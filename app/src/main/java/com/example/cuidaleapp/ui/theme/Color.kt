@@ -2,10 +2,46 @@ package com.example.cuidaleapp.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val Purple80 = Color(0xFFD0BCFF)
-val PurpleGrey80 = Color(0xFFCCC2DC)
-val Pink80 = Color(0xFFEFB8C8)
+//Aqui se personalizan los colores
 
-val Purple40 = Color(0xFF6650a4)
-val PurpleGrey40 = Color(0xFF625b71)
-val Pink40 = Color(0xFF7D5260)
+val CuidaleBlueTopLight = Color(0xFF4B8FDC)
+val CuidaleBlueBottomLight = Color(0xFF43BCD3)
+val CuidaleSurfaceLight = Color(0xFFF5FBFF)
+val CuidaleSurfaceSoftLight = Color(0xFFD7F0E6)
+val CuidalePrimaryLight = Color(0xFF4D5EE8)
+val CuidalePrimaryVariantLight = Color(0xFF5B4AE6)
+val CuidaleOnPrimaryLight = Color(0xFFFFFFFF)
+val CuidaleOnSurfaceLight = Color(0xFF102033)
+val CuidaleOnSurfaceSoftLight = Color(0xFF486072)
+val CuidaleBorderLight = Color(0xFFB8D4E8)
+val CuidaleLinkLight = Color(0xFF4B3FD8)
+val CuidaleErrorLight = Color(0xFFD72638)
+val CuidaleWarningLight = Color(0xFFFF8C42)
+val CuidaleErrorContainerLight = Color(0xFFFFDAD6)
+val CuidaleWarningContainerLight = Color(0xFFFFEDE1)
+val CuidaleSuccessLight = Color(0xFF1D9A6C)
+
+val CuidaleShadowBlueLight = Color(0xFF5E5CE6)
+val CuidaleShadowMintLight = Color(0xFF3FA7C4)
+val CuidaleShadowLavenderLight = Color(0xFF7B61FF)
+
+val CuidaleBlueTopDark = Color(0xFF0D1B2A)
+val CuidaleBlueBottomDark = Color(0xFF133B5C)
+val CuidaleSurfaceDark = Color(0xFF182634)
+val CuidaleSurfaceSoftDark = Color(0xFF1F3B46)
+val CuidalePrimaryDark = Color(0xFF7E8CFF)
+val CuidalePrimaryVariantDark = Color(0xFF9C8CFF)
+val CuidaleOnPrimaryDark = Color(0xFF08111B)
+val CuidaleOnSurfaceDark = Color(0xFFEAF4FF)
+val CuidaleOnSurfaceSoftDark = Color(0xFFB7C9D9)
+val CuidaleBorderDark = Color(0xFF35506A)
+val CuidaleLinkDark = Color(0xFFA89BFF)
+val CuidaleErrorDark = Color(0xFFFF5449) // Rojo más vibrante para modo oscuro
+val CuidaleWarningDark = Color(0xFFFFB871)
+val CuidaleErrorContainerDark = Color(0xFF410002) // Fondo rojo muy oscuro
+val CuidaleWarningContainerDark = Color(0xFF2E1500) // Fondo naranja/vino oscuro
+val CuidaleSuccessDark = Color(0xFF5ED6A5)
+
+val CuidaleShadowBlueDark = Color(0xFF7A6CFF)
+val CuidaleShadowMintDark = Color(0xFF2E7D91)
+val CuidaleShadowLavenderDark = Color(0xFF8C7BFF)

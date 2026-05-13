@@ -1,3 +1,45 @@
 <resources>
-    <string name="app_name">cuidale app</string>
+    <string name="app_name">Cuidale App</string>
+    <string name="title_activity_register">Registro</string>
+    <string name="title_activity_menu">Menú Principal</string>
+
+    <!-- Login Screen -->
+    <string name="login_welcome">Bienvenido de nuevo.\nIngresa tus credenciales para continuar.</string>
+    <string name="login_identifier_label">Correo o RUT</string>
+    <string name="login_identifier_placeholder">Correo@mail.com o 12345678-9</string>
+    <string name="login_password_label">Contraseña</string>
+    <string name="login_password_placeholder">••••••••</string>
+    <string name="login_keep_session">Mantener sesión iniciada</string>
+    <string name="login_button_loading">Cargando…</string>
+    <string name="login_button_retry">Reintentar</string>
+    <string name="login_button_enter">Entrar</string>
+    <string name="login_forgot_password">¿Olvidaste tu contraseña?</string>
+    <string name="login_no_account">¿No tienes cuenta? </string>
+    <string name="login_register_here">Regístrate aquí</string>
+    <string name="login_welcome_back">¡Bienvenido!</string>
+
+    <!-- Menu Screen -->
+    <string name="menu_title">Menú Principal</string>
+    <string name="menu_greeting">Hola, %1$s</string>
+    <string name="menu_forgot_password">Olvidé mi contraseña</string>
+    <string name="menu_logout">Cerrar Sesión</string>
+
+    <!-- Register Screen -->
+    <string name="register_title">Crear Cuenta</string>
+    <string name="register_name_label">Nombre</string>
+    <string name="register_lastname_label">Apellido</string>
+    <string name="register_email_label">Correo Electrónico</string>
+    <string name="register_rut_label">RUT</string>
+    <string name="register_password_label">Contraseña</string>
+    <string name="register_confirm_password_label">Confirmar Contraseña</string>
+    <string name="register_button">Registrarse</string>
+    <string name="register_already_have_account">¿Ya tienes cuenta? </string>
+    <string name="register_login_here">Inicia sesión</string>
+
+    <!-- Forgot Password Dialog -->
+    <string name="forgot_password_title">Recuperar Contraseña</string>
+    <string name="forgot_password_desc">Ingresa tu correo para recibir un enlace de recuperación.</string>
+    <string name="forgot_password_send">Enviar</string>
+    <string name="forgot_password_cancel">Cancelar</string>
+    <string name="forgot_password_success">Correo de recuperación enviado.</string>
 </resources>

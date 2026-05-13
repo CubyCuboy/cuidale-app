@@ -1,0 +1,40 @@
+package com.example.cuidaleapp.viewmodel
+
+import android.app.Application
+import android.content.Context
+import androidx.lifecycle.AndroidViewModel
+import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+
+class MenuViewModel(application: Application) : AndroidViewModel(application) {
+    private val auth = FirebaseAuth.getInstance()
+    private val prefs = application.getSharedPreferences("cuidale_prefs", Context.MODE_PRIVATE)
+
+    private val _userData = MutableStateFlow(getCachedUser())
+    val userData: StateFlow<UserData> = _userData
+
+    private val _isLoggedOut = MutableStateFlow(false)
+    val isLoggedOut: StateFlow<Boolean> = _isLoggedOut
+
+    private fun getCachedUser(): UserData {
+        return UserData(
+            Nombre = prefs.getString("user_nombre", "") ?: "",
+            Apellido_Pa = prefs.getString("user_apellido", "") ?: "",
+            correo = prefs.getString("user_correo", "") ?: "",
+            rut = prefs.getString("user_rut", "") ?: ""
+        )
+    }
+
+    fun logout() {
+        auth.signOut()
+        prefs.edit().clear().apply()
+        _isLoggedOut.value = true
+    }
+
+    fun resetPassword(email: String) {
+        if (email.isNotBlank()) {
+            auth.sendPasswordResetEmail(email)
+        }
+    }
+}
