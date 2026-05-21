@@ -76,7 +76,7 @@ fun ForgotPasswordScreen(
                 value = email,
                 onValueChange = { email = it },
                 placeholder = "ejemplo@correo.com",
-                containerColor = Color.White.copy(alpha = 0.9f)
+                containerColor = Color.Black.copy(alpha = 0.9f)
             )
 
             Spacer(modifier = Modifier.height(32.dp))
