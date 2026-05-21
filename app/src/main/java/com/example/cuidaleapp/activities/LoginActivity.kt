@@ -68,7 +68,7 @@ class LoginActivity : ComponentActivity() {
                         startActivity(Intent(this@LoginActivity, RoleSelectionActivity::class.java))
                     },
                     onForgotPassword = {
-                        viewModel.clearError()
+                        startActivity(Intent(this@LoginActivity, ForgotPasswordActivity::class.java))
                     }
                 )
             }

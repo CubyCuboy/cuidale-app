@@ -31,6 +31,12 @@
         </activity>
 
         <activity
+            android:name=".activities.ForgotPasswordActivity"
+            android:exported="false"
+            android:label="@string/forgot_password_title"
+            android:theme="@style/Theme.CuidaleApp" />
+
+        <activity
             android:name=".activities.RoleSelectionActivity"
             android:exported="false"
             android:label="@string/role_selection_title"
