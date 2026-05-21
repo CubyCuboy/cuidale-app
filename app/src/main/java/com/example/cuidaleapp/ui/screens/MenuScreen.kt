@@ -43,6 +43,21 @@ fun MenuScreen(
             shadowColor = CuidaleThemeExtras.shadows.hardShadowPrimary,
             modifier = Modifier.padding(28.dp)
         ) {
+            val roleTitle = when (userData.rol.lowercase().trim()) {
+                "cuidador" -> stringResource(R.string.home_title_caregiver)
+                "representante" -> stringResource(R.string.home_title_representative)
+                else -> ""
+            }
+
+            if (roleTitle.isNotEmpty()) {
+                Text(
+                    text = roleTitle,
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+                    color = colors.primary,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+
             Text(
                 text = stringResource(R.string.menu_title),
                 style = MaterialTheme.typography.headlineMedium,

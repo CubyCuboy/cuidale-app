@@ -12,6 +12,7 @@ import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
 
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -23,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import com.example.cuidaleapp.R
 import com.example.cuidaleapp.ui.screens.LoginScreen
 import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
 import com.example.cuidaleapp.viewmodel.LoginUiState
@@ -41,8 +43,19 @@ class LoginActivity : ComponentActivity() {
 
             LaunchedEffect(uiState) {
                 if (uiState is LoginUiState.Success) {
-                    startActivity(Intent(this@LoginActivity, MenuActivity::class.java))
-                    finish()
+                    val userData = viewModel.getCachedUser()
+                    val role = userData.rol.lowercase().trim()
+
+                    if (role == "cuidador" || role == "representante") {
+                        startActivity(Intent(this@LoginActivity, MenuActivity::class.java))
+                        finish()
+                    } else if (role == "") {
+                        Toast.makeText(this@LoginActivity, getString(R.string.error_no_role), Toast.LENGTH_LONG).show()
+                        viewModel.clearError()
+                    } else {
+                        Toast.makeText(this@LoginActivity, getString(R.string.error_invalid_role, role), Toast.LENGTH_LONG).show()
+                        viewModel.clearError()
+                    }
                 }
             }
             
@@ -52,7 +65,7 @@ class LoginActivity : ComponentActivity() {
                     onToggleTheme = { darkTheme = !darkTheme },
                     viewModel = viewModel,
                     onNavigateToRegister = {
-                        startActivity(Intent(this@LoginActivity, RegisterActivity::class.java))
+                        startActivity(Intent(this@LoginActivity, RoleSelectionActivity::class.java))
                     },
                     onForgotPassword = {
                         viewModel.clearError()

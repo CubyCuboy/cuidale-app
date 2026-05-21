@@ -16,7 +16,8 @@ data class UserData(
     val Nombre: String = "",
     val Apellido_Pa: String = "",
     val correo: String = "",
-    val rut: String = ""
+    val rut: String = "",
+    val rol: String = ""
 )
 
 sealed class LoginUiState {
@@ -37,8 +38,29 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         // Verificar si ya hay una sesión activa al iniciar
-        if (auth.currentUser != null && prefs.contains("user_nombre")) {
+        val currentUser = auth.currentUser
+        if (currentUser != null && prefs.contains("user_nombre") && prefs.contains("user_rol")) {
             _uiState.value = LoginUiState.Success
+        } else if (currentUser != null) {
+            // Tenemos usuario pero no cache, intentamos recuperar del Firestore
+            viewModelScope.launch {
+                try {
+                    val query = db.collection("usuarios")
+                        .whereEqualTo("correo", currentUser.email)
+                        .get()
+                        .await()
+                    
+                    if (!query.isEmpty) {
+                        val userData = query.documents[0].toObject(UserData::class.java)
+                        if (userData != null) {
+                            saveUserToCache(userData)
+                            _uiState.value = LoginUiState.Success
+                        }
+                    }
+                } catch (e: Exception) {
+                    // Si falla el auto-login por red o datos, dejamos en Idle para login manual
+                }
+            }
         }
     }
 
@@ -111,6 +133,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
             putString("user_apellido", user.Apellido_Pa)
             putString("user_correo", user.correo)
             putString("user_rut", user.rut)
+            putString("user_rol", user.rol)
             apply()
         }
     }
@@ -120,7 +143,8 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
             Nombre = prefs.getString("user_nombre", "") ?: "",
             Apellido_Pa = prefs.getString("user_apellido", "") ?: "",
             correo = prefs.getString("user_correo", "") ?: "",
-            rut = prefs.getString("user_rut", "") ?: ""
+            rut = prefs.getString("user_rut", "") ?: "",
+            rol = prefs.getString("user_rol", "") ?: ""
         )
     }
 

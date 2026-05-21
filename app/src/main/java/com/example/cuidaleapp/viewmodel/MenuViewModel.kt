@@ -22,7 +22,8 @@ class MenuViewModel(application: Application) : AndroidViewModel(application) {
             Nombre = prefs.getString("user_nombre", "") ?: "",
             Apellido_Pa = prefs.getString("user_apellido", "") ?: "",
             correo = prefs.getString("user_correo", "") ?: "",
-            rut = prefs.getString("user_rut", "") ?: ""
+            rut = prefs.getString("user_rut", "") ?: "",
+            rol = prefs.getString("user_rol", "") ?: ""
         )
     }
 
