@@ -1,15 +1,5 @@
 package com.example.cuidaleapp.activities
 
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
-import com.example.cuidaleapp.ui.screens.LoginScreen
-import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
-
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
@@ -17,13 +7,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import com.example.cuidaleapp.R
 import com.example.cuidaleapp.ui.screens.LoginScreen
 import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
@@ -37,8 +23,7 @@ class LoginActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            val systemDarkTheme = isSystemInDarkTheme()
-            var darkTheme by rememberSaveable { mutableStateOf(systemDarkTheme) }
+            val isDark by viewModel.isDarkMode.collectAsState()
             val uiState by viewModel.uiState.collectAsState()
 
             LaunchedEffect(uiState) {
@@ -59,10 +44,10 @@ class LoginActivity : ComponentActivity() {
                 }
             }
             
-            CuidaleAppTheme(darkTheme = darkTheme) {
+            CuidaleAppTheme(darkTheme = isDark) {
                 LoginScreen(
-                    isDark = darkTheme,
-                    onToggleTheme = { darkTheme = !darkTheme },
+                    isDark = isDark,
+                    onToggleTheme = { viewModel.toggleTheme() },
                     viewModel = viewModel,
                     onNavigateToRegister = {
                         startActivity(Intent(this@LoginActivity, RoleSelectionActivity::class.java))

@@ -36,6 +36,15 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow<LoginUiState>(LoginUiState.Idle)
     val uiState: StateFlow<LoginUiState> = _uiState
 
+    private val _isDarkMode = MutableStateFlow(prefs.getBoolean("dark_mode", false))
+    val isDarkMode: StateFlow<Boolean> = _isDarkMode
+
+    fun toggleTheme() {
+        val newValue = !_isDarkMode.value
+        _isDarkMode.value = newValue
+        prefs.edit().putBoolean("dark_mode", newValue).apply()
+    }
+
     init {
         // Verificar si ya hay una sesión activa al iniciar
         val currentUser = auth.currentUser

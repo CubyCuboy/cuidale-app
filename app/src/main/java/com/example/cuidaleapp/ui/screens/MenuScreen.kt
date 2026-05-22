@@ -2,10 +2,19 @@ package com.example.cuidaleapp.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,6 +34,8 @@ import com.example.cuidaleapp.R
 @Composable
 fun MenuScreen(
     userData: UserData,
+    isDark: Boolean,
+    onToggleTheme: () -> Unit,
     onLogout: () -> Unit,
     onResetPassword: () -> Unit
 ) {
@@ -35,14 +46,30 @@ fun MenuScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(gradient.top, gradient.bottom))),
-        contentAlignment = Alignment.Center
+            .background(Brush.verticalGradient(listOf(gradient.top, gradient.bottom)))
     ) {
-        HardShadowPanel(
-            backgroundColor = customColors.panelBackground,
-            shadowColor = CuidaleThemeExtras.shadows.hardShadowPrimary,
-            modifier = Modifier.padding(28.dp)
-        ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                IconButton(onClick = onToggleTheme) {
+                    Icon(
+                        imageVector = if (isDark) Icons.Filled.LightMode else Icons.Filled.DarkMode,
+                        contentDescription = "Cambiar modo",
+                        tint = customColors.onGradient
+                    )
+                }
+            }
+            
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                HardShadowPanel(
+                    backgroundColor = customColors.panelBackground,
+                    shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowAccent else CuidaleThemeExtras.shadows.hardShadowPrimary,
+                    modifier = Modifier.padding(28.dp)
+                ) {
             val roleTitle = when (userData.rol.lowercase().trim()) {
                 "cuidador" -> stringResource(R.string.home_title_caregiver)
                 "representante" -> stringResource(R.string.home_title_representative)
@@ -91,6 +118,8 @@ fun MenuScreen(
                 isDark = customColors.isDark,
                 onClick = onLogout
             )
+                }
+            }
         }
     }
 }

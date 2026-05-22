@@ -17,6 +17,15 @@ class MenuViewModel(application: Application) : AndroidViewModel(application) {
     private val _isLoggedOut = MutableStateFlow(false)
     val isLoggedOut: StateFlow<Boolean> = _isLoggedOut
 
+    private val _isDarkMode = MutableStateFlow(prefs.getBoolean("dark_mode", false))
+    val isDarkMode: StateFlow<Boolean> = _isDarkMode
+
+    fun toggleTheme() {
+        val newValue = !_isDarkMode.value
+        _isDarkMode.value = newValue
+        prefs.edit().putBoolean("dark_mode", newValue).apply()
+    }
+
     private fun getCachedUser(): UserData {
         return UserData(
             Nombre = prefs.getString("user_nombre", "") ?: "",

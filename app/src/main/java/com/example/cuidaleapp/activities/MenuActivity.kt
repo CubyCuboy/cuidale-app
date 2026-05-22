@@ -22,9 +22,8 @@ class MenuActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            val systemDarkTheme = isSystemInDarkTheme()
-            var darkTheme by rememberSaveable { mutableStateOf(systemDarkTheme) }
             val viewModel: MenuViewModel = viewModel()
+            val isDark by viewModel.isDarkMode.collectAsState()
             val userData by viewModel.userData.collectAsState()
             val isLoggedOut by viewModel.isLoggedOut.collectAsState()
 
@@ -37,9 +36,11 @@ class MenuActivity : ComponentActivity() {
                 }
             }
 
-            CuidaleAppTheme(darkTheme = darkTheme) {
+            CuidaleAppTheme(darkTheme = isDark) {
                 MenuScreen(
                     userData = userData,
+                    isDark = isDark,
+                    onToggleTheme = { viewModel.toggleTheme() },
                     onLogout = { viewModel.logout() },
                     onResetPassword = { viewModel.resetPassword(userData.correo) }
                 )

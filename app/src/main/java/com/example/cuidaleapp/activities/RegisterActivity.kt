@@ -18,14 +18,19 @@ import androidx.activity.viewModels
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import com.example.cuidaleapp.viewmodel.ThemeViewModel
 
 
 class RegisterActivity : ComponentActivity() {
+    private val themeViewModel: ThemeViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            CuidaleAppTheme {
+            val isDark by themeViewModel.isDarkMode.collectAsState()
+
+            CuidaleAppTheme(darkTheme = isDark) {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     Greeting2(
                         name = "Android",
