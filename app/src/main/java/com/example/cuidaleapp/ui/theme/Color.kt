@@ -20,6 +20,7 @@ val CuidaleWarningLight = Color(0xFFFF8C42)
 val CuidaleErrorContainerLight = Color(0xFFFFDAD6)
 val CuidaleWarningContainerLight = Color(0xFFFFEDE1)
 val CuidaleSuccessLight = Color(0xFF1D9A6C)
+val CuidaleSuccessStrongLight = Color(0xFF178F17) // Verde fuerte para modo claro
 
 val CuidaleShadowBlueLight = Color(0xFF5E5CE6)
 val CuidaleShadowMintLight = Color(0xFF3FA7C4)
@@ -41,6 +42,7 @@ val CuidaleWarningDark = Color(0xFFFFB871)
 val CuidaleErrorContainerDark = Color(0xFF410002) // Fondo rojo muy oscuro
 val CuidaleWarningContainerDark = Color(0xFF2E1500) // Fondo naranja/vino oscuro
 val CuidaleSuccessDark = Color(0xFF5ED6A5)
+val CuidaleSuccessStrongDark = Color(0xFF5ED6A5) // Verde vibrante para modo oscuro
 
 val CuidaleShadowBlueDark = Color(0xFF7A6CFF)
 val CuidaleShadowMintDark = Color(0xFF2E7D91)

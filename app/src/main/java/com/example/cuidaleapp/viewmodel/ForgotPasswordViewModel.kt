@@ -13,13 +13,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
-sealed class ForgotPasswordUiState {
-    object EnteringEmail : ForgotPasswordUiState()
-    object EnteringCode : ForgotPasswordUiState()
-    object EnteringNewPassword : ForgotPasswordUiState()
-    object Success : ForgotPasswordUiState()
-    object Loading : ForgotPasswordUiState()
-    data class Error(val message: String) : ForgotPasswordUiState()
+enum class ForgotPasswordStep {
+    EMAIL, CODE, PASSWORD, SUCCESS
+}
+
+sealed class ForgotPasswordStatus {
+    object Idle : ForgotPasswordStatus()
+    object Loading : ForgotPasswordStatus()
+    data class Error(val message: String) : ForgotPasswordStatus()
 }
 
 class ForgotPasswordViewModel(application: Application) : AndroidViewModel(application) {
@@ -27,8 +28,11 @@ class ForgotPasswordViewModel(application: Application) : AndroidViewModel(appli
     private val prefs = application.getSharedPreferences("cuidale_prefs", Context.MODE_PRIVATE)
     private val functions = FirebaseFunctions.getInstance("us-central1")
     
-    private val _uiState = MutableStateFlow<ForgotPasswordUiState>(ForgotPasswordUiState.EnteringEmail)
-    val uiState: StateFlow<ForgotPasswordUiState> = _uiState
+    private val _currentStep = MutableStateFlow(ForgotPasswordStep.EMAIL)
+    val currentStep: StateFlow<ForgotPasswordStep> = _currentStep
+
+    private val _status = MutableStateFlow<ForgotPasswordStatus>(ForgotPasswordStatus.Idle)
+    val status: StateFlow<ForgotPasswordStatus> = _status
 
     private val _isDarkMode = MutableStateFlow(prefs.getBoolean("dark_mode", false))
     val isDarkMode: StateFlow<Boolean> = _isDarkMode
@@ -36,10 +40,10 @@ class ForgotPasswordViewModel(application: Application) : AndroidViewModel(appli
     private val _lastRequestedEmail = MutableStateFlow("")
     val lastRequestedEmail: StateFlow<String> = _lastRequestedEmail
 
-    private val _verifiedCode = MutableStateFlow("") // Stores the code after verification to use it in updatePassword
+    private val _verifiedCode = MutableStateFlow("") 
     val verifiedCode: StateFlow<String> = _verifiedCode
 
-    private val _timerSeconds = MutableStateFlow(300) // 5 minutes
+    private val _timerSeconds = MutableStateFlow(300) 
     val timerSeconds: StateFlow<Int> = _timerSeconds
 
     private var timerJob: Job? = null
@@ -54,12 +58,12 @@ class ForgotPasswordViewModel(application: Application) : AndroidViewModel(appli
         val normalizedEmail = email.lowercase().trim()
 
         if (!isValidEmail(normalizedEmail)) {
-            _uiState.value = ForgotPasswordUiState.Error("Formato de correo inválido")
+            _status.value = ForgotPasswordStatus.Error("Formato de correo inválido")
             return
         }
 
         viewModelScope.launch {
-            _uiState.value = ForgotPasswordUiState.Loading
+            _status.value = ForgotPasswordStatus.Loading
 
             try {
                 val data = hashMapOf("email" to normalizedEmail)
@@ -67,21 +71,22 @@ class ForgotPasswordViewModel(application: Application) : AndroidViewModel(appli
 
                 _lastRequestedEmail.value = normalizedEmail
                 startTimer()
-                _uiState.value = ForgotPasswordUiState.EnteringCode
+                _status.value = ForgotPasswordStatus.Idle
+                _currentStep.value = ForgotPasswordStep.CODE
             } catch (e: Exception) {
-                _uiState.value = ForgotPasswordUiState.Error(e.message ?: "Error al enviar el código")
+                _status.value = ForgotPasswordStatus.Error(e.message ?: "Error al enviar el código")
             }
         }
     }
 
     fun verifyCode(code: String) {
         if (code.isBlank()) {
-            _uiState.value = ForgotPasswordUiState.Error("Ingresa el código")
+            _status.value = ForgotPasswordStatus.Error("Ingresa el código")
             return
         }
 
         viewModelScope.launch {
-            _uiState.value = ForgotPasswordUiState.Loading
+            _status.value = ForgotPasswordStatus.Loading
             try {
                 val data = hashMapOf(
                     "email" to _lastRequestedEmail.value,
@@ -90,16 +95,17 @@ class ForgotPasswordViewModel(application: Application) : AndroidViewModel(appli
                 functions.getHttpsCallable("verifyCode").call(data).await()
                 
                 _verifiedCode.value = code
-                _uiState.value = ForgotPasswordUiState.EnteringNewPassword
+                _status.value = ForgotPasswordStatus.Idle
+                _currentStep.value = ForgotPasswordStep.PASSWORD
             } catch (e: Exception) {
-                _uiState.value = ForgotPasswordUiState.Error(e.message ?: "Código inválido")
+                _status.value = ForgotPasswordStatus.Error(e.message ?: "Código inválido")
             }
         }
     }
 
     fun updatePassword(password: String) {
         viewModelScope.launch {
-            _uiState.value = ForgotPasswordUiState.Loading
+            _status.value = ForgotPasswordStatus.Loading
             try {
                 val data = hashMapOf(
                     "email" to _lastRequestedEmail.value,
@@ -107,9 +113,10 @@ class ForgotPasswordViewModel(application: Application) : AndroidViewModel(appli
                     "newPassword" to password
                 )
                 functions.getHttpsCallable("updatePassword").call(data).await()
-                _uiState.value = ForgotPasswordUiState.Success
+                _status.value = ForgotPasswordStatus.Idle
+                _currentStep.value = ForgotPasswordStep.SUCCESS
             } catch (e: Exception) {
-                _uiState.value = ForgotPasswordUiState.Error(e.message ?: "Error al actualizar la contraseña")
+                _status.value = ForgotPasswordStatus.Error(e.message ?: "Error al actualizar la contraseña")
             }
         }
     }
@@ -129,19 +136,13 @@ class ForgotPasswordViewModel(application: Application) : AndroidViewModel(appli
         return Patterns.EMAIL_ADDRESS.matcher(email).matches()
     }
 
-    fun goToStep(state: ForgotPasswordUiState) {
-        _uiState.value = state
+    fun goToStep(step: ForgotPasswordStep) {
+        _currentStep.value = step
     }
 
     fun clearError() {
-        if (_uiState.value is ForgotPasswordUiState.Error) {
-            // Logic to go back to the appropriate interactive state
-            val lastStep = when {
-                _verifiedCode.value.isNotEmpty() -> ForgotPasswordUiState.EnteringNewPassword
-                _lastRequestedEmail.value.isNotEmpty() -> ForgotPasswordUiState.EnteringCode
-                else -> ForgotPasswordUiState.EnteringEmail
-            }
-            _uiState.value = lastStep
+        if (_status.value is ForgotPasswordStatus.Error) {
+            _status.value = ForgotPasswordStatus.Idle
         }
     }
 
@@ -149,6 +150,7 @@ class ForgotPasswordViewModel(application: Application) : AndroidViewModel(appli
         _lastRequestedEmail.value = ""
         _verifiedCode.value = ""
         timerJob?.cancel()
-        _uiState.value = ForgotPasswordUiState.EnteringEmail
+        _status.value = ForgotPasswordStatus.Idle
+        _currentStep.value = ForgotPasswordStep.EMAIL
     }
 }

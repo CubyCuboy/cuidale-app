@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -24,7 +25,8 @@ import com.example.cuidaleapp.ui.components.CuidaleTextField
 import com.example.cuidaleapp.ui.components.HardShadowButton
 import com.example.cuidaleapp.ui.components.HardShadowPanel
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
-import com.example.cuidaleapp.viewmodel.ForgotPasswordUiState
+import com.example.cuidaleapp.viewmodel.ForgotPasswordStatus
+import com.example.cuidaleapp.viewmodel.ForgotPasswordStep
 import com.example.cuidaleapp.viewmodel.ForgotPasswordViewModel
 import java.util.Locale
 
@@ -33,7 +35,8 @@ fun ForgotPasswordScreen(
     viewModel: ForgotPasswordViewModel,
     onBackToLogin: () -> Unit
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val currentStep by viewModel.currentStep.collectAsState()
+    val status by viewModel.status.collectAsState()
     val isDark by viewModel.isDarkMode.collectAsState()
     val gradient = CuidaleThemeExtras.gradient
     val onGradientText = CuidaleThemeExtras.customColors.onGradient
@@ -64,25 +67,30 @@ fun ForgotPasswordScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
-            Crossfade(targetState = uiState, label = "forgotPasswordStep") { state ->
-                when (state) {
-                    is ForgotPasswordUiState.EnteringEmail, is ForgotPasswordUiState.Loading, is ForgotPasswordUiState.Error -> {
+            if (currentStep != ForgotPasswordStep.SUCCESS) {
+                RecoveryProgressBar(currentStep = currentStep)
+                Spacer(modifier = Modifier.height(32.dp))
+            }
+
+            Crossfade(targetState = currentStep, label = "forgotPasswordStep") { step ->
+                when (step) {
+                    ForgotPasswordStep.EMAIL -> {
                         EmailStep(
-                            isLoading = state is ForgotPasswordUiState.Loading,
+                            isLoading = status is ForgotPasswordStatus.Loading,
                             isDark = isDark,
-                            error = (state as? ForgotPasswordUiState.Error)?.message,
+                            error = (status as? ForgotPasswordStatus.Error)?.message,
                             onSend = { viewModel.sendVerificationCode(it) },
                             onClearError = { viewModel.clearError() }
                         )
                     }
-                    is ForgotPasswordUiState.EnteringCode -> {
+                    ForgotPasswordStep.CODE -> {
                         CodeStep(
                             email = viewModel.lastRequestedEmail.collectAsState().value,
                             timerSeconds = viewModel.timerSeconds.collectAsState().value,
-                            isLoading = uiState is ForgotPasswordUiState.Loading,
-                            error = (uiState as? ForgotPasswordUiState.Error)?.message,
+                            isLoading = status is ForgotPasswordStatus.Loading,
+                            error = (status as? ForgotPasswordStatus.Error)?.message,
                             isDark = isDark,
                             onVerify = { viewModel.verifyCode(it) },
                             onResend = { viewModel.sendVerificationCode(viewModel.lastRequestedEmail.value) },
@@ -90,17 +98,17 @@ fun ForgotPasswordScreen(
                             onClearError = { viewModel.clearError() }
                         )
                     }
-                    is ForgotPasswordUiState.EnteringNewPassword -> {
+                    ForgotPasswordStep.PASSWORD -> {
                         NewPasswordStep(
-                            isLoading = uiState is ForgotPasswordUiState.Loading,
-                            error = (uiState as? ForgotPasswordUiState.Error)?.message,
+                            isLoading = status is ForgotPasswordStatus.Loading,
+                            error = (status as? ForgotPasswordStatus.Error)?.message,
                             isDark = isDark,
                             onUpdate = { viewModel.updatePassword(it) },
-                            onBack = { viewModel.goToStep(ForgotPasswordUiState.EnteringCode) },
+                            onBack = { viewModel.goToStep(ForgotPasswordStep.CODE) },
                             onClearError = { viewModel.clearError() }
                         )
                     }
-                    is ForgotPasswordUiState.Success -> {
+                    ForgotPasswordStep.SUCCESS -> {
                         SuccessStep(isDark = isDark, onLogin = onBackToLogin)
                     }
                 }
@@ -108,7 +116,7 @@ fun ForgotPasswordScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            if (uiState !is ForgotPasswordUiState.Success) {
+            if (currentStep != ForgotPasswordStep.SUCCESS) {
                 Row(
                     modifier = Modifier.padding(bottom = 32.dp),
                     horizontalArrangement = Arrangement.Center,
@@ -349,6 +357,8 @@ fun NewPasswordStep(
     val hasUppercase = password.any { it.isUpperCase() }
     val hasSpecialChar = password.any { !it.isLetterOrDigit() }
     val passwordsMatch = password.isNotEmpty() && password == confirmPassword
+    
+    val allRequirementsMet = hasMinLength && hasUppercase && hasSpecialChar
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
@@ -360,8 +370,14 @@ fun NewPasswordStep(
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        val requirementsPanelBg = if (allRequirementsMet) {
+            if (isDark) Color(0xFF1B5E20).copy(alpha = 0.4f) else Color(0xFFDFF6E5)
+        } else {
+            if (isDark) Color.White.copy(alpha = 0.05f) else Color.White
+        }
+
         HardShadowPanel(
-            backgroundColor = if (isDark) Color(0xFF1B5E20).copy(alpha = 0.2f) else Color(0xFFDFF6E5).copy(alpha = 0.9f),
+            backgroundColor = requirementsPanelBg,
             shadowColor = Color.Transparent
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -470,20 +486,109 @@ fun NewPasswordStep(
 }
 
 @Composable
+fun RecoveryProgressBar(currentStep: ForgotPasswordStep) {
+    val steps = listOf(
+        ForgotPasswordStep.EMAIL to "Paso 1",
+        ForgotPasswordStep.CODE to "Paso 2",
+        ForgotPasswordStep.PASSWORD to "Paso 3"
+    )
+    val customColors = CuidaleThemeExtras.customColors
+    val successColor = customColors.successStrong
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        steps.forEachIndexed { index, (step, label) ->
+            val isActive = currentStep == step || 
+                           (currentStep == ForgotPasswordStep.CODE && index < 1) ||
+                           (currentStep == ForgotPasswordStep.PASSWORD && index < 2)
+            
+            val isCurrent = currentStep == step
+            val isCompleted = isActive && !isCurrent
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.weight(1f)
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .background(
+                            color = if (isActive) Color.White else Color.White.copy(alpha = 0.3f),
+                            shape = CircleShape
+                        )
+                ) {
+                    if (isCompleted) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = null,
+                            tint = successColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    } else {
+                        Text(
+                            text = (index + 1).toString(),
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                            color = if (isActive) successColor else Color.White
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(4.dp))
+                
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal),
+                    color = if (isActive) Color.White else Color.White.copy(alpha = 0.6f)
+                )
+            }
+
+            if (index < steps.size - 1) {
+                Box(
+                    modifier = Modifier
+                        .weight(0.5f)
+                        .height(2.dp)
+                        .background(Color.White.copy(alpha = 0.3f))
+                ) {
+                    val isLineFilled = (currentStep == ForgotPasswordStep.CODE && index < 1) ||
+                                      (currentStep == ForgotPasswordStep.PASSWORD && index < 2)
+                    
+                    if (isLineFilled) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.White)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun ValidationItem(text: String, isValid: Boolean, isDark: Boolean) {
-    val successColor = if (isDark) CuidaleThemeExtras.customColors.success else Color(0xFF1B5E20)
+    val customColors = CuidaleThemeExtras.customColors
+    val successColor = customColors.successStrong
+    val inactiveColor = if (isDark) Color.Gray else Color.Black.copy(alpha = 0.55f)
+    
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
         Icon(
             imageVector = Icons.Default.Check,
             contentDescription = null,
-            tint = if (isValid) successColor else Color.Gray,
+            tint = if (isValid) successColor else inactiveColor,
             modifier = Modifier.size(16.dp)
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = text,
             style = MaterialTheme.typography.bodySmall,
-            color = if (isValid) successColor else Color.Gray
+            color = if (isValid) successColor else inactiveColor
         )
     }
 }
