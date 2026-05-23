@@ -29,6 +29,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.cuidaleapp.R
 import com.example.cuidaleapp.ui.components.HardShadowButton
+import com.example.cuidaleapp.ui.components.HardShadowPanel
 import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 
@@ -79,32 +80,62 @@ fun RoleSelectionScreen(
             ) {
                 Text(
                     text = stringResource(R.string.role_selection_title),
-                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold),
+                    style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.ExtraBold),
                     color = Color.White,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = stringResource(R.string.role_selection_subtitle),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color.White.copy(alpha = 0.9f),
                     textAlign = TextAlign.Center
                 )
 
                 Spacer(modifier = Modifier.height(48.dp))
 
-                HardShadowButton(
-                    text = stringResource(R.string.role_caregiver),
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = Color.White,
-                    shadowColor = shadows.hardShadowPrimary,
-                    isDark = isDark,
-                    onClick = onNavigateToCaregiver
-                )
+                HardShadowPanel(
+                    backgroundColor = customColors.panelBackground,
+                    shadowColor = if (isDark) shadows.hardShadowAccent else shadows.hardShadowPrimary
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        HardShadowButton(
+                            text = stringResource(R.string.role_caregiver),
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = Color.White,
+                            shadowColor = shadows.hardShadowPrimary,
+                            isDark = isDark,
+                            onClick = onNavigateToCaregiver
+                        )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                        Text(
+                            text = stringResource(R.string.role_caregiver_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isDark) Color.White.copy(alpha = 0.7f) else Color.Gray,
+                            modifier = Modifier.padding(top = 8.dp, bottom = 24.dp, start = 4.dp, end = 4.dp),
+                            textAlign = TextAlign.Center
+                        )
 
-                HardShadowButton(
-                    text = stringResource(R.string.role_representative),
-                    containerColor = MaterialTheme.colorScheme.secondary,
-                    contentColor = Color.White,
-                    shadowColor = shadows.hardShadowSecondary,
-                    isDark = isDark,
-                    onClick = onNavigateToDependent
-                )
+                        HardShadowButton(
+                            text = stringResource(R.string.role_representative),
+                            containerColor = MaterialTheme.colorScheme.secondary,
+                            contentColor = Color.White,
+                            shadowColor = shadows.hardShadowSecondary,
+                            isDark = isDark,
+                            onClick = onNavigateToDependent
+                        )
+
+                        Text(
+                            text = stringResource(R.string.role_representative_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isDark) Color.White.copy(alpha = 0.7f) else Color.Gray,
+                            modifier = Modifier.padding(top = 8.dp, start = 4.dp, end = 4.dp),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
             }
         }
     }

@@ -141,8 +141,7 @@ fun ForgotPasswordScreen(
                                 unmetRequirements = unmetRequirements,
                                 isDark = isDark,
                                 onUpdate = { p, c -> viewModel.updatePassword(p, c) },
-                                onRestart = { viewModel.resetToStart() },
-                                onClearError = { viewModel.clearError() }
+                                onRestart = { viewModel.resetToStart() }
                             )
                         }
 
@@ -413,8 +412,7 @@ fun NewPasswordStep(
     unmetRequirements: Set<Int>,
     isDark: Boolean,
     onUpdate: (String, String) -> Unit,
-    onRestart: () -> Unit,
-    onClearError: () -> Unit
+    onRestart: () -> Unit
 ) {
     var password by rememberSaveable { mutableStateOf("") }
     var confirmPassword by rememberSaveable { mutableStateOf("") }
@@ -424,7 +422,6 @@ fun NewPasswordStep(
     val shadows = CuidaleThemeExtras.shadows
     val customColors = CuidaleThemeExtras.customColors
     val colors = MaterialTheme.colorScheme
-    val panelShadowColor = if (isDark) shadows.hardShadowAccent else shadows.hardShadowPrimary
 
     val hasMinLength = password.length >= 8
     val hasUppercase = password.any { it.isUpperCase() }
@@ -448,18 +445,18 @@ fun NewPasswordStep(
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        CuidaleValidationPanel(
+            validations = validations,
+            unmetIndices = unmetRequirements,
+            isDark = isDark
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
         HardShadowPanel(
             backgroundColor = customColors.panelBackground,
             shadowColor = shadows.hardShadowPrimary.copy(alpha = 0.3f)
         ) {
-            CuidaleValidationPanel(
-                validations = validations,
-                unmetIndices = unmetRequirements,
-                isDark = isDark
-            )
-
-            Spacer(modifier = Modifier.height(20.dp))
-
             Text(
                 text = "Introduzca su contraseña",
                 style = MaterialTheme.typography.labelMedium,
@@ -471,10 +468,7 @@ fun NewPasswordStep(
 
             CuidaleTextField(
                 value = password,
-                onValueChange = {
-                    password = it
-                    if (error != null) onClearError()
-                },
+                onValueChange = { password = it },
                 placeholder = "Ingrese su contraseña",
                 containerColor = customColors.inputBackground,
                 isPassword = true,
@@ -495,10 +489,7 @@ fun NewPasswordStep(
 
             CuidaleTextField(
                 value = confirmPassword,
-                onValueChange = {
-                    confirmPassword = it
-                    if (error != null) onClearError()
-                },
+                onValueChange = { confirmPassword = it },
                 placeholder = "Reingrese tu contraseña",
                 containerColor = customColors.inputBackground,
                 isPassword = true,

@@ -13,8 +13,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 data class UserData(
-    val Nombre: String = "",
-    val Apellido_Pa: String = "",
+    val nombre: String = "",
+    val apellido_pa: String = "",
     val correo: String = "",
     val rut: String = "",
     val rol: String = ""
@@ -138,8 +138,8 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun saveUserToCache(user: UserData) {
         prefs.edit().apply {
-            putString("user_nombre", user.Nombre)
-            putString("user_apellido", user.Apellido_Pa)
+            putString("user_nombre", user.nombre)
+            putString("user_apellido", user.apellido_pa)
             putString("user_correo", user.correo)
             putString("user_rut", user.rut)
             putString("user_rol", user.rol)
@@ -149,8 +149,8 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
 
     fun getCachedUser(): UserData {
         return UserData(
-            Nombre = prefs.getString("user_nombre", "") ?: "",
-            Apellido_Pa = prefs.getString("user_apellido", "") ?: "",
+            nombre = prefs.getString("user_nombre", "") ?: "",
+            apellido_pa = prefs.getString("user_apellido", "") ?: "",
             correo = prefs.getString("user_correo", "") ?: "",
             rut = prefs.getString("user_rut", "") ?: "",
             rol = prefs.getString("user_rol", "") ?: ""

@@ -33,6 +33,9 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 
 @Composable
 fun InputFieldLabel(text: String, modifier: Modifier = Modifier) {
@@ -321,15 +324,27 @@ fun CuidaleValidationPanel(
     unmetIndices: Set<Int> = emptySet(),
     isDark: Boolean
 ) {
+    val allRequirementsMet = validations.all { it.second }
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        validations.forEachIndexed { index, (text, isValid) ->
-            ValidationItem(
-                text = text, 
-                isValid = isValid, 
-                isError = unmetIndices.contains(index),
-                isDark = isDark
-            )
+    val requirementsPanelBg = if (allRequirementsMet) {
+        if (isDark) Color(0xFF1B5E20).copy(alpha = 0.4f) else Color(0xFFDFF6E5)
+    } else {
+        if (isDark) Color.White.copy(alpha = 0.05f) else Color.White
+    }
+
+    HardShadowPanel(
+        backgroundColor = requirementsPanelBg,
+        shadowColor = Color.Transparent
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            validations.forEachIndexed { index, (text, isValid) ->
+                ValidationItem(
+                    text = text,
+                    isValid = isValid,
+                    isError = unmetIndices.contains(index),
+                    isDark = isDark
+                )
+            }
         }
     }
 }
@@ -337,9 +352,9 @@ fun CuidaleValidationPanel(
 @Composable
 fun ValidationItem(text: String, isValid: Boolean, isError: Boolean, isDark: Boolean) {
     val customColors = CuidaleThemeExtras.customColors
-    val successColor = customColors.successStrong
+    val successColor = if (isDark) customColors.successStrong else Color(0xFF00C853) // Verde vibrante
     val errorColor = MaterialTheme.colorScheme.error
-    val inactiveColor = if (isDark) Color.Gray else Color.Black.copy(alpha = 0.55f)
+    val inactiveColor = if (isDark) Color.Gray else Color(0xFF455A64) // Gris azulado nítido
 
     val color by animateColorAsState(
         targetValue = when {
@@ -391,5 +406,78 @@ fun ValidationItem(text: String, isValid: Boolean, isError: Boolean, isDark: Boo
             ),
             color = color
         )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CuidaleExposedDropdown(
+    label: String,
+    options: List<String>,
+    selectedOption: String,
+    onOptionSelected: (String) -> Unit,
+    enabled: Boolean = true,
+    placeholder: String = "Seleccionar..."
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val customColors = CuidaleThemeExtras.customColors
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        InputFieldLabel(text = label)
+        
+        ExposedDropdownMenuBox(
+            expanded = expanded && enabled,
+            onExpandedChange = { if (enabled) expanded = !expanded },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            OutlinedTextField(
+                value = selectedOption,
+                onValueChange = {},
+                readOnly = true,
+                placeholder = {
+                    Text(
+                        text = placeholder,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+                },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = customColors.inputBackground,
+                    unfocusedContainerColor = customColors.inputBackground,
+                    disabledContainerColor = customColors.inputBackground.copy(alpha = 0.1f),
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = if(enabled) Color.Transparent else Color.Transparent.copy(alpha = 0.1f),
+                    disabledBorderColor = Color.Transparent.copy(alpha = 0.05f)
+                ),
+                shape = RoundedCornerShape(16.dp),
+                enabled = enabled,
+                modifier = Modifier
+                    .menuAnchor()
+                    .fillMaxWidth()
+            )
+
+            ExposedDropdownMenu(
+                expanded = expanded && enabled,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier.background(customColors.panelBackground)
+            ) {
+                options.forEach { selectionOption ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = selectionOption,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        },
+                        onClick = {
+                            onOptionSelected(selectionOption)
+                            expanded = false
+                        },
+                        contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                    )
+                }
+            }
+        }
     }
 }

@@ -93,7 +93,7 @@ fun MenuScreen(
             )
 
             Text(
-                text = stringResource(R.string.menu_greeting, userData.Nombre),
+                text = stringResource(R.string.menu_greeting, userData.nombre),
                 style = MaterialTheme.typography.bodyLarge,
                 color = colors.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 32.dp)

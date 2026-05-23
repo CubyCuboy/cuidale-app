@@ -362,7 +362,7 @@ fun TransitionScreen(userData: UserData, onFinished: () -> Unit) {
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "${userData.Nombre} ${userData.Apellido_Pa}",
+                text = "${userData.nombre} ${userData.apellido_pa}",
                 style = MaterialTheme.typography.headlineMedium,
                 color = onGradientText.copy(alpha = 0.9f)
             )

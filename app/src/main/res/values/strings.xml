@@ -44,9 +44,12 @@
     <string name="forgot_password_success">Correo de recuperación enviado.</string>
 
     <!-- Role Selection Screen -->
-    <string name="role_selection_title">Selecciona tu rol</string>
+    <string name="role_selection_title">Tipo de Registro</string>
+    <string name="role_selection_subtitle">Elige el tipo de Cuenta que quieres crear</string>
     <string name="role_caregiver">Cuidador</string>
+    <string name="role_caregiver_desc">Cuenta para buscar pacientes para ofrecer servicios de cuidado</string>
     <string name="role_representative">Representante</string>
+    <string name="role_representative_desc">Cuenta para poder registrar a un familiar que requiera servicios de cuidado o atencion constante</string>
     <string name="role_dependent">Persona Dependiente</string>
     <string name="register_caregiver_soon">Registro de Cuidador - Próximamente</string>
     <string name="register_dependent_soon">Registro de Persona Dependiente - Próximamente</string>

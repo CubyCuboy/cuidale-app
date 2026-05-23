@@ -144,7 +144,7 @@ fun CuidaleAppTheme(
             successStrong = CuidaleSuccessStrongDark,
             onGradient = Color.White,
             panelBackground = panelBackground,
-            inputBackground = colorScheme.surfaceVariant.copy(alpha = 0.3f),
+            inputBackground = Color.Black.copy(alpha = 0.25f),
             isDark = true
         )
     } else {

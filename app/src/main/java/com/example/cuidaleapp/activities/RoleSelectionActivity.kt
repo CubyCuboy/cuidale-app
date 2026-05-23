@@ -10,13 +10,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.cuidaleapp.R
 import com.example.cuidaleapp.ui.screens.PlaceholderScreen
+import com.example.cuidaleapp.ui.screens.RegisterScreen
 import com.example.cuidaleapp.ui.screens.RoleSelectionScreen
 import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
+import com.example.cuidaleapp.viewmodel.RegisterViewModel
 import com.example.cuidaleapp.viewmodel.ThemeViewModel
 
 class RoleSelectionActivity : ComponentActivity() {
@@ -27,11 +30,14 @@ class RoleSelectionActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val isDark by themeViewModel.isDarkMode.collectAsState()
+            val registerViewModel: RegisterViewModel = viewModel()
 
             CuidaleAppTheme(darkTheme = isDark) {
                 RoleSelectionApp(
                     isDark = isDark,
-                    onToggleTheme = { themeViewModel.toggleTheme() }
+                    onToggleTheme = { themeViewModel.toggleTheme() },
+                    registerViewModel = registerViewModel,
+                    onBackToLogin = { finish() }
                 )
             }
         }
@@ -41,7 +47,9 @@ class RoleSelectionActivity : ComponentActivity() {
 @Composable
 fun RoleSelectionApp(
     isDark: Boolean,
-    onToggleTheme: () -> Unit = {}
+    onToggleTheme: () -> Unit = {},
+    registerViewModel: RegisterViewModel,
+    onBackToLogin: () -> Unit
 ) {
     val navController = rememberNavController()
 
@@ -51,18 +59,20 @@ fun RoleSelectionApp(
                 isDark = isDark,
                 onToggleTheme = onToggleTheme,
                 onNavigateToCaregiver = {
-                    navController.navigate("register_caregiver")
+                    registerViewModel.setRole("cuidador")
+                    navController.navigate("register_form")
                 },
                 onNavigateToDependent = {
-                    navController.navigate("register_dependent")
+                    registerViewModel.setRole("representante")
+                    navController.navigate("register_form")
                 }
             )
         }
-        composable("register_caregiver") {
-            PlaceholderScreen(title = stringResource(R.string.register_caregiver_soon))
-        }
-        composable("register_representative") {
-            PlaceholderScreen(title = stringResource(R.string.register_dependent_soon))
+        composable("register_form") {
+            RegisterScreen(
+                viewModel = registerViewModel,
+                onBackToLogin = onBackToLogin
+            )
         }
     }
 }
