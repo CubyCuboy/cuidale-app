@@ -3,12 +3,16 @@ package com.example.cuidaleapp.ui.components
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.*
@@ -21,10 +25,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 
 @Composable
@@ -47,7 +54,9 @@ fun CuidaleTextField(
     isPassword: Boolean = false,
     isPasswordVisible: Boolean = false,
     onPasswordVisibilityChange: (() -> Unit)? = null,
-    isError: Boolean = false
+    isError: Boolean = false,
+    textAlign: TextAlign = TextAlign.Start,
+    keyboardType: KeyboardType = if (isPassword) KeyboardType.Password else KeyboardType.Text
 ) {
     val customColors = CuidaleThemeExtras.customColors
     val borderColor = if (isError) customColors.warning else MaterialTheme.colorScheme.primary
@@ -56,11 +65,15 @@ fun CuidaleTextField(
         value = value,
         onValueChange = onValueChange,
         modifier = modifier.fillMaxWidth(),
+        textStyle = LocalTextStyle.current.copy(textAlign = textAlign),
         placeholder = {
-            Text(
-                text = placeholder,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-            )
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = if(textAlign == TextAlign.Center) Alignment.Center else Alignment.CenterStart) {
+                Text(
+                    text = placeholder,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    textAlign = textAlign
+                )
+            }
         },
         singleLine = true,
         isError = isError,
@@ -85,7 +98,7 @@ fun CuidaleTextField(
             }
         },
         keyboardOptions = KeyboardOptions(
-            keyboardType = if (isPassword) KeyboardType.Password else KeyboardType.Text
+            keyboardType = keyboardType
         ),
         colors = OutlinedTextFieldDefaults.colors(
             focusedContainerColor = containerColor,
@@ -305,46 +318,78 @@ fun CuidaleStepProgressBar(
 @Composable
 fun CuidaleValidationPanel(
     validations: List<Pair<String, Boolean>>,
+    unmetIndices: Set<Int> = emptySet(),
     isDark: Boolean
 ) {
-    val allRequirementsMet = validations.all { it.second }
 
-    val requirementsPanelBg = if (allRequirementsMet) {
-        if (isDark) Color(0xFF1B5E20).copy(alpha = 0.4f) else Color(0xFFDFF6E5)
-    } else {
-        if (isDark) Color.White.copy(alpha = 0.05f) else Color.White
-    }
-
-    HardShadowPanel(
-        backgroundColor = requirementsPanelBg,
-        shadowColor = Color.Transparent
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            validations.forEach { (text, isValid) ->
-                ValidationItem(text = text, isValid = isValid, isDark = isDark)
-            }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        validations.forEachIndexed { index, (text, isValid) ->
+            ValidationItem(
+                text = text, 
+                isValid = isValid, 
+                isError = unmetIndices.contains(index),
+                isDark = isDark
+            )
         }
     }
 }
 
 @Composable
-fun ValidationItem(text: String, isValid: Boolean, isDark: Boolean) {
+fun ValidationItem(text: String, isValid: Boolean, isError: Boolean, isDark: Boolean) {
     val customColors = CuidaleThemeExtras.customColors
     val successColor = customColors.successStrong
+    val errorColor = MaterialTheme.colorScheme.error
     val inactiveColor = if (isDark) Color.Gray else Color.Black.copy(alpha = 0.55f)
 
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
+    val color by animateColorAsState(
+        targetValue = when {
+            isValid -> successColor
+            isError -> errorColor
+            else -> inactiveColor
+        },
+        animationSpec = tween(300),
+        label = "validationColor"
+    )
+
+    val icon = when {
+        isValid -> Icons.Default.Check
+        isError -> Icons.Default.Close
+        else -> Icons.Default.Check
+    }
+
+    val shakeOffset by animateDpAsState(
+        targetValue = if (isError) 6.dp else 0.dp,
+        animationSpec = if (isError) {
+            repeatable(
+                iterations = 4,
+                animation = tween(durationMillis = 50, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            )
+        } else {
+            tween(0)
+        },
+        label = "shake"
+    )
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically, 
+        modifier = Modifier
+            .padding(vertical = 2.dp)
+            .offset { IntOffset(shakeOffset.toPx().roundToInt(), 0) }
+    ) {
         Icon(
-            imageVector = Icons.Default.Check,
+            imageVector = icon,
             contentDescription = null,
-            tint = if (isValid) successColor else inactiveColor,
+            tint = color,
             modifier = Modifier.size(16.dp)
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = text,
-            style = MaterialTheme.typography.bodySmall,
-            color = if (isValid) successColor else inactiveColor
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontWeight = if (isError) FontWeight.Bold else FontWeight.Normal
+            ),
+            color = color
         )
     }
 }

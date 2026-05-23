@@ -1,0 +1,88 @@
+[debug] [2026-05-23T07:36:46.291Z] ----------------------------------------------------------------------
+[debug] [2026-05-23T07:36:46.292Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\guill\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js deploy --only functions:updatePassword
+[debug] [2026-05-23T07:36:46.292Z] CLI Version:   15.18.0
+[debug] [2026-05-23T07:36:46.292Z] Platform:      win32
+[debug] [2026-05-23T07:36:46.292Z] Node Version:  v24.16.0
+[debug] [2026-05-23T07:36:46.292Z] Time:          Sat May 23 2026 03:36:46 GMT-0400 (hora estándar de Chile)
+[debug] [2026-05-23T07:36:46.292Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-05-23T07:36:47.414Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-23T07:36:47.414Z] > authorizing via signed-in user (guillermo.240gfz@gmail.com)
+[debug] [2026-05-23T07:36:47.414Z] [iam] checking project cuidale-app for permissions ["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]
+[debug] [2026-05-23T07:36:47.415Z] Checked if tokens are valid: true, expires at: 1779525104429
+[debug] [2026-05-23T07:36:47.415Z] Checked if tokens are valid: true, expires at: 1779525104429
+[debug] [2026-05-23T07:36:47.416Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/cuidale-app:testIamPermissions [none]
+[debug] [2026-05-23T07:36:47.416Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/cuidale-app:testIamPermissions  x-goog-user-project=cuidale-app
+[debug] [2026-05-23T07:36:47.416Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/cuidale-app:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}
+[debug] [2026-05-23T07:36:48.565Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/cuidale-app:testIamPermissions 200
+[debug] [2026-05-23T07:36:48.565Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/cuidale-app:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}
+[debug] [2026-05-23T07:36:48.565Z] Checked if tokens are valid: true, expires at: 1779525104429
+[debug] [2026-05-23T07:36:48.565Z] Checked if tokens are valid: true, expires at: 1779525104429
+[debug] [2026-05-23T07:36:48.565Z] >>> [apiv2][query] POST https://iam.googleapis.com/v1/projects/cuidale-app/serviceAccounts/cuidale-app@appspot.gserviceaccount.com:testIamPermissions [none]
+[debug] [2026-05-23T07:36:48.565Z] >>> [apiv2][body] POST https://iam.googleapis.com/v1/projects/cuidale-app/serviceAccounts/cuidale-app@appspot.gserviceaccount.com:testIamPermissions {"permissions":["iam.serviceAccounts.actAs"]}
+[debug] [2026-05-23T07:36:49.476Z] <<< [apiv2][status] POST https://iam.googleapis.com/v1/projects/cuidale-app/serviceAccounts/cuidale-app@appspot.gserviceaccount.com:testIamPermissions 404
+[debug] [2026-05-23T07:36:49.476Z] <<< [apiv2][body] POST https://iam.googleapis.com/v1/projects/cuidale-app/serviceAccounts/cuidale-app@appspot.gserviceaccount.com:testIamPermissions {"error":{"code":404,"message":"Unknown service account","status":"NOT_FOUND"}}
+[debug] [2026-05-23T07:36:49.477Z] [functions] service account IAM check errored, deploy may fail: Request to https://iam.googleapis.com/v1/projects/cuidale-app/serviceAccounts/cuidale-app@appspot.gserviceaccount.com:testIamPermissions had HTTP Error: 404, Unknown service account {"name":"FirebaseError","children":[],"context":{"body":{"error":{"code":404,"message":"Unknown service account","status":"NOT_FOUND"}},"response":{"statusCode":404}},"exit":1,"message":"Request to https://iam.googleapis.com/v1/projects/cuidale-app/serviceAccounts/cuidale-app@appspot.gserviceaccount.com:testIamPermissions had HTTP Error: 404, Unknown service account","status":404}
+[info] 
+[info] === Deploying to 'cuidale-app'...
+[info] 
+[info] i  deploying functions 
+[info] +  functions: Finished running predeploy script. 
+[debug] [2026-05-23T07:36:49.480Z] Checked if tokens are valid: true, expires at: 1779525104429
+[debug] [2026-05-23T07:36:49.480Z] Checked if tokens are valid: true, expires at: 1779525104429
+[debug] [2026-05-23T07:36:49.480Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/cuidale-app [none]
+[debug] [2026-05-23T07:36:49.747Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/cuidale-app 200
+[debug] [2026-05-23T07:36:49.747Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/projects/cuidale-app {"projectNumber":"397845476517","projectId":"cuidale-app","lifecycleState":"ACTIVE","name":"cuidale-app","labels":{"firebase":"enabled","firebase-core":"disabled"},"createTime":"2026-05-12T01:13:14.105Z"}
+[info] i  functions: preparing codebase default for deployment 
+[info] i  functions: ensuring required API cloudfunctions.googleapis.com is enabled... 
+[info] i  functions: ensuring required API cloudbuild.googleapis.com is enabled... 
+[info] i  artifactregistry: ensuring required API artifactregistry.googleapis.com is enabled... 
+[debug] [2026-05-23T07:36:49.753Z] Checked if tokens are valid: true, expires at: 1779525104429
+[debug] [2026-05-23T07:36:49.753Z] Checked if tokens are valid: true, expires at: 1779525104429
+[debug] [2026-05-23T07:36:49.753Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/cuidale-app/adminSdkConfig [none]
+[debug] [2026-05-23T07:36:50.098Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/cuidale-app/adminSdkConfig 200
+[debug] [2026-05-23T07:36:50.099Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/cuidale-app/adminSdkConfig {"projectId":"cuidale-app","storageBucket":"cuidale-app.firebasestorage.app"}
+[debug] [2026-05-23T07:36:50.101Z] Validating nodejs source
+[debug] [2026-05-23T07:36:50.694Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "24"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^13.6.0",
+    "firebase-functions": "^7.0.0",
+    "nodemailer": "^8.0.7"
+  },
+  "devDependencies": {
+    "eslint": "^8.15.0",
+    "eslint-config-google": "^0.14.0",
+    "firebase-functions-test": "^3.4.1"
+  },
+  "private": true
+}
+[debug] [2026-05-23T07:36:50.695Z] Building nodejs source
+[info] i  functions: Loading and analyzing source code for codebase default to determine what to deploy 
+[debug] [2026-05-23T07:36:50.695Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-05-23T07:36:50.705Z] Found firebase-functions binary at 'C:\Users\guill\AndroidStudioProjects\cuidaleapp\functions\node_modules\.bin\firebase-functions'
+[info] Serving at port 8899
+
+[debug] [2026-05-23T07:36:51.205Z] Got response from /__/functions.yaml {"endpoints":{"sendVerificationCode":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","region":["southamerica-west1"],"secretEnvironmentVariables":[{"key":"GMAIL_EMAIL"},{"key":"GMAIL_APP_PASSWORD"}],"labels":{},"callableTrigger":{},"entryPoint":"sendVerificationCode"},"verifyCode":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","region":["southamerica-west1"],"labels":{},"callableTrigger":{},"entryPoint":"verifyCode"},"cancelVerification":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","region":["southamerica-west1"],"labels":{},"callableTrigger":{},"entryPoint":"cancelVerification"},"updatePassword":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","region":["southamerica-west1"],"labels":{},"callableTrigger":{},"entryPoint":"updatePassword"}},"specVersion":"v1alpha1","requiredAPIs":[],"extensions":{},"params":[{"type":"secret","name":"GMAIL_EMAIL"},{"type":"secret","name":"GMAIL_APP_PASSWORD"}]}
+[debug] [2026-05-23T07:36:55.257Z] Checked if tokens are valid: true, expires at: 1779525104429
+[debug] [2026-05-23T07:36:55.258Z] Checked if tokens are valid: true, expires at: 1779525104429
+[debug] [2026-05-23T07:36:55.258Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v1/projects/cuidale-app/locations/-/functions [none]
+[debug] [2026-05-23T07:36:56.257Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v1/projects/cuidale-app/locations/-/functions 200
+[debug] [2026-05-23T07:36:56.257Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v1/projects/cuidale-app/locations/-/functions {}
+[debug] [2026-05-23T07:36:56.258Z] Checked if tokens are valid: true, expires at: 1779525104429
+[debug] [2026-05-23T07:36:56.258Z] Checked if tokens are valid: true, expires at: 1779525104429
+[debug] [2026-05-23T07:36:56.258Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v2/projects/cuidale-app/locations/-/functions filter=environment%3D%22GEN_2%22
+[debug] [2026-05-23T07:36:57.635Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v2/projects/cuidale-app/locations/-/functions 200

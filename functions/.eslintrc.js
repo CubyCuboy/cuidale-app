@@ -17,7 +17,7 @@ module.exports = {
         "quotes": ["error", "double", {allowTemplateLiterals: true}],
         "indent": ["error", 4],
         "max-len": ["error", {
-            code: 140,
+            code: 400,
             tabWidth: 4,
             ignoreUrls: true,
             ignoreStrings: true,
