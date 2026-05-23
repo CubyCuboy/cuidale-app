@@ -3,31 +3,15 @@ package com.example.cuidaleapp.ui.components
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -235,5 +219,132 @@ fun HardShadowButton(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun CuidaleStepProgressBar(
+    steps: List<String>,
+    currentStepIndex: Int
+) {
+    val customColors = CuidaleThemeExtras.customColors
+    val successColor = customColors.successStrong
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        steps.forEachIndexed { index, label ->
+            val isCompleted = index < currentStepIndex
+            val isCurrent = index == currentStepIndex
+            val isActive = isCompleted || isCurrent
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.weight(1f)
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .background(
+                            color = if (isActive) Color.White else Color.White.copy(alpha = 0.3f),
+                            shape = CircleShape
+                        )
+                ) {
+                    if (isCompleted) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = null,
+                            tint = successColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    } else {
+                        Text(
+                            text = (index + 1).toString(),
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                            color = if (isActive) successColor else Color.White
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal
+                    ),
+                    color = if (isActive) Color.White else Color.White.copy(alpha = 0.6f)
+                )
+            }
+
+            if (index < steps.size - 1) {
+                Box(
+                    modifier = Modifier
+                        .weight(0.5f)
+                        .height(2.dp)
+                        .background(Color.White.copy(alpha = 0.3f))
+                ) {
+                    if (index < currentStepIndex) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.White)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CuidaleValidationPanel(
+    validations: List<Pair<String, Boolean>>,
+    isDark: Boolean
+) {
+    val allRequirementsMet = validations.all { it.second }
+
+    val requirementsPanelBg = if (allRequirementsMet) {
+        if (isDark) Color(0xFF1B5E20).copy(alpha = 0.4f) else Color(0xFFDFF6E5)
+    } else {
+        if (isDark) Color.White.copy(alpha = 0.05f) else Color.White
+    }
+
+    HardShadowPanel(
+        backgroundColor = requirementsPanelBg,
+        shadowColor = Color.Transparent
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            validations.forEach { (text, isValid) ->
+                ValidationItem(text = text, isValid = isValid, isDark = isDark)
+            }
+        }
+    }
+}
+
+@Composable
+fun ValidationItem(text: String, isValid: Boolean, isDark: Boolean) {
+    val customColors = CuidaleThemeExtras.customColors
+    val successColor = customColors.successStrong
+    val inactiveColor = if (isDark) Color.Gray else Color.Black.copy(alpha = 0.55f)
+
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
+        Icon(
+            imageVector = Icons.Default.Check,
+            contentDescription = null,
+            tint = if (isValid) successColor else inactiveColor,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall,
+            color = if (isValid) successColor else inactiveColor
+        )
     }
 }

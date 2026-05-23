@@ -5,12 +5,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,9 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.cuidaleapp.ui.components.CuidaleTextField
-import com.example.cuidaleapp.ui.components.HardShadowButton
-import com.example.cuidaleapp.ui.components.HardShadowPanel
+import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.ForgotPasswordStatus
 import com.example.cuidaleapp.viewmodel.ForgotPasswordStep
@@ -40,6 +36,8 @@ fun ForgotPasswordScreen(
     val isDark by viewModel.isDarkMode.collectAsState()
     val gradient = CuidaleThemeExtras.gradient
     val onGradientText = CuidaleThemeExtras.customColors.onGradient
+
+    val recoverySteps = listOf("Paso 1", "Paso 2", "Paso 3")
 
     Box(
         modifier = Modifier
@@ -70,7 +68,15 @@ fun ForgotPasswordScreen(
             Spacer(modifier = Modifier.height(32.dp))
 
             if (currentStep != ForgotPasswordStep.SUCCESS) {
-                RecoveryProgressBar(currentStep = currentStep)
+                CuidaleStepProgressBar(
+                    steps = recoverySteps,
+                    currentStepIndex = when (currentStep) {
+                        ForgotPasswordStep.EMAIL -> 0
+                        ForgotPasswordStep.CODE -> 1
+                        ForgotPasswordStep.PASSWORD -> 2
+                        else -> 0
+                    }
+                )
                 Spacer(modifier = Modifier.height(32.dp))
             }
 
@@ -357,8 +363,12 @@ fun NewPasswordStep(
     val hasUppercase = password.any { it.isUpperCase() }
     val hasSpecialChar = password.any { !it.isLetterOrDigit() }
     val passwordsMatch = password.isNotEmpty() && password == confirmPassword
-    
-    val allRequirementsMet = hasMinLength && hasUppercase && hasSpecialChar
+
+    val validations = listOf(
+        "Mínimo 8 caracteres" to hasMinLength,
+        "Al menos una mayúscula" to hasUppercase,
+        "Un carácter especial" to hasSpecialChar
+    )
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
@@ -370,22 +380,7 @@ fun NewPasswordStep(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        val requirementsPanelBg = if (allRequirementsMet) {
-            if (isDark) Color(0xFF1B5E20).copy(alpha = 0.4f) else Color(0xFFDFF6E5)
-        } else {
-            if (isDark) Color.White.copy(alpha = 0.05f) else Color.White
-        }
-
-        HardShadowPanel(
-            backgroundColor = requirementsPanelBg,
-            shadowColor = Color.Transparent
-        ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                ValidationItem(text = "Mínimo 8 caracteres", isValid = hasMinLength, isDark = isDark)
-                ValidationItem(text = "Al menos una mayúscula", isValid = hasUppercase, isDark = isDark)
-                ValidationItem(text = "Un carácter especial", isValid = hasSpecialChar, isDark = isDark)
-            }
-        }
+        CuidaleValidationPanel(validations = validations, isDark = isDark)
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -481,114 +476,6 @@ fun NewPasswordStep(
             isDark = isDark,
             icon = Icons.AutoMirrored.Filled.ArrowBack,
             onClick = onBack
-        )
-    }
-}
-
-@Composable
-fun RecoveryProgressBar(currentStep: ForgotPasswordStep) {
-    val steps = listOf(
-        ForgotPasswordStep.EMAIL to "Paso 1",
-        ForgotPasswordStep.CODE to "Paso 2",
-        ForgotPasswordStep.PASSWORD to "Paso 3"
-    )
-    val customColors = CuidaleThemeExtras.customColors
-    val successColor = customColors.successStrong
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        steps.forEachIndexed { index, (step, label) ->
-            val isActive = currentStep == step || 
-                           (currentStep == ForgotPasswordStep.CODE && index < 1) ||
-                           (currentStep == ForgotPasswordStep.PASSWORD && index < 2)
-            
-            val isCurrent = currentStep == step
-            val isCompleted = isActive && !isCurrent
-
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.weight(1f)
-            ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .background(
-                            color = if (isActive) Color.White else Color.White.copy(alpha = 0.3f),
-                            shape = CircleShape
-                        )
-                ) {
-                    if (isCompleted) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = null,
-                            tint = successColor,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    } else {
-                        Text(
-                            text = (index + 1).toString(),
-                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                            color = if (isActive) successColor else Color.White
-                        )
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(4.dp))
-                
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal),
-                    color = if (isActive) Color.White else Color.White.copy(alpha = 0.6f)
-                )
-            }
-
-            if (index < steps.size - 1) {
-                Box(
-                    modifier = Modifier
-                        .weight(0.5f)
-                        .height(2.dp)
-                        .background(Color.White.copy(alpha = 0.3f))
-                ) {
-                    val isLineFilled = (currentStep == ForgotPasswordStep.CODE && index < 1) ||
-                                      (currentStep == ForgotPasswordStep.PASSWORD && index < 2)
-                    
-                    if (isLineFilled) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color.White)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ValidationItem(text: String, isValid: Boolean, isDark: Boolean) {
-    val customColors = CuidaleThemeExtras.customColors
-    val successColor = customColors.successStrong
-    val inactiveColor = if (isDark) Color.Gray else Color.Black.copy(alpha = 0.55f)
-    
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
-        Icon(
-            imageVector = Icons.Default.Check,
-            contentDescription = null,
-            tint = if (isValid) successColor else inactiveColor,
-            modifier = Modifier.size(16.dp)
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodySmall,
-            color = if (isValid) successColor else inactiveColor
         )
     }
 }
