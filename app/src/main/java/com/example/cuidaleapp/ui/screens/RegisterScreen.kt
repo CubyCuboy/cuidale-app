@@ -19,6 +19,19 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.cuidaleapp.data.ChileData
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.ui.text.input.KeyboardType
+import com.example.cuidaleapp.R
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.core.os.ConfigurationCompat
+import java.util.Locale
+import androidx.compose.ui.platform.LocalLocale
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
 import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.RegisterStatus
@@ -37,7 +50,11 @@ fun RegisterScreen(
     val onGradientText = CuidaleThemeExtras.customColors.onGradient
     val context = LocalContext.current
     
-    val registrationSteps = listOf("Personal", "Geográfico", "Cuenta")
+    val registrationSteps = listOf(
+        stringResource(R.string.register_step_personal),
+        stringResource(R.string.register_step_geo),
+        stringResource(R.string.register_step_account)
+    )
 
     LaunchedEffect(status) {
         if (status is RegisterStatus.Error) {
@@ -81,35 +98,50 @@ fun RegisterScreen(
                         RegisterStep.PersonalData -> 0
                         RegisterStep.GeographicData -> 1
                         RegisterStep.Password -> 2
-                        else -> 0
+                        else -> 2 // Para Verification/Success en esta actividad, marcamos el último paso
                     }
                 )
                 Spacer(modifier = Modifier.height(40.dp))
             }
 
-            Crossfade(targetState = currentStep, label = "registerStepTransition") { step ->
-                when (step) {
-                    RegisterStep.PersonalData -> {
-                        PersonalDataStep(
-                            viewModel = viewModel,
-                            onNext = { viewModel.goToStep(RegisterStep.GeographicData) }
-                        )
-                    }
-                    RegisterStep.GeographicData -> {
-                        GeographicDataStep(
-                            viewModel = viewModel,
-                            onNext = { viewModel.goToStep(RegisterStep.Password) },
-                            onBack = { viewModel.goToStep(RegisterStep.PersonalData) }
-                        )
-                    }
-                    RegisterStep.Password -> {
-                        PasswordStep(
-                            viewModel = viewModel,
-                            onBack = { viewModel.goToStep(RegisterStep.GeographicData) }
-                        )
-                    }
-                    RegisterStep.Success -> {
-                        RegistrationSuccessStep(onLogin = onBackToLogin)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .animateContentSize()
+            ) {
+                Crossfade(targetState = currentStep, label = "registerStepTransition", animationSpec = tween(500)) { step ->
+                    when (step) {
+                        RegisterStep.PersonalData -> {
+                            PersonalDataStep(
+                                viewModel = viewModel,
+                                onNext = { viewModel.goToStep(RegisterStep.GeographicData) }
+                            )
+                        }
+
+                        RegisterStep.GeographicData -> {
+                            GeographicDataStep(
+                                viewModel = viewModel,
+                                onNext = { viewModel.goToStep(RegisterStep.Password) },
+                                onBack = { viewModel.goToStep(RegisterStep.PersonalData) }
+                            )
+                        }
+
+                        RegisterStep.Password -> {
+                            RegisterPasswordStep(
+                                viewModel = viewModel,
+                                onBack = { viewModel.goToStep(RegisterStep.GeographicData) }
+                            )
+                        }
+
+                        RegisterStep.Verification, RegisterStep.Success -> {
+                            // Pantalla de transición mientras se navega a VerificationActivity
+                            Box(
+                                modifier = Modifier.fillMaxWidth().height(200.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(color = Color.White)
+                            }
+                        }
                     }
                 }
             }
@@ -159,9 +191,14 @@ fun PersonalDataStep(
     var email by remember { mutableStateOf(userData.correo) }
     var rut by remember { mutableStateOf(userData.rut) }
 
+    val isError = status is RegisterStatus.Error
+    val isLoading = status is RegisterStatus.Loading
+
+    val canGoNext = names.isNotBlank() && apellidos.isNotBlank() && email.isNotBlank() && rut.isNotBlank() && !isLoading
+
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
-            text = "Bienvenido, Ingrese sus datos personales",
+            text = stringResource(R.string.register_personal_desc),
             style = MaterialTheme.typography.bodyLarge,
             color = Color.White.copy(alpha = 0.9f),
             textAlign = TextAlign.Center,
@@ -170,54 +207,74 @@ fun PersonalDataStep(
 
         HardShadowPanel(
             backgroundColor = customColors.panelBackground,
-            shadowColor = if (customColors.isDark) shadows.hardShadowAccent else shadows.hardShadowPrimary.copy(alpha = 0.3f)
+            shadowColor = shadows.hardShadowPrimary,
+            isError = isError
         ) {
-            InputFieldLabel("Nombres")
+            InputFieldLabel(stringResource(R.string.register_name_label))
             CuidaleTextField(
                 value = names,
-                onValueChange = { names = it },
-                placeholder = "Primer y Segundo nombre",
-                containerColor = customColors.inputBackground
+                onValueChange = { 
+                    names = it
+                    if (isError) viewModel.clearError()
+                },
+                placeholder = stringResource(R.string.register_names_placeholder),
+                containerColor = customColors.inputBackground,
+                isError = isError && names.isBlank()
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            InputFieldLabel("Apellidos")
+            InputFieldLabel(stringResource(R.string.register_lastname_label))
             CuidaleTextField(
                 value = apellidos,
-                onValueChange = { apellidos = it },
-                placeholder = "Apellido paterno y materno",
-                containerColor = customColors.inputBackground
+                onValueChange = { 
+                    apellidos = it
+                    if (isError) viewModel.clearError()
+                },
+                placeholder = stringResource(R.string.register_apellidos_placeholder),
+                containerColor = customColors.inputBackground,
+                isError = isError && apellidos.isBlank()
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            InputFieldLabel("Correo electrónico")
+            InputFieldLabel(stringResource(R.string.register_email_label))
             CuidaleTextField(
                 value = email,
-                onValueChange = { email = it },
+                onValueChange = { 
+                    email = it
+                    if (isError) viewModel.clearError()
+                },
                 placeholder = "ejemplo@correo.cl",
-                containerColor = customColors.inputBackground
+                containerColor = customColors.inputBackground,
+                isError = isError && (email.isBlank() || !email.contains("@")),
+                keyboardType = KeyboardType.Email
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            InputFieldLabel("RUT")
+            InputFieldLabel(stringResource(R.string.register_rut_label))
             CuidaleTextField(
                 value = rut,
-                onValueChange = { rut = it },
-                placeholder = "12345678-9",
-                containerColor = customColors.inputBackground
+                onValueChange = { 
+                    rut = it
+                    if (isError) viewModel.clearError()
+                },
+                placeholder = stringResource(R.string.register_rut_placeholder),
+                containerColor = customColors.inputBackground,
+                isError = isError && rut.isBlank()
             )
 
             Spacer(modifier = Modifier.height(32.dp))
 
             HardShadowButton(
-                text = if (status is RegisterStatus.Loading) "Verificando..." else "Siguiente",
+                text = if (isLoading) "Verificando..." else stringResource(R.string.register_next_button),
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = Color.White,
                 shadowColor = shadows.hardShadowPrimary,
                 isDark = customColors.isDark,
+                enabled = canGoNext,
+                icon = Icons.AutoMirrored.Filled.ArrowForward,
                 onClick = {
                     viewModel.updatePersonalData(names, apellidos, email, rut, onNext)
                 }
@@ -233,6 +290,7 @@ fun GeographicDataStep(
     onBack: () -> Unit
 ) {
     val userData by viewModel.userData.collectAsState()
+    val status by viewModel.status.collectAsState()
     val customColors = CuidaleThemeExtras.customColors
     val shadows = CuidaleThemeExtras.shadows
     
@@ -243,9 +301,14 @@ fun GeographicDataStep(
     val selectedRegion = regions.find { it.name == selectedRegionName }
     val comunas = selectedRegion?.comunas?.sorted() ?: emptyList()
 
+    val isError = status is RegisterStatus.Error
+    val isLoading = status is RegisterStatus.Loading
+
+    val canGoNext = selectedRegionName.isNotEmpty() && selectedComunaName.isNotEmpty() && !isLoading
+
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
-            text = "Ingrese sus datos Geográficos",
+            text = stringResource(R.string.register_geo_desc),
             style = MaterialTheme.typography.bodyLarge,
             color = Color.White.copy(alpha = 0.9f),
             textAlign = TextAlign.Center,
@@ -254,142 +317,55 @@ fun GeographicDataStep(
 
         HardShadowPanel(
             backgroundColor = customColors.panelBackground,
-            shadowColor = if (customColors.isDark) shadows.hardShadowAccent else shadows.hardShadowPrimary.copy(alpha = 0.3f)
+            shadowColor = shadows.hardShadowPrimary,
+            isError = isError
         ) {
             CuidaleExposedDropdown(
-                label = "Elige la región donde vives actualmente",
+                label = stringResource(R.string.register_region_label),
                 options = regions.map { it.name },
                 selectedOption = selectedRegionName,
                 onOptionSelected = { 
                     selectedRegionName = it 
                     selectedComunaName = "" 
+                    if (isError) viewModel.clearError()
                 },
-                placeholder = "Seleccionar Región"
+                placeholder = stringResource(R.string.register_region_placeholder),
+                isError = isError && selectedRegionName.isEmpty()
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
             CuidaleExposedDropdown(
-                label = "Elige la comuna donde vives",
+                label = stringResource(R.string.register_comuna_label),
                 options = comunas,
                 selectedOption = selectedComunaName,
-                onOptionSelected = { selectedComunaName = it },
+                onOptionSelected = { 
+                    selectedComunaName = it 
+                    if (isError) viewModel.clearError()
+                },
                 enabled = selectedRegionName.isNotEmpty(),
-                placeholder = if (selectedRegionName.isEmpty()) "Primero elija una región" else "Seleccionar Comuna"
+                placeholder = if (selectedRegionName.isEmpty()) "Primero elija una región" else stringResource(R.string.register_comuna_placeholder),
+                isError = isError && selectedComunaName.isEmpty()
             )
 
             Spacer(modifier = Modifier.height(32.dp))
 
             HardShadowButton(
-                text = "Siguiente",
+                text = stringResource(R.string.register_next_button),
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = Color.White,
                 shadowColor = shadows.hardShadowPrimary,
                 isDark = customColors.isDark,
+                enabled = canGoNext,
+                icon = Icons.AutoMirrored.Filled.ArrowForward,
                 onClick = {
                     val error = viewModel.updateGeographicData(
                         selectedRegionName, 
                         selectedComunaName, 
                         selectedRegion?.id ?: ""
                     )
-                    if (error == null) onNext()
-                }
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            HardShadowButton(
-                text = "Retroceder",
-                containerColor = MaterialTheme.colorScheme.secondary,
-                contentColor = Color.White,
-                shadowColor = shadows.hardShadowSecondary,
-                isDark = customColors.isDark,
-                onClick = onBack
-            )
-        }
-    }
-}
-
-@Composable
-fun PasswordStep(
-    viewModel: RegisterViewModel,
-    onBack: () -> Unit
-) {
-    val status by viewModel.status.collectAsState()
-    val customColors = CuidaleThemeExtras.customColors
-    val shadows = CuidaleThemeExtras.shadows
-    
-    var password by remember { mutableStateOf("") }
-    var confirmPassword by remember { mutableStateOf("") }
-    var passwordVisible by remember { mutableStateOf(false) }
-    var confirmPasswordVisible by remember { mutableStateOf(false) }
-
-    val hasMinLength = password.length >= 6
-    val hasUppercase = password.any { it.isUpperCase() }
-    val hasLowercase = password.any { it.isLowerCase() }
-    val hasSpecialChar = password.any { it == '.' || it == '-' || !it.isLetterOrDigit() }
-    val passwordsMatch = password.isNotEmpty() && password == confirmPassword
-
-    val validations = listOf(
-        "Mínimo 6 caracteres" to hasMinLength,
-        "Al menos una mayúscula y minúscula" to (hasUppercase && hasLowercase),
-        "Un símbolo como punto o guion" to hasSpecialChar
-    )
-
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            text = "Establece la contraseña para tu cuenta",
-            style = MaterialTheme.typography.bodyLarge,
-            color = Color.White.copy(alpha = 0.9f),
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(bottom = 24.dp)
-        )
-
-        CuidaleValidationPanel(validations = validations, isDark = customColors.isDark)
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        HardShadowPanel(
-            backgroundColor = customColors.panelBackground,
-            shadowColor = if (customColors.isDark) shadows.hardShadowAccent else shadows.hardShadowPrimary.copy(alpha = 0.3f)
-        ) {
-            InputFieldLabel("Ingrese nueva contraseña")
-            CuidaleTextField(
-                value = password,
-                onValueChange = { password = it },
-                placeholder = "Contraseña",
-                containerColor = customColors.inputBackground,
-                isPassword = true,
-                isPasswordVisible = passwordVisible,
-                onPasswordVisibilityChange = { passwordVisible = !passwordVisible }
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            InputFieldLabel("Repita la contraseña")
-            CuidaleTextField(
-                value = confirmPassword,
-                onValueChange = { confirmPassword = it },
-                placeholder = "Repetir contraseña",
-                containerColor = customColors.inputBackground,
-                isPassword = true,
-                isPasswordVisible = confirmPasswordVisible,
-                onPasswordVisibilityChange = { confirmPasswordVisible = !confirmPasswordVisible }
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            HardShadowButton(
-                text = if (status is RegisterStatus.Loading) "Registrando..." else "Finalizar registro",
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = Color.White,
-                shadowColor = shadows.hardShadowPrimary,
-                isDark = customColors.isDark,
-                onClick = {
-                    if (passwordsMatch && hasMinLength && hasUppercase && hasLowercase && hasSpecialChar) {
-                        viewModel.finalizeRegistration(password)
-                    } else {
-                        // Toast or local error handling
+                    if (error == null) {
+                        onNext()
                     }
                 }
             )
@@ -397,15 +373,66 @@ fun PasswordStep(
             Spacer(modifier = Modifier.height(16.dp))
 
             HardShadowButton(
-                text = "Retroceder",
+                text = stringResource(R.string.register_back_button),
                 containerColor = MaterialTheme.colorScheme.secondary,
                 contentColor = Color.White,
                 shadowColor = shadows.hardShadowSecondary,
                 isDark = customColors.isDark,
+                enabled = !isLoading,
+                icon = Icons.AutoMirrored.Filled.ArrowBack,
                 onClick = onBack
             )
         }
     }
+}
+
+@Composable
+fun RegisterPasswordStep(
+    viewModel: RegisterViewModel,
+    onBack: () -> Unit
+) {
+    val status by viewModel.status.collectAsState()
+    val unmetRequirements by viewModel.unmetRequirementsTrigger.collectAsState()
+    val customColors = CuidaleThemeExtras.customColors
+    val isDark = customColors.isDark
+    
+    NewPasswordStep(
+        isLoading = status is RegisterStatus.Loading,
+        error = (status as? RegisterStatus.Error)?.message,
+        unmetRequirements = unmetRequirements,
+        isDark = isDark,
+        onUpdate = { p, _ -> viewModel.finalizeRegistration(p) },
+        onRestart = onBack,
+        onClearError = { viewModel.clearError() },
+        title = stringResource(R.string.register_pass_title),
+        description = stringResource(R.string.register_pass_desc),
+        buttonText = stringResource(R.string.register_pass_button)
+    )
+}
+
+@Composable
+fun RegisterVerificationStep(
+    viewModel: RegisterViewModel,
+    onBack: (() -> Unit)? = null
+) {
+    val status by viewModel.status.collectAsState()
+    val userData by viewModel.userData.collectAsState()
+    val timerSeconds by viewModel.timerSeconds.collectAsState()
+    val customColors = CuidaleThemeExtras.customColors
+    val isDark = customColors.isDark
+
+    CodeStep(
+        email = userData.correo,
+        timerSeconds = timerSeconds,
+        isLoading = status is RegisterStatus.Loading,
+        error = (status as? RegisterStatus.Error)?.message,
+        isDark = isDark,
+        onVerify = { viewModel.verifyCode(it) },
+        onResend = { viewModel.resendCode() },
+        onCancel = onBack,
+        onClearError = { viewModel.clearError() },
+        title = "Código de verificación"
+    )
 }
 
 @Composable
@@ -416,10 +443,11 @@ fun RegistrationSuccessStep(onLogin: () -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         HardShadowPanel(
             backgroundColor = customColors.panelBackground,
-            shadowColor = if (customColors.isDark) shadows.hardShadowAccent else shadows.hardShadowPrimary.copy(alpha = 0.3f)
+            shadowColor = shadows.hardShadowPrimary,
+            isError = false
         ) {
             Text(
-                text = "¡Registro completado con éxito!",
+                text = stringResource(R.string.register_success_title),
                 style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
                 color = if (customColors.isDark) customColors.success else Color(0xFF178F17),
                 textAlign = TextAlign.Center,
@@ -429,7 +457,7 @@ fun RegistrationSuccessStep(onLogin: () -> Unit) {
             Spacer(modifier = Modifier.height(16.dp))
             
             Text(
-                text = "Ya puedes iniciar sesión con tu cuenta nueva para empezar a usar Cuidale App.",
+                text = stringResource(R.string.register_success_desc),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center
@@ -438,7 +466,7 @@ fun RegistrationSuccessStep(onLogin: () -> Unit) {
             Spacer(modifier = Modifier.height(32.dp))
             
             HardShadowButton(
-                text = "Ir al Login",
+                text = stringResource(R.string.forgot_password_login_button),
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = Color.White,
                 shadowColor = shadows.hardShadowPrimary,

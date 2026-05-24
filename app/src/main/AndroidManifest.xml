@@ -48,6 +48,12 @@
             android:label="Menú Principal"
             android:theme="@style/Theme.CuidaleApp" />
 
+        <activity
+            android:name=".activities.VerificationActivity"
+            android:exported="false"
+            android:label="Verificación"
+            android:theme="@style/Theme.CuidaleApp" />
+
     </application>
 
 </manifest>

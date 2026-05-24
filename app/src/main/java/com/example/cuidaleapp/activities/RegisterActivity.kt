@@ -18,25 +18,52 @@ import androidx.activity.viewModels
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import com.example.cuidaleapp.ui.screens.RegisterScreen
+import com.example.cuidaleapp.viewmodel.RegisterViewModel
 import com.example.cuidaleapp.viewmodel.ThemeViewModel
+import com.example.cuidaleapp.viewmodel.RegisterStep
 
 
 class RegisterActivity : ComponentActivity() {
     private val themeViewModel: ThemeViewModel by viewModels()
+    private val registerViewModel: RegisterViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        val emailToVerify = intent.getStringExtra("EMAIL_TO_VERIFY")
+        val startAtVerification = intent.getBooleanExtra("START_AT_VERIFICATION", false)
+
+        if (startAtVerification && emailToVerify != null) {
+            registerViewModel.prepareForVerification(emailToVerify)
+        } else {
+            val role = intent.getStringExtra("ROLE") ?: "representante"
+            registerViewModel.setRole(role)
+        }
+
         setContent {
             val isDark by themeViewModel.isDarkMode.collectAsState()
+            val currentStep by registerViewModel.currentStep.collectAsState()
+            val userData by registerViewModel.userData.collectAsState()
+
+            LaunchedEffect(currentStep) {
+                if (currentStep == RegisterStep.Verification) {
+                    val intent = Intent(this@RegisterActivity, VerificationActivity::class.java).apply {
+                        putExtra("EMAIL_TO_VERIFY", userData.correo)
+                    }
+                    startActivity(intent)
+                    finish()
+                }
+            }
 
             CuidaleAppTheme(darkTheme = isDark) {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting2(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
+                RegisterScreen(
+                    viewModel = registerViewModel,
+                    onBackToLogin = {
+                        finish()
+                    }
+                )
             }
         }
     }

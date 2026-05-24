@@ -36,13 +36,19 @@ import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.animation.core.Animatable
 
 @Composable
-fun InputFieldLabel(text: String, modifier: Modifier = Modifier) {
+fun InputFieldLabel(
+    text: String,
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.onSurface
+) {
     Text(
         text = text,
         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-        color = MaterialTheme.colorScheme.onSurface,
+        color = color,
         modifier = modifier.padding(start = 4.dp, bottom = 8.dp)
     )
 }
@@ -120,29 +126,45 @@ fun HardShadowPanel(
     backgroundColor: Color,
     shadowColor: Color,
     modifier: Modifier = Modifier,
+    isError: Boolean = false,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val colors = MaterialTheme.colorScheme
+    val shakeOffset = remember { Animatable(0f) }
+
+    LaunchedEffect(isError) {
+        if (isError) {
+            repeat(6) {
+                shakeOffset.animateTo(
+                    targetValue = if (it % 2 == 0) 12f else -12f,
+                    animationSpec = tween(durationMillis = 60, easing = LinearEasing)
+                )
+            }
+            shakeOffset.animateTo(0f)
+        }
+    }
+
+    val finalBg = if (isError) colors.errorContainer.copy(alpha = 0.95f) else backgroundColor
+    val finalShadow = if (isError) colors.error else shadowColor
+
     val animatedBg by animateColorAsState(
-        targetValue = backgroundColor,
+        targetValue = finalBg,
         animationSpec = tween(400),
         label = "panelBg"
     )
 
-    val animatedShadow by animateColorAsState(
-        targetValue = shadowColor,
-        animationSpec = tween(400),
-        label = "panelShadow"
-    )
-
     Box(
-        modifier = modifier.fillMaxWidth()
+        modifier = modifier
+            .fillMaxWidth()
+            .offset { IntOffset(shakeOffset.value.roundToInt(), 0) }
     ) {
+        // Shadow (No animada en color, solo offset fijo)
         Box(
             modifier = Modifier
                 .matchParentSize()
-                .offset(x = 7.dp, y = 7.dp)
+                .offset(x = 6.dp, y = 6.dp)
                 .clip(RoundedCornerShape(28.dp))
-                .background(animatedShadow)
+                .background(shadowColor)
         )
 
         Column(
@@ -166,12 +188,37 @@ fun HardShadowButton(
     icon: ImageVector? = null,
     isErrorMode: Boolean = false,
     isDark: Boolean,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
 
-    val buttonBrush = if (isErrorMode) {
-        Brush.linearGradient(listOf(containerColor, containerColor))
+    val finalContainerColor = if (!enabled) {
+        if (isDark) Color.Gray.copy(alpha = 0.3f) else Color.LightGray
+    } else if (isErrorMode) {
+        colors.error
+    } else {
+        containerColor
+    }
+
+    val finalContentColor = if (!enabled) {
+        if (isDark) Color.White.copy(alpha = 0.4f) else Color.Gray
+    } else if (isErrorMode) {
+        Color.White
+    } else {
+        contentColor
+    }
+
+    val finalShadowColor = if (!enabled) {
+        Color.Transparent
+    } else if (isErrorMode) {
+        colors.errorContainer
+    } else {
+        shadowColor
+    }
+
+    val buttonBrush = if (!enabled || isErrorMode) {
+        Brush.linearGradient(listOf(finalContainerColor, finalContainerColor))
     } else if (isDark) {
         Brush.linearGradient(
             listOf(
@@ -191,23 +238,28 @@ fun HardShadowButton(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(60.dp)
+            .height(58.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .offset(x = 4.dp, y = 4.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(shadowColor)
-        )
+        if (enabled) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .offset(x = 6.dp, y = 6.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(finalShadowColor)
+            )
+        }
 
         Button(
             onClick = onClick,
+            enabled = enabled,
             modifier = Modifier.fillMaxSize(),
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = Color.Transparent,
-                contentColor = contentColor
+                contentColor = finalContentColor,
+                disabledContainerColor = Color.Transparent,
+                disabledContentColor = finalContentColor
             ),
             contentPadding = PaddingValues(0.dp)
         ) {
@@ -222,7 +274,7 @@ fun HardShadowButton(
                         Icon(
                             imageVector = icon,
                             contentDescription = null,
-                            tint = contentColor
+                            tint = finalContentColor
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                     }
@@ -230,7 +282,7 @@ fun HardShadowButton(
                     Text(
                         text = text,
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = contentColor
+                        color = finalContentColor
                     )
                 }
             }
@@ -417,10 +469,12 @@ fun CuidaleExposedDropdown(
     selectedOption: String,
     onOptionSelected: (String) -> Unit,
     enabled: Boolean = true,
+    isError: Boolean = false,
     placeholder: String = "Seleccionar..."
 ) {
     var expanded by remember { mutableStateOf(false) }
     val customColors = CuidaleThemeExtras.customColors
+    val borderColor = if (isError) customColors.warning else MaterialTheme.colorScheme.primary
 
     Column(modifier = Modifier.fillMaxWidth()) {
         InputFieldLabel(text = label)
@@ -441,12 +495,15 @@ fun CuidaleExposedDropdown(
                     )
                 },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                isError = isError,
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = customColors.inputBackground,
                     unfocusedContainerColor = customColors.inputBackground,
                     disabledContainerColor = customColors.inputBackground.copy(alpha = 0.1f),
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = if(enabled) Color.Transparent else Color.Transparent.copy(alpha = 0.1f),
+                    errorContainerColor = customColors.inputBackground,
+                    focusedBorderColor = borderColor,
+                    unfocusedBorderColor = if (isError) borderColor.copy(alpha = 0.8f) else Color.Transparent,
+                    errorBorderColor = borderColor,
                     disabledBorderColor = Color.Transparent.copy(alpha = 0.05f)
                 ),
                 shape = RoundedCornerShape(16.dp),
@@ -481,3 +538,4 @@ fun CuidaleExposedDropdown(
         }
     }
 }
+

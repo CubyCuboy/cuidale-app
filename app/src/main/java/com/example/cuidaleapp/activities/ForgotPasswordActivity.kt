@@ -1,5 +1,6 @@
 package com.example.cuidaleapp.activities
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -23,7 +24,14 @@ class ForgotPasswordActivity : ComponentActivity() {
             CuidaleAppTheme(darkTheme = isDark) {
                 ForgotPasswordScreen(
                     viewModel = viewModel,
-                    onBackToLogin = { finish() }
+                    onBackToLogin = { finish() },
+                    onNavigateToVerification = { email ->
+                        val intent = Intent(this@ForgotPasswordActivity, VerificationActivity::class.java).apply {
+                            putExtra("EMAIL_TO_VERIFY", email)
+                        }
+                        startActivity(intent)
+                        finish()
+                    }
                 )
             }
         }

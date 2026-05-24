@@ -76,9 +76,17 @@ fun LoginScreen(
     onToggleTheme: () -> Unit,
     viewModel: LoginViewModel = viewModel(),
     onNavigateToRegister: () -> Unit = {},
-    onForgotPassword: () -> Unit = {}
+    onForgotPassword: () -> Unit = {},
+    onNavigateToVerification: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(uiState) {
+        if (uiState is LoginUiState.Unverified) {
+            onNavigateToVerification((uiState as LoginUiState.Unverified).email)
+            viewModel.clearError()
+        }
+    }
 
     // Clave estable para el formulario para evitar que se borren los campos al cambiar de estado interno
     val screenKey = when (uiState) {

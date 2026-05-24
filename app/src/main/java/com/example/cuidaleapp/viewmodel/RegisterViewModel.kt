@@ -7,10 +7,12 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import com.google.firebase.functions.FirebaseFunctions
 
 data class RegisterUserData(
     val role: String = "",
@@ -29,6 +31,7 @@ sealed class RegisterStep {
     object PersonalData : RegisterStep()
     object GeographicData : RegisterStep()
     object Password : RegisterStep()
+    object Verification : RegisterStep()
     object Success : RegisterStep()
 }
 
@@ -43,6 +46,7 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
     private val prefs = application.getSharedPreferences("cuidale_registration_cache", Context.MODE_PRIVATE)
     private val auth = FirebaseAuth.getInstance()
     private val db = FirebaseFirestore.getInstance()
+    private val functions = com.google.firebase.functions.FirebaseFunctions.getInstance("southamerica-west1")
 
     private val _currentStep = MutableStateFlow<RegisterStep>(RegisterStep.PersonalData)
     val currentStep: StateFlow<RegisterStep> = _currentStep
@@ -53,9 +57,42 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
     private val _userData = MutableStateFlow(RegisterUserData(role = prefs.getString("temp_role", "") ?: ""))
     val userData: StateFlow<RegisterUserData> = _userData
 
+    private val _timerSeconds = MutableStateFlow(1800)
+    val timerSeconds: StateFlow<Int> = _timerSeconds
+
+    private var timerJob: kotlinx.coroutines.Job? = null
+
+    private val _unmetRequirementsTrigger = MutableStateFlow<Set<Int>>(emptySet())
+    val unmetRequirementsTrigger: StateFlow<Set<Int>> = _unmetRequirementsTrigger
+
     fun setRole(role: String) {
-        prefs.edit().putString("temp_role", role).apply()
+        prefs?.edit()?.putString("temp_role", role)?.apply()
         _userData.value = _userData.value.copy(role = role)
+    }
+
+    fun prepareForVerification(email: String) {
+        viewModelScope.launch {
+            _status.value = RegisterStatus.Loading
+            try {
+                val query = db.collection("usuarios")
+                    .whereEqualTo("correo", email)
+                    .get()
+                    .await()
+
+                if (!query.isEmpty) {
+                    val userDoc = query.documents[0]
+                    val data = userDoc.toObject(RegisterUserData::class.java)
+                    if (data != null) {
+                        _userData.value = data
+                        _currentStep.value = RegisterStep.Verification
+                        startTimer()
+                    }
+                }
+                _status.value = RegisterStatus.Idle
+            } catch (e: Exception) {
+                _status.value = RegisterStatus.Error("Error al cargar datos de verificación")
+            }
+        }
     }
 
     fun updatePersonalData(
@@ -73,43 +110,46 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
         val nameWords = fullNames.trim().split("\\s+".toRegex())
         val apellidoWords = fullApellidos.trim().split("\\s+".toRegex())
 
-        if (nameWords.size > 2) {
-            _status.value = RegisterStatus.Error("Máximo dos nombres permitidos")
-            return
-        }
-
-        if (apellidoWords.size > 2) {
-            _status.value = RegisterStatus.Error("Máximo dos apellidos permitidos")
-            return
-        }
-
         if (!isValidEmail(email)) {
             _status.value = RegisterStatus.Error("Formato de correo inválido")
             return
         }
 
         if (!isValidRut(rut)) {
-            _status.value = RegisterStatus.Error("RUT inválido (use formato 12345678-9)")
+            _status.value = RegisterStatus.Error("RUT inválido")
             return
         }
 
         val normalizedEmail = email.lowercase().trim()
+        val normalizedRut = formatRut(rut)
 
         viewModelScope.launch {
             _status.value = RegisterStatus.Loading
             try {
-                val query = db.collection("usuarios")
+                // Verificar si correo existe
+                val emailQuery = db.collection("usuarios")
                     .whereEqualTo("correo", normalizedEmail)
                     .get()
                     .await()
 
-                if (!query.isEmpty) {
+                if (!emailQuery.isEmpty) {
                     _status.value = RegisterStatus.Error("El correo ya se encuentra registrado")
                     return@launch
                 }
 
-                val (n1, n2) = splitInput(fullNames)
-                val (a1, a2) = splitInput(fullApellidos)
+                // Verificar si RUT existe
+                val rutQuery = db.collection("usuarios")
+                    .whereEqualTo("rut", normalizedRut)
+                    .get()
+                    .await()
+
+                if (!rutQuery.isEmpty) {
+                    _status.value = RegisterStatus.Error("El RUT ya se encuentra registrado")
+                    return@launch
+                }
+
+                val (n1, n2) = splitInput(capitalizeWords(fullNames))
+                val (a1, a2) = splitInput(capitalizeWords(fullApellidos))
 
                 _userData.value = _userData.value.copy(
                     nombre = n1,
@@ -117,15 +157,29 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
                     apellido_pa = a1,
                     apellido_ma = a2,
                     correo = normalizedEmail,
-                    rut = rut.trim()
+                    rut = normalizedRut
                 )
                 
                 _status.value = RegisterStatus.Idle
                 onSuccess()
             } catch (e: Exception) {
-                _status.value = RegisterStatus.Error("Error al verificar el correo: ${e.message}")
+                _status.value = RegisterStatus.Error("Error al validar datos: ${e.message}")
             }
         }
+    }
+
+    private fun capitalizeWords(input: String): String {
+        return input.trim().split("\\s+".toRegex()).joinToString(" ") { word ->
+            word.lowercase().replaceFirstChar { it.uppercase() }
+        }
+    }
+
+    private fun formatRut(rut: String): String {
+        val clean = rut.replace(".", "").replace("-", "").uppercase().trim()
+        if (clean.length < 2) return clean
+        val body = clean.substring(0, clean.length - 1)
+        val dv = clean.substring(clean.length - 1)
+        return "$body-$dv"
     }
 
     fun updateGeographicData(
@@ -161,16 +215,11 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
     }
 
     private fun isValidRut(rut: String): Boolean {
-        val cleanRut = rut.replace(".", "").trim()
-        if (!cleanRut.contains("-")) return false
+        val cleanRut = rut.replace(".", "").replace("-", "").trim()
+        if (cleanRut.length < 8 || cleanRut.length > 9) return false
         
-        val parts = cleanRut.split("-")
-        if (parts.size != 2) return false
-        
-        val body = parts[0]
-        val dvInput = parts[1].uppercase()
-        
-        if (body.length < 7 || body.length > 8) return false
+        val body = cleanRut.substring(0, cleanRut.length - 1)
+        val dvInput = cleanRut.substring(cleanRut.length - 1).uppercase()
         
         return try {
             val expectedDv = calculateRutDv(body.toInt())
@@ -196,6 +245,28 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
     }
     
     fun finalizeRegistration(password: String) {
+        val hasMinLength = password.length >= 8
+        val hasUppercase = password.any { it.isUpperCase() }
+        val hasSpecialChar = password.any { !it.isLetterOrDigit() }
+
+        val unmet = mutableSetOf<Int>()
+        if (!hasMinLength) unmet.add(0)
+        if (!hasUppercase) unmet.add(1)
+        if (!hasSpecialChar) unmet.add(2)
+        // La coincidencia de contraseña se maneja en el UI layer (NewPasswordStep)
+        // pero podemos agregarla aquí si fuera necesario.
+        // Aquí asumimos que si llega aquí es porque NewPasswordStep validó canUpdate.
+
+        if (unmet.isNotEmpty()) {
+            viewModelScope.launch {
+                _unmetRequirementsTrigger.value = unmet
+                _status.value = RegisterStatus.Error("La contraseña no cumple con todos los requisitos.")
+                delay(2000)
+                _unmetRequirementsTrigger.value = emptySet()
+            }
+            return
+        }
+
         viewModelScope.launch {
             _status.value = RegisterStatus.Loading
             try {
@@ -213,17 +284,110 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
                     "region" to data.region,
                     "comuna" to data.comuna,
                     "id_region" to data.id_region,
-                    "rol" to data.role
+                    "rol" to data.role,
+                    "verificado" to false
                 )
 
                 db.collection("usuarios").document(uid).set(userProfile).await()
 
-                _status.value = RegisterStatus.Success
-                _currentStep.value = RegisterStep.Success
+                // Enviar código de verificación
+                sendVerificationCode()
+                
+                _status.value = RegisterStatus.Idle
+                // Cambiamos el paso pero no navegamos a una nueva actividad automáticamente
+                // El Screen de RegisterActivity mostrará el RegisterVerificationStep
+                _currentStep.value = RegisterStep.Verification
                 clearCache()
             } catch (e: Exception) {
                 _status.value = RegisterStatus.Error("Error al registrar: ${e.message}")
             }
+        }
+    }
+
+    private fun sendVerificationCode() {
+        val email = _userData.value.correo
+        if (email.isBlank()) return
+
+        viewModelScope.launch {
+            try {
+                val data = hashMapOf(
+                    "email" to email,
+                    "type" to "verification"
+                )
+                functions.getHttpsCallable("sendVerificationCode").call(data).await()
+                startTimer()
+            } catch (e: Exception) {
+                _status.value = RegisterStatus.Error("Error al enviar código: ${e.message}")
+            }
+        }
+    }
+
+    fun resendCode() {
+        _status.value = RegisterStatus.Loading
+        viewModelScope.launch {
+            try {
+                val email = auth.currentUser?.email ?: _userData.value.correo
+                val data = hashMapOf(
+                    "email" to email,
+                    "type" to "verification"
+                )
+                functions.getHttpsCallable("sendVerificationCode").call(data).await()
+                _status.value = RegisterStatus.Idle
+                startTimer()
+            } catch (e: Exception) {
+                _status.value = RegisterStatus.Error("No se pudo reenviar el código: ${e.message}")
+            }
+        }
+    }
+
+    fun verifyCode(code: String) {
+        if (code.length != 6) {
+            _status.value = RegisterStatus.Error("El código debe tener 6 dígitos.")
+            return
+        }
+
+        viewModelScope.launch {
+            _status.value = RegisterStatus.Loading
+            try {
+                val email = auth.currentUser?.email ?: _userData.value.correo
+                val data = hashMapOf(
+                    "email" to email,
+                    "code" to code
+                )
+
+                functions.getHttpsCallable("verifyCode").call(data).await()
+
+                // Marcar como verificado en Firestore
+                val uid = auth.currentUser?.uid
+                if (uid != null) {
+                    db.collection("usuarios").document(uid).update("verificado", true).await()
+                }
+
+                timerJob?.cancel()
+                _status.value = RegisterStatus.Success
+                _currentStep.value = RegisterStep.Success
+            } catch (e: Exception) {
+                _status.value = RegisterStatus.Error("Código inválido o expirado.")
+            }
+        }
+    }
+
+    private fun startTimer() {
+        timerJob?.cancel()
+        _timerSeconds.value = 1800
+        timerJob = viewModelScope.launch {
+            while (_timerSeconds.value > 0) {
+                delay(1000)
+                _timerSeconds.value -= 1
+            }
+            // Cuando expira, podemos limpiar el código en backend
+            try {
+                val email = auth.currentUser?.email ?: _userData.value.correo
+                if (email.isNotBlank()) {
+                    val data = hashMapOf("email" to email)
+                    functions.getHttpsCallable("cancelVerification").call(data).await()
+                }
+            } catch (e: Exception) {}
         }
     }
 

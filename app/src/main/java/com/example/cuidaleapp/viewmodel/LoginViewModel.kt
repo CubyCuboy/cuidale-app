@@ -17,7 +17,8 @@ data class UserData(
     val apellido_pa: String = "",
     val correo: String = "",
     val rut: String = "",
-    val rol: String = ""
+    val rol: String = "",
+    val verificado: Boolean = false
 )
 
 sealed class LoginUiState {
@@ -26,6 +27,7 @@ sealed class LoginUiState {
     data class Transition(val userData: UserData) : LoginUiState()
     object Success : LoginUiState()
     data class Error(val message: String) : LoginUiState()
+    data class Unverified(val email: String) : LoginUiState()
 }
 
 class LoginViewModel(application: Application) : AndroidViewModel(application) {
@@ -48,10 +50,8 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     init {
         // Verificar si ya hay una sesión activa al iniciar
         val currentUser = auth.currentUser
-        if (currentUser != null && prefs.contains("user_nombre") && prefs.contains("user_rol")) {
-            _uiState.value = LoginUiState.Success
-        } else if (currentUser != null) {
-            // Tenemos usuario pero no cache, intentamos recuperar del Firestore
+        if (currentUser != null) {
+            // Siempre verificamos con Firestore para asegurar el estado de 'verificado'
             viewModelScope.launch {
                 try {
                     val query = db.collection("usuarios")
@@ -62,12 +62,28 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     if (!query.isEmpty) {
                         val userData = query.documents[0].toObject(UserData::class.java)
                         if (userData != null) {
-                            saveUserToCache(userData)
-                            _uiState.value = LoginUiState.Success
+                            if (!userData.verificado) {
+                                // Si no está verificado, forzamos estado Unverified
+                                _uiState.value = LoginUiState.Unverified(userData.correo)
+                            } else {
+                                // Solo si está verificado, guardamos en cache y marcamos éxito
+                                saveUserToCache(userData)
+                                _uiState.value = LoginUiState.Success
+                            }
                         }
+                    } else {
+                        // Usuario de Auth existe pero no en Firestore? Caso raro, limpiar
+                        auth.signOut()
+                        clearCache()
                     }
                 } catch (e: Exception) {
-                    // Si falla el auto-login por red o datos, dejamos en Idle para login manual
+                    // Si falla la red, podemos intentar usar el cache si existe y marcaba verificado
+                    val cachedUser = getCachedUser()
+                    if (cachedUser.correo.isNotEmpty() && cachedUser.verificado) {
+                        _uiState.value = LoginUiState.Success
+                    } else {
+                        _uiState.value = LoginUiState.Idle
+                    }
                 }
             }
         }
@@ -124,6 +140,14 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 
                 if (userData != null) {
+                    // Verificar si la cuenta está verificada
+                    val isVerified = userData.verificado
+                    if (!isVerified) {
+                        // Reenviar código automáticamente al intentar loguear sin verificar
+                        resendVerificationCode(targetEmail)
+                        _uiState.value = LoginUiState.Unverified(targetEmail)
+                        return@launch
+                    }
                     saveUserToCache(userData)
                     _uiState.value = LoginUiState.Transition(userData)
                 } else {
@@ -136,6 +160,22 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private val functions = com.google.firebase.functions.FirebaseFunctions.getInstance("southamerica-west1")
+
+    private fun resendVerificationCode(email: String) {
+        viewModelScope.launch {
+            try {
+                val data = hashMapOf(
+                    "email" to email,
+                    "type" to "verification"
+                )
+                functions.getHttpsCallable("sendVerificationCode").call(data).await()
+            } catch (e: Exception) {
+                // Silencioso o log
+            }
+        }
+    }
+
     private fun saveUserToCache(user: UserData) {
         prefs.edit().apply {
             putString("user_nombre", user.nombre)
@@ -143,6 +183,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
             putString("user_correo", user.correo)
             putString("user_rut", user.rut)
             putString("user_rol", user.rol)
+            putBoolean("user_verificado", user.verificado)
             apply()
         }
     }
@@ -153,7 +194,8 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
             apellido_pa = prefs.getString("user_apellido", "") ?: "",
             correo = prefs.getString("user_correo", "") ?: "",
             rut = prefs.getString("user_rut", "") ?: "",
-            rol = prefs.getString("user_rol", "") ?: ""
+            rol = prefs.getString("user_rol", "") ?: "",
+            verificado = prefs.getBoolean("user_verificado", false)
         )
     }
 

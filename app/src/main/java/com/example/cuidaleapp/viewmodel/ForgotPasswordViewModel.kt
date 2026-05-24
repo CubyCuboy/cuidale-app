@@ -23,6 +23,7 @@ sealed class ForgotPasswordStatus {
     object Idle : ForgotPasswordStatus()
     object Loading : ForgotPasswordStatus()
     data class Error(val message: String) : ForgotPasswordStatus()
+    data class Unverified(val email: String) : ForgotPasswordStatus()
 }
 
 class ForgotPasswordViewModel(application: Application) : AndroidViewModel(application) {
@@ -76,15 +77,37 @@ class ForgotPasswordViewModel(application: Application) : AndroidViewModel(appli
             _status.value = ForgotPasswordStatus.Loading
 
             try {
-                val exists = isRegisteredEmail(normalizedEmail)
-                if (!exists) {
+                val userQuery = firestore.collection("usuarios")
+                    .whereEqualTo("correo", normalizedEmail)
+                    .get()
+                    .await()
+                
+                if (userQuery.isEmpty) {
                     _status.value = ForgotPasswordStatus.Error(
                         "La dirección de correo electrónico proporcionada no se encuentra registrada en nuestro sistema."
                     )
                     return@launch
                 }
 
-                val data = hashMapOf("email" to normalizedEmail)
+                val userData = userQuery.documents[0]
+                val isVerified = userData.getBoolean("verificado") ?: false
+                
+                if (!isVerified) {
+                    // Si no está verificado, redirigimos a la verificación de cuenta
+                    val sendData = hashMapOf(
+                        "email" to normalizedEmail,
+                        "type" to "verification"
+                    )
+                    functions.getHttpsCallable("sendVerificationCode").call(sendData).await()
+                    
+                    _status.value = ForgotPasswordStatus.Unverified(normalizedEmail)
+                    return@launch
+                }
+
+                val data = hashMapOf(
+                    "email" to normalizedEmail,
+                    "type" to "recovery"
+                )
                 functions.getHttpsCallable("sendVerificationCode").call(data).await()
 
                 _lastRequestedEmail.value = normalizedEmail

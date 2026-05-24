@@ -20,12 +20,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.os.ConfigurationCompat
+import com.example.cuidaleapp.R
 import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.ForgotPasswordStatus
@@ -33,11 +35,14 @@ import com.example.cuidaleapp.viewmodel.ForgotPasswordStep
 import com.example.cuidaleapp.viewmodel.ForgotPasswordViewModel
 import java.util.Locale
 import androidx.compose.ui.platform.LocalLocale
+import androidx.compose.ui.tooling.preview.Preview
+import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
 
 @Composable
 fun ForgotPasswordScreen(
     viewModel: ForgotPasswordViewModel,
-    onBackToLogin: () -> Unit
+    onBackToLogin: () -> Unit,
+    onNavigateToVerification: (String) -> Unit = {}
 ) {
     val currentStep by viewModel.currentStep.collectAsState()
     val status by viewModel.status.collectAsState()
@@ -46,12 +51,23 @@ fun ForgotPasswordScreen(
     val lastRequestedEmail by viewModel.lastRequestedEmail.collectAsState()
     val unmetRequirements by viewModel.unmetRequirementsTrigger.collectAsState()
 
+    LaunchedEffect(status) {
+        if (status is ForgotPasswordStatus.Unverified) {
+            onNavigateToVerification((status as ForgotPasswordStatus.Unverified).email)
+            viewModel.clearError()
+        }
+    }
+
     val gradient = CuidaleThemeExtras.gradient
     val onGradientText = CuidaleThemeExtras.customColors.onGradient
     val isLoading = status is ForgotPasswordStatus.Loading
     val errorMessage = (status as? ForgotPasswordStatus.Error)?.message
 
-    val recoverySteps = listOf("Paso 1", "Paso 2", "Paso 3")
+    val recoverySteps = listOf(
+        stringResource(R.string.forgot_password_step_1),
+        stringResource(R.string.forgot_password_step_2),
+        stringResource(R.string.forgot_password_step_3)
+    )
 
     Box(
         modifier = Modifier
@@ -71,7 +87,7 @@ fun ForgotPasswordScreen(
             Spacer(modifier = Modifier.height(60.dp))
 
             Text(
-                text = "Recupere su contraseña",
+                text = stringResource(R.string.forgot_password_screen_title),
                 style = MaterialTheme.typography.displaySmall.copy(
                     fontWeight = FontWeight.Bold,
                     fontSize = 32.sp,
@@ -141,7 +157,8 @@ fun ForgotPasswordScreen(
                                 unmetRequirements = unmetRequirements,
                                 isDark = isDark,
                                 onUpdate = { p, c -> viewModel.updatePassword(p, c) },
-                                onRestart = { viewModel.resetToStart() }
+                                onRestart = { viewModel.resetToStart() },
+                                onClearError = { viewModel.clearError() }
                             )
                         }
 
@@ -163,12 +180,12 @@ fun ForgotPasswordScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "¿Ya tiene cuenta? ",
+                        text = stringResource(R.string.forgot_password_footer_prefix),
                         style = MaterialTheme.typography.bodyMedium,
                         color = onGradientText
                     )
                     Text(
-                        text = "Inicie sesión aquí",
+                        text = stringResource(R.string.forgot_password_footer_link),
                         style = MaterialTheme.typography.bodyMedium.copy(
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -182,7 +199,6 @@ fun ForgotPasswordScreen(
         }
     }
 }
-
 @Composable
 fun EmailStep(
     isLoading: Boolean,
@@ -197,9 +213,11 @@ fun EmailStep(
     val customColors = CuidaleThemeExtras.customColors
     val panelShadowColor = if (isDark) shadows.hardShadowAccent else shadows.hardShadowPrimary
 
+    val canSend = isValidEmail(email) && !isLoading
+
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
-            text = "Para iniciar el proceso de recuperación, por favor ingrese la dirección de correo electrónico asociada a su cuenta. Le enviaremos un código de seguridad.",
+            text = stringResource(R.string.forgot_password_email_desc),
             style = MaterialTheme.typography.bodyLarge,
             color = Color.White.copy(alpha = 0.9f),
             textAlign = TextAlign.Center,
@@ -210,15 +228,12 @@ fun EmailStep(
 
         HardShadowPanel(
             backgroundColor = customColors.panelBackground,
-            shadowColor = panelShadowColor.copy(alpha = 0.6f)
+            shadowColor = panelShadowColor,
+            isError = error != null
         ) {
-            Text(
-                text = "Ingrese tu correo electrónico",
-                style = MaterialTheme.typography.labelMedium,
-                color = if (isDark) customColors.onGradient.copy(alpha = 0.7f) else Color.Gray,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp)
+            InputFieldLabel(
+                text = stringResource(R.string.forgot_password_email_label),
+                color = if (isDark) customColors.onGradient.copy(alpha = 0.7f) else Color.Gray
             )
 
             CuidaleTextField(
@@ -227,7 +242,7 @@ fun EmailStep(
                     email = it
                     if (error != null) onClearError()
                 },
-                placeholder = "Ej: correo@correo.cl",
+                placeholder = stringResource(R.string.forgot_password_email_placeholder),
                 containerColor = customColors.inputBackground,
                 isError = error != null,
                 keyboardType = KeyboardType.Email
@@ -236,7 +251,7 @@ fun EmailStep(
             if (error != null) {
                 Text(
                     text = error,
-                    color = colors.error,
+                    color = colors.onErrorContainer,
                     style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier.padding(top = 8.dp)
                 )
@@ -246,15 +261,21 @@ fun EmailStep(
         Spacer(modifier = Modifier.height(32.dp))
 
         HardShadowButton(
-            text = if (isLoading) "Enviando..." else "Enviar código",
-            containerColor = Color(0xFF4A56E2),
-            contentColor = Color.White,
-            shadowColor = shadows.hardShadowPrimary,
+            text = if (isLoading) stringResource(R.string.forgot_password_sending) else if (error != null) stringResource(R.string.login_button_retry) else stringResource(R.string.forgot_password_send_code),
+            containerColor = if (isDark) customColors.warning else colors.primary,
+            contentColor = if (isDark) Color.Black else Color.White,
+            shadowColor = if (isDark) shadows.hardShadowAccent else shadows.hardShadowPrimary,
             isDark = isDark,
+            isErrorMode = error != null,
+            enabled = canSend,
             icon = Icons.AutoMirrored.Filled.ArrowForward,
             onClick = { if (!isLoading) onSend(email) }
         )
     }
+}
+
+private fun isValidEmail(email: String): Boolean {
+    return email.isNotEmpty() && android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
 }
 
 @Composable
@@ -266,8 +287,9 @@ fun CodeStep(
     isDark: Boolean,
     onVerify: (String) -> Unit,
     onResend: () -> Unit,
-    onCancel: () -> Unit,
-    onClearError: () -> Unit
+    onCancel: (() -> Unit)? = null,
+    onClearError: () -> Unit,
+    title: String = stringResource(R.string.forgot_password_code_title)
 ) {
     var code by rememberSaveable { mutableStateOf("") }
     val minutes = timerSeconds / 60
@@ -280,9 +302,11 @@ fun CodeStep(
     val colors = MaterialTheme.colorScheme
     val panelShadowColor = if (isDark) shadows.hardShadowAccent else shadows.hardShadowPrimary
 
+    val canVerify = code.length == 6 && !isLoading
+
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
-            text = "Ingresa el código de recuperación",
+            text = title,
             style = MaterialTheme.typography.bodyLarge,
             color = Color.White.copy(alpha = 0.9f),
             textAlign = TextAlign.Center
@@ -295,7 +319,7 @@ fun CodeStep(
             shadowColor = Color.Transparent
         ) {
             Text(
-                text = "Se ha enviado un código de seguridad a la dirección: $email. Este código será válido durante los próximos 5 minutos.",
+                text = stringResource(R.string.forgot_password_code_sent_desc, email),
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (isDark) customColors.success else Color(0xFF1B5E20),
                 textAlign = TextAlign.Center,
@@ -317,7 +341,7 @@ fun CodeStep(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "El código expira en $timerText",
+                    text = stringResource(R.string.forgot_password_code_expires, timerText),
                     style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
                     color = if (isDark) customColors.success else Color(0xFF1B5E20),
                 )
@@ -328,15 +352,12 @@ fun CodeStep(
 
         HardShadowPanel(
             backgroundColor = customColors.panelBackground,
-            shadowColor = panelShadowColor.copy(alpha = 0.6f)
+            shadowColor = panelShadowColor,
+            isError = error != null
         ) {
-            Text(
-                text = "Ingrese el código de recuperación",
-                style = MaterialTheme.typography.labelMedium,
-                color = if (isDark) customColors.onGradient.copy(alpha = 0.7f) else Color.Gray,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp)
+            InputFieldLabel(
+                text = stringResource(R.string.forgot_password_code_label),
+                color = if (isDark) customColors.onGradient.copy(alpha = 0.7f) else Color.Gray
             )
 
             CuidaleTextField(
@@ -346,7 +367,7 @@ fun CodeStep(
                     code = filtered
                     if (error != null) onClearError()
                 },
-                placeholder = "Ingrese los 6 dígitos",
+                placeholder = stringResource(R.string.forgot_password_code_placeholder),
                 containerColor = customColors.inputBackground,
                 isError = error != null,
                 textAlign = TextAlign.Center,
@@ -356,7 +377,7 @@ fun CodeStep(
             if (error != null) {
                 Text(
                     text = error,
-                    color = colors.error,
+                    color = colors.onErrorContainer,
                     style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier.padding(top = 8.dp),
                     textAlign = TextAlign.Center
@@ -371,12 +392,12 @@ fun CodeStep(
             modifier = Modifier.clickable(enabled = !isLoading) { onResend() }
         ) {
             Text(
-                text = "¿No ha recibido el código? ",
+                text = stringResource(R.string.forgot_password_no_code),
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.White.copy(alpha = 0.8f)
             )
             Text(
-                text = if (isLoading) "Procesando..." else "Solicitar uno nuevo",
+                text = if (isLoading) stringResource(R.string.forgot_password_processing) else stringResource(R.string.forgot_password_resend),
                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
                 color = Color.White
             )
@@ -385,23 +406,27 @@ fun CodeStep(
         Spacer(modifier = Modifier.height(32.dp))
 
         HardShadowButton(
-            text = if (isLoading) "Verificando..." else "Verificar identidad",
+            text = if (isLoading) stringResource(R.string.forgot_password_verifying) else if (error != null) stringResource(R.string.login_button_retry) else stringResource(R.string.forgot_password_verify_button),
             containerColor = if (isDark) customColors.warning else colors.primary,
             contentColor = if (isDark) Color.Black else Color.White,
             shadowColor = if (isDark) shadows.hardShadowAccent else shadows.hardShadowPrimary,
             isDark = isDark,
+            isErrorMode = error != null,
+            enabled = canVerify,
             icon = Icons.AutoMirrored.Filled.ArrowForward,
             onClick = { if (!isLoading) onVerify(code) }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text(
-            text = "Volver y cancelar",
-            style = MaterialTheme.typography.labelLarge,
-            color = Color.White.copy(alpha = 0.7f),
-            modifier = Modifier.clickable { if (!isLoading) onCancel() }
-        )
+        if (onCancel != null) {
+            Text(
+                text = stringResource(R.string.forgot_password_cancel_button),
+                style = MaterialTheme.typography.labelLarge,
+                color = Color.White.copy(alpha = 0.7f),
+                modifier = Modifier.clickable { if (!isLoading) onCancel() }
+            )
+        }
     }
 }
 
@@ -412,7 +437,11 @@ fun NewPasswordStep(
     unmetRequirements: Set<Int>,
     isDark: Boolean,
     onUpdate: (String, String) -> Unit,
-    onRestart: () -> Unit
+    onRestart: () -> Unit,
+    onClearError: () -> Unit,
+    title: String = stringResource(R.string.forgot_password_new_pass_title),
+    description: String = stringResource(R.string.forgot_password_new_pass_title), // Using title as fallback or default
+    buttonText: String? = null
 ) {
     var password by rememberSaveable { mutableStateOf("") }
     var confirmPassword by rememberSaveable { mutableStateOf("") }
@@ -422,6 +451,7 @@ fun NewPasswordStep(
     val shadows = CuidaleThemeExtras.shadows
     val customColors = CuidaleThemeExtras.customColors
     val colors = MaterialTheme.colorScheme
+    val panelShadowColor = if (isDark) shadows.hardShadowAccent else shadows.hardShadowPrimary
 
     val hasMinLength = password.length >= 8
     val hasUppercase = password.any { it.isUpperCase() }
@@ -429,15 +459,19 @@ fun NewPasswordStep(
     val passwordsMatch = password.isNotEmpty() && password == confirmPassword
 
     val validations = listOf(
-        "Mínimo 8 caracteres" to hasMinLength,
-        "Al menos una mayúscula" to hasUppercase,
-        "Un carácter especial" to hasSpecialChar,
-        "Las contraseñas coinciden" to passwordsMatch
+        stringResource(R.string.password_req_length) to hasMinLength,
+        stringResource(R.string.password_req_upper) to hasUppercase,
+        stringResource(R.string.password_req_special) to hasSpecialChar,
+        stringResource(R.string.password_req_match) to passwordsMatch
     )
+
+    val canUpdate = hasMinLength && hasUppercase && hasSpecialChar && passwordsMatch && !isLoading
+
+    val finalButtonText = buttonText ?: (if (isLoading) stringResource(R.string.forgot_password_updating) else if (error != null) stringResource(R.string.login_button_retry) else stringResource(R.string.forgot_password_update_button))
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
-            text = "Defina su nueva contraseña",
+            text = title,
             style = MaterialTheme.typography.bodyLarge,
             color = Color.White.copy(alpha = 0.9f),
             textAlign = TextAlign.Center
@@ -455,52 +489,47 @@ fun NewPasswordStep(
 
         HardShadowPanel(
             backgroundColor = customColors.panelBackground,
-            shadowColor = shadows.hardShadowPrimary.copy(alpha = 0.3f)
+            shadowColor = panelShadowColor,
+            isError = error != null
         ) {
-            Text(
-                text = "Introduzca su contraseña",
-                style = MaterialTheme.typography.labelMedium,
-                color = if (isDark) customColors.onGradient.copy(alpha = 0.7f) else Color.Gray,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp)
+            InputFieldLabel(
+                text = stringResource(R.string.forgot_password_pass_label),
+                color = if (isDark) customColors.onGradient.copy(alpha = 0.7f) else Color.Gray
             )
 
             CuidaleTextField(
                 value = password,
-                onValueChange = { password = it },
-                placeholder = "Ingrese su contraseña",
+                onValueChange = { password = it; onClearError() },
+                placeholder = stringResource(R.string.login_password_placeholder),
                 containerColor = customColors.inputBackground,
                 isPassword = true,
                 isPasswordVisible = passwordVisible,
-                onPasswordVisibilityChange = { passwordVisible = !passwordVisible }
+                onPasswordVisibilityChange = { passwordVisible = !passwordVisible },
+                isError = error != null
             )
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            Text(
-                text = "Repita nuevamente su contraseña",
-                style = MaterialTheme.typography.labelMedium,
-                color = if (isDark) customColors.onGradient.copy(alpha = 0.7f) else Color.Gray,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp)
+            InputFieldLabel(
+                text = stringResource(R.string.forgot_password_confirm_pass_label),
+                color = if (isDark) customColors.onGradient.copy(alpha = 0.7f) else Color.Gray
             )
 
             CuidaleTextField(
                 value = confirmPassword,
-                onValueChange = { confirmPassword = it },
-                placeholder = "Reingrese tu contraseña",
+                onValueChange = { confirmPassword = it; onClearError() },
+                placeholder = stringResource(R.string.login_password_placeholder),
                 containerColor = customColors.inputBackground,
                 isPassword = true,
                 isPasswordVisible = confirmPasswordVisible,
-                onPasswordVisibilityChange = { confirmPasswordVisible = !confirmPasswordVisible }
+                onPasswordVisibilityChange = { confirmPasswordVisible = !confirmPasswordVisible },
+                isError = error != null
             )
 
             if (error != null) {
                 Text(
                     text = error,
-                    color = colors.error,
+                    color = colors.onErrorContainer,
                     style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier.padding(top = 8.dp)
                 )
@@ -510,11 +539,13 @@ fun NewPasswordStep(
         Spacer(modifier = Modifier.height(32.dp))
 
         HardShadowButton(
-            text = if (isLoading) "Actualizando..." else "Actualizar la contraseña",
-            containerColor = Color(0xFF4A56E2),
-            contentColor = Color.White,
-            shadowColor = shadows.hardShadowPrimary,
+            text = finalButtonText,
+            containerColor = if (isDark) customColors.warning else colors.primary,
+            contentColor = if (isDark) Color.Black else Color.White,
+            shadowColor = if (isDark) shadows.hardShadowAccent else shadows.hardShadowPrimary,
             isDark = isDark,
+            isErrorMode = error != null,
+            enabled = canUpdate,
             icon = Icons.AutoMirrored.Filled.ArrowForward,
             onClick = { if (!isLoading) onUpdate(password, confirmPassword) }
         )
@@ -522,10 +553,10 @@ fun NewPasswordStep(
         Spacer(modifier = Modifier.height(16.dp))
 
         HardShadowButton(
-            text = "Cancelar y reiniciar",
-            containerColor = Color(0xFF4A56E2),
+            text = stringResource(R.string.forgot_password_restart_button),
+            containerColor = Color(0xFF4A56E2).copy(alpha = 0.7f),
             contentColor = Color.White,
-            shadowColor = shadows.hardShadowPrimary,
+            shadowColor = shadows.hardShadowPrimary.copy(alpha = 0.5f),
             isDark = isDark,
             icon = Icons.AutoMirrored.Filled.ArrowBack,
             onClick = { if (!isLoading) onRestart() }
@@ -542,7 +573,7 @@ fun SuccessStep(isDark: Boolean, onLogin: () -> Unit) {
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
-            text = "Se cambió la contraseña con éxito",
+            text = stringResource(R.string.forgot_password_success_title),
             style = MaterialTheme.typography.bodyLarge,
             color = Color.White.copy(alpha = 0.9f),
             textAlign = TextAlign.Center
@@ -552,10 +583,10 @@ fun SuccessStep(isDark: Boolean, onLogin: () -> Unit) {
 
         HardShadowPanel(
             backgroundColor = customColors.panelBackground,
-            shadowColor = panelShadowColor.copy(alpha = 0.6f)
+            shadowColor = panelShadowColor
         ) {
             Text(
-                text = "Tu contraseña fue restablecida correctamente. Ya puedes iniciar sesión y usar la plataforma con normalidad.",
+                text = stringResource(R.string.forgot_password_success_desc),
                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
                 color = if (isDark) customColors.success else Color(0xFF1B5E20),
                 textAlign = TextAlign.Center
@@ -565,7 +596,7 @@ fun SuccessStep(isDark: Boolean, onLogin: () -> Unit) {
         Spacer(modifier = Modifier.height(48.dp))
 
         HardShadowButton(
-            text = "Iniciar sesión",
+            text = stringResource(R.string.forgot_password_login_button),
             containerColor = if (isDark) customColors.warning else colors.primary,
             contentColor = if (isDark) Color.Black else Color.White,
             shadowColor = if (isDark) shadows.hardShadowAccent else shadows.hardShadowPrimary,
@@ -581,3 +612,4 @@ private fun currentJavaLocale(): Locale {
     val configuration = LocalConfiguration.current
     return ConfigurationCompat.getLocales(configuration).get(0) ?: LocalLocale.current.platformLocale
 }
+

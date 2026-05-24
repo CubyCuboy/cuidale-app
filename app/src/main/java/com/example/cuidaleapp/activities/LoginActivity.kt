@@ -27,20 +27,30 @@ class LoginActivity : ComponentActivity() {
             val uiState by viewModel.uiState.collectAsState()
 
             LaunchedEffect(uiState) {
-                if (uiState is LoginUiState.Success) {
-                    val userData = viewModel.getCachedUser()
-                    val role = userData.rol.lowercase().trim()
+                when (uiState) {
+                    is LoginUiState.Success -> {
+                        val userData = viewModel.getCachedUser()
+                        val role = userData.rol.lowercase().trim()
 
-                    if (role == "cuidador" || role == "representante") {
-                        startActivity(Intent(this@LoginActivity, MenuActivity::class.java))
-                        finish()
-                    } else if (role == "") {
-                        Toast.makeText(this@LoginActivity, getString(R.string.error_no_role), Toast.LENGTH_LONG).show()
-                        viewModel.clearError()
-                    } else {
-                        Toast.makeText(this@LoginActivity, getString(R.string.error_invalid_role, role), Toast.LENGTH_LONG).show()
-                        viewModel.clearError()
+                        if (role == "cuidador" || role == "representante") {
+                            startActivity(Intent(this@LoginActivity, MenuActivity::class.java))
+                            finish()
+                        } else if (role == "") {
+                            Toast.makeText(this@LoginActivity, getString(R.string.error_no_role), Toast.LENGTH_LONG).show()
+                            viewModel.clearError()
+                        } else {
+                            Toast.makeText(this@LoginActivity, getString(R.string.error_invalid_role, role), Toast.LENGTH_LONG).show()
+                            viewModel.clearError()
+                        }
                     }
+                    is LoginUiState.Unverified -> {
+                        val email = (uiState as LoginUiState.Unverified).email
+                        val intent = Intent(this@LoginActivity, VerificationActivity::class.java).apply {
+                            putExtra("EMAIL_TO_VERIFY", email)
+                        }
+                        startActivity(intent)
+                    }
+                    else -> {}
                 }
             }
             
@@ -54,6 +64,12 @@ class LoginActivity : ComponentActivity() {
                     },
                     onForgotPassword = {
                         startActivity(Intent(this@LoginActivity, ForgotPasswordActivity::class.java))
+                    },
+                    onNavigateToVerification = { email ->
+                        val intent = Intent(this@LoginActivity, VerificationActivity::class.java).apply {
+                            putExtra("EMAIL_TO_VERIFY", email)
+                        }
+                        startActivity(intent)
                     }
                 )
             }
