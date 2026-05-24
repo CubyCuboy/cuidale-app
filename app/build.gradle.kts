@@ -82,6 +82,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.jbcrypt)
     implementation(libs.accompanist.systemuicontroller)
+    implementation(libs.coil.compose)
 
     // Testing
     testImplementation(libs.junit)

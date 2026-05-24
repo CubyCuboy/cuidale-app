@@ -37,7 +37,8 @@ fun MenuScreen(
     isDark: Boolean,
     onToggleTheme: () -> Unit,
     onLogout: () -> Unit,
-    onResetPassword: () -> Unit
+    onResetPassword: () -> Unit,
+    onViewProfile: () -> Unit
 ) {
     val gradient = CuidaleThemeExtras.gradient
     val colors = MaterialTheme.colorScheme
@@ -98,6 +99,17 @@ fun MenuScreen(
                 color = colors.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 32.dp)
             )
+
+            HardShadowButton(
+                text = stringResource(R.string.profile_view_my_data),
+                containerColor = colors.primary,
+                contentColor = Color.White,
+                shadowColor = CuidaleThemeExtras.shadows.hardShadowPrimary,
+                isDark = customColors.isDark,
+                onClick = onViewProfile
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             HardShadowButton(
                 text = stringResource(R.string.menu_forgot_password),

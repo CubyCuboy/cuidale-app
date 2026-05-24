@@ -42,7 +42,10 @@ class MenuActivity : ComponentActivity() {
                     isDark = isDark,
                     onToggleTheme = { viewModel.toggleTheme() },
                     onLogout = { viewModel.logout() },
-                    onResetPassword = { viewModel.resetPassword(userData.correo) }
+                    onResetPassword = { viewModel.resetPassword(userData.correo) },
+                    onViewProfile = {
+                        startActivity(Intent(this@MenuActivity, ProfileActivity::class.java))
+                    }
                 )
             }
         }

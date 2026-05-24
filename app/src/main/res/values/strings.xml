@@ -129,4 +129,39 @@
     <string name="home_title_caregiver">Pantalla Cuidador</string>
     <string name="home_title_representative">Pantalla Representante</string>
     <string name="home_logout">Cerrar Sesión</string>
+
+    <!-- Profile Features -->
+    <string name="profile_view_my_data">Ver mis datos</string>
+    <string name="profile_edit_data">Editar datos</string>
+    <string name="profile_save_changes">Guardar Cambios</string>
+    <string name="profile_cuidador_title">Cuidador</string>
+    <string name="profile_cuidador_subtitle">Ingrese sus datos de cuidador</string>
+    <string name="profile_familiar_title">Familiar</string>
+    <string name="profile_familiar_subtitle">Ingrese los datos del familiar</string>
+    <string name="profile_label_specialization">Especialización</string>
+    <string name="profile_label_experience">Experiencia en cuidados</string>
+    <string name="profile_label_experience_placeholder">Escribe aquí tu experiencia (máx. 300 palabras)</string>
+    <string name="profile_label_communes">Comunas de preferencia</string>
+    <string name="profile_label_communes_max">Máximo 3 comunas</string>
+    <string name="profile_label_schedule">Horario de preferencia</string>
+    <string name="profile_label_photo">Sube tu foto de perfil</string>
+    <string name="profile_label_phone">Teléfono de contacto</string>
+    <string name="profile_label_email">Correo electrónico</string>
+    <string name="profile_label_description">Descripción Personal</string>
+    <string name="profile_label_description_placeholder">Cuéntanos sobre ti…</string>
+    <string name="profile_label_fullname">Nombre Completo</string>
+    <string name="profile_label_age">Edad</string>
+    <string name="profile_label_gender">Género</string>
+    <string name="profile_label_address">Dirección</string>
+    <string name="profile_label_disability">¿Tiene alguna discapacidad?</string>
+    <string name="profile_label_chronic">¿Tiene alguna enfermedad crónica?</string>
+    <string name="profile_label_diet">¿Tiene una dieta especial?</string>
+    <string name="profile_label_medication">¿Usa Medicación?</string>
+    <string name="profile_label_conditions">Condiciones a considerar</string>
+    <string name="profile_label_conditions_placeholder">Detalla cualquier condición relevante…</string>
+    <string name="profile_unspecified">Sin Especificar</string>
+    <string name="profile_option_si">Si</string>
+    <string name="profile_option_no">No</string>
+    <string name="profile_loading">Cargando perfil…</string>
+    <string name="profile_error_save">Error al guardar los datos. Reintente por favor.</string>
 </resources>

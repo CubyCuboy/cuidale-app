@@ -1,23 +1,28 @@
 package com.example.cuidaleapp.ui.components
 
+import android.net.Uri
+import androidx.compose.animation.Animatable
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AddAPhoto
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,19 +30,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import kotlin.math.roundToInt
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.animation.core.Animatable
+import kotlin.math.roundToInt
 
 @Composable
 fun InputFieldLabel(
@@ -145,7 +145,6 @@ fun HardShadowPanel(
     }
 
     val finalBg = if (isError) colors.errorContainer.copy(alpha = 0.95f) else backgroundColor
-    val finalShadow = if (isError) colors.error else shadowColor
 
     val animatedBg by animateColorAsState(
         targetValue = finalBg,
@@ -158,7 +157,6 @@ fun HardShadowPanel(
             .fillMaxWidth()
             .offset { IntOffset(shakeOffset.value.roundToInt(), 0) }
     ) {
-        // Shadow (No animada en color, solo offset fijo)
         Box(
             modifier = Modifier
                 .matchParentSize()
@@ -539,3 +537,203 @@ fun CuidaleExposedDropdown(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CuidaleMultiSelectDropdown(
+    label: String,
+    options: List<String>,
+    selectedOptions: List<String>,
+    onOptionToggled: (String) -> Unit,
+    maxSelection: Int = Int.MAX_VALUE,
+    enabled: Boolean = true,
+    placeholder: String = "Seleccionar..."
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val customColors = CuidaleThemeExtras.customColors
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        InputFieldLabel(text = label)
+        
+        ExposedDropdownMenuBox(
+            expanded = expanded && enabled,
+            onExpandedChange = { if (enabled) expanded = !expanded },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            OutlinedTextField(
+                value = if (selectedOptions.isEmpty()) "" else selectedOptions.joinToString(", "),
+                onValueChange = {},
+                readOnly = true,
+                placeholder = {
+                    Text(
+                        text = placeholder,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+                },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = customColors.inputBackground,
+                    unfocusedContainerColor = customColors.inputBackground,
+                    disabledContainerColor = customColors.inputBackground.copy(alpha = 0.1f),
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = Color.Transparent,
+                    disabledBorderColor = Color.Transparent.copy(alpha = 0.05f)
+                ),
+                shape = RoundedCornerShape(16.dp),
+                enabled = enabled,
+                modifier = Modifier
+                    .menuAnchor()
+                    .fillMaxWidth()
+            )
+
+            ExposedDropdownMenu(
+                expanded = expanded && enabled,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier.background(customColors.panelBackground)
+            ) {
+                options.forEach { option ->
+                    val isSelected = selectedOptions.contains(option)
+                    DropdownMenuItem(
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Checkbox(
+                                    checked = isSelected,
+                                    onCheckedChange = null
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = option,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        },
+                        onClick = {
+                            if (isSelected || selectedOptions.size < maxSelection) {
+                                onOptionToggled(option)
+                            }
+                        },
+                        contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                    )
+                }
+            }
+        }
+        
+        if (selectedOptions.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(selectedOptions) { option ->
+                    SuggestionChip(
+                        onClick = { onOptionToggled(option) },
+                        label = { Text(option) },
+                        colors = SuggestionChipDefaults.suggestionChipColors(
+                            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                            labelColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CuidaleBinaryChoice(
+    label: String,
+    selectedOption: String?, // "Si", "No"
+    onOptionSelected: (String) -> Unit,
+    extraContent: @Composable (() -> Unit)? = null
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.Start,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically, 
+                modifier = Modifier.clickable { onOptionSelected("Si") }
+            ) {
+                RadioButton(
+                    selected = selectedOption == "Si",
+                    onClick = null
+                )
+                Text(text = "Si", modifier = Modifier.padding(start = 4.dp), color = MaterialTheme.colorScheme.onSurface)
+            }
+            
+            Spacer(modifier = Modifier.width(24.dp))
+            
+            Row(
+                verticalAlignment = Alignment.CenterVertically, 
+                modifier = Modifier.clickable { onOptionSelected("No") }
+            ) {
+                RadioButton(
+                    selected = selectedOption == "No",
+                    onClick = null
+                )
+                Text(text = "No", modifier = Modifier.padding(start = 4.dp), color = MaterialTheme.colorScheme.onSurface)
+            }
+        }
+        
+        if (selectedOption == "Si" && extraContent != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            extraContent()
+        }
+    }
+}
+
+@Composable
+fun CuidaleImagePicker(
+    label: String,
+    imageUri: Uri?,
+    onImageClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        
+        Box(
+            modifier = Modifier
+                .size(140.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(CuidaleThemeExtras.customColors.inputBackground)
+                .border(
+                    BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
+                    RoundedCornerShape(16.dp)
+                )
+                .clickable { onImageClick() },
+            contentAlignment = Alignment.Center
+        ) {
+            if (imageUri != null) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = "Imagen seleccionada",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(48.dp)
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.AddAPhoto,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                    modifier = Modifier.size(44.dp)
+                )
+            }
+        }
+    }
+}

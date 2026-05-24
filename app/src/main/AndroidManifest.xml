@@ -54,6 +54,12 @@
             android:label="Verificación"
             android:theme="@style/Theme.CuidaleApp" />
 
+        <activity
+            android:name=".activities.ProfileActivity"
+            android:exported="false"
+            android:label="Mi Perfil"
+            android:theme="@style/Theme.CuidaleApp" />
+
     </application>
 
 </manifest>
