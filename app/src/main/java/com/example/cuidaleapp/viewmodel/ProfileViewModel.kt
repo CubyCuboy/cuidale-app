@@ -50,7 +50,6 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             _state.value = ProfileState.Loading
             try {
-                // First get the user role and region from 'usuarios' collection
                 val userDoc = db.collection("usuarios").document(user.uid).get().await()
                 val currentRole = userDoc.getString("rol") ?: ""
                 val currentRegion = userDoc.getString("region") ?: ""
@@ -58,7 +57,6 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 _role.value = currentRole
                 _userRegion.value = currentRegion
                 
-                // Load communes for that region
                 val regionData = ChileData.regions.find { it.name == currentRegion }
                 _availableCommunes.value = regionData?.comunas?.sorted() ?: emptyList()
 
@@ -119,10 +117,10 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         genero: String,
         comuna: String,
         direccion: String,
-        discapacidad: String, // "No" or the text
-        enfermedad: String, // "No" or the text
-        dieta: String, // "No" or the text
-        medicacion: String, // "Si" or "No"
+        discapacidad: String,
+        enfermedad: String,
+        dieta: String,
+        medicacion: String,
         condiciones: String
     ) {
         val user = auth.currentUser ?: return

@@ -43,13 +43,8 @@ class LoginActivity : ComponentActivity() {
                             viewModel.clearError()
                         }
                     }
-                    is LoginUiState.Unverified -> {
-                        val email = (uiState as LoginUiState.Unverified).email
-                        val intent = Intent(this@LoginActivity, VerificationActivity::class.java).apply {
-                            putExtra("EMAIL_TO_VERIFY", email)
-                        }
-                        startActivity(intent)
-                    }
+                    // Quitamos el manejo de Unverified de aquí, ya que se maneja en el LoginScreen
+                    // para asegurar que se limpie el estado de error/loading correctamente.
                     else -> {}
                 }
             }

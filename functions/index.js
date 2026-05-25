@@ -49,7 +49,8 @@ const getCodeConfig = (type) => {
       ttlMs: VERIFICATION_TTL_MS,
       expiresInSeconds: 1800,
       subject: "Código de verificación de cuenta",
-      textBuilder: (code) => `Tu código de verificación es ${code}. Expira en 30 minutos.`,
+      textBuilder: (code) =>
+        `Tu código de verificación es ${code}. Expira en 30 minutos.`,
     };
   }
 
@@ -58,7 +59,8 @@ const getCodeConfig = (type) => {
       ttlMs: RECOVERY_TTL_MS,
       expiresInSeconds: 300,
       subject: "Código de recuperación",
-      textBuilder: (code) => `Tu código de recuperación es ${code}. Expira en 5 minutos.`,
+      textBuilder: (code) =>
+        `Tu código de recuperación es ${code}. Expira en 5 minutos.`,
     };
   }
 
@@ -83,21 +85,66 @@ exports.sendVerificationCode = onCall(
   },
   async (req) => {
     const email = normalizeEmail(req.data?.email);
-    const type = String(req.data?.type || CODE_TYPES.RECOVERY).trim().toLowerCase();
+    const type = String(req.data?.type || "").trim().toLowerCase();
+    const uid = String(req.data?.uid || "").trim();
 
     if (!email) {
       throw new HttpsError("invalid-argument", "Email requerido");
     }
 
+    if (!type) {
+      throw new HttpsError("invalid-argument", "Tipo requerido");
+    }
+
     const config = getCodeConfig(type);
     const code = generateCode();
     const ref = getRef(email);
+    const expiresAt = Date.now() + config.ttlMs;
+
+    let safeUid = uid;
+
+    if (type === CODE_TYPES.VERIFICATION) {
+      if (!safeUid) {
+        throw new HttpsError("invalid-argument", "UID requerido para verificación");
+      }
+
+      const userDoc = await db.collection("usuarios").doc(safeUid).get();
+      if (!userDoc.exists) {
+        throw new HttpsError("not-found", "Usuario no encontrado");
+      }
+
+      const userData = userDoc.data();
+      if (!userData || normalizeEmail(userData.correo) !== email) {
+        throw new HttpsError("permission-denied", "El correo no coincide con el usuario");
+      }
+
+      if (userData.verificado === true) {
+        await ref.delete().catch(() => null);
+        return {
+          ok: true,
+          alreadyVerified: true,
+          type,
+          expiresInSeconds: 0,
+          maxAttempts: MAX_ATTEMPTS,
+        };
+      }
+    }
+
+    if (type === CODE_TYPES.RECOVERY) {
+      try {
+        const authUser = await auth.getUserByEmail(email);
+        safeUid = authUser.uid;
+      } catch (error) {
+        throw new HttpsError("not-found", "No existe un usuario con ese correo");
+      }
+    }
 
     await ref.set({
       email,
+      uid: safeUid || null,
       type,
       hash: hash(code),
-      expiresAt: Date.now() + config.ttlMs,
+      expiresAt,
       attempts: 0,
       verified: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -122,6 +169,7 @@ exports.sendVerificationCode = onCall(
       type,
       expiresInSeconds: config.expiresInSeconds,
       maxAttempts: MAX_ATTEMPTS,
+      expiresAt,
     };
   }
 );
@@ -195,6 +243,31 @@ exports.verifyCode = onCall(
         );
       }
 
+      const type = data.type || CODE_TYPES.RECOVERY;
+      const uid = String(data.uid || "").trim();
+
+      if (type === CODE_TYPES.VERIFICATION) {
+        if (!uid) {
+          tx.delete(ref);
+          throw new HttpsError("failed-precondition", "UID faltante para verificación");
+        }
+
+        const userRef = db.collection("usuarios").doc(uid);
+        tx.update(userRef, {
+          verificado: true,
+          verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        tx.delete(ref);
+
+        return {
+          ok: true,
+          type,
+          verifiedUser: true,
+        };
+      }
+
       tx.update(ref, {
         verified: true,
         verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -203,7 +276,8 @@ exports.verifyCode = onCall(
 
       return {
         ok: true,
-        type: data.type || CODE_TYPES.RECOVERY,
+        type,
+        verifiedUser: false,
       };
     });
 
@@ -225,6 +299,62 @@ exports.cancelVerification = onCall(
     await getRef(email).delete().catch(() => null);
 
     return { ok: true };
+  }
+);
+
+exports.getVerificationStatus = onCall(
+  {
+    enforceAppCheck: false,
+  },
+  async (req) => {
+    const email = normalizeEmail(req.data?.email);
+
+    if (!email) {
+      throw new HttpsError("invalid-argument", "Email requerido");
+    }
+
+    const ref = getRef(email);
+    const snap = await ref.get();
+
+    if (!snap.exists) {
+      return {
+        ok: true,
+        exists: false,
+      };
+    }
+
+    const data = snap.data();
+    const now = Date.now();
+
+    if (!data || typeof data.expiresAt !== "number") {
+      await ref.delete().catch(() => null);
+      return {
+        ok: true,
+        exists: false,
+      };
+    }
+
+    if (now > data.expiresAt) {
+      await ref.delete().catch(() => null);
+      return {
+        ok: true,
+        exists: false,
+        expired: true,
+      };
+    }
+
+    return {
+      ok: true,
+      exists: true,
+      email: data.email,
+      uid: data.uid || null,
+      type: data.type || null,
+      attempts: Number(data.attempts || 0),
+      maxAttempts: MAX_ATTEMPTS,
+      verified: Boolean(data.verified),
+      expiresAt: data.expiresAt,
+      remainingSeconds: Math.max(0, Math.floor((data.expiresAt - now) / 1000)),
+    };
   }
 );
 
@@ -289,6 +419,7 @@ exports.updatePassword = onCall(
       }
 
       await ref.delete().catch(() => null);
+
       return { ok: true };
     } catch (error) {
       console.error("Error updating password:", error);

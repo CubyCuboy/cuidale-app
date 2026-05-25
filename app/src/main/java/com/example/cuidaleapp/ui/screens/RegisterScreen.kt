@@ -78,7 +78,7 @@ fun RegisterScreen(
             Spacer(modifier = Modifier.height(60.dp))
 
             Text(
-                text = if (currentStep is RegisterStep.Success) "¡Bienvenido!" else "Registro ${userData.role.replaceFirstChar { it.uppercase() }}",
+                text = if (currentStep is RegisterStep.Success) "¡Bienvenido!" else "Registro ${userData.rol.replaceFirstChar { it.uppercase() }}",
                 style = MaterialTheme.typography.displaySmall.copy(
                     fontWeight = FontWeight.Bold,
                     fontSize = 32.sp,
@@ -258,6 +258,7 @@ fun PersonalDataStep(
                 value = rut,
                 onValueChange = { 
                     rut = it
+                    viewModel.onRutChanged(it)
                     if (isError) viewModel.clearError()
                 },
                 placeholder = stringResource(R.string.register_rut_placeholder),
@@ -418,6 +419,7 @@ fun RegisterVerificationStep(
     val status by viewModel.status.collectAsState()
     val userData by viewModel.userData.collectAsState()
     val timerSeconds by viewModel.timerSeconds.collectAsState()
+    val verificationState by viewModel.verificationState.collectAsState()
     val customColors = CuidaleThemeExtras.customColors
     val isDark = customColors.isDark
 
@@ -431,7 +433,8 @@ fun RegisterVerificationStep(
         onResend = { viewModel.resendCode() },
         onCancel = onBack,
         onClearError = { viewModel.clearError() },
-        title = "Código de verificación"
+        title = "Código de verificación",
+        remainingAttempts = verificationState.remainingAttempts
     )
 }
 

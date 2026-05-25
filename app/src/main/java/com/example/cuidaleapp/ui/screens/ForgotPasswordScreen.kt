@@ -48,6 +48,7 @@ fun ForgotPasswordScreen(
     val status by viewModel.status.collectAsState()
     val isDark by viewModel.isDarkMode.collectAsState()
     val timerSeconds by viewModel.timerSeconds.collectAsState()
+    val verificationState by viewModel.verificationState.collectAsState()
     val lastRequestedEmail by viewModel.lastRequestedEmail.collectAsState()
     val unmetRequirements by viewModel.unmetRequirementsTrigger.collectAsState()
 
@@ -146,7 +147,8 @@ fun ForgotPasswordScreen(
                                 onCancel = {
                                     if (!isLoading) viewModel.resetToStart()
                                 },
-                                onClearError = { viewModel.clearError() }
+                                onClearError = { viewModel.clearError() },
+                                remainingAttempts = verificationState.remainingAttempts
                             )
                         }
 
@@ -289,7 +291,8 @@ fun CodeStep(
     onResend: () -> Unit,
     onCancel: (() -> Unit)? = null,
     onClearError: () -> Unit,
-    title: String = stringResource(R.string.forgot_password_code_title)
+    title: String = stringResource(R.string.forgot_password_code_title),
+    remainingAttempts: Int? = null
 ) {
     var code by rememberSaveable { mutableStateOf("") }
     val minutes = timerSeconds / 60
@@ -302,7 +305,7 @@ fun CodeStep(
     val colors = MaterialTheme.colorScheme
     val panelShadowColor = if (isDark) shadows.hardShadowAccent else shadows.hardShadowPrimary
 
-    val canVerify = code.length == 6 && !isLoading
+    val canVerify = code.length == 6 && !isLoading && (remainingAttempts == null || remainingAttempts > 0)
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
@@ -328,23 +331,35 @@ fun CodeStep(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Icon(
-                    imageVector = Icons.Default.Timer,
-                    contentDescription = null,
-                    tint = if (isDark) customColors.success else Color(0xFF1B5E20),
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = stringResource(R.string.forgot_password_code_expires, timerText),
-                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                    color = if (isDark) customColors.success else Color(0xFF1B5E20),
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Timer,
+                        contentDescription = null,
+                        tint = if (isDark) customColors.success else Color(0xFF1B5E20),
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(R.string.forgot_password_code_expires, timerText),
+                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                        color = if (isDark) customColors.success else Color(0xFF1B5E20),
+                    )
+                }
+
+                if (remainingAttempts != null) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Intentos restantes: $remainingAttempts",
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                        color = if (isDark) customColors.success.copy(alpha = 0.8f) else Color(0xFF1B5E20).copy(alpha = 0.8f),
+                    )
+                }
             }
         }
 
@@ -467,7 +482,13 @@ fun NewPasswordStep(
 
     val canUpdate = hasMinLength && hasUppercase && hasSpecialChar && passwordsMatch && !isLoading
 
-    val finalButtonText = buttonText ?: (if (isLoading) stringResource(R.string.forgot_password_updating) else if (error != null) stringResource(R.string.login_button_retry) else stringResource(R.string.forgot_password_update_button))
+    val finalButtonText = if (isLoading) {
+        if (buttonText != null) stringResource(R.string.forgot_password_processing) else stringResource(R.string.forgot_password_updating)
+    } else if (error != null) {
+        stringResource(R.string.login_button_retry)
+    } else {
+        buttonText ?: stringResource(R.string.forgot_password_update_button)
+    }
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
