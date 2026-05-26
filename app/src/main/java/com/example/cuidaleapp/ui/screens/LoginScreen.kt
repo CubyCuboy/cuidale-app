@@ -30,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Login
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
@@ -75,18 +76,11 @@ fun LoginScreen(
     isDark: Boolean,
     onToggleTheme: () -> Unit,
     viewModel: LoginViewModel = viewModel(),
-    onNavigateToRegister: () -> Unit = {},
     onForgotPassword: () -> Unit = {},
-    onNavigateToVerification: (String) -> Unit = {}
+    onRegister: () -> Unit = {},
+    onVerify: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
-
-    LaunchedEffect(uiState) {
-        if (uiState is LoginUiState.Unverified) {
-            onNavigateToVerification((uiState as LoginUiState.Unverified).email)
-            viewModel.clearError()
-        }
-    }
 
     // Clave estable para el formulario para evitar que se borren los campos al cambiar de estado interno
     val screenKey = when (uiState) {
@@ -105,7 +99,8 @@ fun LoginScreen(
                     onLogin = { id, pass -> viewModel.login(id, pass) },
                     onClearError = { viewModel.clearError() },
                     onForgotPassword = onForgotPassword,
-                    onNavigateToRegister = onNavigateToRegister
+                    onRegister = onRegister,
+                    onVerify = onVerify
                 )
             }
             "transition" -> {
@@ -120,7 +115,7 @@ fun LoginScreen(
                     modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("Cargando...", color = MaterialTheme.colorScheme.onBackground)
+                    Text(stringResource(R.string.common_loading), color = MaterialTheme.colorScheme.onBackground)
                 }
             }
         }
@@ -135,7 +130,8 @@ fun LoginForm(
     onLogin: (String, String) -> Unit,
     onClearError: () -> Unit,
     onForgotPassword: () -> Unit,
-    onNavigateToRegister: () -> Unit
+    onRegister: () -> Unit,
+    onVerify: (String) -> Unit
 ) {
     var correoOrRut by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
@@ -150,7 +146,7 @@ fun LoginForm(
 
     val onGradientText = customColors.onGradient
     val panelBg = customColors.panelBackground
-    val inputBg = colors.surface
+    val inputBg = customColors.inputBackground
 
     val panelShadowColor = if (isDark) shadows.hardShadowAccent else shadows.hardShadowPrimary
 
@@ -207,8 +203,8 @@ fun LoginForm(
             Spacer(modifier = Modifier.height(20.dp))
 
             Text(
-                text = "Iniciar Sesión",
-                style = typography.displaySmall.copy(fontWeight = FontWeight.Bold),
+                text = stringResource(R.string.login_title),
+                style = typography.displaySmall,
                 color = onGradientText,
                 textAlign = TextAlign.Center
             )
@@ -223,25 +219,28 @@ fun LoginForm(
                     .background(colors.primaryContainer.copy(alpha = 0.30f)),
                 contentAlignment = Alignment.Center
             ) {
-                Text(text = "LOGO", style = typography.headlineSmall, color = onGradientText)
+                Text(
+                    text = stringResource(R.string.login_logo_placeholder),
+                    style = typography.headlineSmall,
+                    color = onGradientText
+                )
             }
 
             Spacer(modifier = Modifier.height(24.dp))
-
-            Text(
-                text = stringResource(R.string.login_welcome),
-                style = typography.bodyLarge,
-                color = onGradientText.copy(alpha = 0.92f),
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
 
             HardShadowPanel(
                 backgroundColor = if (isError) colors.errorContainer.copy(alpha = 0.95f) else panelBg,
                 shadowColor = if (isError) colors.error else panelShadowColor,
                 modifier = Modifier.offset { IntOffset(shakeOffset.value.roundToInt(), 0) }
             ) {
+                Text(
+                    text = stringResource(R.string.login_welcome),
+                    style = typography.bodyLarge,
+                    color = colors.onSurface.copy(alpha = 0.92f),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)
+                )
+
                 InputFieldLabel(stringResource(R.string.login_identifier_label))
 
                 CuidaleTextField(
@@ -257,26 +256,30 @@ fun LoginForm(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                InputFieldLabel(stringResource(R.string.login_password_label))
+                val needsVerification = (state as? LoginUiState.Error)?.message?.contains("verificar") == true
 
-                CuidaleTextField(
-                    value = password,
-                    onValueChange = { 
-                        password = it
-                        onClearError()
-                    },
-                    placeholder = stringResource(R.string.login_password_placeholder),
-                    containerColor = inputBg,
-                    isPassword = true,
-                    isPasswordVisible = isPasswordVisible,
-                    onPasswordVisibilityChange = { isPasswordVisible = !isPasswordVisible },
-                    isError = isError
-                )
+                if (!needsVerification) {
+                    InputFieldLabel(stringResource(R.string.login_password_label))
+
+                    CuidaleTextField(
+                        value = password,
+                        onValueChange = { 
+                            password = it
+                            onClearError()
+                        },
+                        placeholder = stringResource(R.string.login_password_placeholder),
+                        containerColor = inputBg,
+                        isPassword = true,
+                        isPasswordVisible = isPasswordVisible,
+                        onPasswordVisibilityChange = { isPasswordVisible = !isPasswordVisible },
+                        isError = isError
+                    )
+                }
 
                 AnimatedVisibility(visible = isError) {
                     Text(
                         text = (state as? LoginUiState.Error)?.message ?: "",
-                        color = colors.onErrorContainer,
+                        color = if (needsVerification) colors.primary else colors.onErrorContainer,
                         style = typography.labelMedium,
                         modifier = Modifier.padding(top = 8.dp)
                     )
@@ -303,15 +306,28 @@ fun LoginForm(
 
             Spacer(modifier = Modifier.height(32.dp))
 
+            val needsVerification = (state as? LoginUiState.Error)?.message?.contains("verificar") == true
+            
             HardShadowButton(
-                text = if (isLoading) stringResource(R.string.login_button_loading) else if (isError) stringResource(R.string.login_button_retry) else stringResource(R.string.login_button_enter),
+                text = if (isLoading) stringResource(R.string.login_button_loading) 
+                       else if (needsVerification) "Verificar"
+                       else if (isError) stringResource(R.string.login_button_retry) 
+                       else stringResource(R.string.login_button_enter),
                 containerColor = loginButtonColor,
-                contentColor = if (isError) Color.White else colors.onPrimary,
+                contentColor = if (isError && !needsVerification) Color.White else colors.onPrimary,
                 shadowColor = loginButtonShadow,
-                icon = if (isError) Icons.Filled.Block else Icons.AutoMirrored.Outlined.Login,
-                isErrorMode = isError,
+                icon = if (needsVerification) Icons.Default.Email else if (isError) Icons.Filled.Block else Icons.AutoMirrored.Outlined.Login,
+                isErrorMode = isError && !needsVerification,
                 isDark = isDark,
-                onClick = { if (!isLoading) onLogin(correoOrRut, password) }
+                onClick = { 
+                    if (!isLoading) {
+                        if (needsVerification) {
+                            onVerify(correoOrRut)
+                        } else {
+                            onLogin(correoOrRut, password)
+                        }
+                    }
+                }
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -330,15 +346,15 @@ fun LoginForm(
                 Text(
                     text = stringResource(R.string.login_register_here),
                     style = typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                    color = onGradientText,
-                    modifier = Modifier.clickable { onNavigateToRegister() }
+                    color = customColors.linkColor,
+                    modifier = Modifier.clickable { onRegister() }
                 )
             }
             Spacer(modifier = Modifier.height(56.dp))
         }
 
         Text(
-            text = "v0.01",
+            text = stringResource(R.string.login_version),
             modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 12.dp),
             style = typography.labelSmall,
             color = onGradientText.copy(alpha = 0.55f)

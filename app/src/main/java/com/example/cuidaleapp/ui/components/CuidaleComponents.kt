@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddAPhoto
@@ -26,6 +27,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -64,6 +67,7 @@ fun CuidaleTextField(
     isPasswordVisible: Boolean = false,
     onPasswordVisibilityChange: (() -> Unit)? = null,
     isError: Boolean = false,
+    enabled: Boolean = true,
     textAlign: TextAlign = TextAlign.Start,
     keyboardType: KeyboardType = if (isPassword) KeyboardType.Password else KeyboardType.Text
 ) {
@@ -74,12 +78,13 @@ fun CuidaleTextField(
         value = value,
         onValueChange = onValueChange,
         modifier = modifier.fillMaxWidth(),
+        enabled = enabled,
         textStyle = LocalTextStyle.current.copy(textAlign = textAlign),
         placeholder = {
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = if(textAlign == TextAlign.Center) Alignment.Center else Alignment.CenterStart) {
                 Text(
                     text = placeholder,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
                     textAlign = textAlign
                 )
             }
@@ -122,6 +127,100 @@ fun CuidaleTextField(
 }
 
 @Composable
+fun OtpInputField(
+    otpText: String,
+    onOtpTextChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    otpCount: Int = 6,
+    isError: Boolean = false,
+    enabled: Boolean = true
+) {
+    val focusRequesters = remember { List(otpCount) { FocusRequester() } }
+
+    LaunchedEffect(Unit) {
+        if (enabled && otpText.length < otpCount) {
+            focusRequesters[otpText.length].requestFocus()
+        }
+    }
+
+    BasicTextField(
+        value = otpText,
+        onValueChange = {
+            if (it.length <= otpCount && it.all { char -> char.isDigit() }) {
+                onOtpTextChange(it)
+            }
+        },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        enabled = enabled,
+        decorationBox = {
+            Row(
+                modifier = modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+            ) {
+                repeat(otpCount) { index ->
+                    val char = when {
+                        index >= otpText.length -> ""
+                        else -> otpText[index].toString()
+                    }
+                    val isFocused = index == otpText.length
+
+                    OtpCharBox(
+                        char = char,
+                        isFocused = isFocused && enabled,
+                        isError = isError,
+                        isDark = CuidaleThemeExtras.customColors.isDark,
+                        modifier = Modifier
+                            .weight(1f)
+                            .focusRequester(focusRequesters[index])
+                    )
+                }
+            }
+        }
+    )
+}
+
+@Composable
+private fun OtpCharBox(
+    char: String,
+    isFocused: Boolean,
+    isError: Boolean,
+    isDark: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val colors = MaterialTheme.colorScheme
+    val customColors = CuidaleThemeExtras.customColors
+    
+    val borderColor by animateColorAsState(
+        targetValue = when {
+            isError -> colors.error
+            isFocused -> colors.primary
+            else -> if (isDark) Color.White.copy(alpha = 0.35f) else colors.outline.copy(alpha = 0.25f)
+        },
+        label = "otpBorderColor"
+    )
+
+    val borderWidth by animateDpAsState(
+        targetValue = if (isFocused || isError) 2.dp else 1.dp,
+        label = "otpBorderWidth"
+    )
+
+    Box(
+        modifier = modifier
+            .aspectRatio(1f)
+            .clip(RoundedCornerShape(12.dp))
+            .background(customColors.inputBackground)
+            .border(borderWidth, borderColor, RoundedCornerShape(12.dp)),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = char,
+            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+            color = if (isError) colors.error else colors.onSurface
+        )
+    }
+}
+
+@Composable
 fun HardShadowPanel(
     backgroundColor: Color,
     shadowColor: Color,
@@ -134,22 +233,38 @@ fun HardShadowPanel(
 
     LaunchedEffect(isError) {
         if (isError) {
-            repeat(6) {
+            repeat(8) {
                 shakeOffset.animateTo(
                     targetValue = if (it % 2 == 0) 12f else -12f,
-                    animationSpec = tween(durationMillis = 60, easing = LinearEasing)
+                    animationSpec = tween(durationMillis = 40, easing = LinearEasing)
                 )
             }
             shakeOffset.animateTo(0f)
         }
     }
 
-    val finalBg = if (isError) colors.errorContainer.copy(alpha = 0.95f) else backgroundColor
+    val targetBgColor = if (isError) {
+        colors.errorContainer.copy(alpha = 0.98f)
+    } else {
+        backgroundColor
+    }
 
     val animatedBg by animateColorAsState(
-        targetValue = finalBg,
-        animationSpec = tween(400),
+        targetValue = targetBgColor,
+        animationSpec = tween(500),
         label = "panelBg"
+    )
+
+    val targetShadowColor = if (isError) {
+        colors.error.copy(alpha = 0.3f)
+    } else {
+        shadowColor
+    }
+
+    val animatedShadow by animateColorAsState(
+        targetValue = targetShadowColor,
+        animationSpec = tween(500),
+        label = "panelShadow"
     )
 
     Box(
@@ -162,7 +277,7 @@ fun HardShadowPanel(
                 .matchParentSize()
                 .offset(x = 6.dp, y = 6.dp)
                 .clip(RoundedCornerShape(28.dp))
-                .background(shadowColor)
+                .background(animatedShadow)
         )
 
         Column(
@@ -170,6 +285,11 @@ fun HardShadowPanel(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(28.dp))
                 .background(animatedBg)
+                .border(
+                    width = if (isError) 2.dp else 0.dp,
+                    color = if (isError) colors.error.copy(alpha = 0.5f) else Color.Transparent,
+                    shape = RoundedCornerShape(28.dp)
+                )
                 .padding(20.dp),
             content = content
         )
@@ -185,19 +305,39 @@ fun HardShadowButton(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     isErrorMode: Boolean = false,
+    errorText: String? = null,
     isDark: Boolean,
     enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
+    val shakeOffset = remember { Animatable(0f) }
 
-    val finalContainerColor = if (!enabled) {
+    LaunchedEffect(isErrorMode) {
+        if (isErrorMode) {
+            repeat(6) {
+                shakeOffset.animateTo(
+                    targetValue = if (it % 2 == 0) 10f else -10f,
+                    animationSpec = tween(durationMillis = 50, easing = LinearEasing)
+                )
+            }
+            shakeOffset.animateTo(0f)
+        }
+    }
+
+    val targetContainerColor = if (!enabled) {
         if (isDark) Color.Gray.copy(alpha = 0.3f) else Color.LightGray
     } else if (isErrorMode) {
         colors.error
     } else {
         containerColor
     }
+
+    val animatedContainerColor by animateColorAsState(
+        targetValue = targetContainerColor,
+        animationSpec = tween(durationMillis = 400),
+        label = "buttonContainerColor"
+    )
 
     val finalContentColor = if (!enabled) {
         if (isDark) Color.White.copy(alpha = 0.4f) else Color.Gray
@@ -207,28 +347,46 @@ fun HardShadowButton(
         contentColor
     }
 
-    val finalShadowColor = if (!enabled) {
+    val animatedContentColor by animateColorAsState(
+        targetValue = finalContentColor,
+        animationSpec = tween(durationMillis = 400),
+        label = "buttonContentColor"
+    )
+
+    val targetShadowColor = if (!enabled) {
         Color.Transparent
     } else if (isErrorMode) {
-        colors.errorContainer
+        colors.errorContainer.copy(alpha = 0.7f)
     } else {
         shadowColor
     }
 
+    val animatedShadowColor by animateColorAsState(
+        targetValue = targetShadowColor,
+        animationSpec = tween(durationMillis = 400),
+        label = "buttonShadowColor"
+    )
+
+    val errorBorderWidth by animateDpAsState(
+        targetValue = if (isErrorMode) 2.dp else 0.dp,
+        animationSpec = tween(400),
+        label = "errorBorder"
+    )
+
     val buttonBrush = if (!enabled || isErrorMode) {
-        Brush.linearGradient(listOf(finalContainerColor, finalContainerColor))
+        Brush.linearGradient(listOf(animatedContainerColor, animatedContainerColor))
     } else if (isDark) {
         Brush.linearGradient(
             listOf(
-                containerColor,
+                animatedContainerColor,
                 colors.primary.copy(alpha = 0.82f)
             )
         )
     } else {
         Brush.linearGradient(
             listOf(
-                containerColor,
-                containerColor.copy(alpha = 0.92f)
+                animatedContainerColor,
+                animatedContainerColor.copy(alpha = 0.92f)
             )
         )
     }
@@ -237,50 +395,83 @@ fun HardShadowButton(
         modifier = modifier
             .fillMaxWidth()
             .height(58.dp)
+            .offset { IntOffset(shakeOffset.value.roundToInt(), 0) }
     ) {
-        if (enabled) {
+        if (enabled || isErrorMode) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .offset(x = 6.dp, y = 6.dp)
                     .clip(RoundedCornerShape(16.dp))
-                    .background(finalShadowColor)
+                    .background(animatedShadowColor)
             )
         }
 
         Button(
             onClick = onClick,
-            enabled = enabled,
+            enabled = enabled && !isErrorMode,
             modifier = Modifier.fillMaxSize(),
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = Color.Transparent,
-                contentColor = finalContentColor,
+                contentColor = animatedContentColor,
                 disabledContainerColor = Color.Transparent,
-                disabledContentColor = finalContentColor
+                disabledContentColor = animatedContentColor
             ),
             contentPadding = PaddingValues(0.dp)
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(buttonBrush),
+                    .background(buttonBrush)
+                    .border(
+                        width = errorBorderWidth,
+                        color = colors.onErrorContainer.copy(alpha = 0.3f),
+                        shape = RoundedCornerShape(16.dp)
+                    ),
                 contentAlignment = Alignment.Center
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (icon != null) {
+                if (isErrorMode) {
+                    val progress = remember { Animatable(1f) }
+                    LaunchedEffect(Unit) {
+                        progress.animateTo(0f, animationSpec = tween(3000, easing = LinearEasing))
+                    }
+                    
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(progress.value)
+                            .fillMaxHeight(0.08f)
+                            .align(Alignment.BottomCenter)
+                            .background(Color.White.copy(alpha = 0.4f))
+                    )
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                ) {
+                    if (icon != null && !isErrorMode) {
                         Icon(
                             imageVector = icon,
                             contentDescription = null,
-                            tint = finalContentColor
+                            tint = animatedContentColor
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    } else if (isErrorMode) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = null,
+                            tint = animatedContentColor
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                     }
 
                     Text(
-                        text = text,
+                        text = if (isErrorMode && errorText != null) errorText else text,
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = finalContentColor
+                        color = animatedContentColor,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1
                     )
                 }
             }
@@ -295,6 +486,9 @@ fun CuidaleStepProgressBar(
 ) {
     val customColors = CuidaleThemeExtras.customColors
     val successColor = customColors.successStrong
+    val onGradient = customColors.onGradient
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val onPrimaryColor = MaterialTheme.colorScheme.onPrimary
 
     Row(
         modifier = Modifier
@@ -308,6 +502,17 @@ fun CuidaleStepProgressBar(
             val isCurrent = index == currentStepIndex
             val isActive = isCompleted || isCurrent
 
+            val circleColor = when {
+                isCompleted -> successColor
+                isCurrent -> primaryColor
+                else -> onGradient.copy(alpha = 0.25f)
+            }
+
+            val contentColor = when {
+                isCompleted || isCurrent -> onPrimaryColor
+                else -> onGradient.copy(alpha = 0.5f)
+            }
+
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.weight(1f)
@@ -317,7 +522,7 @@ fun CuidaleStepProgressBar(
                     modifier = Modifier
                         .size(32.dp)
                         .background(
-                            color = if (isActive) Color.White else Color.White.copy(alpha = 0.3f),
+                            color = circleColor,
                             shape = CircleShape
                         )
                 ) {
@@ -325,14 +530,14 @@ fun CuidaleStepProgressBar(
                         Icon(
                             imageVector = Icons.Default.Check,
                             contentDescription = null,
-                            tint = successColor,
+                            tint = contentColor,
                             modifier = Modifier.size(16.dp)
                         )
                     } else {
                         Text(
                             text = (index + 1).toString(),
                             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                            color = if (isActive) successColor else Color.White
+                            color = contentColor
                         )
                     }
                 }
@@ -344,7 +549,7 @@ fun CuidaleStepProgressBar(
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal
                     ),
-                    color = if (isActive) Color.White else Color.White.copy(alpha = 0.6f)
+                    color = if (isActive) onGradient else onGradient.copy(alpha = 0.5f)
                 )
             }
 
@@ -353,13 +558,13 @@ fun CuidaleStepProgressBar(
                     modifier = Modifier
                         .weight(0.5f)
                         .height(2.dp)
-                        .background(Color.White.copy(alpha = 0.3f))
+                        .background(onGradient.copy(alpha = 0.3f))
                 ) {
                     if (index < currentStepIndex) {
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(Color.White)
+                                .background(onGradient)
                         )
                     }
                 }
@@ -404,7 +609,7 @@ fun ValidationItem(text: String, isValid: Boolean, isError: Boolean, isDark: Boo
     val customColors = CuidaleThemeExtras.customColors
     val successColor = if (isDark) customColors.successStrong else Color(0xFF00C853) // Verde vibrante
     val errorColor = MaterialTheme.colorScheme.error
-    val inactiveColor = if (isDark) Color.Gray else Color(0xFF455A64) // Gris azulado nítido
+    val inactiveColor = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF455A64) // Gris con mejor contraste en dark mode
 
     val color by animateColorAsState(
         targetValue = when {

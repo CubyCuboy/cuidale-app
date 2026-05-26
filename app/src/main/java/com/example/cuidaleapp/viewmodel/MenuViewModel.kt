@@ -29,7 +29,9 @@ class MenuViewModel(application: Application) : AndroidViewModel(application) {
     private fun getCachedUser(): UserData {
         return UserData(
             nombre = prefs.getString("user_nombre", "") ?: "",
-            apellido_pa = prefs.getString("user_apellido", "") ?: "",
+            nombre_s = prefs.getString("user_nombre_s", "") ?: "",
+            apellido_pa = prefs.getString("user_apellido_pa", "") ?: "",
+            apellido_ma = prefs.getString("user_apellido_ma", "") ?: "",
             correo = prefs.getString("user_correo", "") ?: "",
             rut = prefs.getString("user_rut", "") ?: "",
             rol = prefs.getString("user_rol", "") ?: ""

@@ -2,7 +2,6 @@ package com.example.cuidaleapp.activities
 
 import android.content.Intent
 import android.os.Bundle
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -10,7 +9,9 @@ import androidx.activity.viewModels
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import com.example.cuidaleapp.R
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.example.cuidaleapp.ui.screens.LoginScreen
 import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
 import com.example.cuidaleapp.viewmodel.LoginUiState
@@ -22,6 +23,8 @@ class LoginActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        hideSystemUI()
+
         setContent {
             val isDark by viewModel.isDarkMode.collectAsState()
             val uiState by viewModel.uiState.collectAsState()
@@ -29,22 +32,15 @@ class LoginActivity : ComponentActivity() {
             LaunchedEffect(uiState) {
                 when (uiState) {
                     is LoginUiState.Success -> {
-                        val userData = viewModel.getCachedUser()
-                        val role = userData.rol.lowercase().trim()
-
-                        if (role == "cuidador" || role == "representante") {
-                            startActivity(Intent(this@LoginActivity, MenuActivity::class.java))
-                            finish()
-                        } else if (role == "") {
-                            Toast.makeText(this@LoginActivity, getString(R.string.error_no_role), Toast.LENGTH_LONG).show()
-                            viewModel.clearError()
-                        } else {
-                            Toast.makeText(this@LoginActivity, getString(R.string.error_invalid_role, role), Toast.LENGTH_LONG).show()
-                            viewModel.clearError()
-                        }
+                        startActivity(Intent(this@LoginActivity, MenuActivity::class.java))
+                        finish()
                     }
-                    // Quitamos el manejo de Unverified de aquí, ya que se maneja en el LoginScreen
-                    // para asegurar que se limpie el estado de error/loading correctamente.
+                    is LoginUiState.Unverified -> {
+                        val intent = Intent(this@LoginActivity, EmailVerificationActivity::class.java)
+                        intent.putExtra("email", (uiState as LoginUiState.Unverified).email)
+                        startActivity(intent)
+                        viewModel.clearError() // Resetear estado para evitar bucle
+                    }
                     else -> {}
                 }
             }
@@ -54,20 +50,32 @@ class LoginActivity : ComponentActivity() {
                     isDark = isDark,
                     onToggleTheme = { viewModel.toggleTheme() },
                     viewModel = viewModel,
-                    onNavigateToRegister = {
-                        startActivity(Intent(this@LoginActivity, RoleSelectionActivity::class.java))
-                    },
                     onForgotPassword = {
-                        startActivity(Intent(this@LoginActivity, ForgotPasswordActivity::class.java))
+                        startActivity(Intent(this@LoginActivity, RecoveryPasswordActivity::class.java))
                     },
-                    onNavigateToVerification = { email ->
-                        val intent = Intent(this@LoginActivity, VerificationActivity::class.java).apply {
-                            putExtra("EMAIL_TO_VERIFY", email)
-                        }
+                    onRegister = {
+                        startActivity(Intent(this@LoginActivity, RegisterActivity::class.java))
+                    },
+                    onVerify = { email ->
+                        val intent = Intent(this@LoginActivity, EmailVerificationActivity::class.java)
+                        intent.putExtra("email", email)
                         startActivity(intent)
                     }
                 )
             }
         }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            hideSystemUI()
+        }
+    }
+
+    private fun hideSystemUI() {
+        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
+        windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
     }
 }

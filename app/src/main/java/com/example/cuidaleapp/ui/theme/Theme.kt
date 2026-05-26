@@ -66,6 +66,7 @@ data class CuidaleCustomColors(
     val onGradient: Color,
     val panelBackground: Color,
     val inputBackground: Color,
+    val linkColor: Color,
     val isDark: Boolean
 )
 
@@ -93,6 +94,7 @@ private val LocalCuidaleCustomColors = staticCompositionLocalOf {
         onGradient = Color.White,
         panelBackground = Color.White.copy(alpha = 0.95f),
         inputBackground = Color.White,
+        linkColor = CuidaleLinkLight,
         isDark = false
     )
 }
@@ -145,6 +147,7 @@ fun CuidaleAppTheme(
             onGradient = Color.White,
             panelBackground = panelBackground,
             inputBackground = Color.Black.copy(alpha = 0.25f),
+            linkColor = CuidaleLinkDark,
             isDark = true
         )
     } else {
@@ -156,6 +159,7 @@ fun CuidaleAppTheme(
             onGradient = Color.White,
             panelBackground = panelBackground,
             inputBackground = Color.White,
+            linkColor = CuidaleLinkLight,
             isDark = false
         )
     }

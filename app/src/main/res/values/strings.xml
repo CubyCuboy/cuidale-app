@@ -1,9 +1,10 @@
 <resources>
     <string name="app_name">Cuidale App</string>
-    <string name="title_activity_register">Registro</string>
     <string name="title_activity_menu">Menú Principal</string>
 
     <!-- Login Screen -->
+    <string name="login_title">Iniciar Sesión</string>
+    <string name="login_logo_placeholder">LOGO</string>
     <string name="login_welcome">Bienvenido de nuevo.\nIngresa tus credenciales para continuar.</string>
     <string name="login_identifier_label">Correo o RUT</string>
     <string name="login_identifier_placeholder">Correo@mail.com o 12345678-9</string>
@@ -17,56 +18,51 @@
     <string name="login_no_account">¿No tienes cuenta? </string>
     <string name="login_register_here">Regístrate aquí</string>
     <string name="login_welcome_back">¡Bienvenido!</string>
-    <string name="login_unverified_error">Cuenta no verificada. Por favor, verifica tu correo.</string>
+    <string name="login_version">v0.01</string>
+    <string name="common_loading">Cargando…</string>
 
     <!-- Menu Screen -->
     <string name="menu_title">Menú Principal</string>
     <string name="menu_greeting">Hola, %1$s</string>
     <string name="menu_forgot_password">Olvidé mi contraseña</string>
     <string name="menu_logout">Cerrar Sesión</string>
-
-    <!-- Register Screen -->
-    <string name="register_title">Crear Cuenta</string>
-    <string name="register_name_label">Nombre</string>
-    <string name="register_lastname_label">Apellido</string>
-    <string name="register_email_label">Correo Electrónico</string>
-    <string name="register_rut_label" translatable="false">RUT</string>
-    <string name="register_password_label">Contraseña</string>
-    <string name="register_confirm_password_label">Confirmar Contraseña</string>
-    <string name="register_button">Registrarse</string>
-    <string name="register_already_have_account">¿Ya tienes cuenta? </string>
-    <string name="register_login_here">Inicia sesión</string>
+    <string name="profile_view_my_data">Ver mis datos</string>
 
     <!-- Forgot Password Screen -->
-    <string name="forgot_password_screen_title">Recuperar Contraseña</string>
-    <string name="forgot_password_step_1">Identificación</string>
-    <string name="forgot_password_step_2">Verificación</string>
-    <string name="forgot_password_step_3">Nueva Clave</string>
+    <string name="forgot_password_screen_title">Recuperación de tu\ncontraseña</string>
+    <string name="forgot_password_step_email">Correo</string>
+    <string name="forgot_password_step_code">Código</string>
+    <string name="forgot_password_step_pass">Contraseña</string>
+    <string name="forgot_password_step_success">Éxito</string>
+
     <string name="forgot_password_email_desc">Para iniciar el proceso de recuperación, por favor ingrese la dirección de correo electrónico asociada a su cuenta. Le enviaremos un código de seguridad.</string>
     <string name="forgot_password_email_label">Correo electrónico</string>
     <string name="forgot_password_email_placeholder">ejemplo@correo.cl</string>
-    <string name="forgot_password_sending">Enviando…</string>
     <string name="forgot_password_send_code">Enviar código de seguridad</string>
-    <string name="forgot_password_code_title">Ingresa el código de recuperación</string>
-    <string name="forgot_password_code_sent_desc">Se ha enviado un código de seguridad a la dirección: %1$s. Este código será válido durante los próximos 30 minutos.</string>
-    <string name="forgot_password_code_expires">El código expira en %1$s</string>
+
+    <string name="forgot_password_code_title">Ingresa el código de\nexpiración</string>
+    <string name="forgot_password_code_desc">¡Todo listo! Hemos enviado un código de recuperación a %1$s. Tiene una validez de 5 minutos.</string>
+    <string name="forgot_password_code_expiry">El código expira en %1$s</string>
+    <string name="forgot_password_code_attempts">Intentos restantes: %1$d</string>
+    <string name="forgot_password_code_expired_q">¿Se venció el código?</string>
+    <string name="forgot_password_code_resend">Presiona aquí para reenviarlo.</string>
+
     <string name="forgot_password_code_label">Código de seguridad</string>
     <string name="forgot_password_code_placeholder">Ingrese los 6 dígitos</string>
-    <string name="forgot_password_no_code">¿No ha recibido el código? </string>
-    <string name="forgot_password_processing">Procesando…</string>
-    <string name="forgot_password_resend">Solicitar uno nuevo</string>
-    <string name="forgot_password_verifying">Verificando…</string>
-    <string name="forgot_password_verify_button">Verificar identidad</string>
-    <string name="forgot_password_cancel_button">Cancelar y volver</string>
-    <string name="forgot_password_new_pass_title">Defina su nueva contraseña</string>
+    <string name="forgot_password_verify_button">Verificar código</string>
+    <string name="forgot_password_cancel_button">Retroceder</string>
+
+    <string name="forgot_password_pass_title">Establece su nueva contraseña para su\ncuenta</string>
     <string name="forgot_password_pass_label">Nueva contraseña</string>
+    <string name="forgot_password_pass_placeholder">Ingrese su contraseña</string>
     <string name="forgot_password_confirm_pass_label">Confirmar nueva contraseña</string>
-    <string name="forgot_password_updating">Actualizando…</string>
+    <string name="forgot_password_confirm_pass_placeholder">Reingrese su contraseña</string>
     <string name="forgot_password_update_button">Actualizar contraseña</string>
-    <string name="forgot_password_restart_button">Reiniciar proceso</string>
-    <string name="forgot_password_success_title">¡Contraseña actualizada!</string>
-    <string name="forgot_password_success_desc">Su contraseña ha sido restablecida correctamente. Ya puede iniciar sesión y utilizar la plataforma con total seguridad.</string>
-    <string name="forgot_password_login_button">Ir al inicio de sesión</string>
+
+    <string name="forgot_password_success_title">Se cambió la contraseña con éxito</string>
+    <string name="forgot_password_success_desc">¡Felicitaciones! Tu contraseña fue restablecida correctamente. Ya puedes iniciar sesión y usar la plataforma con normalidad.</string>
+    <string name="forgot_password_success_button">Iniciar sesión</string>
+
     <string name="forgot_password_footer_prefix">¿Ya tiene cuenta? </string>
     <string name="forgot_password_footer_link">Inicie sesión aquí</string>
 
@@ -75,93 +71,49 @@
     <string name="password_req_special">Un carácter especial</string>
     <string name="password_req_match">Las contraseñas coinciden</string>
 
-    <!-- Register Screen Updates -->
-    <string name="register_step_personal">Personal</string>
-    <string name="register_step_geo">Geográfico</string>
-    <string name="register_step_account">Contraseña</string>
-    <string name="register_personal_desc">Bienvenido. Por favor, ingrese sus datos personales para comenzar su registro.</string>
-    <string name="register_geo_desc">Por favor, indíquenos su ubicación para brindarle un mejor servicio.</string>
-    <string name="register_pass_desc">Por último defina una contraseña segura para proteger su cuenta.</string>
-    <string name="register_pass_title">Defina su contraseña</string>
-    <string name="register_pass_button">Verificar correo</string>
-    <string name="register_names_placeholder">Nombres (Ej: Juan Alberto)</string>
-    <string name="register_apellidos_placeholder">Apellidos (Ej: Pérez Soto)</string>
-    <string name="register_rut_placeholder">12.345.678-9</string>
-    <string name="register_region_label">Región de residencia</string>
-    <string name="register_region_placeholder">Seleccione su región</string>
-    <string name="register_comuna_label">Comuna de residencia</string>
-    <string name="register_comuna_placeholder">Seleccione su comuna</string>
-    <string name="register_next_button">Siguiente paso</string>
-    <string name="register_back_button">Regresar</string>
-    <string name="register_finish_button">Crear cuenta</string>
-    <string name="register_success_title">¡Registro completado con éxito!</string>
-    <string name="register_success_desc">Estimado usuario, su cuenta ha sido creada exitosamente. Ya puede acceder a todos nuestros servicios.</string>
+    <!-- Registration Screen -->
+    <string name="register_title">Registrate</string>
+    <string name="register_step_role">Rol</string>
+    <string name="register_step_personal">Datos</string>
+    <string name="register_step_location">Ubicación</string>
+    <string name="register_step_pass">Seguridad</string>
 
-    <!-- Errors and Validations -->
-    <string name="error_field_required">Por favor, complete todos los campos obligatorios para continuar.</string>
-    <string name="error_invalid_email">La dirección de correo electrónico ingresada no es válida. Por favor, verifíquela.</string>
-    <string name="error_invalid_rut">El RUT ingresado no es válido. Asegúrese de ingresarlo correctamente.</string>
-    <string name="error_email_exists">Esta dirección de correo electrónico ya se encuentra registrada en nuestro sistema.</string>
-    <string name="error_rut_exists">El RUT ingresado ya se encuentra registrado en nuestra plataforma.</string>
-    <string name="error_passwords_dont_match">Las contraseñas ingresadas no coinciden. Por favor, inténtelo de nuevo.</string>
-    <string name="error_geo_missing">Por favor, seleccione una región y una comuna para continuar.</string>
-    <string name="error_generic_validation">Estimado usuario, ha ocurrido un inconveniente al validar sus datos: %1$s</string>
-    <string name="error_registration_failed">Ha ocurrido un error durante el proceso de registro: %1$s</string>
-    <string name="error_auth_failed">No se pudo establecer la conexión con el servicio de autenticación.</string>
+    <string name="register_role_desc">Para comenzar, selecciona qué tipo de usuario serás en la plataforma.</string>
+    <string name="register_role_caregiver">Cuidador</string>
+    <string name="register_role_caregiver_desc">Busco ofrecer mis servicios de cuidado.</string>
+    <string name="register_role_representative">Representante</string>
+    <string name="register_role_representative_desc">Busco cuidadores para un familiar.</string>
 
-    <!-- Role Selection Screen -->
-    <string name="role_selection_title">Tipo de Registro</string>
-    <string name="role_selection_subtitle">Elige el tipo de Cuenta que quieres crear</string>
-    <string name="role_caregiver">Cuidador</string>
-    <string name="role_caregiver_desc">Cuenta para buscar pacientes para ofrecer servicios de cuidado</string>
-    <string name="role_representative">Representante</string>
-    <string name="role_representative_desc">Cuenta para poder registrar a un familiar que requiera servicios de cuidado o atencion constante</string>
-    <string name="role_dependent">Persona Dependiente</string>
-    <string name="register_caregiver_soon">Registro de Cuidador - Próximamente</string>
-    <string name="register_dependent_soon">Registro de Persona Dependiente - Próximamente</string>
+    <string name="register_personal_desc">Bienvenido. Ingrese sus datos personales</string>
+    <string name="register_name_label">Ingrese sus nombres (Primer y segundo nombre)</string>
+    <string name="register_name_placeholder">Ej Santiago Bernardo</string>
+    <string name="register_lastname_label">Ingrese sus apellidos (Apellido paterno y materno)</string>
+    <string name="register_lastname_placeholder">Ej Fernandes Fuentes</string>
+    <string name="register_rut_label">Ingrese RUT. Ej 12.235.678-9</string>
+    <string name="register_rut_placeholder">Ej 12.345.678-9</string>
+    <string name="register_email_label">Ingrese su correo electrónico</string>
+    <string name="register_email_placeholder">Ej correo@correo.cl</string>
 
-    <!-- Role Errors -->
-    <string name="error_no_role">El usuario no tiene un rol asignado o no existe el documento.</string>
-    <string name="error_invalid_role">Rol de usuario no reconocido: %1$s</string>
+    <string name="register_location_desc">Ingrese sus datos geograficos</string>
+    <string name="register_region_label">Elige la región donde vives actualmente.</string>
+    <string name="register_region_placeholder">Seleccionar region</string>
+    <string name="register_comuna_label">Elige la comuna donde vives actualmente.</string>
+    <string name="register_comuna_placeholder">Seleccionar comuna</string>
 
-    <!-- Home Screens -->
-    <string name="home_welcome">Bienvenido, %1$s</string>
+    <string name="register_pass_desc">Establece tu contraseña para su cuenta</string>
+    <string name="register_pass_label">Introduzca su contraseña</string>
+    <string name="register_pass_placeholder">Ingrese su contraseña</string>
+    <string name="register_confirm_pass_label">Repita nuevamente su contraseña</string>
+    <string name="register_confirm_pass_placeholder">Reingrese su contraseña</string>
+    <string name="register_button_next">Siguiente</string>
+    <string name="register_button_back">Retroceder</string>
+    <string name="register_button_finish">Finalizar registro</string>
+    <string name="register_error_invalid_email">Correo no válido</string>
+    <string name="register_error_invalid_rut">RUT no válido</string>
+    <string name="register_error_fields_required">Todos los campos son obligatorios</string>
+
+    <!-- Role specific Home titles (kept for MenuScreen logic) -->
     <string name="home_title_caregiver">Pantalla Cuidador</string>
     <string name="home_title_representative">Pantalla Representante</string>
-    <string name="home_logout">Cerrar Sesión</string>
 
-    <!-- Profile Features -->
-    <string name="profile_view_my_data">Ver mis datos</string>
-    <string name="profile_edit_data">Editar datos</string>
-    <string name="profile_save_changes">Guardar Cambios</string>
-    <string name="profile_cuidador_title">Cuidador</string>
-    <string name="profile_cuidador_subtitle">Ingrese sus datos de cuidador</string>
-    <string name="profile_familiar_title">Familiar</string>
-    <string name="profile_familiar_subtitle">Ingrese los datos del familiar</string>
-    <string name="profile_label_specialization">Especialización</string>
-    <string name="profile_label_experience">Experiencia en cuidados</string>
-    <string name="profile_label_experience_placeholder">Escribe aquí tu experiencia (máx. 300 palabras)</string>
-    <string name="profile_label_communes">Comunas de preferencia</string>
-    <string name="profile_label_communes_max">Máximo 3 comunas</string>
-    <string name="profile_label_schedule">Horario de preferencia</string>
-    <string name="profile_label_photo">Sube tu foto de perfil</string>
-    <string name="profile_label_phone">Teléfono de contacto</string>
-    <string name="profile_label_email">Correo electrónico</string>
-    <string name="profile_label_description">Descripción Personal</string>
-    <string name="profile_label_description_placeholder">Cuéntanos sobre ti…</string>
-    <string name="profile_label_fullname">Nombre Completo</string>
-    <string name="profile_label_age">Edad</string>
-    <string name="profile_label_gender">Género</string>
-    <string name="profile_label_address">Dirección</string>
-    <string name="profile_label_disability">¿Tiene alguna discapacidad?</string>
-    <string name="profile_label_chronic">¿Tiene alguna enfermedad crónica?</string>
-    <string name="profile_label_diet">¿Tiene una dieta especial?</string>
-    <string name="profile_label_medication">¿Usa Medicación?</string>
-    <string name="profile_label_conditions">Condiciones a considerar</string>
-    <string name="profile_label_conditions_placeholder">Detalla cualquier condición relevante…</string>
-    <string name="profile_unspecified">Sin Especificar</string>
-    <string name="profile_option_si">Si</string>
-    <string name="profile_option_no">No</string>
-    <string name="profile_loading">Cargando perfil…</string>
-    <string name="profile_error_save">Error al guardar los datos. Reintente por favor.</string>
 </resources>

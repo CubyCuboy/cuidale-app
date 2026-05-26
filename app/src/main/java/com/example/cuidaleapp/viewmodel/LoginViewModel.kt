@@ -14,7 +14,9 @@ import kotlinx.coroutines.tasks.await
 
 data class UserData(
     val nombre: String = "",
+    val nombre_s: String = "",
     val apellido_pa: String = "",
+    val apellido_ma: String = "",
     val correo: String = "",
     val rut: String = "",
     val rol: String = "",
@@ -26,8 +28,8 @@ sealed class LoginUiState {
     object Loading : LoginUiState()
     data class Transition(val userData: UserData) : LoginUiState()
     object Success : LoginUiState()
-    data class Error(val message: String) : LoginUiState()
     data class Unverified(val email: String) : LoginUiState()
+    data class Error(val message: String) : LoginUiState()
 }
 
 class LoginViewModel(application: Application) : AndroidViewModel(application) {
@@ -51,7 +53,6 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         // Verificar si ya hay una sesión activa al iniciar
         val currentUser = auth.currentUser
         if (currentUser != null) {
-            // Siempre verificamos con Firestore para asegurar el estado de 'verificado'
             viewModelScope.launch {
                 try {
                     val query = db.collection("usuarios")
@@ -62,13 +63,14 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     if (!query.isEmpty) {
                         val userData = query.documents[0].toObject(UserData::class.java)
                         if (userData != null) {
-                            if (!userData.verificado) {
-                                // Si no está verificado, forzamos estado Unverified
-                                _uiState.value = LoginUiState.Unverified(userData.correo)
-                            } else {
-                                // Solo si está verificado, guardamos en cache y marcamos éxito
+                            if (userData.verificado) {
                                 saveUserToCache(userData)
                                 _uiState.value = LoginUiState.Success
+                            } else {
+                                // Usuario no verificado, forzar logout para que pase por el flujo de login
+                                auth.signOut()
+                                clearCache()
+                                _uiState.value = LoginUiState.Idle
                             }
                         }
                     } else {
@@ -77,9 +79,8 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                         clearCache()
                     }
                 } catch (e: Exception) {
-                    // Si falla la red, podemos intentar usar el cache si existe y marcaba verificado
                     val cachedUser = getCachedUser()
-                    if (cachedUser.correo.isNotEmpty() && cachedUser.verificado) {
+                    if (cachedUser.correo.isNotEmpty()) {
                         _uiState.value = LoginUiState.Success
                     } else {
                         _uiState.value = LoginUiState.Idle
@@ -114,7 +115,17 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     if (!query.isEmpty) {
                         userData = query.documents[0].toObject(UserData::class.java)
                     } else {
-                        throw Exception("Usuario no registrado")
+                        // Intentar buscar por correo original si el lowercase falló (aunque se guardan en lowercase por lo general)
+                        val queryRetry = db.collection("usuarios")
+                            .whereEqualTo("correo", identifier.trim())
+                            .get()
+                            .await()
+                        if (!queryRetry.isEmpty) {
+                            userData = queryRetry.documents[0].toObject(UserData::class.java)
+                            targetEmail = userData?.correo ?: identifier.trim()
+                        } else {
+                            throw Exception("Usuario no registrado")
+                        }
                     }
                 } else {
                     // Es RUT
@@ -140,11 +151,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 
                 if (userData != null) {
-                    // Verificar si la cuenta está verificada
-                    val isVerified = userData.verificado
-                    if (!isVerified) {
-                        // Reenviar código automáticamente al intentar loguear sin verificar
-                        resendVerificationCode(targetEmail)
+                    if (!userData.verificado) {
                         _uiState.value = LoginUiState.Unverified(targetEmail)
                         return@launch
                     }
@@ -160,30 +167,15 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private val functions = com.google.firebase.functions.FirebaseFunctions.getInstance("southamerica-west1")
-
-    private fun resendVerificationCode(email: String) {
-        viewModelScope.launch {
-            try {
-                val data = hashMapOf(
-                    "email" to email,
-                    "type" to "verification"
-                )
-                functions.getHttpsCallable("sendVerificationCode").call(data).await()
-            } catch (e: Exception) {
-                // Silencioso o log
-            }
-        }
-    }
-
     private fun saveUserToCache(user: UserData) {
         prefs.edit().apply {
             putString("user_nombre", user.nombre)
-            putString("user_apellido", user.apellido_pa)
+            putString("user_nombre_s", user.nombre_s)
+            putString("user_apellido_pa", user.apellido_pa)
+            putString("user_apellido_ma", user.apellido_ma)
             putString("user_correo", user.correo)
             putString("user_rut", user.rut)
             putString("user_rol", user.rol)
-            putBoolean("user_verificado", user.verificado)
             apply()
         }
     }
@@ -191,11 +183,12 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     fun getCachedUser(): UserData {
         return UserData(
             nombre = prefs.getString("user_nombre", "") ?: "",
-            apellido_pa = prefs.getString("user_apellido", "") ?: "",
+            nombre_s = prefs.getString("user_nombre_s", "") ?: "",
+            apellido_pa = prefs.getString("user_apellido_pa", "") ?: "",
+            apellido_ma = prefs.getString("user_apellido_ma", "") ?: "",
             correo = prefs.getString("user_correo", "") ?: "",
             rut = prefs.getString("user_rut", "") ?: "",
-            rol = prefs.getString("user_rol", "") ?: "",
-            verificado = prefs.getBoolean("user_verificado", false)
+            rol = prefs.getString("user_rol", "") ?: ""
         )
     }
 
