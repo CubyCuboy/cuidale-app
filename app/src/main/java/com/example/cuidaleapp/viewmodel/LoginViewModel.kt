@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.cuidaleapp.models.UserData
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,20 +13,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
-data class UserData(
-    val nombre: String = "",
-    val nombre_s: String = "",
-    val apellido_pa: String = "",
-    val apellido_ma: String = "",
-    val correo: String = "",
-    val rut: String = "",
-    val rol: String = "",
-    val verificado: Boolean = false
-)
-
 sealed class LoginUiState {
     object Idle : LoginUiState()
     object Loading : LoginUiState()
+    object CheckingAuth : LoginUiState()
     data class Transition(val userData: UserData) : LoginUiState()
     object Success : LoginUiState()
     data class Unverified(val email: String) : LoginUiState()
@@ -37,7 +28,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     private val db = FirebaseFirestore.getInstance()
     private val prefs = application.getSharedPreferences("cuidale_prefs", Context.MODE_PRIVATE)
 
-    private val _uiState = MutableStateFlow<LoginUiState>(LoginUiState.Idle)
+    private val _uiState = MutableStateFlow<LoginUiState>(LoginUiState.CheckingAuth)
     val uiState: StateFlow<LoginUiState> = _uiState
 
     private val _isDarkMode = MutableStateFlow(prefs.getBoolean("dark_mode", false))
@@ -72,11 +63,14 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                                 clearCache()
                                 _uiState.value = LoginUiState.Idle
                             }
+                        } else {
+                            _uiState.value = LoginUiState.Idle
                         }
                     } else {
                         // Usuario de Auth existe pero no en Firestore? Caso raro, limpiar
                         auth.signOut()
                         clearCache()
+                        _uiState.value = LoginUiState.Idle
                     }
                 } catch (e: Exception) {
                     val cachedUser = getCachedUser()
@@ -87,6 +81,8 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
             }
+        } else {
+            _uiState.value = LoginUiState.Idle
         }
     }
 
@@ -169,6 +165,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun saveUserToCache(user: UserData) {
         prefs.edit().apply {
+            putString("user_uid", user.uid)
             putString("user_nombre", user.nombre)
             putString("user_nombre_s", user.nombre_s)
             putString("user_apellido_pa", user.apellido_pa)
@@ -176,19 +173,34 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
             putString("user_correo", user.correo)
             putString("user_rut", user.rut)
             putString("user_rol", user.rol)
+            putString("user_telefono", user.telefono)
+            putString("user_fotoUrl", user.fotoUrl)
+            putBoolean("user_telefonoVerificado", user.telefonoVerificado)
+            putString("user_descripcion", user.descripcion)
+            putString("user_id_region", user.id_region)
+            putString("user_region", user.region)
+            putString("user_comuna", user.comuna)
             apply()
         }
     }
 
     fun getCachedUser(): UserData {
         return UserData(
+            uid = prefs.getString("user_uid", "") ?: "",
             nombre = prefs.getString("user_nombre", "") ?: "",
             nombre_s = prefs.getString("user_nombre_s", "") ?: "",
             apellido_pa = prefs.getString("user_apellido_pa", "") ?: "",
             apellido_ma = prefs.getString("user_apellido_ma", "") ?: "",
             correo = prefs.getString("user_correo", "") ?: "",
             rut = prefs.getString("user_rut", "") ?: "",
-            rol = prefs.getString("user_rol", "") ?: ""
+            rol = prefs.getString("user_rol", "") ?: "",
+            telefono = prefs.getString("user_telefono", "") ?: "",
+            fotoUrl = prefs.getString("user_fotoUrl", "") ?: "",
+            telefonoVerificado = prefs.getBoolean("user_telefonoVerificado", false),
+            descripcion = prefs.getString("user_descripcion", "") ?: "",
+            id_region = prefs.getString("user_id_region", "") ?: "",
+            region = prefs.getString("user_region", "") ?: "",
+            comuna = prefs.getString("user_comuna", "") ?: ""
         )
     }
 

@@ -26,9 +26,13 @@ import androidx.compose.ui.unit.dp
 import com.example.cuidaleapp.ui.components.HardShadowButton
 import com.example.cuidaleapp.ui.components.HardShadowPanel
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
-import com.example.cuidaleapp.viewmodel.UserData
+import com.example.cuidaleapp.models.UserData
 
+import androidx.compose.material.icons.filled.Badge
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import com.example.cuidaleapp.R
 
 @Composable
@@ -38,7 +42,9 @@ fun MenuScreen(
     onToggleTheme: () -> Unit,
     onLogout: () -> Unit,
     onResetPassword: () -> Unit,
-    onViewProfile: () -> Unit
+    onViewProfile: () -> Unit,
+    onNavigateToFicha: () -> Unit,
+    onNavigateToSearch: () -> Unit = {}
 ) {
     val gradient = CuidaleThemeExtras.gradient
     val colors = MaterialTheme.colorScheme
@@ -101,12 +107,37 @@ fun MenuScreen(
             )
 
             HardShadowButton(
-                text = stringResource(R.string.profile_view_my_data),
+                text = stringResource(R.string.menu_item_ficha),
                 containerColor = colors.primary,
                 contentColor = Color.White,
                 shadowColor = CuidaleThemeExtras.shadows.hardShadowPrimary,
+                icon = Icons.Default.Badge,
+                isDark = customColors.isDark,
+                onClick = { onNavigateToFicha() }
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HardShadowButton(
+                text = stringResource(R.string.menu_item_profile),
+                containerColor = colors.primary,
+                contentColor = Color.White,
+                shadowColor = CuidaleThemeExtras.shadows.hardShadowPrimary,
+                icon = Icons.Default.Person,
                 isDark = customColors.isDark,
                 onClick = onViewProfile
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HardShadowButton(
+                text = "Buscar Usuarios",
+                containerColor = colors.primary,
+                contentColor = Color.White,
+                shadowColor = CuidaleThemeExtras.shadows.hardShadowPrimary,
+                icon = Icons.Default.Search,
+                isDark = customColors.isDark,
+                onClick = onNavigateToSearch
             )
 
             Spacer(modifier = Modifier.height(16.dp))

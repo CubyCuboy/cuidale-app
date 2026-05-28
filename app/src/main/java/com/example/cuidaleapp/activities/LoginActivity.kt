@@ -6,9 +6,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -46,22 +51,31 @@ class LoginActivity : ComponentActivity() {
             }
             
             CuidaleAppTheme(darkTheme = isDark) {
-                LoginScreen(
-                    isDark = isDark,
-                    onToggleTheme = { viewModel.toggleTheme() },
-                    viewModel = viewModel,
-                    onForgotPassword = {
-                        startActivity(Intent(this@LoginActivity, RecoveryPasswordActivity::class.java))
-                    },
-                    onRegister = {
-                        startActivity(Intent(this@LoginActivity, RegisterActivity::class.java))
-                    },
-                    onVerify = { email ->
-                        val intent = Intent(this@LoginActivity, EmailVerificationActivity::class.java)
-                        intent.putExtra("email", email)
-                        startActivity(intent)
+                if (uiState is LoginUiState.CheckingAuth) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
                     }
-                )
+                } else {
+                    LoginScreen(
+                        isDark = isDark,
+                        onToggleTheme = { viewModel.toggleTheme() },
+                        viewModel = viewModel,
+                        onForgotPassword = {
+                            startActivity(Intent(this@LoginActivity, RecoveryPasswordActivity::class.java))
+                        },
+                        onRegister = {
+                            startActivity(Intent(this@LoginActivity, RegisterActivity::class.java))
+                        },
+                        onVerify = { email ->
+                            val intent = Intent(this@LoginActivity, EmailVerificationActivity::class.java)
+                            intent.putExtra("email", email)
+                            startActivity(intent)
+                        }
+                    )
+                }
             }
         }
     }

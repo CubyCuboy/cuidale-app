@@ -67,7 +67,7 @@ import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.LoginUiState
 import com.example.cuidaleapp.viewmodel.LoginViewModel
-import com.example.cuidaleapp.viewmodel.UserData
+import com.example.cuidaleapp.models.UserData
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 

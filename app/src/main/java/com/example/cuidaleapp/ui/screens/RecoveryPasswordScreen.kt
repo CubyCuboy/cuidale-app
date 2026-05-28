@@ -57,7 +57,8 @@ enum class RecoveryStep {
 fun RecoveryPasswordScreen(
     viewModel: RecoveryViewModel = viewModel(),
     onNavigateBack: () -> Unit,
-    onFinish: () -> Unit
+    onFinish: () -> Unit,
+    fromProfile: Boolean = false
 ) {
     val isDark = isSystemInDarkTheme()
     val uiState by viewModel.uiState.collectAsState()
@@ -65,7 +66,6 @@ fun RecoveryPasswordScreen(
     
     var currentStep by rememberSaveable { mutableStateOf(RecoveryStep.EMAIL) }
     
-    // Sincronizar UI step con ViewModel state
     LaunchedEffect(uiState) {
         when(uiState) {
             is RecoveryUiState.CodeSent -> currentStep = RecoveryStep.CODE
@@ -92,6 +92,8 @@ fun RecoveryPasswordScreen(
         RecoveryStep.SUCCESS -> 3
     }
 
+    val backButtonLabel = if (fromProfile) "Volver al Perfil" else stringResource(R.string.forgot_password_cancel_button)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -115,7 +117,7 @@ fun RecoveryPasswordScreen(
                 IconButton(onClick = onNavigateBack) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = stringResource(R.string.forgot_password_cancel_button),
+                        contentDescription = backButtonLabel,
                         tint = onGradientText
                     )
                 }
@@ -140,7 +142,6 @@ fun RecoveryPasswordScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Pasos dinámicos
             Crossfade(targetState = currentStep, animationSpec = tween(500), label = "stepTransition") { step ->
                 val error = if (uiState is RecoveryUiState.Error) (uiState as RecoveryUiState.Error).message else null
                 

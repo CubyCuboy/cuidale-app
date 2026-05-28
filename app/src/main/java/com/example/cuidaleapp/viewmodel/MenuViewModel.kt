@@ -3,6 +3,7 @@ package com.example.cuidaleapp.viewmodel
 import android.app.Application
 import android.content.Context
 import androidx.lifecycle.AndroidViewModel
+import com.example.cuidaleapp.models.UserData
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -34,8 +35,17 @@ class MenuViewModel(application: Application) : AndroidViewModel(application) {
             apellido_ma = prefs.getString("user_apellido_ma", "") ?: "",
             correo = prefs.getString("user_correo", "") ?: "",
             rut = prefs.getString("user_rut", "") ?: "",
-            rol = prefs.getString("user_rol", "") ?: ""
+            rol = prefs.getString("user_rol", "") ?: "",
+            telefono = prefs.getString("user_telefono", "") ?: "",
+            fotoUrl = prefs.getString("user_fotoUrl", "") ?: "",
+            descripcion = prefs.getString("user_descripcion", "") ?: "",
+            comuna = prefs.getString("user_comuna", "") ?: "",
+            region = prefs.getString("user_region", "") ?: ""
         )
+    }
+
+    fun updateUserData() {
+        _userData.value = getCachedUser()
     }
 
     fun logout() {

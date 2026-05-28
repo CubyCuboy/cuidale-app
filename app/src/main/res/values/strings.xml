@@ -107,13 +107,65 @@
     <string name="register_confirm_pass_placeholder">Reingrese su contraseña</string>
     <string name="register_button_next">Siguiente</string>
     <string name="register_button_back">Retroceder</string>
+    <string name="register_next_button">Siguiente</string>
+    <string name="register_back_button">Retroceder</string>
     <string name="register_button_finish">Finalizar registro</string>
     <string name="register_error_invalid_email">Correo no válido</string>
     <string name="register_error_invalid_rut">RUT no válido</string>
     <string name="register_error_fields_required">Todos los campos son obligatorios</string>
 
-    <!-- Role specific Home titles (kept for MenuScreen logic) -->
-    <string name="home_title_caregiver">Pantalla Cuidador</string>
-    <string name="home_title_representative">Pantalla Representante</string>
+    <!-- Profile Screen -->
+    <string name="profile_title">Mi Perfil</string>
+    <string name="profile_label_name">Nombres</string>
+    <string name="profile_label_lastname">Apellidos</string>
+    <string name="profile_label_email">Correo Electrónico</string>
+    <string name="profile_label_rut">RUT</string>
+    <string name="profile_label_phone">Teléfono</string>
+    <string name="profile_label_role">Rol</string>
+    <string name="profile_edit_button">Editar Perfil</string>
+    <string name="profile_reset_pass_button">Restablecer Contraseña</string>
+    <string name="profile_logout_button">Cerrar Sesión</string>
+    <string name="profile_update_success">Perfil actualizado correctamente</string>
 
+    <string name="profile_cuidador_title">Ficha Cuidador</string>
+    <string name="profile_cuidador_subtitle">Completa tu información profesional</string>
+    <string name="profile_familiar_title">Ficha Familiar</string>
+    <string name="profile_familiar_subtitle">Información del paciente a cuidar</string>
+
+    <string name="profile_label_specialization">Especialización</string>
+    <string name="profile_label_experience">Experiencia</string>
+    <string name="profile_label_experience_placeholder">Años de experiencia o descripción corta</string>
+    <string name="profile_label_communes">Comunas de trabajo</string>
+    <string name="profile_label_communes_max">Máximo 3 comunas</string>
+    <string name="profile_label_schedule">Horarios disponibles</string>
+    <string name="profile_label_photo">Foto de perfil</string>
+    <string name="profile_label_description">Descripción personal</string>
+    <string name="profile_label_description_placeholder">Cuéntanos sobre ti…</string>
+    <string name="profile_save_changes">Guardar cambios</string>
+    <string name="profile_label_fullname">Nombre completo</string>
+    <string name="profile_label_age">Edad</string>
+    <string name="profile_label_gender">Género</string>
+    <string name="profile_label_address">Dirección</string>
+    <string name="profile_label_disability">¿Posee discapacidad?</string>
+    <string name="profile_label_chronic">¿Enfermedad crónica?</string>
+    <string name="profile_label_diet">¿Dieta especial?</string>
+    <string name="profile_label_medication">¿Toma medicamentos?</string>
+    <string name="profile_label_conditions">Otras condiciones</string>
+    <string name="profile_label_conditions_placeholder">Otras observaciones relevantes…</string>
+    <string name="profile_edit_data">Editar mis datos</string>
+
+    <!-- Edit Profile Screen -->
+    <string name="edit_profile_title">Editar Perfil</string>
+    <string name="edit_profile_save">Guardar Cambios</string>
+    <string name="edit_profile_cancel">Cancelar</string>
+    <string name="edit_profile_change_photo">Cambiar Foto</string>
+    <string name="edit_profile_phone_placeholder">Ej: +56912345678</string>
+
+    <!-- Menu Items -->
+    <string name="menu_item_profile">Mi Perfil</string>
+    <string name="menu_item_ficha">Mi Ficha</string>
+
+    <!-- Role specific Home titles -->
+    <string name="home_title_caregiver">Cuidador</string>
+    <string name="home_title_representative">Representante</string>
 </resources>

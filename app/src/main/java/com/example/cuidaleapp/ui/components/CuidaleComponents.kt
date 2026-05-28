@@ -37,7 +37,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.IntOffset
+import coil3.compose.AsyncImage
 import androidx.compose.ui.unit.dp
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import kotlin.math.roundToInt
@@ -69,7 +71,9 @@ fun CuidaleTextField(
     isError: Boolean = false,
     enabled: Boolean = true,
     textAlign: TextAlign = TextAlign.Start,
-    keyboardType: KeyboardType = if (isPassword) KeyboardType.Password else KeyboardType.Text
+    keyboardType: KeyboardType = if (isPassword) KeyboardType.Password else KeyboardType.Text,
+    singleLine: Boolean = true,
+    maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE
 ) {
     val customColors = CuidaleThemeExtras.customColors
     val borderColor = if (isError) customColors.warning else MaterialTheme.colorScheme.primary
@@ -89,7 +93,8 @@ fun CuidaleTextField(
                 )
             }
         },
-        singleLine = true,
+        singleLine = singleLine,
+        maxLines = maxLines,
         isError = isError,
         shape = RoundedCornerShape(16.dp),
         visualTransformation = if (isPassword && !isPasswordVisible) {
@@ -925,11 +930,11 @@ fun CuidaleImagePicker(
             contentAlignment = Alignment.Center
         ) {
             if (imageUri != null) {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = "Imagen seleccionada",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(48.dp)
+                AsyncImage(
+                    model = imageUri,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)),
+                    contentScale = ContentScale.Crop
                 )
             } else {
                 Icon(
@@ -938,6 +943,87 @@ fun CuidaleImagePicker(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
                     modifier = Modifier.size(44.dp)
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun CuidaleMultiImagePicker(
+    label: String,
+    imageUris: List<Uri>,
+    onAddImage: () -> Unit,
+    onRemoveImage: (Uri) -> Unit,
+    maxImages: Int = 3
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            imageUris.forEach { uri ->
+                Box(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .padding(4.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(CuidaleThemeExtras.customColors.inputBackground)
+                ) {
+                    AsyncImage(
+                        model = uri,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                    IconButton(
+                        onClick = { onRemoveImage(uri) },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .size(24.dp)
+                            .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Eliminar",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+
+            if (imageUris.size < maxImages) {
+                Box(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .padding(4.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(CuidaleThemeExtras.customColors.inputBackground)
+                        .border(
+                            BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
+                            RoundedCornerShape(8.dp)
+                        )
+                        .clickable { onAddImage() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AddAPhoto,
+                        contentDescription = "Agregar foto",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
         }
     }

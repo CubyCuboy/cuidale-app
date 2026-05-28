@@ -45,7 +45,6 @@ class RecoveryViewModel : ViewModel() {
 
     fun onEmailChange(newEmail: String) {
         _email.value = newEmail
-        // Limpiar error inmediatamente al escribir
         if (_uiState.value is RecoveryUiState.Error) {
             _uiState.value = RecoveryUiState.Idle
         }
