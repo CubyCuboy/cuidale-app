@@ -19,8 +19,12 @@ sealed class ProfileUiState {
 }
 
 data class UserPhoto(
+    val id: String = "",
     val url: String = "",
-    val esPrivada: Boolean = false
+    val esPrivada: Boolean = false,
+    val storagePath: String = "",
+    val sourceType: String = "REMOTE",
+    val cacheKey: String = ""
 )
 
 data class SocialNetwork(
@@ -40,6 +44,7 @@ data class UserData(
     val correo: String = "",
     val correoAlternativo: String = "",
     val fotoUrl: String = "",
+    val profilePhoto: Map<String, Any>? = null,
     val fotos: List<UserPhoto> = emptyList(),
     val id_region: String = "",
     val mostrarCorreo: Boolean = false,
@@ -148,11 +153,11 @@ data class ProfileDomainModel(
     val region: String = "",
     val id_region: String = "",
     val privacidadVinculos: String = "privado",
-    val descripcion: String = "",
     val profilePhoto: ProfileImage? = null,
     val galleryPhotos: List<ProfileImage> = emptyList(),
     val socialLinks: List<SocialLink> = emptyList(),
-    val contactMethods: List<ContactMethod> = emptyList()
+    val contactMethods: List<ContactMethod> = emptyList(),
+    val descripcion: String = ""
 )
 
 data class ProfileRemoteState(
@@ -182,13 +187,13 @@ data class EditProfileDraftState(
     val region: String = "",
     val id_region: String = "",
     val privacidadVinculos: String = "privado",
-    val descripcion: String = "",
     val profilePhoto: ProfileImage? = null,
     val galleryPhotos: List<ProfileImage> = emptyList(),
     val socialLinks: List<SocialLink> = emptyList(),
     val contactMethods: List<ContactMethod> = emptyList(),
     val isDirty: Boolean = false,
     val isSaving: Boolean = false,
+    val descripcion: String = "",
     val error: String? = null
 )
 

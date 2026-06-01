@@ -8,7 +8,7 @@ import java.io.ByteArrayOutputStream
 import java.io.InputStream
 
 object ImageUtils {
-    private const val MAX_SIZE_BYTES = 5 * 1024 * 1024 // 5MB
+    private const val MAX_SIZE_BYTES = 5 * 1024 * 1024
     private val ALLOWED_FORMATS = listOf("image/jpeg", "image/png", "image/webp", "image/jpg")
 
     fun validateImage(context: Context, uri: Uri): Result<Unit> {
@@ -18,7 +18,7 @@ object ImageUtils {
         }
         
         val size = getImageSize(context, uri)
-        if (size > MAX_SIZE_BYTES * 2) { // Permitir hasta 10MB antes de compresión extrema
+        if (size > MAX_SIZE_BYTES * 2) {
             return Result.failure(Exception("La imagen es demasiado grande. Máximo permitido: 10MB."))
         }
         
@@ -33,7 +33,6 @@ object ImageUtils {
             return originalBytes
         }
 
-        // Si excede 5MB, comprimir
         val bitmap = BitmapFactory.decodeByteArray(originalBytes, 0, originalBytes.size)
         var quality = 90
         val outputStream = ByteArrayOutputStream()
@@ -53,3 +52,4 @@ object ImageUtils {
         } ?: 0L
     }
 }
+

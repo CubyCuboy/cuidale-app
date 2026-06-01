@@ -82,7 +82,6 @@ fun LoginScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    // Clave estable para el formulario para evitar que se borren los campos al cambiar de estado interno
     val screenKey = when (uiState) {
         is LoginUiState.Transition -> "transition"
         is LoginUiState.Success -> "success"
@@ -110,7 +109,7 @@ fun LoginScreen(
                 }
             }
             "success" -> {
-                // Pantalla de carga mínima mientras se abre la nueva actividad
+
                 Box(
                     modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
                     contentAlignment = Alignment.Center
@@ -184,7 +183,7 @@ fun LoginForm(
                 .padding(horizontal = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Theme Toggle
+
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
                 horizontalArrangement = Arrangement.End
@@ -211,7 +210,6 @@ fun LoginForm(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Logo Animado Placeholder
             Box(
                 modifier = Modifier
                     .size(100.dp)
@@ -409,3 +407,4 @@ fun LoginPreviewDark() {
         LoginScreen(isDark = true, onToggleTheme = {})
     }
 }
+

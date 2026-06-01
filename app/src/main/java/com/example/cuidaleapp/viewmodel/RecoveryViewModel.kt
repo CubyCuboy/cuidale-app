@@ -53,7 +53,7 @@ class RecoveryViewModel : ViewModel() {
     fun onCodeChange(newCode: String) {
         if (newCode.length <= 6) {
             _code.value = newCode
-            // Limpiar error inmediatamente al escribir
+
             if (_uiState.value is RecoveryUiState.Error) {
                 _uiState.value = RecoveryUiState.CodeSent
             }
@@ -85,8 +85,7 @@ class RecoveryViewModel : ViewModel() {
                     .getHttpsCallable("sendRecoveryCode")
                     .call(data)
                     .await()
-                
-                // Reiniciar timer
+
                 startTimer(5 * 60 * 1000)
                 _attemptsRemaining.value = 5
                 _uiState.value = RecoveryUiState.CodeSent
@@ -139,7 +138,7 @@ class RecoveryViewModel : ViewModel() {
                 }
                 delay(3000)
                 if (_uiState.value is RecoveryUiState.Error) {
-                    _uiState.value = RecoveryUiState.CodeSent // Volver al estado previo al error
+                    _uiState.value = RecoveryUiState.CodeSent
                 }
             }
         }
@@ -199,3 +198,4 @@ class RecoveryViewModel : ViewModel() {
         }
     }
 }
+

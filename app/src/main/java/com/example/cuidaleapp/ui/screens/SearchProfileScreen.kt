@@ -47,8 +47,8 @@ fun SearchProfileScreen(
         if (searchQuery.length >= 3) {
             isLoading = true
             try {
-                // Búsqueda simple por nombre (Firestore no soporta full text search nativo bien sin Algolia etc, 
-                // pero usaremos una técnica básica para este ejemplo: startAt/endAt)
+
+
                 val q = searchQuery.lowercase().trim()
                 val query = db.collection("usuarios")
                     .whereGreaterThanOrEqualTo("nombre", q)
@@ -59,7 +59,7 @@ fun SearchProfileScreen(
                 
                 searchResults = query.toObjects(UserData::class.java)
             } catch (e: Exception) {
-                // Error handling
+
             } finally {
                 isLoading = false
             }
@@ -156,3 +156,4 @@ fun UserSearchItem(user: UserData, onClick: () -> Unit) {
         }
     }
 }
+

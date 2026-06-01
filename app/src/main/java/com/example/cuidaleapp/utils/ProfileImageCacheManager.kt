@@ -8,15 +8,10 @@ import coil3.request.ImageRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/**
- * Manages deterministic local caching for profile images to ensure
- * immediate UI updates and cache consistency.
- */
+
 object ProfileImageCacheManager {
 
-    /**
-     * Clears the Coil image cache for a specific key (usually the remote URL or custom cache key).
-     */
+    
     @OptIn(DelicateCoilApi::class)
     suspend fun evictFromCache(context: Context, cacheKey: String) {
         withContext(Dispatchers.IO) {
@@ -26,9 +21,7 @@ object ProfileImageCacheManager {
         }
     }
 
-    /**
-     * Clears all cached profile images. Useful during logout.
-     */
+    
     @OptIn(DelicateCoilApi::class)
     suspend fun clearAllCache(context: Context) {
         withContext(Dispatchers.IO) {
@@ -38,9 +31,7 @@ object ProfileImageCacheManager {
         }
     }
 
-    /**
-     * Preloads an image into the cache.
-     */
+    
     suspend fun preloadImage(context: Context, url: String) {
         val request = ImageRequest.Builder(context)
             .data(url)
@@ -50,3 +41,4 @@ object ProfileImageCacheManager {
         SingletonImageLoader.get(context).enqueue(request)
     }
 }
+

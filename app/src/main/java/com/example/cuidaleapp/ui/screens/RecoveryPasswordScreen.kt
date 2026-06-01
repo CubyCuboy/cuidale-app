@@ -108,7 +108,7 @@ fun RecoveryPasswordScreen(
                 .padding(horizontal = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Header: Icono Volver
+
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
                 horizontalArrangement = Arrangement.Start,
@@ -589,7 +589,7 @@ fun RecoverySuccessStep(
             contentColor = colors.onPrimary,
             shadowColor = shadows.hardShadowPrimary,
             icon = Icons.AutoMirrored.Filled.ArrowForward,
-            isDark = false, // Estilo por defecto
+            isDark = false,
             onClick = onLogin
         )
     }
@@ -610,3 +610,4 @@ fun RecoveryPreviewDark() {
         RecoveryPasswordScreen(onNavigateBack = {}, onFinish = {})
     }
 }
+

@@ -26,7 +26,7 @@ sealed class MenuNavigation {
     object Main : MenuNavigation()
     object Profile : MenuNavigation()
     object EditProfile : MenuNavigation()
-    object Ficha : MenuNavigation()
+    data class Ficha(val startInEditMode: Boolean = false, val returnTo: MenuNavigation = Profile) : MenuNavigation()
     object Search : MenuNavigation()
     object Settings : MenuNavigation()
     data class OtherProfile(val uid: String) : MenuNavigation()
@@ -68,17 +68,19 @@ class MenuActivity : ComponentActivity() {
                             onLogout = { menuViewModel.logout() },
                             onResetPassword = { menuViewModel.resetPassword(userData.correo) },
                             onViewProfile = { currentScreen = Profile },
-                            onNavigateToFicha = { currentScreen = Ficha },
+                            onNavigateToFicha = { currentScreen = Ficha(startInEditMode = false, returnTo = Main) },
                             onNavigateToSearch = { currentScreen = Search }
                         )
                     }
                     Profile -> {
                         ProfileScreen(
                             viewModel = profileViewModel,
+                            fichaViewModel = fichaViewModel,
                             isDark = isDark,
                             onEditProfile = { currentScreen = EditProfile },
+                            onNavigateToFicha = { currentScreen = Ficha(startInEditMode = true, returnTo = Profile) },
                             onNavigateBack = {
-                                menuViewModel.updateUserData() // Refrescar datos antes de volver
+                                menuViewModel.updateUserData()
                                 currentScreen = Main
                             },
                             onSettingsClick = { currentScreen = Settings }
@@ -104,10 +106,15 @@ class MenuActivity : ComponentActivity() {
                             onNavigateBack = { currentScreen = Profile }
                         )
                     }
-                    Ficha -> {
+                    is Ficha -> {
+                        val fichaNav = currentScreen as Ficha
                         FichaScreen(
                             viewModel = fichaViewModel,
-                            onBack = { currentScreen = Main }
+                            profileViewModel = profileViewModel,
+                            startInEditMode = fichaNav.startInEditMode,
+                            onNavigateBack = { 
+                                currentScreen = fichaNav.returnTo
+                            }
                         )
                     }
                     Search -> {
@@ -124,10 +131,12 @@ class MenuActivity : ComponentActivity() {
                         }
                         ProfileScreen(
                             viewModel = profileViewModel,
+                            fichaViewModel = fichaViewModel,
                             isDark = isDark,
-                            onEditProfile = { /* No-op in visitor view */ },
+                            onEditProfile = { },
+                            onNavigateToFicha = { },
                             onNavigateBack = { currentScreen = Search },
-                            onSettingsClick = { /* No-op */ }
+                            onSettingsClick = { }
                         )
                     }
                 }

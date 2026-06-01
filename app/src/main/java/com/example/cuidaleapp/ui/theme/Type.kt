@@ -6,7 +6,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-//Aqui se personalizan los textos
 
 val CuidaleTypography = Typography(
     displayLarge = TextStyle(
@@ -101,3 +100,4 @@ val CuidaleTypography = Typography(
         lineHeight = 16.sp
     )
 )
+

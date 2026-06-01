@@ -152,7 +152,6 @@ fun EditProfileScreen(
     val shadows = CuidaleThemeExtras.shadows
     val context = LocalContext.current
 
-    // Dialog states
     var showAddSocialDialog by remember { mutableStateOf(false) }
     var newPlatform by remember { mutableStateOf(SocialPlatform.INSTAGRAM) }
     var customPlatformName by remember { mutableStateOf("") }
@@ -241,7 +240,6 @@ fun EditProfileScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 24.dp)
             ) {
-                // Header
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -263,7 +261,6 @@ fun EditProfileScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Panel (Similar to ProfileScreen)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -273,7 +270,6 @@ fun EditProfileScreen(
                         .padding(24.dp)
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        // Profile Image with camera overlay
                         Box(
                             modifier = Modifier
                                 .size(140.dp)
@@ -297,12 +293,14 @@ fun EditProfileScreen(
                                 else -> R.drawable.profile_default
                             }
 
+                        key(profilePhoto?.cacheKey ?: "profile_main") {
                             AsyncImage(
                                 model = imageSource,
                                 contentDescription = "Profile Picture",
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop
                             )
+                        }
                             
                             if (profilePhoto?.uploadState is ImageOperationState.Processing) {
                                 val progress = (profilePhoto.uploadState as ImageOperationState.Processing).progress
@@ -353,7 +351,6 @@ fun EditProfileScreen(
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // Avatar Selector
                         Text("Elegir Avatar", style = MaterialTheme.typography.labelSmall)
                         LazyRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -392,7 +389,18 @@ fun EditProfileScreen(
 
                         Spacer(modifier = Modifier.height(24.dp))
 
-                        // Fields
+                        InputFieldLabel(text = "Sobre mí / Descripción")
+                        CuidaleTextField(
+                            value = draftState.descripcion,
+                            onValueChange = { newValue -> viewModel.updateDraftField { it.copy(descripcion = newValue) } },
+                            placeholder = "Cuéntanos un poco sobre ti (Ej: Soy cuidador con 5 años de experiencia...)",
+                            containerColor = customColors.inputBackground,
+                            singleLine = false,
+                            maxLines = 5
+                        )
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
                         InputFieldLabel(text = "Información Personal")
                         CuidaleTextField(
                             value = draftState.nombre,
@@ -425,28 +433,6 @@ fun EditProfileScreen(
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
-                        InputFieldLabel(text = "Sobre Mí")
-                        CuidaleTextField(
-                            value = draftState.descripcion,
-                            onValueChange = { newValue -> 
-                                if (newValue.length <= 300) {
-                                    viewModel.updateDraftField { it.copy(descripcion = newValue) }
-                                }
-                            },
-                            placeholder = "Breve biografía (máx. 300 caracteres)",
-                            containerColor = customColors.inputBackground,
-                            maxLines = 5,
-                            singleLine = false
-                        )
-                        Text(
-                            text = "${draftState.descripcion.length}/300",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (draftState.descripcion.length >= 300) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier.fillMaxWidth().padding(end = 4.dp),
-                            textAlign = TextAlign.End
-                        )
-
-                        Spacer(modifier = Modifier.height(16.dp))
                         InputFieldLabel(text = "Ubicación")
 
                         var regionExpanded by remember { mutableStateOf(false) }
@@ -477,7 +463,7 @@ fun EditProfileScreen(
                                             viewModel.updateDraftField { it.copy(
                                                 region = region.name,
                                                 id_region = region.id,
-                                                comuna = "" // Reset comuna when region changes
+                                                comuna = ""
                                             ) }
                                             regionExpanded = false
                                         }
@@ -527,7 +513,6 @@ fun EditProfileScreen(
                         
                         Spacer(modifier = Modifier.height(16.dp))
                         
-                        // Contact Section
                         InputFieldLabel(text = "Contacto")
                         Text(
                             "Tus métodos de contacto permiten a otros comunicarse contigo según tu configuración de privacidad.",
@@ -590,7 +575,6 @@ fun EditProfileScreen(
                             }
                         }
 
-                        // Privacy Switches
                         Spacer(modifier = Modifier.height(16.dp))
                         InputFieldLabel(text = "Privacidad de Datos")
                         
@@ -616,7 +600,6 @@ fun EditProfileScreen(
                             Text("Solo contactos", style = MaterialTheme.typography.bodyMedium)
                         }
 
-                        // Social Networks Section
                         Spacer(modifier = Modifier.height(24.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -675,7 +658,6 @@ fun EditProfileScreen(
                             }
                         }
 
-                        // Additional Photos Section
                         Spacer(modifier = Modifier.height(24.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -713,13 +695,14 @@ fun EditProfileScreen(
                                         .background(MaterialTheme.colorScheme.surfaceVariant)
                                         .border(1.dp, Color.Gray.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
                                 ) {
-                                    AsyncImage(
-                                        model = photo.remoteUrl ?: photo.localUri,
-                                        contentDescription = null,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                    // Privacy Toggle
+                                    key(photo.cacheKey) {
+                                        AsyncImage(
+                                            model = photo.remoteUrl ?: photo.localUri,
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
                                     Box(
                                         modifier = Modifier
                                             .align(Alignment.TopEnd)
@@ -737,7 +720,6 @@ fun EditProfileScreen(
                                         )
                                     }
 
-                                    // Upload Progress Overlay
                                     if (photo.uploadState is ImageOperationState.Processing) {
                                         val progress = (photo.uploadState as ImageOperationState.Processing).progress
                                         Box(
@@ -755,7 +737,6 @@ fun EditProfileScreen(
                                         }
                                     }
 
-                                    // Delete
                                     Box(
                                         modifier = Modifier
                                             .align(Alignment.BottomEnd)
@@ -803,7 +784,6 @@ fun EditProfileScreen(
         }
     }
 
-    // Dialogs
     if (showAddSocialDialog) {
         val platforms = SocialPlatform.entries
         var expanded by remember { mutableStateOf(false) }
@@ -939,9 +919,9 @@ fun EditProfileScreen(
                     } else {
                         AsyncImage(model = pendingImageUri, contentDescription = null, modifier = Modifier.size(200.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Crop)
                         if (isAdditionalPhotoUpload) {
-                            Text("¿Deseas subir esta foto?", modifier = Modifier.padding(top = 8.dp))
+                            Text("¿Deseas subir esta foto?")
                         } else {
-                            Text("¿Deseas usar esta imagen como foto de perfil?", modifier = Modifier.padding(top = 8.dp))
+                            Text("¿Deseas usar esta imagen como foto de perfil?")
                         }
                     }
                 }

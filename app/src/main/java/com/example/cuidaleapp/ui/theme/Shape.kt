@@ -4,7 +4,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Shapes
 import androidx.compose.ui.unit.dp
 
-//Aqui se personalizan los bordes
 
 val CuidaleShapes = Shapes(
     small = RoundedCornerShape(12.dp),

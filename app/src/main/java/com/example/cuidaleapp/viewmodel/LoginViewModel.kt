@@ -41,7 +41,6 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     init {
-        // Verificar si ya hay una sesión activa al iniciar
         val currentUser = auth.currentUser
         if (currentUser != null) {
             viewModelScope.launch {
@@ -58,7 +57,6 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                                 saveUserToCache(userData)
                                 _uiState.value = LoginUiState.Success
                             } else {
-                                // Usuario no verificado, forzar logout para que pase por el flujo de login
                                 auth.signOut()
                                 clearCache()
                                 _uiState.value = LoginUiState.Idle
@@ -67,7 +65,6 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                             _uiState.value = LoginUiState.Idle
                         }
                     } else {
-                        // Usuario de Auth existe pero no en Firestore? Caso raro, limpiar
                         auth.signOut()
                         clearCache()
                         _uiState.value = LoginUiState.Idle
@@ -111,7 +108,6 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     if (!query.isEmpty) {
                         userData = query.documents[0].toObject(UserData::class.java)
                     } else {
-                        // Intentar buscar por correo original si el lowercase falló (aunque se guardan en lowercase por lo general)
                         val queryRetry = db.collection("usuarios")
                             .whereEqualTo("correo", identifier.trim())
                             .get()
@@ -124,7 +120,6 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     }
                 } else {
-                    // Es RUT
                     val formattedRut = formatRut(input)
                     val query = db.collection("usuarios")
                         .whereEqualTo("rut", formattedRut)
@@ -139,7 +134,6 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
 
-                // Verificar contraseña en Auth
                 try {
                     auth.signInWithEmailAndPassword(targetEmail, contrasena).await()
                 } catch (e: Exception) {

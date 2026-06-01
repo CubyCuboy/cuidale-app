@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -60,13 +61,13 @@ class RegisterViewModel : ViewModel() {
     private val _comuna = MutableStateFlow("")
     val comuna: StateFlow<String> = _comuna.asStateFlow()
 
-    val isEmailValid: StateFlow<Boolean> = _email.combine(_email) { email, _ ->
-        validateEmail(email)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val isEmailValid: StateFlow<Boolean> = _email
+        .map { validateEmail(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    val isRutValid: StateFlow<Boolean> = _rut.combine(_rut) { rut, _ ->
-        validateRut(rut)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val isRutValid: StateFlow<Boolean> = _rut
+        .map { validateRut(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val isFormValid: StateFlow<Boolean> = combine(_nombre, _apellidoPa, _email, _rut) { nombre, apellido, email, rut ->
         nombre.trim().length >= 2 && 
@@ -87,14 +88,38 @@ class RegisterViewModel : ViewModel() {
         return domain.contains(".") && domain.substringAfterLast(".").length >= 2
     }
 
-    fun onRoleChange(newRole: String) { _role.value = newRole }
-    fun onNombreChange(newName: String) { _nombre.value = capitalizeWords(newName) }
-    fun onNombreSChange(newNameS: String) { _nombreS.value = capitalizeWords(newNameS) }
-    fun onApellidoPaChange(newApellidoPa: String) { _apellidoPa.value = capitalizeWords(newApellidoPa) }
-    fun onApellidoMaChange(newApellidoMa: String) { _apellidoMa.value = capitalizeWords(newApellidoMa) }
-    fun onEmailChange(newEmail: String) { _email.value = newEmail.trim().lowercase() }
-    fun onPasswordChange(newPassword: String) { _password.value = newPassword }
-    fun onRutChange(newRut: String) { _rut.value = newRut.uppercase() }
+    fun onRoleChange(newRole: String) { 
+        _role.value = newRole 
+        clearError()
+    }
+    fun onNombreChange(newName: String) { 
+        _nombre.value = capitalizeWords(newName)
+        clearError()
+    }
+    fun onNombreSChange(newNameS: String) { 
+        _nombreS.value = capitalizeWords(newNameS)
+        clearError()
+    }
+    fun onApellidoPaChange(newApellidoPa: String) { 
+        _apellidoPa.value = capitalizeWords(newApellidoPa)
+        clearError()
+    }
+    fun onApellidoMaChange(newApellidoMa: String) { 
+        _apellidoMa.value = capitalizeWords(newApellidoMa)
+        clearError()
+    }
+    fun onEmailChange(newEmail: String) { 
+        _email.value = newEmail.trim().lowercase()
+        clearError()
+    }
+    fun onPasswordChange(newPassword: String) { 
+        _password.value = newPassword
+        clearError()
+    }
+    fun onRutChange(newRut: String) { 
+        _rut.value = newRut.uppercase().trim()
+        clearError()
+    }
 
     private fun capitalizeWords(text: String): String {
         return text.split(" ").joinToString(" ") { word ->
@@ -116,8 +141,8 @@ class RegisterViewModel : ViewModel() {
     }
 
     private fun validateRut(rut: String): Boolean {
-        val cleanRut = rut.replace(".", "").replace("-", "").uppercase()
-        if (cleanRut.length < 8) return false
+        val cleanRut = rut.replace(".", "").replace("-", "").replace(" ", "").uppercase()
+        if (cleanRut.length < 7 || cleanRut.length > 9) return false
         val body = cleanRut.substring(0, cleanRut.length - 1)
         val dv = cleanRut.substring(cleanRut.length - 1)
         
@@ -145,8 +170,7 @@ class RegisterViewModel : ViewModel() {
             _uiState.value = RegisterUiState.Loading
             try {
                 val formattedRut = formatRutForSaving(_rut.value)
-                
-                // Usamos la colección "usuarios" para coincidir con las reglas
+
                 val rutQuery = db.collection("usuarios")
                     .whereEqualTo("rut", formattedRut)
                     .get()
@@ -179,11 +203,22 @@ class RegisterViewModel : ViewModel() {
                 _uiState.value = RegisterUiState.Success
             } catch (e: Exception) {
                 val errorMessage = when {
-                    e.message?.contains("email-already-in-use") == true -> "El correo electrónico ya se encuentra registrado"
-                    e.message?.contains("PERMISSION_DENIED") == true -> "Error de permisos: Asegúrate de que las reglas de Firestore permitan 'list' en 'usuarios'"
+                    e.message?.contains("email-already-in-use") == true || e.message?.contains("already in use") == true -> 
+                        "El correo electrónico ya se encuentra registrado"
+                    e.message?.contains("network-request-failed") == true -> "Error de conexión a internet"
+                    e.message?.contains("weak-password") == true -> "La contraseña es muy débil"
+                    e.message?.contains("PERMISSION_DENIED") == true -> "Error de permisos en el servidor"
                     else -> e.localizedMessage ?: "Error al registrar"
                 }
                 _uiState.value = RegisterUiState.Error(errorMessage)
+                
+                // Desbloquear automáticamente después de 5 segundos
+                viewModelScope.launch {
+                    kotlinx.coroutines.delay(5000)
+                    if (_uiState.value is RegisterUiState.Error) {
+                        _uiState.value = RegisterUiState.Idle
+                    }
+                }
             }
         }
     }
@@ -194,3 +229,4 @@ class RegisterViewModel : ViewModel() {
         }
     }
 }
+

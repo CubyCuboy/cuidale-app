@@ -2,7 +2,6 @@ package com.example.cuidaleapp.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-//Aqui se personalizan los colores
 
 val CuidaleBlueTopLight = Color(0xFF4B8FDC)
 val CuidaleBlueBottomLight = Color(0xFF43BCD3)
@@ -20,7 +19,7 @@ val CuidaleWarningLight = Color(0xFFFF8C42)
 val CuidaleErrorContainerLight = Color(0xFFFFDAD6)
 val CuidaleWarningContainerLight = Color(0xFFFFEDE1)
 val CuidaleSuccessLight = Color(0xFF1D9A6C)
-val CuidaleSuccessStrongLight = Color(0xFF178F17) // Verde fuerte para modo claro
+val CuidaleSuccessStrongLight = Color(0xFF178F17)
 
 val CuidaleShadowBlueLight = Color(0xFF5E5CE6)
 val CuidaleShadowMintLight = Color(0xFF3FA7C4)
@@ -37,12 +36,12 @@ val CuidaleOnSurfaceDark = Color(0xFFEAF4FF)
 val CuidaleOnSurfaceSoftDark = Color(0xFFB7C9D9)
 val CuidaleBorderDark = Color(0xFF35506A)
 val CuidaleLinkDark = Color(0xFFA89BFF)
-val CuidaleErrorDark = Color(0xFFFF5449) // Rojo más vibrante para modo oscuro
+val CuidaleErrorDark = Color(0xFFFF5449)
 val CuidaleWarningDark = Color(0xFFFFB871)
-val CuidaleErrorContainerDark = Color(0xFF410002) // Fondo rojo muy oscuro
-val CuidaleWarningContainerDark = Color(0xFF2E1500) // Fondo naranja/vino oscuro
+val CuidaleErrorContainerDark = Color(0xFF410002)
+val CuidaleWarningContainerDark = Color(0xFF2E1500)
 val CuidaleSuccessDark = Color(0xFF5ED6A5)
-val CuidaleSuccessStrongDark = Color(0xFF5ED6A5) // Verde vibrante para modo oscuro
+val CuidaleSuccessStrongDark = Color(0xFF5ED6A5)
 
 val CuidaleShadowBlueDark = Color(0xFF7A6CFF)
 val CuidaleShadowMintDark = Color(0xFF2E7D91)

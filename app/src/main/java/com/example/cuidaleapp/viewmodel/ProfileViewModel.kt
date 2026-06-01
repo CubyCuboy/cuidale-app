@@ -14,6 +14,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.PhoneAuthOptions
 import com.google.firebase.auth.PhoneAuthProvider
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.storage.storageMetadata
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,6 +58,27 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun UserData.toProfileImage(): ProfileImage? {
+        profilePhoto?.let { map ->
+            val remoteUrl = map["remoteUrl"] as? String
+            if (!remoteUrl.isNullOrBlank()) {
+                val sourceTypeStr = map["sourceType"] as? String ?: "REMOTE"
+                val sourceType = try { ImageSourceType.valueOf(sourceTypeStr) } catch (e: Exception) { ImageSourceType.REMOTE }
+                
+                return ProfileImage(
+                    id = map["id"] as? String ?: "profile_main",
+                    remoteUrl = remoteUrl,
+                    localUri = null,
+                    cacheKey = map["cacheKey"] as? String ?: remoteUrl,
+                    storagePath = map["storagePath"] as? String ?: "",
+                    isPrivate = map["isPrivate"] as? Boolean ?: false,
+                    isProfilePhoto = true,
+                    sortOrder = (map["sortOrder"] as? Number)?.toInt() ?: 0,
+                    sourceType = sourceType,
+                    uploadState = ImageOperationState.Idle
+                )
+            }
+        }
+
         if (fotoUrl.isBlank()) return null
 
         return if (fotoUrl.startsWith("res:")) {
@@ -156,16 +178,17 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             if (!canSeePrivatePhotos && photo.esPrivada) {
                 null
             } else {
+                val sourceType = try { ImageSourceType.valueOf(photo.sourceType) } catch (e: Exception) { ImageSourceType.REMOTE }
                 ProfileImage(
-                    id = "${photo.url}_${index}",
+                    id = if (photo.id.isNotBlank()) photo.id else "${photo.url}_${index}",
                     remoteUrl = if (photo.url.startsWith("res:")) null else photo.url,
                     localUri = null,
-                    cacheKey = photo.url,
-                    storagePath = "",
+                    cacheKey = if (photo.cacheKey.isNotBlank()) photo.cacheKey else photo.url,
+                    storagePath = photo.storagePath,
                     isPrivate = photo.esPrivada,
                     isProfilePhoto = false,
                     sortOrder = index,
-                    sourceType = if (photo.url.startsWith("res:")) ImageSourceType.DEFAULT_AVATAR else ImageSourceType.REMOTE,
+                    sourceType = if (photo.url.startsWith("res:")) ImageSourceType.DEFAULT_AVATAR else sourceType,
                     uploadState = ImageOperationState.Idle
                 )
             }
@@ -258,6 +281,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun startEditing() {
+        if (_draftState.value.isDirty) return
         val current = _remoteState.value.data ?: return
         _draftState.value = EditProfileDraftState(
             uid = current.uid,
@@ -377,22 +401,43 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     .await()
 
                 val url = storageRef.downloadUrl.await().toString()
-                db.collection("usuarios").document(uid).update("fotoUrl", url).await()
+                
+                val photoMap = mapOf(
+                    "id" to "profile_main",
+                    "remoteUrl" to url,
+                    "cacheKey" to url,
+                    "storagePath" to "perfiles/$uid/foto_perfil.jpg",
+                    "isPrivate" to false,
+                    "isProfilePhoto" to true,
+                    "sortOrder" to 0,
+                    "sourceType" to ImageSourceType.REMOTE.name
+                )
+                
+                db.collection("usuarios").document(uid).update(
+                    "fotoUrl", url,
+                    "profilePhoto", photoMap
+                ).await()
+
+                val updatedProfilePhoto = draftState.value.profilePhoto?.copy(
+                    remoteUrl = url,
+                    localUri = null,
+                    cacheKey = url,
+                    sourceType = ImageSourceType.REMOTE,
+                    uploadState = ImageOperationState.Success
+                )
 
                 _draftState.update { draft ->
                     draft.copy(
-                        profilePhoto = draft.profilePhoto?.copy(
-                            remoteUrl = url,
-                            localUri = null,
-                            cacheKey = url,
-                            sourceType = ImageSourceType.REMOTE,
-                            uploadState = ImageOperationState.Success
-                        ),
+                        profilePhoto = updatedProfilePhoto,
                         isDirty = true
                     )
                 }
 
-                loadUserProfileInternal()
+                _remoteState.update { remote ->
+                    remote.copy(
+                        data = remote.data?.copy(profilePhoto = updatedProfilePhoto)
+                    )
+                }
             } catch (e: Exception) {
                 _draftState.update { draft ->
                     draft.copy(
@@ -472,30 +517,47 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 val url = storageRef.downloadUrl.await().toString()
 
                 val currentRemotePhotos = getCurrentUserRaw()?.fotos ?: emptyList()
-                val updatedPhotos = currentRemotePhotos + UserPhoto(url = url, esPrivada = isPrivate)
+                val newPhoto = UserPhoto(
+                    id = tempId,
+                    url = url,
+                    esPrivada = isPrivate,
+                    storagePath = "perfiles/$uid/fotos/$tempId.jpg",
+                    sourceType = ImageSourceType.REMOTE.name,
+                    cacheKey = url
+                )
+                val updatedPhotos = currentRemotePhotos + newPhoto
 
                 db.collection("usuarios").document(uid).update("fotos", updatedPhotos).await()
 
+                var finalPhoto: ProfileImage? = null
                 _draftState.update { draft ->
+                    val updatedGallery = draft.galleryPhotos.map {
+                        if (it.id == tempId) {
+                            it.copy(
+                                remoteUrl = url,
+                                localUri = null,
+                                cacheKey = url,
+                                storagePath = "perfiles/$uid/fotos/$tempId.jpg",
+                                sourceType = ImageSourceType.REMOTE,
+                                uploadState = ImageOperationState.Success
+                            ).also { photo -> finalPhoto = photo }
+                        } else {
+                            it
+                        }
+                    }
                     draft.copy(
-                        galleryPhotos = draft.galleryPhotos.map {
-                            if (it.id == tempId) {
-                                it.copy(
-                                    remoteUrl = url,
-                                    localUri = null,
-                                    cacheKey = url,
-                                    sourceType = ImageSourceType.REMOTE,
-                                    uploadState = ImageOperationState.Success
-                                )
-                            } else {
-                                it
-                            }
-                        },
+                        galleryPhotos = updatedGallery,
                         isDirty = true
                     )
                 }
 
-                loadUserProfileInternal()
+                _remoteState.update { remote ->
+                    remote.copy(
+                        data = remote.data?.copy(
+                            galleryPhotos = remote.data.galleryPhotos + listOfNotNull(finalPhoto)
+                        )
+                    )
+                }
             } catch (e: Exception) {
                 _draftState.update { draft ->
                     draft.copy(
@@ -537,14 +599,12 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     try {
                         storage.getReferenceFromUrl(url).delete().await()
                     } catch (_: Exception) {
-                        // ignore deletion errors
                     }
                 }
 
                 try {
                     ProfileImageCacheManager.evictFromCache(getApplication<Application>().applicationContext, image.cacheKey)
                 } catch (_: Exception) {
-                    // ignore cache errors
                 }
 
                 _draftState.update { draft ->
@@ -554,14 +614,26 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     )
                 }
 
+                var profilePhotoRemoved = false
                 if (_draftState.value.profilePhoto?.remoteUrl == image.remoteUrl) {
-                    db.collection("usuarios").document(uid).update("fotoUrl", "").await()
+                    db.collection("usuarios").document(uid).update(
+                        "fotoUrl", "",
+                        "profilePhoto", FieldValue.delete()
+                    ).await()
                     _draftState.update { draft ->
                         draft.copy(profilePhoto = null, isDirty = true)
                     }
+                    profilePhotoRemoved = true
                 }
 
-                loadUserProfileInternal()
+                _remoteState.update { remote ->
+                    remote.copy(
+                        data = remote.data?.copy(
+                            galleryPhotos = remote.data.galleryPhotos.filter { it.id != image.id },
+                            profilePhoto = if (profilePhotoRemoved) null else remote.data.profilePhoto
+                        )
+                    )
+                }
             } catch (e: Exception) {
                 _draftState.update { draft ->
                     draft.copy(
@@ -601,7 +673,16 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 }
 
                 db.collection("usuarios").document(uid).update("fotos", updatedPhotos).await()
-                loadUserProfileInternal()
+                
+                _remoteState.update { remote ->
+                    remote.copy(
+                        data = remote.data?.copy(
+                            galleryPhotos = remote.data.galleryPhotos.map {
+                                if (it.remoteUrl == image.remoteUrl) it.copy(isPrivate = newPrivacy) else it
+                            }
+                        )
+                    )
+                }
             } catch (e: Exception) {
                 _draftState.update { draft ->
                     draft.copy(
@@ -626,14 +707,35 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
 
         viewModelScope.launch {
             try {
-                db.collection("usuarios").document(uid).update("fotoUrl", finalValue).await()
+                val photoMap = mapOf(
+                    "id" to image.id,
+                    "remoteUrl" to image.remoteUrl.orEmpty(),
+                    "cacheKey" to image.cacheKey,
+                    "storagePath" to image.storagePath,
+                    "isPrivate" to image.isPrivate,
+                    "isProfilePhoto" to true,
+                    "sortOrder" to image.sortOrder,
+                    "sourceType" to image.sourceType.name
+                )
+
+                db.collection("usuarios").document(uid).update(
+                    "fotoUrl", finalValue,
+                    "profilePhoto", photoMap
+                ).await()
+
+                val updatedProfilePhoto = image.copy(isProfilePhoto = true)
                 _draftState.update {
                     it.copy(
-                        profilePhoto = image.copy(isProfilePhoto = true),
+                        profilePhoto = updatedProfilePhoto,
                         isDirty = true
                     )
                 }
-                loadUserProfileInternal()
+                
+                _remoteState.update { remote ->
+                    remote.copy(
+                        data = remote.data?.copy(profilePhoto = updatedProfilePhoto)
+                    )
+                }
             } catch (e: Exception) {
                 _uiState.value = ProfileUiState.Error(e.localizedMessage ?: "Error al cambiar foto de perfil")
             }
@@ -660,6 +762,19 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     null -> ""
                 }.orEmpty()
 
+                val photoMap = draft.profilePhoto?.let {
+                    mapOf(
+                        "id" to it.id,
+                        "remoteUrl" to it.remoteUrl.orEmpty(),
+                        "cacheKey" to it.cacheKey,
+                        "storagePath" to it.storagePath,
+                        "isPrivate" to it.isPrivate,
+                        "isProfilePhoto" to true,
+                        "sortOrder" to it.sortOrder,
+                        "sourceType" to it.sourceType.name
+                    )
+                }
+
                 val updates = mutableMapOf<String, Any>(
                     "nombre" to capitalizeWords(draft.nombre),
                     "nombre_s" to capitalizeWords(draft.nombre_s),
@@ -677,6 +792,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     "privacidadVinculos" to draft.privacidadVinculos,
                     "descripcion" to draft.descripcion.trim(),
                     "fotoUrl" to photoValue,
+                    "profilePhoto" to (photoMap ?: FieldValue.delete()),
                     "redesSociales" to draft.socialLinks.map {
                         SocialNetwork(
                             platform = it.platform.displayName,
@@ -691,7 +807,14 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                             ImageSourceType.DEFAULT_AVATAR -> it.cacheKey
                             ImageSourceType.LOCAL_PENDING -> it.remoteUrl
                         }
-                        if (url.isNullOrBlank()) null else UserPhoto(url = url, esPrivada = it.isPrivate)
+                        if (url.isNullOrBlank()) null else UserPhoto(
+                            id = it.id,
+                            url = url,
+                            esPrivada = it.isPrivate,
+                            storagePath = it.storagePath,
+                            sourceType = it.sourceType.name,
+                            cacheKey = it.cacheKey
+                        )
                     }
                 )
 
@@ -787,7 +910,6 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     }
                 }
             } catch (_: Exception) {
-                // ignore caching errors
             }
         }
     }
@@ -838,7 +960,6 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             try {
                 ProfileImageCacheManager.clearAllCache(getApplication<Application>().applicationContext)
             } catch (_: Exception) {
-                // ignore cache clear errors
             }
 
             auth.signOut()

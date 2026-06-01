@@ -44,7 +44,7 @@ class LoginActivity : ComponentActivity() {
                         val intent = Intent(this@LoginActivity, EmailVerificationActivity::class.java)
                         intent.putExtra("email", (uiState as LoginUiState.Unverified).email)
                         startActivity(intent)
-                        viewModel.clearError() // Resetear estado para evitar bucle
+                        viewModel.clearError()
                     }
                     else -> {}
                 }
@@ -93,3 +93,4 @@ class LoginActivity : ComponentActivity() {
         windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
     }
 }
+

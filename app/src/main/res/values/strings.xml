@@ -129,29 +129,29 @@
 
     <string name="profile_cuidador_title">Ficha Cuidador</string>
     <string name="profile_cuidador_subtitle">Completa tu información profesional</string>
-    <string name="profile_familiar_title">Ficha Familiar</string>
+    <string name="profile_familiar_title">Ficha Representante</string>
     <string name="profile_familiar_subtitle">Información del paciente a cuidar</string>
 
-    <string name="profile_label_specialization">Especialización</string>
-    <string name="profile_label_experience">Experiencia</string>
-    <string name="profile_label_experience_placeholder">Años de experiencia o descripción corta</string>
-    <string name="profile_label_communes">Comunas de trabajo</string>
-    <string name="profile_label_communes_max">Máximo 3 comunas</string>
-    <string name="profile_label_schedule">Horarios disponibles</string>
-    <string name="profile_label_photo">Foto de perfil</string>
-    <string name="profile_label_description">Descripción personal</string>
-    <string name="profile_label_description_placeholder">Cuéntanos sobre ti…</string>
-    <string name="profile_save_changes">Guardar cambios</string>
-    <string name="profile_label_fullname">Nombre completo</string>
-    <string name="profile_label_age">Edad</string>
+    <string name="profile_label_specialization">¿Cuál es tu especialidad o formación?</string>
+    <string name="profile_label_experience">Cuéntanos sobre tu experiencia previa</string>
+    <string name="profile_label_experience_placeholder">Ej: 5 años cuidando adultos mayores con Alzheimer...</string>
+    <string name="profile_label_communes">¿En qué comunas te gustaría trabajar?</string>
+    <string name="profile_label_communes_max">Puedes elegir hasta 3 comunas</string>
+    <string name="profile_label_schedule">¿Qué horarios tienes disponibles para trabajar?</string>
+    <string name="profile_label_photo">Fotos de la ficha</string>
+    <string name="profile_label_description">Escribe una breve descripción sobre ti para que las familias te conozcan mejor</string>
+    <string name="profile_label_description_placeholder">Soy una persona paciente, responsable y con mucha vocación...</string>
+    <string name="profile_save_changes">Guardar mi Ficha</string>
+    <string name="profile_label_fullname">¿Cómo se llama la persona que necesita cuidados?</string>
+    <string name="profile_label_age">¿Qué edad tiene?</string>
     <string name="profile_label_gender">Género</string>
-    <string name="profile_label_address">Dirección</string>
-    <string name="profile_label_disability">¿Posee discapacidad?</string>
-    <string name="profile_label_chronic">¿Enfermedad crónica?</string>
-    <string name="profile_label_diet">¿Dieta especial?</string>
-    <string name="profile_label_medication">¿Toma medicamentos?</string>
-    <string name="profile_label_conditions">Otras condiciones</string>
-    <string name="profile_label_conditions_placeholder">Otras observaciones relevantes…</string>
+    <string name="profile_label_address">¿Cuál es su dirección?</string>
+    <string name="profile_label_disability">¿Posee alguna discapacidad que debamos conocer?</string>
+    <string name="profile_label_chronic">¿Tiene alguna enfermedad crónica?</string>
+    <string name="profile_label_diet">¿Sigue alguna dieta especial?</string>
+    <string name="profile_label_medication">¿Toma medicamentos regularmente?</string>
+    <string name="profile_label_conditions">¿Alguna otra condición u observación importante?</string>
+    <string name="profile_label_conditions_placeholder">Ej: Usa silla de ruedas, tiene alergias...</string>
     <string name="profile_edit_data">Editar mis datos</string>
 
     <!-- Edit Profile Screen -->

@@ -18,7 +18,7 @@ sealed class FichaState {
     object Loading : FichaState()
     object NotFound : FichaState()
     data class View(val data: Map<String, Any>) : FichaState()
-    object Editing : FichaState()
+    data class Editing(val data: Map<String, Any>) : FichaState()
     data class Error(val message: String) : FichaState()
 }
 
@@ -40,6 +40,9 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
     private val _availableCommunes = MutableStateFlow<List<String>>(emptyList())
     val availableCommunes: StateFlow<List<String>> = _availableCommunes
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing
+
     init {
         checkProfile()
     }
@@ -53,6 +56,7 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             _state.value = FichaState.Loading
+            _isRefreshing.value = true
             try {
                 val userDoc = db.collection("usuarios").document(user.uid).get().await()
                 val currentRole = userDoc.getString("rol") ?: ""
@@ -64,8 +68,7 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
                 val regionData = ChileData.regions.find { it.name == currentRegion }
                 _availableCommunes.value = regionData?.comunas?.sorted() ?: emptyList()
 
-                val collectionName = if (currentRole == "cuidador") "perfil_cuidador" else "perfil_familiar"
-                val profileDoc = db.collection(collectionName).document(user.uid).get().await()
+                val profileDoc = db.collection("fichas").document(user.uid).get().await()
 
                 if (profileDoc.exists()) {
                     _state.value = FichaState.View(profileDoc.data ?: emptyMap())
@@ -74,16 +77,21 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
                 }
             } catch (e: Exception) {
                 _state.value = FichaState.Error(e.message ?: "Error al cargar perfil")
+            } finally {
+                _isRefreshing.value = false
             }
         }
     }
 
-    fun refreshProfile() {
-        checkProfile()
+    fun startEditing() {
+        val currentState = _state.value
+        if (currentState is FichaState.View) {
+            _state.value = FichaState.Editing(currentState.data)
+        }
     }
 
-    fun startEditing() {
-        _state.value = FichaState.Editing
+    fun cancelEditing() {
+        checkProfile()
     }
 
     private suspend fun uploadFichaImages(userId: String, uris: List<Uri>): List<String> {
@@ -94,36 +102,30 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
             if (uri.toString().startsWith("http")) {
                 urls.add(uri.toString())
             } else {
-                // Validar cada imagen
-                ImageUtils.validateImage(context, uri).getOrThrow()
-
-                val fileName = "foto_${index + 1}.jpg"
-                val fileRef = storageRef.child(fileName)
-                val bytes = ImageUtils.getCompressedImage(context, uri) ?: return@forEachIndexed
-                
-                fileRef.putBytes(bytes).await()
-                val downloadUrl = fileRef.downloadUrl.await().toString()
-                urls.add(downloadUrl)
+                try {
+                    ImageUtils.validateImage(context, uri).getOrThrow()
+                    val fileName = "foto_${System.currentTimeMillis()}_$index.jpg"
+                    val fileRef = storageRef.child(fileName)
+                    val bytes = ImageUtils.getCompressedImage(context, uri) ?: return@forEachIndexed
+                    
+                    fileRef.putBytes(bytes).await()
+                    val downloadUrl = fileRef.downloadUrl.await().toString()
+                    urls.add(downloadUrl)
+                } catch (e: Exception) {
+                }
             }
         }
         return urls
     }
 
-    fun saveCaregiverProfile(
+    fun createCaregiverFicha(
         especializacion: String,
         experiencia: String,
         comunas: List<String>,
-        horarios: List<String>,
-        fotoUris: List<Uri>,
-        telefono: String,
-        correo: String,
-        descripcion: String
+        descripcion: String,
+        fotoUris: List<Uri>
     ) {
         val user = auth.currentUser ?: return
-        if (especializacion.isBlank() || telefono.isBlank() || correo.isBlank() || descripcion.isBlank()) {
-            _state.value = FichaState.Error("Por favor completa los campos obligatorios")
-            return
-        }
         
         viewModelScope.launch {
             _state.value = FichaState.Loading
@@ -131,18 +133,15 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
                 val imageUrls = uploadFichaImages(user.uid, fotoUris)
                 
                 val data = hashMapOf(
-                    "especializacion" to especializacion,
-                    "experiencia" to if (experiencia.isBlank()) "Sin Especificar" else validateWordCount(experiencia, 300),
+                    "tipo" to "cuidador",
+                    "especializacion" to especializacion.trim(),
+                    "experiencia" to experiencia.trim(),
                     "comunas" to comunas,
-                    "horarios" to horarios,
                     "fotos" to imageUrls,
-                    "telefono" to telefono,
-                    "correo" to correo,
-                    "descripcion" to validateWordCount(descripcion, 300)
+                    "descripcion" to descripcion.trim(),
+                    "ultima_actualizacion" to com.google.firebase.Timestamp.now()
                 )
-                db.collection("perfil_cuidador").document(user.uid).set(data).await()
-                _state.value = FichaState.View(data)
-                // Opcional: refrescar para asegurar sincronía completa
+                db.collection("fichas").document(user.uid).set(data).await()
                 checkProfile()
             } catch (e: Exception) {
                 _state.value = FichaState.Error("Error al guardar perfil: ${e.message}")
@@ -150,24 +149,31 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun saveFamilyProfile(
-        fotoUris: List<Uri>,
+    fun createFamilyFicha(
         nombreCompleto: String,
         edad: String,
         genero: String,
+        vivesConFamiliar: Boolean,
+        region: String,
         comuna: String,
-        direccion: String,
-        discapacidad: String,
-        enfermedad: String,
-        dieta: String,
-        medicacion: String,
-        condiciones: String
+        calle: String,
+        numero: String,
+        depto: String,
+        nivelDependencia: String,
+        movilidad: String,
+        comunicacion: String,
+        discapacidades: List<String>,
+        discapacidadOtro: String,
+        enfermedades: List<String>,
+        enfermedadOtro: String,
+        dieta: Map<String, String>,
+        medicamentos: List<Map<String, Any>>,
+        condicionesExtra: String,
+        fotoUris: List<Uri>,
+        comunasPreferencia: List<String> = emptyList(),
+        horariosPreferencia: List<String> = emptyList()
     ) {
         val user = auth.currentUser ?: return
-        if (nombreCompleto.isBlank() || edad.isBlank() || comuna.isBlank() || direccion.isBlank()) {
-            _state.value = FichaState.Error("Por favor completa los campos obligatorios")
-            return
-        }
 
         viewModelScope.launch {
             _state.value = FichaState.Loading
@@ -175,34 +181,36 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
                 val imageUrls = uploadFichaImages(user.uid, fotoUris)
 
                 val data = hashMapOf(
+                    "tipo" to "familiar",
                     "fotos" to imageUrls,
-                    "nombre_completo" to nombreCompleto,
-                    "edad" to edad,
+                    "nombre_completo" to nombreCompleto.trim(),
+                    "edad" to edad.trim(),
                     "genero" to genero,
+                    "vives_con_familiar" to vivesConFamiliar,
+                    "region" to region,
                     "comuna" to comuna,
-                    "direccion" to direccion,
-                    "discapacidad" to discapacidad,
-                    "enfermedad_cronica" to enfermedad,
-                    "dieta_especial" to dieta,
-                    "usa_medicacion" to medicacion,
-                    "condiciones" to validateWordCount(condiciones, 300)
+                    "calle" to calle.trim(),
+                    "numero" to numero.trim(),
+                    "depto" to depto.trim(),
+                    "nivel_dependencia" to nivelDependencia,
+                    "movilidad" to movilidad,
+                    "comunicacion" to comunicacion,
+                    "discapacidades" to discapacidades,
+                    "discapacidad_otro" to discapacidadOtro.trim(),
+                    "enfermedades" to enfermedades,
+                    "enfermedad_otro" to enfermedadOtro.trim(),
+                    "dieta" to dieta,
+                    "medicamentos" to medicamentos,
+                    "condiciones" to condicionesExtra.trim(),
+                    "comunas_preferencia" to comunasPreferencia,
+                    "horarios_preferencia" to horariosPreferencia,
+                    "ultima_actualizacion" to com.google.firebase.Timestamp.now()
                 )
-                db.collection("perfil_familiar").document(user.uid).set(data).await()
-                _state.value = FichaState.View(data)
-                // Opcional: refrescar para asegurar sincronía completa
+                db.collection("fichas").document(user.uid).set(data).await()
                 checkProfile()
             } catch (e: Exception) {
                 _state.value = FichaState.Error("Error al guardar perfil: ${e.message}")
             }
-        }
-    }
-
-    private fun validateWordCount(text: String, max: Int): String {
-        val words = text.trim().split("\\s+".toRegex())
-        return if (words.size > max) {
-            words.take(max).joinToString(" ")
-        } else {
-            text
         }
     }
 }

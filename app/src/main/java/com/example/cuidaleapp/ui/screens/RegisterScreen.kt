@@ -1,8 +1,7 @@
 package com.example.cuidaleapp.ui.screens
 
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -32,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.cuidaleapp.R
@@ -41,6 +41,7 @@ import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.RegisterViewModel
 import com.example.cuidaleapp.viewmodel.RegisterUiState
+import kotlin.math.roundToInt
 
 enum class RegisterStep {
     ROLE, PERSONAL, LOCATION, PASSWORD, SUCCESS
@@ -56,8 +57,7 @@ fun RegisterScreen(
     val uiState by viewModel.uiState.collectAsState()
     
     var currentStep by rememberSaveable { mutableStateOf(RegisterStep.ROLE) }
-    
-    // Sync with ViewModel for success
+
     LaunchedEffect(uiState) {
         if (uiState is RegisterUiState.Success) {
             currentStep = RegisterStep.SUCCESS
@@ -96,7 +96,7 @@ fun RegisterScreen(
                 .padding(horizontal = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Header
+
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
                 horizontalArrangement = Arrangement.Start,
@@ -250,7 +250,7 @@ fun RoleCard(
     }
 
     Box(modifier = Modifier.fillMaxWidth().clickable { onClick() }) {
-        // Shadow layer
+
         Box(
             modifier = Modifier
                 .matchParentSize()
@@ -532,11 +532,25 @@ fun RegisterPasswordStep(
     val passMatches = password.isNotEmpty() && password == confirmPassword
     val isPassValid = password.length >= 8 && password.any { it.isUpperCase() } && password.any { !it.isLetterOrDigit() }
 
+    val shakeOffset = remember { Animatable(0f) }
+    LaunchedEffect(error) {
+        if (error != null) {
+            repeat(6) {
+                shakeOffset.animateTo(
+                    targetValue = if (it % 2 == 0) 10f else -10f,
+                    animationSpec = tween(durationMillis = 50, easing = LinearEasing)
+                )
+            }
+            shakeOffset.animateTo(0f)
+        }
+    }
+
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         HardShadowPanel(
             backgroundColor = CuidaleThemeExtras.customColors.panelBackground,
             shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowAccent else CuidaleThemeExtras.shadows.hardShadowPrimary,
-            isError = error != null
+            isError = error != null,
+            modifier = Modifier.offset { IntOffset(shakeOffset.value.roundToInt(), 0) }
         ) {
             Text(
                 text = stringResource(R.string.register_pass_desc),
@@ -561,7 +575,10 @@ fun RegisterPasswordStep(
             InputFieldLabel(stringResource(R.string.register_pass_label))
             CuidaleTextField(
                 value = password,
-                onValueChange = viewModel::onPasswordChange,
+                onValueChange = {
+                    viewModel.onPasswordChange(it)
+                    viewModel.clearError()
+                },
                 placeholder = stringResource(R.string.register_pass_placeholder),
                 containerColor = CuidaleThemeExtras.customColors.inputBackground,
                 isPassword = true,
@@ -575,7 +592,10 @@ fun RegisterPasswordStep(
             InputFieldLabel(stringResource(R.string.register_confirm_pass_label))
             CuidaleTextField(
                 value = confirmPassword,
-                onValueChange = { confirmPassword = it },
+                onValueChange = { 
+                    confirmPassword = it
+                    viewModel.clearError()
+                },
                 placeholder = stringResource(R.string.register_confirm_pass_placeholder),
                 containerColor = CuidaleThemeExtras.customColors.inputBackground,
                 isPassword = true,
@@ -583,6 +603,15 @@ fun RegisterPasswordStep(
                 onPasswordVisibilityChange = { isConfirmVisible = !isConfirmVisible },
                 enabled = !isLoading
             )
+
+            AnimatedVisibility(visible = error != null) {
+                Text(
+                    text = error ?: "",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(top = 12.dp)
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -679,3 +708,4 @@ fun RegisterPreviewLight() {
         RegisterScreen(onNavigateBack = {}, onFinish = {})
     }
 }
+

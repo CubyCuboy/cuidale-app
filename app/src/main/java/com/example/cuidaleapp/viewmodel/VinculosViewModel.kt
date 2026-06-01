@@ -14,7 +14,7 @@ data class Vinculo(
     val id: String = "",
     val uid1: String = "",
     val uid2: String = "",
-    val estado: String = "pendiente", // "pendiente", "aceptado", "rechazado"
+    val estado: String = "pendiente",
     val solicitante: String = "",
     val fecha: Long = System.currentTimeMillis()
 )
@@ -44,7 +44,7 @@ class VinculosViewModel(application: Application) : AndroidViewModel(application
         val uid = auth.currentUser?.uid ?: return
         viewModelScope.launch {
             try {
-                // Buscar donde sea uid1 o uid2
+
                 val q1 = db.collection("vinculos").whereEqualTo("uid1", uid).get().await()
                 val q2 = db.collection("vinculos").whereEqualTo("uid2", uid).get().await()
                 
@@ -65,7 +65,7 @@ class VinculosViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             _uiState.value = VinculosUiState.Loading
             try {
-                // Verificar si ya existe un vínculo
+
                 val existing = db.collection("vinculos")
                     .whereIn("uid1", listOf(myUid, targetUid))
                     .get()
@@ -139,3 +139,4 @@ class VinculosViewModel(application: Application) : AndroidViewModel(application
         _uiState.value = VinculosUiState.Idle
     }
 }
+

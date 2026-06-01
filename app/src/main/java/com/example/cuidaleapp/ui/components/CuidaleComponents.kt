@@ -11,15 +11,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AddAPhoto
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.*
@@ -32,15 +31,22 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.IntOffset
-import coil3.compose.AsyncImage
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import coil3.compose.AsyncImage
+import com.example.cuidaleapp.R
+import com.example.cuidaleapp.models.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import kotlin.math.roundToInt
 
@@ -63,8 +69,8 @@ fun CuidaleTextField(
     value: String,
     onValueChange: (String) -> Unit,
     placeholder: String,
-    containerColor: Color,
     modifier: Modifier = Modifier,
+    containerColor: Color = MaterialTheme.colorScheme.surface,
     isPassword: Boolean = false,
     isPasswordVisible: Boolean = false,
     onPasswordVisibilityChange: (() -> Unit)? = null,
@@ -73,7 +79,8 @@ fun CuidaleTextField(
     textAlign: TextAlign = TextAlign.Start,
     keyboardType: KeyboardType = if (isPassword) KeyboardType.Password else KeyboardType.Text,
     singleLine: Boolean = true,
-    maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE
+    maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE,
+    trailingIcon: @Composable (() -> Unit)? = null
 ) {
     val customColors = CuidaleThemeExtras.customColors
     val borderColor = if (isError) customColors.warning else MaterialTheme.colorScheme.primary
@@ -114,6 +121,8 @@ fun CuidaleTextField(
                         contentDescription = "Ver u ocultar contraseña"
                     )
                 }
+            } else {
+                trailingIcon?.invoke()
             }
         },
         keyboardOptions = KeyboardOptions(
@@ -222,6 +231,582 @@ private fun OtpCharBox(
             style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
             color = if (isError) colors.error else colors.onSurface
         )
+    }
+}
+
+@Composable
+fun ProfileInfoRow(
+    icon: ImageVector,
+    label: String,
+    value: String,
+    isPublic: Boolean = true,
+    showVisibilityIcon: Boolean = true
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        if (showVisibilityIcon) {
+            Icon(
+                imageVector = if (isPublic) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                contentDescription = if (isPublic) "Público" else "Privado",
+                tint = if (isPublic) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f) else Color.Gray.copy(alpha = 0.6f),
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
+
+@Composable
+fun PhotoGalleryDialog(
+    photos: List<Any>,
+    initialIndex: Int,
+    onDismiss: () -> Unit
+) {
+    val pagerState = rememberPagerState(initialPage = initialIndex) { photos.size }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+        ) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                val photo = photos[page]
+                val context = LocalContext.current
+                val imageSource: Any = when (photo) {
+                    is ProfileImage -> {
+                        if (photo.sourceType == ImageSourceType.DEFAULT_AVATAR) {
+                            val iconName = photo.cacheKey.substringAfter("res:")
+                            context.resources.getIdentifier(iconName, "drawable", context.packageName).let {
+                                if (it != 0) it else R.drawable.profile_default
+                            }
+                        } else photo.remoteUrl ?: R.drawable.profile_default
+                    }
+                    else -> photo
+                }
+
+                AsyncImage(
+                    model = imageSource,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
+                )
+            }
+
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(16.dp)
+                    .background(Color.Black.copy(0.4f), CircleShape)
+            ) {
+                Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = Color.White)
+            }
+
+            Text(
+                text = "${pagerState.currentPage + 1} / ${photos.size}",
+                color = Color.White,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(32.dp)
+                    .background(Color.Black.copy(0.4f), RoundedCornerShape(16.dp))
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                style = MaterialTheme.typography.labelLarge
+            )
+        }
+    }
+}
+
+@Composable
+fun ProfileDetailView(
+    role: String,
+    data: Map<String, Any>,
+    isEditMode: Boolean = false,
+    onEdit: () -> Unit,
+    defaultPhoto: String? = null,
+    onPhotoClick: ((Int, List<Any>) -> Unit)? = null
+) {
+    val colors = MaterialTheme.colorScheme
+    val fotos = data["fotos"] as? List<*> ?: emptyList<Any>()
+    
+    val displayPhotos = if (fotos.isEmpty() && defaultPhoto != null) listOf(defaultPhoto) else fotos
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+    ) {
+        HardShadowPanel(
+            backgroundColor = CuidaleThemeExtras.customColors.panelBackground,
+            shadowColor = CuidaleThemeExtras.shadows.hardShadowPrimary.copy(alpha = 0.3f),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "RESUMEN DE FICHA",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = colors.primary
+                    )
+                    if (!isEditMode) {
+                        IconButton(
+                            onClick = onEdit,
+                            modifier = Modifier.background(colors.primary.copy(alpha = 0.1f), CircleShape).size(36.dp)
+                        ) {
+                            Icon(Icons.Default.Edit, contentDescription = "Editar", tint = colors.primary, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
+                
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = colors.primary.copy(alpha = 0.2f))
+                
+                if (displayPhotos.isNotEmpty()) {
+                    Text(
+                        text = "FOTOS ADJUNTAS",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp),
+                        color = colors.primary.copy(alpha = 0.7f),
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(displayPhotos) { foto ->
+                            AsyncImage(
+                                model = foto.toString(),
+                                contentDescription = "Ficha Image",
+                                modifier = Modifier
+                                    .size(140.dp)
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(Color.Gray.copy(alpha = 0.05f))
+                                    .border(1.dp, colors.primary.copy(alpha = 0.1f), RoundedCornerShape(20.dp))
+                                    .clickable { 
+                                        onPhotoClick?.invoke(displayPhotos.indexOf(foto), displayPhotos as List<Any>)
+                                    },
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+
+                val excludedKeys = mutableSetOf("fotos", "tipo", "ultima_actualizacion", "horarios")
+
+                val preferredOrder = if (role == "cuidador") {
+                    listOf("especializacion", "experiencia", "comunas", "descripcion")
+                } else {
+                    listOf(
+                        "nombre_completo", "edad", "genero", 
+                        "vives_con_familiar", "region", "comuna", "calle", "numero", "depto",
+                        "comunas_preferencia", "horarios_preferencia",
+                        "nivel_dependencia", "movilidad", "comunicacion",
+                        "discapacidades", "discapacidad_otro", "enfermedades", "enfermedad_otro", 
+                        "dieta", "medicamentos", "condiciones"
+                    )
+                }
+
+                val dataToShow = data.filterKeys { it !in excludedKeys }
+                val sortedKeys = dataToShow.keys.sortedWith { k1, k2 ->
+                    val i1 = preferredOrder.indexOf(k1).let { if (it == -1) Int.MAX_VALUE else it }
+                    val i2 = preferredOrder.indexOf(k2).let { if (it == -1) Int.MAX_VALUE else it }
+                    i1.compareTo(i2)
+                }
+                
+                sortedKeys.forEach { key ->
+                    val value = dataToShow[key]!!
+                    val label = when(key) {
+                        "especializacion" -> "Especialidad o formación:"
+                        "experiencia" -> "Tu experiencia previa:"
+                        "comunas" -> "Comunas de preferencia:"
+                        "descripcion" -> "Descripción sobre mí:"
+                        "nombre_completo" -> "Nombre de la persona a cuidar:"
+                        "edad" -> "Edad:"
+                        "genero" -> "Género:"
+                        "vives_con_familiar" -> "Vive con el solicitante:"
+                        "region" -> "Región:"
+                        "comuna" -> "Comuna:"
+                        "calle" -> "Calle / Pasaje:"
+                        "numero" -> "Número:"
+                        "depto" -> "Depto / Block:"
+                        "comunas_preferencia" -> "Comunas de interés:"
+                        "horarios_preferencia" -> "Horarios de preferencia:"
+                        "nivel_dependencia" -> "Nivel de Dependencia:"
+                        "movilidad" -> "Movilidad:"
+                        "comunicacion" -> "Comunicación:"
+                        "discapacidades" -> "Discapacidades:"
+                        "discapacidad_otro" -> "Otra discapacidad:"
+                        "enfermedades" -> "Enfermedades crónicas:"
+                        "enfermedad_otro" -> "Otra enfermedad:"
+                        "dieta" -> "Plan de alimentación:"
+                        "medicamentos" -> "Medicamentos:"
+                        "condiciones" -> "Otras observaciones:"
+                        else -> key.replace("_", " ").replaceFirstChar { it.uppercase() }
+                    }
+                    
+                    val displayValue = when {
+                        value is List<*> -> {
+                            if (value.all { it is Map<*, *> }) {
+                                ""
+                            } else {
+                                value.joinToString(", ")
+                            }
+                        }
+                        value is Map<*, *> -> {
+                            ""
+                        }
+                        value is Boolean -> if (value) "Sí" else "No"
+                        else -> value.toString()
+                    }
+                    
+                    if ((displayValue.isNotBlank() || value is List<*> || value is Map<*, *>) && displayValue != "No") {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp)
+                                .background(Color.White, RoundedCornerShape(12.dp))
+                                .border(1.dp, colors.primary.copy(alpha = 0.05f), RoundedCornerShape(12.dp))
+                                .padding(12.dp)
+                        ) {
+                            val isComplex = value is List<*> || value is Map<*, *> || displayValue.length > 30
+                            
+                            if (!isComplex) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                        val sectionIcon = when(key) {
+                                            "dieta" -> Icons.Default.Restaurant
+                                            "medicamentos" -> Icons.Default.Medication
+                                            "especializacion" -> Icons.Default.School
+                                            "experiencia" -> Icons.Default.History
+                                            "comunas", "region", "comuna" -> Icons.Default.Place
+                                            "nombre_completo" -> Icons.Default.Person
+                                            "edad" -> Icons.Default.Cake
+                                            "nivel_dependencia" -> Icons.Default.Accessibility
+                                            "enfermedades" -> Icons.Default.HealthAndSafety
+                                            else -> null
+                                        }
+                                        if (sectionIcon != null) {
+                                            Icon(sectionIcon, contentDescription = null, tint = colors.primary, modifier = Modifier.size(18.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                        }
+                                        Text(
+                                            text = label.removeSuffix(":"),
+                                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                            color = colors.primary
+                                        )
+                                    }
+                                    Text(
+                                        text = displayValue,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = colors.onSurface,
+                                        textAlign = TextAlign.End,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                            } else {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    val sectionIcon = when(key) {
+                                        "dieta" -> Icons.Default.Restaurant
+                                        "medicamentos" -> Icons.Default.Medication
+                                        "especializacion" -> Icons.Default.School
+                                        "experiencia" -> Icons.Default.History
+                                        "comunas", "region", "comuna" -> Icons.Default.Place
+                                        "nombre_completo" -> Icons.Default.Person
+                                        "edad" -> Icons.Default.Cake
+                                        "nivel_dependencia" -> Icons.Default.Accessibility
+                                        "enfermedades" -> Icons.Default.HealthAndSafety
+                                        else -> null
+                                    }
+                                    if (sectionIcon != null) {
+                                        Icon(sectionIcon, contentDescription = null, tint = colors.primary, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                    }
+                                    Text(
+                                        text = label,
+                                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = colors.primary
+                                    )
+                                }
+                                
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                if (key == "medicamentos" && value is List<*>) {
+                                    value.forEach { med ->
+                                        val m = med as Map<*, *>
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(bottom = 12.dp)
+                                                .background(colors.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                                                .padding(12.dp)
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(Icons.Default.Medication, contentDescription = null, tint = colors.primary, modifier = Modifier.size(16.dp))
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    text = m["nombre"].toString(),
+                                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                                                    color = colors.primary
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            val admins = m["administraciones"] as? List<Map<String, String>>
+                                            if (admins != null) {
+                                                admins.forEach { admin ->
+                                                    Row(
+                                                        modifier = Modifier.padding(bottom = 4.dp),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Icon(Icons.Default.Schedule, contentDescription = null, tint = colors.onSurfaceVariant, modifier = Modifier.size(14.dp))
+                                                        Spacer(modifier = Modifier.width(6.dp))
+                                                        Text(
+                                                            text = "${admin["hora"]} — ${admin["dosis"]}",
+                                                            style = MaterialTheme.typography.bodyMedium
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            if ((m["observaciones"] as? String)?.isNotBlank() == true) {
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Surface(
+                                                    color = colors.secondaryContainer.copy(alpha = 0.4f),
+                                                    shape = RoundedCornerShape(8.dp)
+                                                ) {
+                                                    Text(
+                                                        text = "Nota: ${m["observaciones"]}",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = colors.onSecondaryContainer,
+                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                } else if (key == "dieta" && value is Map<*, *>) {
+                                    value.entries.filter { it.value.toString().isNotBlank() }.forEach { entry ->
+                                        Column(modifier = Modifier.padding(bottom = 8.dp)) {
+                                            Text(
+                                                text = entry.key.toString().replaceFirstChar { it.uppercase() },
+                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                                color = colors.primary
+                                            )
+                                            Text(
+                                                text = entry.value.toString(),
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    Text(
+                                        text = displayValue,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = colors.onSurface
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PersonalDataCard(
+    userData: ProfileDomainModel,
+    onEditClick: (() -> Unit)? = null,
+    onPhotoClick: (() -> Unit)? = null
+) {
+    val customColors = CuidaleThemeExtras.customColors
+    val shadows = CuidaleThemeExtras.shadows
+
+    HardShadowPanel(
+        backgroundColor = customColors.panelBackground,
+        shadowColor = shadows.hardShadowPrimary.copy(alpha = 0.3f)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "DATOS PERSONALES",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = MaterialTheme.colorScheme.primary
+                )
+                if (onEditClick != null) {
+                    IconButton(
+                        onClick = onEditClick,
+                        modifier = Modifier
+                            .background(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                CircleShape
+                            )
+                            .size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Editar Perfil",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Box(
+                modifier = Modifier
+                    .size(160.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+                    .border(4.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                    .then(if (onPhotoClick != null) Modifier.clickable { onPhotoClick() } else Modifier),
+                contentAlignment = Alignment.Center
+            ) {
+                val profilePhoto = userData.profilePhoto
+                val context = androidx.compose.ui.platform.LocalContext.current
+
+                val imageSource: Any = when {
+                    profilePhoto == null -> R.drawable.profile_default
+                    profilePhoto.sourceType == ImageSourceType.DEFAULT_AVATAR -> {
+                        val iconName = profilePhoto.cacheKey.substringAfter("res:")
+                        context.resources.getIdentifier(
+                            iconName,
+                            "drawable",
+                            context.packageName
+                        ).let {
+                            if (it != 0) it else R.drawable.profile_default
+                        }
+                    }
+                    else -> profilePhoto.remoteUrl ?: R.drawable.profile_default
+                }
+
+                AsyncImage(
+                    model = imageSource,
+                    contentDescription = "Profile Picture",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "${userData.nombre} ${userData.apellido_pa}",
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            if (userData.descripcion.isNotBlank()) {
+                Text(
+                    text = userData.descripcion,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 8.dp).padding(horizontal = 16.dp)
+                )
+            }
+
+            Surface(
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.padding(top = 8.dp)
+            ) {
+                Text(
+                    text = (if (userData.rol == "representante") "Representante" else userData.rol).uppercase(),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            ProfileInfoRow(
+                icon = Icons.Default.Email,
+                label = stringResource(R.string.profile_label_email),
+                value = userData.correo,
+                isPublic = userData.mostrarCorreo
+            )
+            ProfileInfoRow(
+                icon = Icons.Default.Badge,
+                label = stringResource(R.string.profile_label_rut),
+                value = userData.rut,
+                isPublic = userData.mostrarRut
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(modifier = Modifier.weight(1f)) {
+                    ProfileInfoRow(
+                        icon = Icons.Default.Phone,
+                        label = stringResource(R.string.profile_label_phone),
+                        value = if (userData.telefono.isNotBlank()) userData.telefono else "No registrado",
+                        isPublic = userData.mostrarTelefono
+                    )
+                }
+                if (userData.telefono.isNotBlank()) {
+                    val verificado = userData.telefonoVerificado
+                    Surface(
+                        color = if (verificado) Color(0xFF4CAF50).copy(alpha = 0.1f) else MaterialTheme.colorScheme.error.copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            text = if (verificado) "Verificado" else "No verificado",
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (verificado) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -612,9 +1197,9 @@ fun CuidaleValidationPanel(
 @Composable
 fun ValidationItem(text: String, isValid: Boolean, isError: Boolean, isDark: Boolean) {
     val customColors = CuidaleThemeExtras.customColors
-    val successColor = if (isDark) customColors.successStrong else Color(0xFF00C853) // Verde vibrante
+    val successColor = if (isDark) customColors.successStrong else Color(0xFF00C853)
     val errorColor = MaterialTheme.colorScheme.error
-    val inactiveColor = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF455A64) // Gris con mejor contraste en dark mode
+    val inactiveColor = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF455A64)
 
     val color by animateColorAsState(
         targetValue = when {
@@ -852,7 +1437,7 @@ fun CuidaleMultiSelectDropdown(
 @Composable
 fun CuidaleBinaryChoice(
     label: String,
-    selectedOption: String?, // "Si", "No"
+    selectedOption: String?,
     onOptionSelected: (String) -> Unit,
     extraContent: @Composable (() -> Unit)? = null
 ) {
