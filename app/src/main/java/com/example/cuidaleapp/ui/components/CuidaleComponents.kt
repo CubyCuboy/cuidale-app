@@ -453,7 +453,7 @@ fun ProfileDetailView(
                         "nombre_completo" -> "Nombre de la persona a cuidar:"
                         "edad" -> "Edad:"
                         "genero" -> "Género:"
-                        "vives_con_familiar" -> "Vive con el solicitante:"
+                        "vives_con_familiar" -> "Vive con the solicitante:"
                         "region" -> "Región:"
                         "comuna" -> "Comuna:"
                         "calle" -> "Calle / Pasaje:"
@@ -584,6 +584,7 @@ fun ProfileDetailView(
                                                 )
                                             }
                                             Spacer(modifier = Modifier.height(8.dp))
+                                            @Suppress("UNCHECKED_CAST")
                                             val admins = m["administraciones"] as? List<Map<String, String>>
                                             if (admins != null) {
                                                 admins.forEach { admin ->
@@ -639,170 +640,6 @@ fun ProfileDetailView(
                                 }
                             }
                         }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun PersonalDataCard(
-    userData: ProfileDomainModel,
-    onEditClick: (() -> Unit)? = null,
-    onPhotoClick: (() -> Unit)? = null
-) {
-    val customColors = CuidaleThemeExtras.customColors
-    val shadows = CuidaleThemeExtras.shadows
-
-    HardShadowPanel(
-        backgroundColor = customColors.panelBackground,
-        shadowColor = shadows.hardShadowPrimary.copy(alpha = 0.3f)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "DATOS PERSONALES",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold
-                    ),
-                    color = MaterialTheme.colorScheme.primary
-                )
-                if (onEditClick != null) {
-                    IconButton(
-                        onClick = onEditClick,
-                        modifier = Modifier
-                            .background(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                                CircleShape
-                            )
-                            .size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "Editar Perfil",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Box(
-                modifier = Modifier
-                    .size(160.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer)
-                    .border(4.dp, MaterialTheme.colorScheme.primary, CircleShape)
-                    .then(if (onPhotoClick != null) Modifier.clickable { onPhotoClick() } else Modifier),
-                contentAlignment = Alignment.Center
-            ) {
-                val profilePhoto = userData.profilePhoto
-                val context = androidx.compose.ui.platform.LocalContext.current
-
-                val imageSource: Any = when {
-                    profilePhoto == null -> R.drawable.profile_default
-                    profilePhoto.sourceType == ImageSourceType.DEFAULT_AVATAR -> {
-                        val iconName = profilePhoto.cacheKey.substringAfter("res:")
-                        context.resources.getIdentifier(
-                            iconName,
-                            "drawable",
-                            context.packageName
-                        ).let {
-                            if (it != 0) it else R.drawable.profile_default
-                        }
-                    }
-                    else -> profilePhoto.remoteUrl ?: R.drawable.profile_default
-                }
-
-                AsyncImage(
-                    model = imageSource,
-                    contentDescription = "Profile Picture",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                text = "${userData.nombre} ${userData.apellido_pa}",
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
-            if (userData.descripcion.isNotBlank()) {
-                Text(
-                    text = userData.descripcion,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 8.dp).padding(horizontal = 16.dp)
-                )
-            }
-
-            Surface(
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.padding(top = 8.dp)
-            ) {
-                Text(
-                    text = (if (userData.rol == "representante") "Representante" else userData.rol).uppercase(),
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            ProfileInfoRow(
-                icon = Icons.Default.Email,
-                label = stringResource(R.string.profile_label_email),
-                value = userData.correo,
-                isPublic = userData.mostrarCorreo
-            )
-            ProfileInfoRow(
-                icon = Icons.Default.Badge,
-                label = stringResource(R.string.profile_label_rut),
-                value = userData.rut,
-                isPublic = userData.mostrarRut
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(modifier = Modifier.weight(1f)) {
-                    ProfileInfoRow(
-                        icon = Icons.Default.Phone,
-                        label = stringResource(R.string.profile_label_phone),
-                        value = if (userData.telefono.isNotBlank()) userData.telefono else "No registrado",
-                        isPublic = userData.mostrarTelefono
-                    )
-                }
-                if (userData.telefono.isNotBlank()) {
-                    val verificado = userData.telefonoVerificado
-                    Surface(
-                        color = if (verificado) Color(0xFF4CAF50).copy(alpha = 0.1f) else MaterialTheme.colorScheme.error.copy(alpha = 0.1f),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(
-                            text = if (verificado) "Verificado" else "No verificado",
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (verificado) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error
-                        )
                     }
                 }
             }
@@ -1610,6 +1447,407 @@ fun CuidaleMultiImagePicker(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun PersonalDataCard(
+    userData: ProfileDomainModel,
+    onEditClick: (() -> Unit)? = null,
+    onPhotoClick: (() -> Unit)? = null
+) {
+    val customColors = CuidaleThemeExtras.customColors
+    val shadows = CuidaleThemeExtras.shadows
+
+    HardShadowPanel(
+        backgroundColor = customColors.panelBackground,
+        shadowColor = shadows.hardShadowPrimary.copy(alpha = 0.3f)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "DATOS PERSONALES",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = MaterialTheme.colorScheme.primary
+                )
+                if (onEditClick != null) {
+                    IconButton(
+                        onClick = onEditClick,
+                        modifier = Modifier
+                            .background(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                CircleShape
+                            )
+                            .size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Editar Perfil",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Box(
+                modifier = Modifier
+                    .size(160.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+                    .border(4.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                    .then(if (onPhotoClick != null) Modifier.clickable { onPhotoClick() } else Modifier),
+                contentAlignment = Alignment.Center
+            ) {
+                val profilePhoto = userData.profilePhoto
+                val context = androidx.compose.ui.platform.LocalContext.current
+
+                val imageSource: Any = when {
+                    profilePhoto == null -> R.drawable.profile_default
+                    profilePhoto.sourceType == ImageSourceType.DEFAULT_AVATAR -> {
+                        val iconName = profilePhoto.cacheKey.substringAfter("res:")
+                        context.resources.getIdentifier(
+                            iconName,
+                            "drawable",
+                            context.packageName
+                        ).let {
+                            if (it != 0) it else R.drawable.profile_default
+                        }
+                    }
+                    else -> profilePhoto.remoteUrl ?: R.drawable.profile_default
+                }
+
+                AsyncImage(
+                    model = imageSource,
+                    contentDescription = "Profile Picture",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "${userData.nombre} ${userData.apellido_pa}",
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            if (userData.descripcion.isNotBlank()) {
+                Text(
+                    text = userData.descripcion,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 8.dp).padding(horizontal = 16.dp)
+                )
+            }
+
+            Surface(
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.padding(top = 8.dp)
+            ) {
+                Text(
+                    text = (if (userData.rol == "representante") "Representante" else userData.rol).uppercase(),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            ProfileInfoRow(
+                icon = Icons.Default.Email,
+                label = stringResource(R.string.profile_label_email),
+                value = userData.correo,
+                isPublic = userData.mostrarCorreo
+            )
+            ProfileInfoRow(
+                icon = Icons.Default.Badge,
+                label = stringResource(R.string.profile_label_rut),
+                value = userData.rut,
+                isPublic = userData.mostrarRut
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(modifier = Modifier.weight(1f)) {
+                    ProfileInfoRow(
+                        icon = Icons.Default.Phone,
+                        label = stringResource(R.string.profile_label_phone),
+                        value = if (userData.telefono.isNotBlank()) userData.telefono else "No registrado",
+                        isPublic = userData.mostrarTelefono
+                    )
+                }
+                if (userData.telefono.isNotBlank()) {
+                    val verificado = userData.telefonoVerificado
+                    Surface(
+                        color = if (verificado) Color(0xFF4CAF50).copy(alpha = 0.1f) else MaterialTheme.colorScheme.error.copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            text = if (verificado) "Verificado" else "No verificado",
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (verificado) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CuidaleUserCard(
+    nombre: String,
+    apellido: String,
+    fotoUrl: String,
+    onClick: () -> Unit
+) {
+    val shadows = CuidaleThemeExtras.shadows
+    val colors = MaterialTheme.colorScheme
+
+    HardShadowPanel(
+        backgroundColor = CuidaleThemeExtras.customColors.panelBackground,
+        shadowColor = shadows.hardShadowPrimary.copy(alpha = 0.3f),
+        modifier = Modifier.clickable { onClick() }
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(CircleShape)
+                    .background(colors.surfaceVariant)
+            ) {
+                AsyncImage(
+                    model = if (fotoUrl.isNotEmpty()) fotoUrl else R.drawable.profile_default,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+            
+            Spacer(modifier = Modifier.width(16.dp))
+            
+            Column {
+                Text(
+                    text = "$nombre $apellido",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = colors.onSurface
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun CuidaleDrawerContent(
+    nombre: String,
+    apellido: String,
+    fotoUrl: String,
+    isDark: Boolean,
+    onToggleTheme: () -> Unit,
+    onProfileClick: () -> Unit,
+    onFichaClick: () -> Unit,
+    onLogoutClick: () -> Unit
+) {
+    val colors = MaterialTheme.colorScheme
+    val customColors = CuidaleThemeExtras.customColors
+
+    Column(
+        modifier = Modifier
+            .fillMaxHeight()
+            .width(300.dp)
+            .background(customColors.panelBackground)
+            .padding(24.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = if (isDark) Icons.Default.DarkMode else Icons.Default.LightMode,
+                    contentDescription = null,
+                    tint = colors.primary
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Modo Oscuro",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.onSurface
+                )
+            }
+            Switch(
+                checked = isDark,
+                onCheckedChange = { onToggleTheme() }
+            )
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(bottom = 24.dp), color = colors.outlineVariant.copy(alpha = 0.5f))
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .size(100.dp)
+                    .clip(CircleShape)
+                    .background(colors.surfaceVariant)
+            ) {
+                AsyncImage(
+                    model = if (fotoUrl.isNotEmpty()) fotoUrl else R.drawable.profile_default,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "$nombre $apellido",
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                color = colors.onSurface,
+                textAlign = TextAlign.Center
+            )
+        }
+
+        Spacer(modifier = Modifier.height(48.dp))
+
+        NavigationDrawerItem(
+            label = { Text(stringResource(R.string.menu_item_profile)) },
+            selected = false,
+            onClick = onProfileClick,
+            icon = { Icon(Icons.Default.Person, contentDescription = null) },
+            colors = NavigationDrawerItemDefaults.colors(unselectedContainerColor = Color.Transparent)
+        )
+        
+        NavigationDrawerItem(
+            label = { Text(stringResource(R.string.menu_item_ficha)) },
+            selected = false,
+            onClick = onFichaClick,
+            icon = { Icon(Icons.Default.Badge, contentDescription = null) },
+            colors = NavigationDrawerItemDefaults.colors(unselectedContainerColor = Color.Transparent)
+        )
+
+        Spacer(modifier = Modifier.weight(1f))
+
+        HardShadowButton(
+            text = stringResource(R.string.menu_logout),
+            containerColor = colors.error,
+            contentColor = Color.White,
+            shadowColor = colors.errorContainer,
+            isDark = customColors.isDark,
+            onClick = onLogoutClick,
+            icon = Icons.Default.Logout
+        )
+    }
+}
+
+@Composable
+fun CuidaleSearchContent(
+    allRegions: List<String>,
+    selectedRegion: String,
+    onRegionSelected: (String) -> Unit,
+    allCommunes: List<String>,
+    selectedCommunes: List<String>,
+    onCommuneToggle: (String) -> Unit,
+    onClose: () -> Unit
+) {
+    val colors = MaterialTheme.colorScheme
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(24.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(R.string.search_button),
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                color = colors.primary
+            )
+            IconButton(onClick = onClose) {
+                Icon(Icons.Default.KeyboardArrowDown, contentDescription = null)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        CuidaleExposedDropdown(
+            label = "Filtrar por región",
+            options = allRegions,
+            selectedOption = selectedRegion,
+            onOptionSelected = onRegionSelected,
+            placeholder = "Seleccionar región..."
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        CuidaleMultiSelectDropdown(
+            label = stringResource(R.string.search_filter_commune),
+            options = allCommunes,
+            selectedOptions = selectedCommunes,
+            onOptionToggled = onCommuneToggle,
+            maxSelection = 3,
+            placeholder = if (selectedRegion.isEmpty()) "Selecciona una región primero" else stringResource(R.string.search_max_communes),
+            enabled = selectedRegion.isNotEmpty()
+        )
+        
+        Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+@Composable
+fun CuidaleCircularMenuButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val shadows = CuidaleThemeExtras.shadows
+    
+    Box(
+        modifier = modifier
+            .size(56.dp)
+            .offset(x = 4.dp, y = 4.dp)
+            .background(shadows.hardShadowPrimary.copy(alpha = 0.3f), CircleShape)
+    ) {
+        IconButton(
+            onClick = onClick,
+            modifier = Modifier
+                .matchParentSize()
+                .offset(x = (-4).dp, y = (-4).dp)
+                .background(MaterialTheme.colorScheme.primary, CircleShape)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Menu,
+                contentDescription = null,
+                tint = Color.White
+            )
         }
     }
 }

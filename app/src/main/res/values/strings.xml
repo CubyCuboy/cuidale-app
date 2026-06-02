@@ -166,6 +166,12 @@
     <string name="menu_item_ficha">Mi Ficha</string>
 
     <!-- Role specific Home titles -->
-    <string name="home_title_caregiver">Cuidador</string>
-    <string name="home_title_representative">Representante</string>
+    <string name="home_title_caregivers">Cuidadores</string>
+    <string name="home_title_patients">Pacientes</string>
+
+    <!-- Search System -->
+    <string name="search_button">Buscar</string>
+    <string name="search_filter_commune">Filtrar por comuna</string>
+    <string name="search_max_communes">Máximo 3 comunas</string>
+    <string name="search_empty_results">No se encontraron resultados para los filtros seleccionados.</string>
 </resources>

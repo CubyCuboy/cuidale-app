@@ -19,6 +19,7 @@ import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
 import com.example.cuidaleapp.viewmodel.MenuViewModel
 import com.example.cuidaleapp.viewmodel.ProfileViewModel
 import com.example.cuidaleapp.viewmodel.FichaViewModel
+import com.example.cuidaleapp.viewmodel.SearchViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.cuidaleapp.activities.MenuNavigation.*
 
@@ -42,6 +43,7 @@ class MenuActivity : ComponentActivity() {
             val menuViewModel: MenuViewModel = viewModel()
             val profileViewModel: ProfileViewModel = viewModel()
             val fichaViewModel: FichaViewModel = viewModel()
+            val searchViewModel: SearchViewModel = viewModel()
 
             val isDark by menuViewModel.isDarkMode.collectAsState()
             val userData by menuViewModel.userData.collectAsState()
@@ -63,13 +65,13 @@ class MenuActivity : ComponentActivity() {
                     Main -> {
                         MenuScreen(
                             userData = userData,
+                            searchViewModel = searchViewModel,
                             isDark = isDark,
                             onToggleTheme = { menuViewModel.toggleTheme() },
                             onLogout = { menuViewModel.logout() },
-                            onResetPassword = { menuViewModel.resetPassword(userData.correo) },
                             onViewProfile = { currentScreen = Profile },
-                            onNavigateToFicha = { currentScreen = Ficha(startInEditMode = false, returnTo = Main) },
-                            onNavigateToSearch = { currentScreen = Search }
+                            onViewFicha = { currentScreen = Ficha(startInEditMode = false, returnTo = Main) },
+                            onUserClick = { uid -> currentScreen = OtherProfile(uid) }
                         )
                     }
                     Profile -> {
