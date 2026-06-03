@@ -1,14 +1,11 @@
 package com.example.cuidaleapp.viewmodel
 
 import android.app.Application
-import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.cuidaleapp.data.ChileData
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.example.cuidaleapp.utils.ImageUtils
-import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -25,7 +22,6 @@ sealed class FichaState {
 class FichaViewModel(application: Application) : AndroidViewModel(application) {
     private val auth = FirebaseAuth.getInstance()
     private val db = FirebaseFirestore.getInstance()
-    private val storage = FirebaseStorage.getInstance()
     private val context = application.applicationContext
 
     private val _state = MutableStateFlow<FichaState>(FichaState.Loading)
@@ -84,9 +80,10 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun startEditing() {
-        val currentState = _state.value
-        if (currentState is FichaState.View) {
-            _state.value = FichaState.Editing(currentState.data)
+        when (val currentState = _state.value) {
+            is FichaState.View -> _state.value = FichaState.Editing(currentState.data)
+            is FichaState.NotFound -> _state.value = FichaState.Editing(emptyMap())
+            else -> {}
         }
     }
 
@@ -94,50 +91,24 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
         checkProfile()
     }
 
-    private suspend fun uploadFichaImages(userId: String, uris: List<Uri>): List<String> {
-        val urls = mutableListOf<String>()
-        val storageRef = storage.reference.child("fichas/$userId")
-
-        uris.forEachIndexed { index, uri ->
-            if (uri.toString().startsWith("http")) {
-                urls.add(uri.toString())
-            } else {
-                try {
-                    ImageUtils.validateImage(context, uri).getOrThrow()
-                    val fileName = "foto_${System.currentTimeMillis()}_$index.jpg"
-                    val fileRef = storageRef.child(fileName)
-                    val bytes = ImageUtils.getCompressedImage(context, uri) ?: return@forEachIndexed
-                    
-                    fileRef.putBytes(bytes).await()
-                    val downloadUrl = fileRef.downloadUrl.await().toString()
-                    urls.add(downloadUrl)
-                } catch (e: Exception) {
-                }
-            }
-        }
-        return urls
-    }
-
     fun createCaregiverFicha(
         especializacion: String,
         experiencia: String,
         comunas: List<String>,
-        descripcion: String,
-        fotoUris: List<Uri>
+        horarios: List<String>,
+        descripcion: String
     ) {
         val user = auth.currentUser ?: return
         
         viewModelScope.launch {
             _state.value = FichaState.Loading
             try {
-                val imageUrls = uploadFichaImages(user.uid, fotoUris)
-                
                 val data = hashMapOf(
                     "tipo" to "cuidador",
                     "especializacion" to especializacion.trim(),
                     "experiencia" to experiencia.trim(),
                     "comunas" to comunas,
-                    "fotos" to imageUrls,
+                    "horarios" to horarios,
                     "descripcion" to descripcion.trim(),
                     "ultima_actualizacion" to com.google.firebase.Timestamp.now()
                 )
@@ -169,7 +140,6 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
         dieta: Map<String, String>,
         medicamentos: List<Map<String, Any>>,
         condicionesExtra: String,
-        fotoUris: List<Uri>,
         comunasPreferencia: List<String> = emptyList(),
         horariosPreferencia: List<String> = emptyList()
     ) {
@@ -178,11 +148,8 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _state.value = FichaState.Loading
             try {
-                val imageUrls = uploadFichaImages(user.uid, fotoUris)
-
                 val data = hashMapOf(
                     "tipo" to "familiar",
-                    "fotos" to imageUrls,
                     "nombre_completo" to nombreCompleto.trim(),
                     "edad" to edad.trim(),
                     "genero" to genero,

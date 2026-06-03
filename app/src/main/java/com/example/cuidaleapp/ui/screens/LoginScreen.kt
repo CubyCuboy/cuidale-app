@@ -6,6 +6,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -165,8 +166,8 @@ fun LoginForm(
     val isError = state is LoginUiState.Error
     val isLoading = state is LoginUiState.Loading
 
-    val loginButtonColor = if (isError) colors.error else if (isDark) customColors.warning else colors.primary
-    val loginButtonShadow = if (isError) colors.errorContainer else if (isDark) shadows.hardShadowAccent else shadows.hardShadowPrimary
+    val loginButtonColor = if (isError) colors.error else if (isDark) colors.primary else colors.primary
+    val loginButtonShadow = if (isError) colors.errorContainer else if (isDark) shadows.hardShadowPrimary else shadows.hardShadowPrimary
 
     Box(
         modifier = Modifier
@@ -210,21 +211,32 @@ fun LoginForm(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // Logo Modernizado con Neo-Brutalismo
             Box(
-                modifier = Modifier
-                    .size(100.dp)
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(colors.primaryContainer.copy(alpha = 0.30f)),
-                contentAlignment = Alignment.Center
+                modifier = Modifier.padding(bottom = 24.dp)
             ) {
-                Text(
-                    text = stringResource(R.string.login_logo_placeholder),
-                    style = typography.headlineSmall,
-                    color = onGradientText
+                Box(
+                    modifier = Modifier
+                        .size(100.dp)
+                        .offset(x = 6.dp, y = 6.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(if (isDark) shadows.hardShadowAccent.copy(alpha = 0.4f) else shadows.hardShadowPrimary.copy(alpha = 0.2f))
                 )
+                Box(
+                    modifier = Modifier
+                        .size(100.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(colors.surface.copy(alpha = 0.9f))
+                        .border(2.dp, onGradientText.copy(alpha = 0.2f), RoundedCornerShape(24.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = stringResource(R.string.login_logo_placeholder),
+                        style = typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold),
+                        color = colors.primary
+                    )
+                }
             }
-
-            Spacer(modifier = Modifier.height(24.dp))
 
             HardShadowPanel(
                 backgroundColor = if (isError) colors.errorContainer.copy(alpha = 0.95f) else panelBg,
@@ -249,7 +261,8 @@ fun LoginForm(
                     },
                     placeholder = stringResource(R.string.login_identifier_placeholder),
                     containerColor = inputBg,
-                    isError = isError
+                    isError = isError,
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Next
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -270,7 +283,15 @@ fun LoginForm(
                         isPassword = true,
                         isPasswordVisible = isPasswordVisible,
                         onPasswordVisibilityChange = { isPasswordVisible = !isPasswordVisible },
-                        isError = isError
+                        isError = isError,
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                            onDone = {
+                                if (correoOrRut.isNotBlank() && password.isNotBlank()) {
+                                    onLogin(correoOrRut, password)
+                                }
+                            }
+                        )
                     )
                 }
 
@@ -308,7 +329,7 @@ fun LoginForm(
             
             HardShadowButton(
                 text = if (isLoading) stringResource(R.string.login_button_loading) 
-                       else if (needsVerification) "Verificar"
+                       else if (needsVerification) "Verificar Cuenta"
                        else if (isError) stringResource(R.string.login_button_retry) 
                        else stringResource(R.string.login_button_enter),
                 containerColor = loginButtonColor,

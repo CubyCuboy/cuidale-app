@@ -1,4 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
-<paths>
-    <cache-path name="my_cache" path="." />
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <external-cache-path
+        name="user_profile_cache"
+        path="profile_images/" />
+
+    <external-cache-path
+        name="family_profile_cache"
+        path="family_images/" />
+
+    <cache-path
+        name="internal_user_profile_cache"
+        path="profile_images/" />
+
+    <cache-path
+        name="internal_family_profile_cache"
+        path="family_images/" />
+
+    <external-files-path
+        name="user_profile_pictures"
+        path="Pictures/profile_images/" />
+
+    <external-files-path
+        name="family_profile_pictures"
+        path="Pictures/family_images/" />
+
 </paths>

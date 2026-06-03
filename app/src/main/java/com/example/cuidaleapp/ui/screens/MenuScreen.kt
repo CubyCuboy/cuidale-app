@@ -74,7 +74,7 @@ fun MenuScreen(
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                 HardShadowPanel(
                     backgroundColor = customColors.panelBackground,
-                    shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowAccent else CuidaleThemeExtras.shadows.hardShadowPrimary,
+                    shadowColor = CuidaleThemeExtras.shadows.hardShadowPrimary,
                     modifier = Modifier.padding(28.dp)
                 ) {
             val roleTitle = when (userData.rol.lowercase().trim()) {

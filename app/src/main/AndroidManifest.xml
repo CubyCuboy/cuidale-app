@@ -2,6 +2,21 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- Android 8 a 12L -->
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
+    <!-- Android 13+ -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -43,14 +58,44 @@
             android:theme="@style/Theme.CuidaleApp" />
 
         <activity
+            android:name=".activities.ProfileActivity"
+            android:exported="false"
+            android:label="Perfil"
+            android:theme="@style/Theme.CuidaleApp" />
+
+        <activity
+            android:name=".activities.EditProfileActivity"
+            android:exported="false"
+            android:label="Editar Perfil"
+            android:theme="@style/Theme.CuidaleApp" />
+
+        <activity
+            android:name=".activities.FichaActivity"
+            android:exported="false"
+            android:label="Ficha Técnica"
+            android:theme="@style/Theme.CuidaleApp" />
+
+        <activity
             android:name=".activities.EmailVerificationActivity"
             android:exported="false"
             android:label="Verificación de Email"
             android:theme="@style/Theme.CuidaleApp" />
 
+        <activity
+            android:name=".activities.PhoneVerificationActivity"
+            android:exported="false"
+            android:label="Verificación de Teléfono"
+            android:theme="@style/Theme.CuidaleApp" />
+
+        <activity
+            android:name=".activities.SettingsActivity"
+            android:exported="false"
+            android:label="Configuración"
+            android:theme="@style/Theme.CuidaleApp" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.provider"
+            android:authorities="${applicationId}.fileprovider"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data
