@@ -28,6 +28,7 @@ import coil3.compose.AsyncImage
 import com.example.cuidaleapp.activities.EditProfileActivity
 import com.example.cuidaleapp.activities.FichaActivity
 import com.example.cuidaleapp.activities.PhoneVerificationActivity
+import com.example.cuidaleapp.models.UserData
 import com.example.cuidaleapp.ui.components.HardShadowButton
 import com.example.cuidaleapp.ui.components.HardShadowPanel
 import com.example.cuidaleapp.ui.components.ProfileDetailView
@@ -40,19 +41,44 @@ import com.example.cuidaleapp.viewmodel.ProfileViewModel
 fun ProfileScreen(
     viewModel: ProfileViewModel,
     fichaViewModel: FichaViewModel,
+    isOtherProfile: Boolean = false,
     onNavigateBack: () -> Unit,
-    onSettingsClick: () -> Unit
+    onSettingsClick: () -> Unit = {}
 ) {
-    val userData by viewModel.userData.collectAsState()
-    val fichaState by fichaViewModel.state.collectAsState()
-    val fichaRole by fichaViewModel.role.collectAsState()
+    val myUserData by viewModel.userData.collectAsState()
+    val otherUserData by viewModel.otherUserData.collectAsState()
+    val otherProfileState by viewModel.otherProfileState.collectAsState()
     
+    val myFichaState by fichaViewModel.state.collectAsState()
+    val otherFichaState by viewModel.otherFichaState.collectAsState()
+    
+    val myFichaRole by fichaViewModel.role.collectAsState()
+    
+    // Resolve which data to show
+    val displayUser: UserData? = if (isOtherProfile) otherUserData else myUserData
+    val displayFichaState = if (isOtherProfile) otherFichaState else myFichaState
+    val displayFichaRole = if (isOtherProfile) displayUser?.rol ?: "" else myFichaRole
+
     val scrollState = rememberScrollState()
     val context = LocalContext.current
-
     val customColors = CuidaleThemeExtras.customColors
     val shadowPalette = CuidaleThemeExtras.shadows
-    val accentColor = if (userData.rol == "cuidador") MaterialTheme.colorScheme.primary else customColors.successStrong
+
+    if (isOtherProfile && otherProfileState is ProfileViewModel.RemoteState.Loading) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+
+    if (displayUser == null) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("No se pudo cargar el perfil")
+        }
+        return
+    }
+
+    val accentColor = if (displayUser.rol == "cuidador") MaterialTheme.colorScheme.primary else customColors.successStrong
     val textColor = MaterialTheme.colorScheme.onSurface
     val secondaryTextColor = MaterialTheme.colorScheme.onSurfaceVariant
     val panelBg = customColors.panelBackground
@@ -67,7 +93,7 @@ fun ProfileScreen(
                 .fillMaxSize()
                 .verticalScroll(scrollState)
         ) {
-            // Modern Header / Banner (Matching FichaScreen)
+            // Modern Header / Banner
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -89,16 +115,18 @@ fun ProfileScreen(
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = "MI PERFIL",
+                        text = if (isOtherProfile) "PERFIL" else "MI PERFIL",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = Color.White
                     )
                     Spacer(modifier = Modifier.weight(1f))
-                    IconButton(
-                        onClick = onSettingsClick,
-                        modifier = Modifier.background(Color.Black.copy(alpha = 0.3f), CircleShape)
-                    ) {
-                        Icon(Icons.Default.Settings, "Ajustes", tint = Color.White)
+                    if (!isOtherProfile) {
+                        IconButton(
+                            onClick = onSettingsClick,
+                            modifier = Modifier.background(Color.Black.copy(alpha = 0.3f), CircleShape)
+                        ) {
+                            Icon(Icons.Default.Settings, "Ajustes", tint = Color.White)
+                        }
                     }
                 }
             }
@@ -121,9 +149,9 @@ fun ProfileScreen(
                     color = Color.White,
                     tonalElevation = 8.dp
                 ) {
-                    if (userData.fotoUrl.isNotEmpty()) {
+                    if (displayUser.fotoUrl.isNotEmpty()) {
                         AsyncImage(
-                            model = userData.fotoUrl,
+                            model = displayUser.fotoUrl,
                             contentDescription = "Profile",
                             modifier = Modifier.fillMaxSize().clip(CircleShape),
                             contentScale = ContentScale.Crop
@@ -155,7 +183,7 @@ fun ProfileScreen(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "${userData.nombre} ${userData.apellido_pa}",
+                                text = "${displayUser.nombre} ${displayUser.apellido_pa}",
                                 style = MaterialTheme.typography.headlineSmall.copy(
                                     fontWeight = FontWeight.ExtraBold,
                                     color = textColor
@@ -164,13 +192,13 @@ fun ProfileScreen(
                             )
                             
                             Text(
-                                text = userData.correo,
+                                text = displayUser.correo,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = secondaryTextColor,
                                 textAlign = TextAlign.Center
                             )
 
-                            if (userData.telefono.isNotEmpty() && !userData.telefonoVerificado) {
+                            if (!isOtherProfile && displayUser.telefono.isNotEmpty() && !displayUser.telefonoVerificado) {
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Surface(
                                     color = customColors.warningContainer,
@@ -195,35 +223,36 @@ fun ProfileScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(24.dp))
-                        
-                        HardShadowButton(
-                            text = "EDITAR PERFIL",
-                            onClick = { context.startActivity(Intent(context, EditProfileActivity::class.java)) },
-                            containerColor = accentColor,
-                            contentColor = Color.White,
-                            shadowColor = shadowPalette.hardShadowPrimary,
-                            isDark = customColors.isDark,
-                            icon = Icons.Default.Edit,
-                            cornerRadius = 16.dp
-                        )
+                        if (!isOtherProfile) {
+                            Spacer(modifier = Modifier.height(24.dp))
+                            HardShadowButton(
+                                text = "EDITAR PERFIL",
+                                onClick = { context.startActivity(Intent(context, EditProfileActivity::class.java)) },
+                                containerColor = accentColor,
+                                contentColor = Color.White,
+                                shadowColor = shadowPalette.hardShadowPrimary,
+                                isDark = customColors.isDark,
+                                icon = Icons.Default.Edit,
+                                cornerRadius = 16.dp
+                            )
+                        }
 
                         Spacer(modifier = Modifier.height(24.dp))
                         HorizontalDivider(color = textColor.copy(alpha = 0.08f))
                         Spacer(modifier = Modifier.height(20.dp))
 
-                        InfoItem(Icons.Default.Badge, "RUT", userData.rut, textColor, secondaryTextColor)
+                        InfoItem(Icons.Default.Badge, "RUT", displayUser.rut, textColor, secondaryTextColor)
                         
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             InfoItem(
                                 Icons.Default.Phone, 
                                 "TELÉFONO", 
-                                userData.telefono.ifEmpty { "No especificado" }, 
+                                displayUser.telefono.ifEmpty { "No registrado" }, 
                                 textColor, 
                                 secondaryTextColor,
                                 modifier = Modifier.weight(1f)
                             )
-                            if (userData.telefono.isNotEmpty() && !userData.telefonoVerificado) {
+                            if (!isOtherProfile && displayUser.telefono.isNotEmpty() && !displayUser.telefonoVerificado) {
                                 Text(
                                     "NO VERIFICADO",
                                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
@@ -233,8 +262,8 @@ fun ProfileScreen(
                             }
                         }
                         
-                        InfoItem(Icons.Default.Place, "UBICACIÓN", "${userData.comuna}, ${userData.region}", textColor, secondaryTextColor)
-                        InfoItem(Icons.Default.Work, "ROL", userData.rol.replaceFirstChar { it.uppercase() }, textColor, secondaryTextColor)
+                        InfoItem(Icons.Default.Place, "UBICACIÓN", "${displayUser.comuna}, ${displayUser.region}", textColor, secondaryTextColor)
+                        InfoItem(Icons.Default.Work, "ROL", displayUser.rol.replaceFirstChar { it.uppercase() }, textColor, secondaryTextColor)
                     }
                 }
 
@@ -242,34 +271,37 @@ fun ProfileScreen(
 
                 // Ficha Section
                 Text(
-                    text = if (userData.rol == "cuidador") "MI FICHA TÉCNICA" else "FICHA DEL FAMILIAR",
+                    text = if (displayUser.rol == "cuidador") "FICHA TÉCNICA" else "FICHA DEL FAMILIAR",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = accentColor,
                     modifier = Modifier.fillMaxWidth().padding(start = 8.dp, bottom = 12.dp)
                 )
 
-                when (fichaState) {
+                when (displayFichaState) {
                     is FichaState.Loading -> {
                         CircularProgressIndicator(color = accentColor, modifier = Modifier.padding(24.dp))
                     }
                     is FichaState.View -> {
                         ProfileDetailView(
-                            role = fichaRole,
-                            data = (fichaState as FichaState.View).data,
+                            role = displayFichaRole,
+                            data = (displayFichaState as FichaState.View).data,
                             onEdit = { 
-                                val intent = Intent(context, FichaActivity::class.java)
-                                intent.putExtra("edit_mode", true)
-                                context.startActivity(intent)
+                                if (!isOtherProfile) {
+                                    val intent = Intent(context, FichaActivity::class.java)
+                                    intent.putExtra("edit_mode", true)
+                                    context.startActivity(intent)
+                                }
                             }
                         )
                     }
                     is FichaState.NotFound -> {
                         FichaPlaceholder(
-                            role = userData.rol,
+                            role = displayUser.rol,
                             accentColor = accentColor,
                             panelBg = panelBg,
                             textColor = textColor,
                             secondaryTextColor = secondaryTextColor,
+                            isOtherProfile = isOtherProfile,
                             onCreateClick = {
                                 context.startActivity(Intent(context, FichaActivity::class.java))
                             }
@@ -291,6 +323,7 @@ fun FichaPlaceholder(
     panelBg: Color,
     textColor: Color,
     secondaryTextColor: Color,
+    isOtherProfile: Boolean = false,
     onCreateClick: () -> Unit
 ) {
     val shadowPalette = CuidaleThemeExtras.shadows
@@ -313,34 +346,39 @@ fun FichaPlaceholder(
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = if (role == "cuidador") 
-                    "Parece ser que aún no sabemos mucho de ti" 
-                else 
-                    "Aún no tenemos información de tu familiar",
+                text = if (isOtherProfile) {
+                    "Este usuario aún no tiene ficha técnica"
+                } else {
+                    if (role == "cuidador") "Parece ser que aún no sabemos mucho de ti" 
+                    else "Aún no tenemos información de tu familiar"
+                },
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 textAlign = TextAlign.Center,
                 color = textColor
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = if (role == "cuidador")
-                    "Ingresa tus datos en la ficha técnica para que las familias puedan conocer tu experiencia."
-                else
-                    "Ingresa sus datos en la ficha técnica para que podamos ayudarte mejor a encontrar el cuidado ideal.",
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center,
-                color = secondaryTextColor
-            )
-            Spacer(modifier = Modifier.height(24.dp))
-            HardShadowButton(
-                text = "CREAR FICHA",
-                onClick = onCreateClick,
-                containerColor = accentColor,
-                contentColor = Color.White,
-                shadowColor = shadowPalette.hardShadowPrimary,
-                isDark = customColors.isDark,
-                icon = Icons.Default.Add
-            )
+            
+            if (!isOtherProfile) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = if (role == "cuidador")
+                        "Ingresa tus datos en la ficha técnica para que las familias puedan conocer tu experiencia."
+                    else
+                        "Ingresa sus datos en la ficha técnica para que podamos ayudarte mejor a encontrar el cuidado ideal.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                    color = secondaryTextColor
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                HardShadowButton(
+                    text = "CREAR FICHA",
+                    onClick = onCreateClick,
+                    containerColor = accentColor,
+                    contentColor = Color.White,
+                    shadowColor = shadowPalette.hardShadowPrimary,
+                    isDark = customColors.isDark,
+                    icon = Icons.Default.Add
+                )
+            }
         }
     }
 }

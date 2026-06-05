@@ -6,7 +6,8 @@ import androidx.compose.ui.graphics.Color
 val CuidaleBlueTopLight = Color(0xFF4B8FDC)
 val CuidaleBlueBottomLight = Color(0xFF43BCD3)
 val CuidaleSurfaceLight = Color(0xFFF0F4F8) // Softer background
-val CuidaleSurfaceSoftLight = Color(0xFFE1E9F0) // Slightly darker soft surface
+val CuidaleSurfaceSoftLight = Color(0xFFA6EDCC) // Softer Green
+val CuidaleSurfaceSoftLightVariant = Color(0xFFC4F2DB) // For gradient
 val CuidalePrimaryLight = Color(0xFF3A49D1) // Deeper blue
 val CuidalePrimaryVariantLight = Color(0xFF5142D4)
 val CuidaleOnPrimaryLight = Color(0xFFFFFFFF)

@@ -1,5 +1,6 @@
 package com.example.cuidaleapp.ui.screens
 
+import android.net.Uri
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -29,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import coil3.compose.AsyncImage
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.layout.ContentScale
+import androidx.core.net.toUri
 import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.FichaState
@@ -212,8 +214,7 @@ fun ModernPersonalDataCard(
     val shadowPalette = CuidaleThemeExtras.shadows
     HardShadowPanel(
         backgroundColor = cardColor,
-        shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
-        cornerRadius = 16.dp
+        shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
@@ -252,7 +253,7 @@ fun ModernErrorState(message: String, cardColor: Color, accentColor: Color, onRe
     val shadowPalette = CuidaleThemeExtras.shadows
     val customColors = CuidaleThemeExtras.customColors
     val textColor = MaterialTheme.colorScheme.onSurface
-    HardShadowPanel(backgroundColor = cardColor, shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f), cornerRadius = 16.dp) {
+    HardShadowPanel(backgroundColor = cardColor, shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f)) {
         Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(Icons.Default.ErrorOutline, null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f))
             Spacer(modifier = Modifier.height(16.dp))
@@ -291,13 +292,15 @@ fun CaregiverEditFlow(
     var selectedCommunes by remember { mutableStateOf<List<String>>(initialData?.get("comunas") as? List<String> ?: emptyList()) }
     var selectedHorarios by remember { mutableStateOf<List<String>>(initialData?.get("horarios") as? List<String> ?: emptyList()) }
     var descripcion by remember { mutableStateOf(initialData?.get("descripcion") as? String ?: "") }
+    var photosUris by remember { 
+        mutableStateOf<List<Uri>>((initialData?.get("fotos") as? List<*>)?.mapNotNull { it.toString().toUri() } ?: emptyList()) 
+    }
 
     Column {
         if (step == 1) {
             HardShadowPanel(
                 backgroundColor = cardColor,
                 shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
-                cornerRadius = 24.dp,
                 contentPadding = PaddingValues(20.dp)
             ) {
                 Column {
@@ -355,7 +358,6 @@ fun CaregiverEditFlow(
             HardShadowPanel(
                 backgroundColor = cardColor,
                 shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
-                cornerRadius = 24.dp,
                 contentPadding = PaddingValues(20.dp)
             ) {
                 Column {
@@ -390,7 +392,7 @@ fun CaregiverEditFlow(
                         HardShadowButton(
                             text = "FINALIZAR",
                             onClick = {
-                                viewModel.createCaregiverFicha(especializacion, experiencia, selectedCommunes, selectedHorarios, descripcion)
+                                viewModel.createCaregiverFicha(especializacion, experiencia, selectedCommunes, selectedHorarios, descripcion, photosUris)
                                 onFinishSuccess()
                             },
                             modifier = Modifier.weight(1.5f),
@@ -446,6 +448,9 @@ fun FamilyEditFlow(
     var condicionesExtra by remember { mutableStateOf(initialData?.get("condiciones") as? String ?: "") }
     var selectedCommunesPref by remember { mutableStateOf(initialData?.get("comunas_preferencia") as? List<String> ?: emptyList()) }
     var selectedHorariosPref by remember { mutableStateOf(initialData?.get("horarios_preferencia") as? List<String> ?: emptyList()) }
+    var photosUris by remember { 
+        mutableStateOf<List<Uri>>((initialData?.get("fotos") as? List<*>)?.mapNotNull { it.toString().toUri() } ?: emptyList()) 
+    }
 
     LaunchedEffect(vivesConFamiliar) {
         if (vivesConFamiliar) {
@@ -463,7 +468,6 @@ fun FamilyEditFlow(
                 HardShadowPanel(
                     backgroundColor = cardColor,
                     shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
-                    cornerRadius = 24.dp,
                     contentPadding = PaddingValues(20.dp)
                 ) {
                     Column {
@@ -560,7 +564,6 @@ fun FamilyEditFlow(
                 HardShadowPanel(
                     backgroundColor = cardColor,
                     shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
-                    cornerRadius = 24.dp,
                     contentPadding = PaddingValues(20.dp)
                 ) {
                     Column {
@@ -573,7 +576,7 @@ fun FamilyEditFlow(
 
                         CuidaleExposedDropdown(label = "DEPENDENCIA", options = listOf("Independiente", "Leve", "Moderada", "Severa"), selectedOption = nivelDependencia, onOptionSelected = { nivelDependencia = it })
                         Spacer(modifier = Modifier.height(16.dp))
-                        CuidaleExposedDropdown(label = "MOVILIDAD", options = listOf("Normal", "Reducida", "Silla de Ruedas", "Postrado"), selectedOption = movilidad, onOptionSelected = { movilidad = it })
+                        CuidaleExposedDropdown(label = "MOVILIDAD", options = listOf("Normal", "Reducida", "Silla de Ruedas", "Postrado"), selectedOption = mobilityStateFix(movilidad), onOptionSelected = { movilidad = it })
                         Spacer(modifier = Modifier.height(20.dp))
 
                         CuidaleMultiSelectDropdown(
@@ -645,7 +648,6 @@ fun FamilyEditFlow(
                     HardShadowPanel(
                         backgroundColor = cardColor,
                         shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
-                        cornerRadius = 24.dp,
                         contentPadding = PaddingValues(20.dp)
                     ) {
                         Column {
@@ -682,7 +684,6 @@ fun FamilyEditFlow(
                     HardShadowPanel(
                         backgroundColor = cardColor,
                         shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
-                        cornerRadius = 24.dp,
                         contentPadding = PaddingValues(20.dp)
                     ) {
                         Column {
@@ -711,7 +712,7 @@ fun FamilyEditFlow(
                                 HardShadowButton(
                                     text = "FINALIZAR",
                                     onClick = {
-                                        viewModel.createFamilyFicha(nombreCompleto, edad, genero, vivesConFamiliar, region, comuna, calle, numero, depto, nivelDependencia, movilidad, comunicacion, discapacidades, discapacidadOtro, enfermedades, enfermedadOtro, dieta, medicamentos, condicionesExtra, selectedCommunesPref, selectedHorariosPref)
+                                        viewModel.createFamilyFicha(nombreCompleto, edad, genero, vivesConFamiliar, region, comuna, calle, numero, depto, nivelDependencia, movilidad, comunicacion, discapacidades, discapacidadOtro, enfermedades, enfermedadOtro, dieta, medicamentos, condicionesExtra, selectedCommunesPref, selectedHorariosPref, photosUris)
                                         onFinishSuccess()
                                     },
                                     modifier = Modifier.weight(1.5f),
@@ -727,6 +728,11 @@ fun FamilyEditFlow(
             }
         }
     }
+}
+
+// Simple fix for a common string-comparison issue
+private fun mobilityStateFix(current: String): String {
+    return if (current == "Normal" || current == "Reducida" || current == "Silla de Ruedas" || current == "Postrado") current else "Normal"
 }
 
 
@@ -781,7 +787,6 @@ fun ModernMedicamentosSection(
             HardShadowPanel(
                 backgroundColor = if (isDark) customColors.panelBackground.copy(alpha = 0.7f) else Color.White,
                 shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.15f),
-                cornerRadius = 16.dp,
                 contentPadding = PaddingValues(16.dp)
             ) {
                 Column {

@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 
 private val LightColors = lightColorScheme(
@@ -65,6 +66,8 @@ data class CuidaleCustomColors(
     val successStrong: Color,
     val onGradient: Color,
     val panelBackground: Color,
+    val panelGradient: Brush,
+    val avatarBackground: Color,
     val inputBackground: Color,
     val linkColor: Color,
     val isDark: Boolean
@@ -93,6 +96,8 @@ private val LocalCuidaleCustomColors = staticCompositionLocalOf {
         successStrong = CuidaleSuccessStrongLight,
         onGradient = Color.White,
         panelBackground = Color.White,
+        panelGradient = Brush.verticalGradient(listOf(Color.White, Color.White)),
+        avatarBackground = Color.White,
         inputBackground = Color.White,
         linkColor = CuidaleLinkLight,
         isDark = false
@@ -136,7 +141,12 @@ fun CuidaleAppTheme(
         )
     }
 
-    val panelBackground = if (darkTheme) colorScheme.surfaceVariant else Color.White
+    val panelBackground = if (darkTheme) colorScheme.surfaceVariant else CuidaleSurfaceSoftLight
+    val panelGradient = if (darkTheme) {
+        Brush.verticalGradient(listOf(colorScheme.surfaceVariant, colorScheme.surfaceVariant))
+    } else {
+        Brush.verticalGradient(listOf(CuidaleSurfaceSoftLight, CuidaleSurfaceSoftLightVariant))
+    }
 
     val customColors = if (darkTheme) {
         CuidaleCustomColors(
@@ -146,6 +156,8 @@ fun CuidaleAppTheme(
             successStrong = CuidaleSuccessStrongDark,
             onGradient = Color.White,
             panelBackground = panelBackground,
+            panelGradient = panelGradient,
+            avatarBackground = Color(0xFF2C2F33), // Grey for dark
             inputBackground = CuidaleSurfaceDark,
             linkColor = CuidaleLinkDark,
             isDark = true
@@ -158,6 +170,8 @@ fun CuidaleAppTheme(
             successStrong = CuidaleSuccessStrongLight,
             onGradient = Color.White,
             panelBackground = panelBackground,
+            panelGradient = panelGradient,
+            avatarBackground = Color.White, // White for light
             inputBackground = Color.White,
             linkColor = CuidaleLinkLight,
             isDark = false
