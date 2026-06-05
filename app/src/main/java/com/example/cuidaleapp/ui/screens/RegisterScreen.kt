@@ -254,7 +254,7 @@ fun RoleCard(
         Box(
             modifier = Modifier
                 .matchParentSize()
-                .offset(x = 4.dp, y = 4.dp)
+                .offset(x = 6.dp, y = 6.dp)
                 .clip(RoundedCornerShape(20.dp))
                 .background(shadowColor.copy(alpha = 0.5f))
         )
@@ -304,6 +304,7 @@ fun RegisterPersonalStep(
     val apellidoMa by viewModel.apellidoMa.collectAsState()
     val email by viewModel.email.collectAsState()
     val rut by viewModel.rut.collectAsState()
+    val telefono by viewModel.telefono.collectAsState()
     
     val isEmailValid by viewModel.isEmailValid.collectAsState()
     val isRutValid by viewModel.isRutValid.collectAsState()
@@ -315,7 +316,7 @@ fun RegisterPersonalStep(
     ) {
         HardShadowPanel(
             backgroundColor = CuidaleThemeExtras.customColors.panelBackground,
-            shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowAccent else CuidaleThemeExtras.shadows.hardShadowPrimary,
+            shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowPrimary else CuidaleThemeExtras.shadows.hardShadowPrimary,
             isError = error != null
         ) {
             Text(
@@ -332,7 +333,8 @@ fun RegisterPersonalStep(
                 onValueChange = viewModel::onNombreChange,
                 placeholder = "Ej: Juan",
                 containerColor = CuidaleThemeExtras.customColors.inputBackground,
-                isError = nombre.isNotEmpty() && nombre.length < 2
+                isError = nombre.isNotEmpty() && nombre.length < 2,
+                imeAction = androidx.compose.ui.text.input.ImeAction.Next
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -342,7 +344,8 @@ fun RegisterPersonalStep(
                 value = nombreS,
                 onValueChange = viewModel::onNombreSChange,
                 placeholder = "Ej: Antonio",
-                containerColor = CuidaleThemeExtras.customColors.inputBackground
+                containerColor = CuidaleThemeExtras.customColors.inputBackground,
+                imeAction = androidx.compose.ui.text.input.ImeAction.Next
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -353,7 +356,8 @@ fun RegisterPersonalStep(
                 onValueChange = viewModel::onApellidoPaChange,
                 placeholder = "Ej: Pérez",
                 containerColor = CuidaleThemeExtras.customColors.inputBackground,
-                isError = apellidoPa.isNotEmpty() && apellidoPa.length < 2
+                isError = apellidoPa.isNotEmpty() && apellidoPa.length < 2,
+                imeAction = androidx.compose.ui.text.input.ImeAction.Next
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -363,7 +367,8 @@ fun RegisterPersonalStep(
                 value = apellidoMa,
                 onValueChange = viewModel::onApellidoMaChange,
                 placeholder = "Ej: González",
-                containerColor = CuidaleThemeExtras.customColors.inputBackground
+                containerColor = CuidaleThemeExtras.customColors.inputBackground,
+                imeAction = androidx.compose.ui.text.input.ImeAction.Next
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -375,7 +380,8 @@ fun RegisterPersonalStep(
                 placeholder = "ejemplo@correo.com",
                 containerColor = CuidaleThemeExtras.customColors.inputBackground,
                 keyboardType = KeyboardType.Email,
-                isError = email.isNotEmpty() && !isEmailValid
+                isError = email.isNotEmpty() && !isEmailValid,
+                imeAction = androidx.compose.ui.text.input.ImeAction.Next
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -386,7 +392,8 @@ fun RegisterPersonalStep(
                 onValueChange = viewModel::onRutChange,
                 placeholder = "12.345.678-9",
                 containerColor = CuidaleThemeExtras.customColors.inputBackground,
-                isError = rut.isNotEmpty() && !isRutValid
+                isError = rut.isNotEmpty() && !isRutValid,
+                imeAction = androidx.compose.ui.text.input.ImeAction.Next
             )
             if (rut.isNotEmpty() && !isRutValid) {
                 Text(
@@ -396,6 +403,25 @@ fun RegisterPersonalStep(
                     modifier = Modifier.padding(start = 8.dp, top = 4.dp)
                 )
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            InputFieldLabel("Teléfono")
+            CuidaleTextField(
+                value = telefono,
+                onValueChange = viewModel::onTelefonoChange,
+                placeholder = "+569...",
+                containerColor = CuidaleThemeExtras.customColors.inputBackground,
+                keyboardType = KeyboardType.Phone,
+                imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                    onDone = {
+                        if (isFormValid) {
+                            onNext()
+                        }
+                    }
+                )
+            )
         }
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -404,7 +430,7 @@ fun RegisterPersonalStep(
             text = stringResource(R.string.register_button_next),
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
-            shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowAccent else CuidaleThemeExtras.shadows.hardShadowPrimary,
+            shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowPrimary else CuidaleThemeExtras.shadows.hardShadowPrimary,
             icon = Icons.AutoMirrored.Filled.ArrowForward,
             enabled = isFormValid,
             isDark = isDark,
@@ -441,7 +467,7 @@ fun RegisterLocationStep(
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         HardShadowPanel(
             backgroundColor = CuidaleThemeExtras.customColors.panelBackground,
-            shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowAccent else CuidaleThemeExtras.shadows.hardShadowPrimary
+            shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowPrimary else CuidaleThemeExtras.shadows.hardShadowPrimary
         ) {
             Text(
                 text = stringResource(R.string.register_location_desc),
@@ -480,7 +506,7 @@ fun RegisterLocationStep(
             text = stringResource(R.string.register_button_next),
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
-            shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowAccent else CuidaleThemeExtras.shadows.hardShadowPrimary,
+            shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowPrimary else CuidaleThemeExtras.shadows.hardShadowPrimary,
             icon = Icons.AutoMirrored.Filled.ArrowForward,
             enabled = selectedRegion.isNotEmpty() && selectedComuna.isNotEmpty(),
             isDark = isDark,
@@ -493,7 +519,7 @@ fun RegisterLocationStep(
             text = stringResource(R.string.register_button_back),
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
-            shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowAccent else CuidaleThemeExtras.shadows.hardShadowPrimary,
+            shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowPrimary else CuidaleThemeExtras.shadows.hardShadowPrimary,
             icon = Icons.AutoMirrored.Filled.ArrowBack,
             isDark = isDark,
             onClick = onBack
@@ -548,7 +574,7 @@ fun RegisterPasswordStep(
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         HardShadowPanel(
             backgroundColor = CuidaleThemeExtras.customColors.panelBackground,
-            shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowAccent else CuidaleThemeExtras.shadows.hardShadowPrimary,
+            shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowPrimary else CuidaleThemeExtras.shadows.hardShadowPrimary,
             isError = error != null,
             modifier = Modifier.offset { IntOffset(shakeOffset.value.roundToInt(), 0) }
         ) {
@@ -584,7 +610,8 @@ fun RegisterPasswordStep(
                 isPassword = true,
                 isPasswordVisible = isPassVisible,
                 onPasswordVisibilityChange = { isPassVisible = !isPassVisible },
-                enabled = !isLoading
+                enabled = !isLoading,
+                imeAction = androidx.compose.ui.text.input.ImeAction.Next
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -601,7 +628,15 @@ fun RegisterPasswordStep(
                 isPassword = true,
                 isPasswordVisible = isConfirmVisible,
                 onPasswordVisibilityChange = { isConfirmVisible = !isConfirmVisible },
-                enabled = !isLoading
+                enabled = !isLoading,
+                imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                    onDone = {
+                        if (isPassValid && passMatches) {
+                            onRegister()
+                        }
+                    }
+                )
             )
 
             AnimatedVisibility(visible = error != null) {
@@ -623,7 +658,7 @@ fun RegisterPasswordStep(
                 text = stringResource(R.string.register_button_finish),
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
-                shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowAccent else CuidaleThemeExtras.shadows.hardShadowPrimary,
+                shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowPrimary else CuidaleThemeExtras.shadows.hardShadowPrimary,
                 icon = Icons.Default.CheckCircle,
                 enabled = isPassValid && passMatches,
                 isDark = isDark,

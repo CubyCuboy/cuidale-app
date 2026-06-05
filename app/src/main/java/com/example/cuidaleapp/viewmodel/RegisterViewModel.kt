@@ -2,6 +2,7 @@ package com.example.cuidaleapp.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.cuidaleapp.utils.PhoneUtils
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -61,6 +62,9 @@ class RegisterViewModel : ViewModel() {
     private val _comuna = MutableStateFlow("")
     val comuna: StateFlow<String> = _comuna.asStateFlow()
 
+    private val _telefono = MutableStateFlow("")
+    val telefono: StateFlow<String> = _telefono.asStateFlow()
+
     val isEmailValid: StateFlow<Boolean> = _email
         .map { validateEmail(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
@@ -69,11 +73,12 @@ class RegisterViewModel : ViewModel() {
         .map { validateRut(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    val isFormValid: StateFlow<Boolean> = combine(_nombre, _apellidoPa, _email, _rut) { nombre, apellido, email, rut ->
+    val isFormValid: StateFlow<Boolean> = combine(_nombre, _apellidoPa, _email, _rut, _telefono) { nombre, apellido, email, rut, telefono ->
         nombre.trim().length >= 2 && 
         apellido.trim().length >= 2 && 
         validateEmail(email) && 
-        validateRut(rut)
+        validateRut(rut) &&
+        telefono.length >= 8
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     private fun validateEmail(email: String): Boolean {
@@ -131,6 +136,11 @@ class RegisterViewModel : ViewModel() {
         _idRegion.value = newIdRegion
     }
     fun onComunaChange(newComuna: String) { _comuna.value = newComuna }
+
+    fun onTelefonoChange(newTelefono: String) {
+        val clean = newTelefono.replace(Regex("[^0-9+]"), "")
+        _telefono.value = clean
+    }
 
     private fun formatRutForSaving(rut: String): String {
         val clean = rut.replace(".", "").replace("-", "").uppercase()
@@ -192,6 +202,7 @@ class RegisterViewModel : ViewModel() {
                     "apellido_ma" to _apellidoMa.value.trim(),
                     "correo" to _email.value.trim().lowercase(),
                     "rut" to formattedRut,
+                    "telefono" to PhoneUtils.formatChileanPhone(_telefono.value),
                     "region" to _region.value,
                     "id_region" to _idRegion.value,
                     "comuna" to _comuna.value,

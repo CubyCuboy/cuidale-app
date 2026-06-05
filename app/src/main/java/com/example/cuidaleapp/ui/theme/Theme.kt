@@ -31,7 +31,7 @@ private val DarkColors = darkColorScheme(
     primary = CuidalePrimaryDark,
     onPrimary = CuidaleOnPrimaryDark,
     secondary = CuidalePrimaryVariantDark,
-    onSecondary = CuidaleOnSurfaceDark,
+    onSecondary = CuidaleOnPrimaryDark,
     background = CuidaleSurfaceDark,
     onBackground = CuidaleOnSurfaceDark,
     surface = CuidaleSurfaceDark,
@@ -41,7 +41,7 @@ private val DarkColors = darkColorScheme(
     outline = CuidaleBorderDark,
     error = CuidaleErrorDark,
     errorContainer = CuidaleErrorContainerDark,
-    onErrorContainer = Color.White
+    onErrorContainer = CuidaleOnSurfaceDark
 )
 
 @Immutable
@@ -92,7 +92,7 @@ private val LocalCuidaleCustomColors = staticCompositionLocalOf {
         success = CuidaleSuccessLight,
         successStrong = CuidaleSuccessStrongLight,
         onGradient = Color.White,
-        panelBackground = Color.White.copy(alpha = 0.95f),
+        panelBackground = Color.White,
         inputBackground = Color.White,
         linkColor = CuidaleLinkLight,
         isDark = false
@@ -136,7 +136,7 @@ fun CuidaleAppTheme(
         )
     }
 
-    val panelBackground = colorScheme.surfaceVariant.copy(alpha = if (darkTheme) 0.98f else 0.95f)
+    val panelBackground = if (darkTheme) colorScheme.surfaceVariant else Color.White
 
     val customColors = if (darkTheme) {
         CuidaleCustomColors(
@@ -146,7 +146,7 @@ fun CuidaleAppTheme(
             successStrong = CuidaleSuccessStrongDark,
             onGradient = Color.White,
             panelBackground = panelBackground,
-            inputBackground = Color.Black.copy(alpha = 0.25f),
+            inputBackground = CuidaleSurfaceDark,
             linkColor = CuidaleLinkDark,
             isDark = true
         )
