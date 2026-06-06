@@ -1,11 +1,14 @@
 package com.example.cuidaleapp.viewmodel
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.cuidaleapp.data.ChileData
+import com.example.cuidaleapp.utils.ImageUtils
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -22,6 +25,7 @@ sealed class FichaState {
 class FichaViewModel(application: Application) : AndroidViewModel(application) {
     private val auth = FirebaseAuth.getInstance()
     private val db = FirebaseFirestore.getInstance()
+    private val storage = FirebaseStorage.getInstance()
     private val context = application.applicationContext
 
     private val _state = MutableStateFlow<FichaState>(FichaState.Loading)
@@ -91,24 +95,60 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
         checkProfile()
     }
 
+    private suspend fun uploadFichaImages(userId: String, uris: List<Uri>): List<String> {
+        val urls = mutableListOf<String>()
+        val storageRef = storage.reference.child("fichas/$userId")
+
+        uris.forEachIndexed { index, uri ->
+            if (uri.toString().startsWith("http")) {
+                urls.add(uri.toString())
+            } else {
+                try {
+                    val fileName = "foto_${System.currentTimeMillis()}_$index.jpg"
+                    val fileRef = storageRef.child(fileName)
+                    val bytes = ImageUtils.getCompressedImage(context, uri) ?: return@forEachIndexed
+                    
+                    fileRef.putBytes(bytes).await()
+                    val downloadUrl = fileRef.downloadUrl.await().toString()
+                    urls.add(downloadUrl)
+                } catch (e: Exception) {
+                    // Ignore errors
+                }
+            }
+        }
+        return urls
+    }
+
     fun createCaregiverFicha(
         especializacion: String,
         experiencia: String,
         comunas: List<String>,
         horarios: List<String>,
-        descripcion: String
+        descripcion: String,
+        fotoUris: List<Uri>
     ) {
         val user = auth.currentUser ?: return
         
         viewModelScope.launch {
             _state.value = FichaState.Loading
             try {
+                val userDoc = db.collection("usuarios").document(user.uid).get().await()
+                val nombre = userDoc.getString("nombre") ?: ""
+                val apellido = userDoc.getString("apellido_pa") ?: ""
+                val region = userDoc.getString("region") ?: ""
+
+                val imageUrls = uploadFichaImages(user.uid, fotoUris)
+                
                 val data = hashMapOf(
                     "tipo" to "cuidador",
+                    "nombre" to nombre,
+                    "apellido_pa" to apellido,
+                    "region" to region,
                     "especializacion" to especializacion.trim(),
                     "experiencia" to experiencia.trim(),
                     "comunas" to comunas,
                     "horarios" to horarios,
+                    "fotos" to imageUrls,
                     "descripcion" to descripcion.trim(),
                     "ultima_actualizacion" to com.google.firebase.Timestamp.now()
                 )
@@ -140,16 +180,26 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
         dieta: Map<String, String>,
         medicamentos: List<Map<String, Any>>,
         condicionesExtra: String,
-        comunasPreferencia: List<String> = emptyList(),
-        horariosPreferencia: List<String> = emptyList()
+        comunasPreferencia: List<String>,
+        horariosPreferencia: List<String>,
+        fotoUris: List<Uri>
     ) {
         val user = auth.currentUser ?: return
 
         viewModelScope.launch {
             _state.value = FichaState.Loading
             try {
+                val userDoc = db.collection("usuarios").document(user.uid).get().await()
+                val nombreSolicitante = userDoc.getString("nombre") ?: ""
+                val apellidoSolicitante = userDoc.getString("apellido_pa") ?: ""
+
+                val imageUrls = uploadFichaImages(user.uid, fotoUris)
+
                 val data = hashMapOf(
                     "tipo" to "familiar",
+                    "nombre" to nombreSolicitante,
+                    "apellido_pa" to apellidoSolicitante,
+                    "fotos" to imageUrls,
                     "nombre_completo" to nombreCompleto.trim(),
                     "edad" to edad.trim(),
                     "genero" to genero,

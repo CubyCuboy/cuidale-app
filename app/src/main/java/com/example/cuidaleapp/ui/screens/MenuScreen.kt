@@ -1,166 +1,258 @@
 package com.example.cuidaleapp.ui.screens
 
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.animation.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
-import com.example.cuidaleapp.ui.components.HardShadowButton
-import com.example.cuidaleapp.ui.components.HardShadowPanel
-import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
-import com.example.cuidaleapp.models.UserData
-
-import androidx.compose.material.icons.filled.Badge
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.cuidaleapp.R
+import com.example.cuidaleapp.data.ChileData
+import com.example.cuidaleapp.models.UserData
+import com.example.cuidaleapp.ui.components.*
+import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
+import com.example.cuidaleapp.viewmodel.SearchState
+import com.example.cuidaleapp.viewmodel.SearchViewModel
+import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MenuScreen(
     userData: UserData,
+    searchViewModel: SearchViewModel,
     isDark: Boolean,
     onToggleTheme: () -> Unit,
     onLogout: () -> Unit,
-    onResetPassword: () -> Unit,
     onViewProfile: () -> Unit,
-    onNavigateToFicha: () -> Unit,
-    onNavigateToSearch: () -> Unit = {}
+    onViewFicha: () -> Unit,
+    onUserClick: (String) -> Unit
 ) {
     val gradient = CuidaleThemeExtras.gradient
-    val colors = MaterialTheme.colorScheme
-    val customColors = CuidaleThemeExtras.customColors
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+    
+    val searchState by searchViewModel.state.collectAsState()
+    val isRefreshing by searchViewModel.isRefreshing.collectAsState()
+    val selectedRegion by searchViewModel.selectedRegion.collectAsState()
+    val selectedCommunes by searchViewModel.selectedCommunes.collectAsState()
+    
+    val pullToRefreshState = rememberPullToRefreshState()
+    val sheetState = rememberModalBottomSheetState()
+    var showSearchSheet by remember { mutableStateOf(false) }
+    
+    val listState = rememberLazyListState()
+    val shouldLoadMore = remember {
+        derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            val totalItems = layoutInfo.totalItemsCount
+            val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            totalItems > 0 && lastVisibleItem >= totalItems - 2
+        }
+    }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(gradient.top, gradient.bottom)))
-    ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.End
-            ) {
-                IconButton(onClick = onToggleTheme) {
-                    Icon(
-                        imageVector = if (isDark) Icons.Filled.LightMode else Icons.Filled.DarkMode,
-                        contentDescription = "Cambiar modo",
-                        tint = customColors.onGradient
-                    )
+    LaunchedEffect(shouldLoadMore.value) {
+        if (shouldLoadMore.value) {
+            searchViewModel.loadMore()
+        }
+    }
+
+    LaunchedEffect(userData.rol) {
+        if (userData.rol.isNotEmpty()) {
+            searchViewModel.initSearch(userData.rol)
+        }
+    }
+
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            drawerContent = {
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    ModalDrawerSheet(
+                        modifier = Modifier.fillMaxSize(),
+                        drawerContainerColor = Color.Transparent,
+                        drawerTonalElevation = 0.dp
+                    ) {
+                        CuidaleDrawerContent(
+                            nombre = userData.nombre,
+                            apellido = userData.apellido_pa,
+                            fotoUrl = userData.fotoUrl,
+                            isDark = isDark,
+                            onToggleTheme = onToggleTheme,
+                            onProfileClick = {
+                                scope.launch { drawerState.close() }
+                                onViewProfile()
+                            },
+                            onFichaClick = {
+                                scope.launch { drawerState.close() }
+                                onViewFicha()
+                            },
+                            onLogoutClick = {
+                                scope.launch { drawerState.close() }
+                                onLogout()
+                            },
+                            onCloseClick = {
+                                scope.launch { drawerState.close() }
+                            }
+                        )
+                    }
                 }
-            }
-            
-            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                HardShadowPanel(
-                    backgroundColor = customColors.panelBackground,
-                    shadowColor = CuidaleThemeExtras.shadows.hardShadowPrimary,
-                    modifier = Modifier.padding(28.dp)
-                ) {
-            val roleTitle = when (userData.rol.lowercase().trim()) {
-                "cuidador" -> stringResource(R.string.home_title_caregiver)
-                "representante" -> stringResource(R.string.home_title_representative)
-                else -> ""
-            }
+            },
+            gesturesEnabled = true
+        ) {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                Scaffold(
+                    topBar = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                                .windowInsetsPadding(WindowInsets.statusBars)
+                        ) {
+                            CuidaleCircularMenuButton(
+                                onClick = { scope.launch { drawerState.open() } },
+                                modifier = Modifier.align(Alignment.CenterEnd)
+                            )
+                        }
+                    },
+                    floatingActionButton = {
+                        CuidaleCircularMenuButton(
+                            onClick = { showSearchSheet = true },
+                            modifier = Modifier.padding(bottom = 16.dp, end = 16.dp),
+                            icon = {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = null,
+                                    tint = Color.White
+                                )
+                            }
+                        )
+                    },
+                    containerColor = Color.Transparent
+                ) { innerPadding ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Brush.verticalGradient(listOf(gradient.top, gradient.bottom)))
+                            .padding(innerPadding)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 24.dp)
+                        ) {
+                            val listTitle = if (userData.rol == "cuidador") "Pacientes" else "Cuidadores"
 
-            if (roleTitle.isNotEmpty()) {
-                Text(
-                    text = roleTitle,
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
-                    color = colors.primary,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-            }
+                            Text(
+                                text = listTitle,
+                                style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
+                                color = Color.White,
+                                modifier = Modifier.padding(vertical = 16.dp)
+                            )
 
-            Text(
-                text = stringResource(R.string.menu_title),
-                style = MaterialTheme.typography.headlineMedium,
-                color = colors.onSurface,
-                modifier = Modifier.padding(bottom = 24.dp)
-            )
+                            PullToRefreshBox(
+                                state = pullToRefreshState,
+                                isRefreshing = isRefreshing,
+                                onRefresh = { searchViewModel.refresh() },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                when (searchState) {
+                                    is SearchState.Loading -> {
+                                        if (!isRefreshing) {
+                                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                                CircularProgressIndicator(color = Color.White)
+                                            }
+                                        }
+                                    }
+                                    is SearchState.Success -> {
+                                        val resultsList = (searchState as SearchState.Success).results
+                                        val isLoadingMore = (searchState as SearchState.Success).isLoadingMore
+                                        
+                                        if (resultsList.isEmpty()) {
+                                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                                Text(
+                                                    text = "No se encontraron resultados",
+                                                    color = Color.White.copy(alpha = 0.7f),
+                                                    textAlign = TextAlign.Center
+                                                )
+                                            }
+                                        } else {
+                                            LazyColumn(
+                                                state = listState,
+                                                verticalArrangement = Arrangement.spacedBy(16.dp),
+                                                contentPadding = PaddingValues(bottom = 80.dp),
+                                                modifier = Modifier.fillMaxSize()
+                                            ) {
+                                                items(resultsList) { result ->
+                                                    CuidaleUserCard(
+                                                        nombre = result.nombre,
+                                                        apellido = result.apellido_pa,
+                                                        fotoUrl = result.foto_url,
+                                                        onClick = { onUserClick(result.id) }
+                                                    )
+                                                }
+                                                
+                                                if (isLoadingMore) {
+                                                    item {
+                                                        Box(
+                                                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                                            contentAlignment = Alignment.Center
+                                                        ) {
+                                                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    is SearchState.Error -> {
+                                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                            Text(
+                                                text = (searchState as SearchState.Error).message,
+                                                color = MaterialTheme.colorScheme.error,
+                                                textAlign = TextAlign.Center
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
-            Text(
-                text = stringResource(R.string.menu_greeting, userData.nombre),
-                style = MaterialTheme.typography.bodyLarge,
-                color = colors.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 32.dp)
-            )
-
-            HardShadowButton(
-                text = stringResource(R.string.menu_item_ficha),
-                containerColor = colors.primary,
-                contentColor = Color.White,
-                shadowColor = CuidaleThemeExtras.shadows.hardShadowPrimary,
-                icon = Icons.Default.Badge,
-                isDark = customColors.isDark,
-                onClick = { onNavigateToFicha() }
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            HardShadowButton(
-                text = stringResource(R.string.menu_item_profile),
-                containerColor = colors.primary,
-                contentColor = Color.White,
-                shadowColor = CuidaleThemeExtras.shadows.hardShadowPrimary,
-                icon = Icons.Default.Person,
-                isDark = customColors.isDark,
-                onClick = onViewProfile
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            HardShadowButton(
-                text = "Buscar Usuarios",
-                containerColor = colors.primary,
-                contentColor = Color.White,
-                shadowColor = CuidaleThemeExtras.shadows.hardShadowPrimary,
-                icon = Icons.Default.Search,
-                isDark = customColors.isDark,
-                onClick = onNavigateToSearch
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            HardShadowButton(
-                text = stringResource(R.string.menu_forgot_password),
-                containerColor = colors.secondary,
-                contentColor = colors.onSecondary,
-                shadowColor = colors.secondaryContainer,
-                isDark = customColors.isDark,
-                onClick = onResetPassword
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            HardShadowButton(
-                text = stringResource(R.string.menu_logout),
-                containerColor = colors.error,
-                contentColor = Color.White,
-                shadowColor = colors.errorContainer,
-                isDark = customColors.isDark,
-                onClick = onLogout
-            )
+                        if (showSearchSheet) {
+                            ModalBottomSheet(
+                                onDismissRequest = { showSearchSheet = false },
+                                sheetState = sheetState,
+                                containerColor = CuidaleThemeExtras.customColors.panelBackground
+                            ) {
+                                CuidaleSearchContent(
+                                    allRegions = ChileData.regions.map { it.name },
+                                    selectedRegion = selectedRegion,
+                                    onRegionSelected = { searchViewModel.selectRegion(it) },
+                                    allCommunes = ChileData.regions.find { it.name == selectedRegion }?.comunas?.sorted() ?: emptyList(),
+                                    selectedCommunes = selectedCommunes,
+                                    onCommuneToggle = { searchViewModel.toggleCommune(it) },
+                                    onClearFilters = { searchViewModel.clearFilters() },
+                                    onClose = { scope.launch { sheetState.hide() }.invokeOnCompletion { showSearchSheet = false } }
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

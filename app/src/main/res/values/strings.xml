@@ -166,8 +166,8 @@
     <string name="menu_item_ficha">Mi Ficha</string>
 
     <!-- Role specific Home titles -->
-    <string name="home_title_caregivers">Cuidadores</string>
-    <string name="home_title_patients">Pacientes</string>
+    <string name="home_title_caregiver">Cuidador</string>
+    <string name="home_title_representative">Representante</string>
 
     <!-- Search System -->
     <string name="search_button">Buscar</string>
