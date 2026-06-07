@@ -141,11 +141,11 @@ fun CuidaleAppTheme(
         )
     }
 
-    val panelBackground = if (darkTheme) colorScheme.surfaceVariant else CuidaleSurfaceSoftLight
+    val panelBackground = if (darkTheme) colorScheme.surfaceVariant else Color(0xFFF8FAFC)
     val panelGradient = if (darkTheme) {
         Brush.verticalGradient(listOf(colorScheme.surfaceVariant, colorScheme.surfaceVariant))
     } else {
-        Brush.verticalGradient(listOf(CuidaleSurfaceSoftLight, CuidaleSurfaceSoftLightVariant))
+        Brush.verticalGradient(listOf(Color(0xFFF8FAFC), Color(0xFFF1F5F9)))
     }
 
     val customColors = if (darkTheme) {
@@ -168,11 +168,11 @@ fun CuidaleAppTheme(
             warningContainer = CuidaleWarningContainerLight,
             success = CuidaleSuccessLight,
             successStrong = CuidaleSuccessStrongLight,
-            onGradient = Color.White,
+            onGradient = Color(0xFF2D3748),
             panelBackground = panelBackground,
             panelGradient = panelGradient,
-            avatarBackground = Color.White, // White for light
-            inputBackground = Color.White,
+            avatarBackground = Color(0xFFF1F5F9), // Soft grey for light theme avatars
+            inputBackground = Color(0xFFFFFFFF),
             linkColor = CuidaleLinkLight,
             isDark = false
         )

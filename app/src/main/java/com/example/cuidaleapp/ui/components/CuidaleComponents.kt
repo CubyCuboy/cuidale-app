@@ -521,7 +521,7 @@ fun FullProfileDetailView(
                     }
                 }
                 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = textColor.copy(alpha = if (customColors.isDark) 0.2f else 0.1f))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = textColor.copy(alpha = if (customColors.isDark) 0.2f else 0.08f))
                 
                 val excludedKeys = mutableSetOf("fotos", "tipo", "ultima_actualizacion", "horarios", "comunas", "horarios_preferencia", "comunas_preferencia")
 
@@ -592,8 +592,8 @@ fun FullProfileDetailView(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 8.dp)
-                                .background(textColor.copy(alpha = if (customColors.isDark) 0.08f else 0.04f), RoundedCornerShape(12.dp))
-                                .border(1.dp, textColor.copy(alpha = if (customColors.isDark) 0.15f else 0.1f), RoundedCornerShape(12.dp))
+                                .background(textColor.copy(alpha = if (customColors.isDark) 0.08f else 0.03f), RoundedCornerShape(12.dp))
+                                .border(1.dp, textColor.copy(alpha = if (customColors.isDark) 0.15f else 0.06f), RoundedCornerShape(12.dp))
                                 .padding(12.dp)
                         ) {
                             val isComplex = value is List<*> || value is Map<*, *> || displayValue.length > 30
@@ -669,7 +669,7 @@ fun FullProfileDetailView(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .padding(bottom = 12.dp)
-                                                .background(textColor.copy(alpha = if (customColors.isDark) 0.15f else 0.08f), RoundedCornerShape(12.dp))
+                                                .background(textColor.copy(alpha = if (customColors.isDark) 0.15f else 0.03f), RoundedCornerShape(12.dp))
                                                 .border(1.dp, textColor.copy(alpha = if (customColors.isDark) 0.1f else 0.05f), RoundedCornerShape(12.dp))
                                                 .padding(12.dp)
                                         ) {
@@ -825,7 +825,7 @@ fun SearchPreferencesCard(
                         text = "CANCELAR",
                         onClick = { isEditing = false },
                         modifier = Modifier.weight(1f).height(48.dp),
-                        containerColor = if (CuidaleThemeExtras.customColors.isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFEEEEEE),
+                        containerColor = if (CuidaleThemeExtras.customColors.isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFE2E8F0),
                         contentColor = secondaryTextColor,
                         shadowColor = Color.Transparent,
                         isDark = CuidaleThemeExtras.customColors.isDark
