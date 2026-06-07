@@ -40,5 +40,6 @@ class ProfileActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         viewModel.refreshUserData()
+        fichaViewModel.checkProfile()
     }
 }

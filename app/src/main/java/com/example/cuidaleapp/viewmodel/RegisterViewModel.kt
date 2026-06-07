@@ -74,11 +74,12 @@ class RegisterViewModel : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val isFormValid: StateFlow<Boolean> = combine(_nombre, _apellidoPa, _email, _rut, _telefono) { nombre, apellido, email, rut, telefono ->
+        val phoneValid = if (telefono.isEmpty()) true else PhoneUtils.isValidChileanPhone(telefono)
         nombre.trim().length >= 2 && 
         apellido.trim().length >= 2 && 
         validateEmail(email) && 
         validateRut(rut) &&
-        telefono.length >= 8
+        phoneValid
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     private fun validateEmail(email: String): Boolean {
@@ -138,8 +139,10 @@ class RegisterViewModel : ViewModel() {
     fun onComunaChange(newComuna: String) { _comuna.value = newComuna }
 
     fun onTelefonoChange(newTelefono: String) {
-        val clean = newTelefono.replace(Regex("[^0-9+]"), "")
-        _telefono.value = clean
+        val clean = newTelefono.replace(Regex("[^0-9]"), "")
+        if (clean.length <= 9) {
+            _telefono.value = clean
+        }
     }
 
     private fun formatRutForSaving(rut: String): String {

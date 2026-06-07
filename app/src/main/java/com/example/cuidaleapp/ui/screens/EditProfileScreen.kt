@@ -1,6 +1,10 @@
 package com.example.cuidaleapp.ui.screens
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -8,6 +12,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Collections
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,8 +25,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextAlign
+import androidx.core.content.FileProvider
+import coil3.compose.AsyncImage
 import com.example.cuidaleapp.data.ChileData
 import com.example.cuidaleapp.ui.components.CuidaleExposedDropdown
 import com.example.cuidaleapp.ui.components.CuidaleTextField
@@ -25,8 +40,8 @@ import com.example.cuidaleapp.ui.components.HardShadowButton
 import com.example.cuidaleapp.ui.components.HardShadowPanel
 import com.example.cuidaleapp.ui.components.InputFieldLabel
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
-import com.example.cuidaleapp.utils.PhoneUtils
 import com.example.cuidaleapp.viewmodel.ProfileViewModel
+import java.io.File
 
 @Composable
 fun EditProfileScreen(
@@ -36,16 +51,45 @@ fun EditProfileScreen(
     val userData by viewModel.userData.collectAsState()
     val remoteState by viewModel.remoteState.collectAsState()
     val scrollState = rememberScrollState()
+    val context = LocalContext.current
 
-    var nombre by remember { mutableStateOf(userData.nombre) }
-    var nombreS by remember { mutableStateOf(userData.nombre_s) }
-    var apellidoPa by remember { mutableStateOf(userData.apellido_pa) }
-    var apellidoMa by remember { mutableStateOf(userData.apellido_ma) }
-    var telefono by remember { mutableStateOf(userData.telefono) }
-    var rut by remember { mutableStateOf(userData.rut) }
-    var region by remember { mutableStateOf(userData.region) }
-    var comuna by remember { mutableStateOf(userData.comuna) }
-    var descripcion by remember { mutableStateOf(userData.descripcion) }
+    var nombre by remember { mutableStateOf("") }
+    var nombreS by remember { mutableStateOf("") }
+    var apellidoPa by remember { mutableStateOf("") }
+    var apellidoMa by remember { mutableStateOf("") }
+    var telefono by remember { mutableStateOf("") }
+    var rut by remember { mutableStateOf("") }
+    var region by remember { mutableStateOf("") }
+    var comuna by remember { mutableStateOf("") }
+    var descripcion by remember { mutableStateOf("") }
+
+    // Sincronizar estados locales solo si no estamos guardando
+    LaunchedEffect(userData) {
+        if (userData.uid.isNotEmpty() && remoteState !is ProfileViewModel.RemoteState.Loading) {
+            nombre = userData.nombre
+            nombreS = userData.nombre_s
+            apellidoPa = userData.apellido_pa
+            apellidoMa = userData.apellido_ma
+            telefono = userData.telefono
+            rut = userData.rut
+            region = userData.region
+            comuna = userData.comuna
+            descripcion = userData.descripcion
+        }
+    }
+
+    // Observar estado remoto para navegar o mostrar errores
+    LaunchedEffect(remoteState) {
+        if (remoteState is ProfileViewModel.RemoteState.Success) {
+            viewModel.resetRemoteState()
+            onNavigateBack()
+        }
+    }
+
+    var showImageSourceDialog by remember { mutableStateOf(false) }
+    var tempPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    var showConfirmPhotoDialog by remember { mutableStateOf(false) }
 
     val customColors = CuidaleThemeExtras.customColors
     val shadowPalette = CuidaleThemeExtras.shadows
@@ -57,12 +101,132 @@ fun EditProfileScreen(
         ChileData.regions.find { it.name == region }?.comunas?.sorted() ?: emptyList()
     }
 
-    val canSave = nombre.isNotBlank() && apellidoPa.isNotBlank()
+    val isLoading = remoteState is ProfileViewModel.RemoteState.Loading
+    val canSave = nombre.isNotBlank() && apellidoPa.isNotBlank() && !isLoading
 
-    LaunchedEffect(remoteState) {
-        if (remoteState is ProfileViewModel.RemoteState.Success) {
-            onNavigateBack()
+    // Image Pickers
+    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { 
+            selectedImageUri = it
+            showConfirmPhotoDialog = true
         }
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        if (success) {
+            tempPhotoUri?.let { 
+                selectedImageUri = it
+                showConfirmPhotoDialog = true
+            }
+        }
+    }
+
+    if (showConfirmPhotoDialog && selectedImageUri != null) {
+        AlertDialog(
+            onDismissRequest = { showConfirmPhotoDialog = false },
+            title = { Text("Confirmar foto", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    AsyncImage(
+                        model = selectedImageUri,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(150.dp)
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text("¿Deseas establecer esta imagen como tu foto de perfil?", textAlign = TextAlign.Center)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.uploadProfilePicture(selectedImageUri!!)
+                    showConfirmPhotoDialog = false
+                    selectedImageUri = null
+                }) {
+                    Text("Establecer")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { 
+                    showConfirmPhotoDialog = false
+                    selectedImageUri = null
+                }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    if (showImageSourceDialog) {
+        AlertDialog(
+            onDismissRequest = { showImageSourceDialog = false },
+            title = { Text("Cambiar foto de perfil", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text("Selecciona una opción para tu nueva foto", style = MaterialTheme.typography.bodyMedium)
+                    
+                    Button(
+                        onClick = {
+                            val file = File(context.cacheDir, "temp_profile_${System.currentTimeMillis()}.jpg")
+                            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                            tempPhotoUri = uri
+                            cameraLauncher.launch(uri)
+                            showImageSourceDialog = false
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.CameraAlt, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Cámara")
+                    }
+
+                    Button(
+                        onClick = {
+                            galleryLauncher.launch("image/*")
+                            showImageSourceDialog = false
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Collections, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Galería")
+                    }
+
+                    if (userData.fotoUrl.isNotEmpty()) {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                        Button(
+                            onClick = {
+                                viewModel.deleteProfilePicture()
+                                showImageSourceDialog = false
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                contentColor = MaterialTheme.colorScheme.onErrorContainer
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.Delete, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Eliminar foto actual")
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showImageSourceDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 
     val gradient = CuidaleThemeExtras.gradient
@@ -112,6 +276,79 @@ fun EditProfileScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            // Profile Picture Section
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(130.dp)
+                        .clickable { showImageSourceDialog = true }
+                ) {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        shape = CircleShape,
+                        color = Color.White.copy(alpha = 0.2f),
+                        border = androidx.compose.foundation.BorderStroke(2.dp, Color.White.copy(alpha = 0.5f))
+                    ) {
+                        if (userData.fotoUrl.isNotEmpty()) {
+                            AsyncImage(
+                                model = userData.fotoUrl,
+                                contentDescription = "Profile Picture",
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(CircleShape),
+                                contentScale = ContentScale.Crop,
+                                onError = {
+                                    // Manejar error de carga si la imagen fue borrada de storage pero el link persiste
+                                }
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(80.dp),
+                                    tint = Color.White
+                                )
+                            }
+                        }
+                    }
+                    
+                    // Edit Overlay Button
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .offset(x = 4.dp, y = 4.dp)
+                            .size(40.dp)
+                            .background(MaterialTheme.colorScheme.primary, CircleShape)
+                            .padding(8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (userData.fotoUrl.isEmpty()) Icons.Default.CameraAlt else Icons.Default.Edit,
+                            contentDescription = "Change Picture",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    if (remoteState is ProfileViewModel.RemoteState.Loading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.matchParentSize().padding(4.dp),
+                            color = Color.White,
+                            strokeWidth = 3.dp
+                        )
+                    }
+                }
+            }
+
             // Form inside a Panel
             HardShadowPanel(
                 backgroundColor = customColors.panelBackground,
@@ -126,22 +363,24 @@ fun EditProfileScreen(
                     CuidaleTextField(
                         value = nombre,
                         onValueChange = { input -> 
-                            nombre = input.lowercase().replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+                            nombre = input.lowercase().split(" ").joinToString(" ") { it.replaceFirstChar { char -> char.uppercase() } }
                         },
                         placeholder = "Tu nombre",
                         containerColor = customColors.inputBackground,
-                        textColor = textColor
+                        textColor = textColor,
+                        enabled = !isLoading
                     )
 
                     InputFieldLabel(text = "Segundo Nombre (Opcional)", color = textColor)
                     CuidaleTextField(
                         value = nombreS,
                         onValueChange = { input ->
-                            nombreS = input.lowercase().replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+                            nombreS = input.lowercase().split(" ").joinToString(" ") { it.replaceFirstChar { char -> char.uppercase() } }
                         },
                         placeholder = "Segundo nombre",
                         containerColor = customColors.inputBackground,
-                        textColor = textColor
+                        textColor = textColor,
+                        enabled = !isLoading
                     )
 
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -150,11 +389,12 @@ fun EditProfileScreen(
                             CuidaleTextField(
                                 value = apellidoPa,
                                 onValueChange = { input ->
-                                    apellidoPa = input.lowercase().replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+                                    apellidoPa = input.lowercase().split(" ").joinToString(" ") { it.replaceFirstChar { char -> char.uppercase() } }
                                 },
                                 placeholder = "Apellido",
                                 containerColor = customColors.inputBackground,
-                                textColor = textColor
+                                textColor = textColor,
+                                enabled = !isLoading
                             )
                         }
                         Column(modifier = Modifier.weight(1f)) {
@@ -162,11 +402,12 @@ fun EditProfileScreen(
                             CuidaleTextField(
                                 value = apellidoMa,
                                 onValueChange = { input ->
-                                    apellidoMa = input.lowercase().replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+                                    apellidoMa = input.lowercase().split(" ").joinToString(" ") { it.replaceFirstChar { char -> char.uppercase() } }
                                 },
                                 placeholder = "Apellido",
                                 containerColor = customColors.inputBackground,
-                                textColor = textColor
+                                textColor = textColor,
+                                enabled = !isLoading
                             )
                         }
                     }
@@ -185,19 +426,16 @@ fun EditProfileScreen(
                     CuidaleTextField(
                         value = telefono,
                         onValueChange = { input ->
-                            if (input.isEmpty() || input.all { it.isDigit() || it == '+' }) {
-                                telefono = input
+                            val clean = input.replace(Regex("[^0-9]"), "")
+                            if (clean.length <= 9) {
+                                telefono = clean
                             }
                         },
-                        placeholder = "+569...",
+                        placeholder = "Ej: 912345678",
                         containerColor = customColors.inputBackground,
                         keyboardType = androidx.compose.ui.text.input.KeyboardType.Phone,
                         textColor = textColor,
-                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                            onDone = { 
-                                telefono = PhoneUtils.formatChileanPhone(telefono)
-                            }
-                        )
+                        enabled = !isLoading
                     )
 
                     CuidaleExposedDropdown(
@@ -208,7 +446,8 @@ fun EditProfileScreen(
                             region = it
                             comuna = ""
                         },
-                        placeholder = "Seleccionar Región"
+                        placeholder = "Seleccionar Región",
+                        enabled = !isLoading
                     )
 
                     CuidaleExposedDropdown(
@@ -217,7 +456,7 @@ fun EditProfileScreen(
                         selectedOption = comuna,
                         onOptionSelected = { comuna = it },
                         placeholder = "Seleccionar Comuna",
-                        enabled = region.isNotBlank()
+                        enabled = region.isNotBlank() && !isLoading
                     )
 
                     InputFieldLabel(text = "Sobre mí", color = textColor)
@@ -228,7 +467,8 @@ fun EditProfileScreen(
                         containerColor = customColors.inputBackground,
                         singleLine = false,
                         modifier = Modifier.height(100.dp),
-                        textColor = textColor
+                        textColor = textColor,
+                        enabled = !isLoading
                     )
                     Text(
                         text = "${descripcion.length}/300",
@@ -236,7 +476,7 @@ fun EditProfileScreen(
                         color = secondaryTextColor,
                         modifier = Modifier.align(Alignment.End)
                     )
-                    
+
                     Spacer(modifier = Modifier.height(12.dp))
 
                     if (remoteState is ProfileViewModel.RemoteState.Error) {

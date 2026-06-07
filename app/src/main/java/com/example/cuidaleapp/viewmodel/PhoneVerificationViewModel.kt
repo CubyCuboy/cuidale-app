@@ -58,8 +58,17 @@ class PhoneVerificationViewModel(application: Application) : AndroidViewModel(ap
     }
 
     fun onPhoneChange(newPhone: String) {
-        val clean = newPhone.replace(Regex("[^0-9+]"), "")
-        _phoneNumber.value = clean
+        val clean = newPhone.replace(Regex("[^0-9]"), "")
+        // If the user starts typing '9', limit to 9 digits. 
+        // If they pasted something with 56, we can handle it but let's keep it simple: 
+        // always limit to 9 digits as per requirement "must be strictly 9-digit Chilean format".
+        if (clean.length <= 9) {
+            _phoneNumber.value = clean
+        } else if (clean.startsWith("56") && clean.length <= 11) {
+            // Allow typing/pasting 56 + 9 digits but we'll trim it to the last 9 in the state
+            _phoneNumber.value = clean.takeLast(9)
+        }
+
         if (_uiState.value is PhoneVerificationUiState.Error) {
             _uiState.value = PhoneVerificationUiState.Step1Phone
         }
@@ -81,7 +90,7 @@ class PhoneVerificationViewModel(application: Application) : AndroidViewModel(ap
             return
         }
 
-        val formattedPhone = PhoneUtils.formatChileanPhone(phone)
+        val formattedPhone = PhoneUtils.formatForFirebase(phone)
 
         _uiState.value = PhoneVerificationUiState.Loading
 

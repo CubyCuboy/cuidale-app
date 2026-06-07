@@ -22,6 +22,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "cuidale app"
+rootProject.name = "cuidaleapp"
 include(":app")
  
