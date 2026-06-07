@@ -24,16 +24,27 @@ local.properties
 *.tmp
 *.temp
 *.log
+node_modules/
+venv/
+.venv/
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+target/
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
 
 # Environment
 .env
 .env.local
 *.env.*
 
-# Coverage reports
-coverage/
-htmlcov/
-.coverage
+# Editors
+.vscode/
+.idea/
 
 # System files
 .DS_Store
@@ -68,6 +79,12 @@ dmypy.json
 .eggs/
 
 # Compressed archives
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
+# Compressed files
 *.zip
 *.tar.gz
 *.tar.bz2

@@ -62,6 +62,7 @@ fun EditProfileScreen(
     var region by remember { mutableStateOf("") }
     var comuna by remember { mutableStateOf("") }
     var descripcion by remember { mutableStateOf("") }
+    var hasChanges by remember { mutableStateOf(false) }
 
     // Sincronizar estados locales solo si no estamos guardando
     LaunchedEffect(userData) {
@@ -75,6 +76,7 @@ fun EditProfileScreen(
             region = userData.region
             comuna = userData.comuna
             descripcion = userData.descripcion
+            hasChanges = false
         }
     }
 
@@ -82,7 +84,15 @@ fun EditProfileScreen(
     LaunchedEffect(remoteState) {
         if (remoteState is ProfileViewModel.RemoteState.Success) {
             viewModel.resetRemoteState()
+            viewModel.revertPendingPhotoChanges()
             onNavigateBack()
+        }
+    }
+    
+    // Revert changes when navigating back without saving
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.revertPendingPhotoChanges()
         }
     }
 
@@ -102,7 +112,20 @@ fun EditProfileScreen(
     }
 
     val isLoading = remoteState is ProfileViewModel.RemoteState.Loading
-    val canSave = nombre.isNotBlank() && apellidoPa.isNotBlank() && !isLoading
+    val canSave = (nombre.isNotBlank() && apellidoPa.isNotBlank() && !isLoading) || viewModel.hasPendingPhotoChange()
+    
+    // Check if form has changes
+    val hasFormChanges = remember(nombre, nombreS, apellidoPa, apellidoMa, telefono, region, comuna, descripcion, userData) {
+        nombre != userData.nombre || 
+        nombreS != userData.nombre_s || 
+        apellidoPa != userData.apellido_pa || 
+        apellidoMa != userData.apellido_ma || 
+        telefono != userData.telefono || 
+        region != userData.region || 
+        comuna != userData.comuna || 
+        descripcion != userData.descripcion
+    }
+    val canSaveFinal = canSave && (hasFormChanges || viewModel.hasPendingPhotoChange())
 
     // Image Pickers
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -294,9 +317,10 @@ fun EditProfileScreen(
                         color = Color.White.copy(alpha = 0.2f),
                         border = androidx.compose.foundation.BorderStroke(2.dp, Color.White.copy(alpha = 0.5f))
                     ) {
-                        if (userData.fotoUrl.isNotEmpty()) {
+                        val displayPhotoUrl = viewModel.getDisplayPhotoUrl()
+                        if (displayPhotoUrl.isNotEmpty()) {
                             AsyncImage(
-                                model = userData.fotoUrl,
+                                model = displayPhotoUrl,
                                 contentDescription = "Profile Picture",
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -491,7 +515,7 @@ fun EditProfileScreen(
                     HardShadowButton(
                         text = if (remoteState is ProfileViewModel.RemoteState.Loading) "Guardando..." else "Guardar Cambios",
                         onClick = {
-                            if (canSave) {
+                            if (canSaveFinal) {
                                 val updatedUser = userData.copy(
                                     nombre = nombre.trim(),
                                     nombre_s = nombreS.trim(),
@@ -510,7 +534,7 @@ fun EditProfileScreen(
                         contentColor = MaterialTheme.colorScheme.onPrimary,
                         shadowColor = shadowPalette.hardShadowPrimary,
                         isDark = customColors.isDark,
-                        enabled = remoteState !is ProfileViewModel.RemoteState.Loading && canSave,
+                        enabled = remoteState !is ProfileViewModel.RemoteState.Loading && canSaveFinal,
                         icon = if (remoteState is ProfileViewModel.RemoteState.Loading) null else Icons.Default.Save
                     )
                 }
