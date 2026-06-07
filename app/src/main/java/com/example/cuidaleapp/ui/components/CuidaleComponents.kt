@@ -1730,3 +1730,286 @@ fun CuidaleMultiImagePicker(
         }
     }
 }
+
+@Composable
+fun CuidaleDrawerContent(
+    nombre: String,
+    apellido: String,
+    fotoUrl: String,
+    isDark: Boolean,
+    onToggleTheme: () -> Unit,
+    onProfileClick: () -> Unit,
+    onFichaClick: () -> Unit,
+    onLogoutClick: () -> Unit,
+    onCloseClick: () -> Unit
+) {
+    val colors = MaterialTheme.colorScheme
+    val customColors = CuidaleThemeExtras.customColors
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(customColors.panelBackground)
+            .padding(24.dp)
+            .windowInsetsPadding(WindowInsets.statusBars)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onCloseClick) {
+                Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = colors.onSurface)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = if (isDark) Icons.Default.DarkMode else Icons.Default.LightMode,
+                    contentDescription = null,
+                    tint = colors.primary
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Modo Oscuro",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.onSurface
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Switch(
+                    checked = isDark,
+                    onCheckedChange = { onToggleTheme() }
+                )
+            }
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(bottom = 24.dp), color = colors.outlineVariant.copy(alpha = 0.5f))
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .size(100.dp)
+                    .clip(CircleShape)
+                    .background(customColors.avatarBackground),
+                contentAlignment = Alignment.Center
+            ) {
+                if (fotoUrl.isNotEmpty() && !fotoUrl.startsWith("res:")) {
+                    AsyncImage(
+                        model = fotoUrl,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        error = androidx.compose.ui.graphics.painter.ColorPainter(customColors.avatarBackground)
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = null,
+                        modifier = Modifier.size(50.dp),
+                        tint = colors.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "$nombre $apellido",
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                color = colors.onSurface,
+                textAlign = TextAlign.Center
+            )
+        }
+
+        Spacer(modifier = Modifier.height(48.dp))
+
+        NavigationDrawerItem(
+            label = { Text(stringResource(R.string.menu_item_profile)) },
+            selected = false,
+            onClick = onProfileClick,
+            icon = { Icon(Icons.Default.Person, contentDescription = null) },
+            colors = NavigationDrawerItemDefaults.colors(unselectedContainerColor = Color.Transparent)
+        )
+
+        NavigationDrawerItem(
+            label = { Text(stringResource(R.string.menu_item_ficha)) },
+            selected = false,
+            onClick = onFichaClick,
+            icon = { Icon(Icons.Default.Badge, contentDescription = null) },
+            colors = NavigationDrawerItemDefaults.colors(unselectedContainerColor = Color.Transparent)
+        )
+
+        Spacer(modifier = Modifier.weight(1f))
+
+        HardShadowButton(
+            text = stringResource(R.string.menu_logout),
+            containerColor = colors.error,
+            contentColor = Color.White,
+            shadowColor = colors.errorContainer,
+            isDark = customColors.isDark,
+            onClick = onLogoutClick,
+            icon = Icons.Default.Logout
+        )
+    }
+}
+
+@Composable
+fun CuidaleSearchContent(
+    allRegions: List<String>,
+    selectedRegion: String,
+    onRegionSelected: (String) -> Unit,
+    allCommunes: List<String>,
+    selectedCommunes: List<String>,
+    onCommuneToggle: (String) -> Unit,
+    onClearFilters: () -> Unit,
+    onClose: () -> Unit
+) {
+    val colors = MaterialTheme.colorScheme
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(R.string.search_button),
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                    color = colors.primary
+                )
+                if (selectedRegion.isNotEmpty() || selectedCommunes.isNotEmpty()) {
+                    TextButton(
+                        onClick = onClearFilters,
+                        modifier = Modifier.padding(start = 8.dp)
+                    ) {
+                        Text(
+                            text = "Limpiar Filtros",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                            color = colors.error
+                        )
+                    }
+                }
+            }
+            IconButton(onClick = onClose) {
+                Icon(Icons.Default.KeyboardArrowDown, contentDescription = null)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        CuidaleExposedDropdown(
+            label = "Filtrar por región",
+            options = allRegions,
+            selectedOption = selectedRegion,
+            onOptionSelected = onRegionSelected,
+            placeholder = "Seleccionar región..."
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        CuidaleMultiSelectDropdown(
+            label = stringResource(R.string.search_filter_commune),
+            options = allCommunes,
+            selectedOptions = selectedCommunes,
+            onOptionToggled = onCommuneToggle,
+            maxSelection = 3,
+            placeholder = if (selectedRegion.isEmpty()) "Selecciona una región primero" else stringResource(R.string.search_max_communes),
+            enabled = selectedRegion.isNotEmpty()
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+@Composable
+fun CuidaleCircularMenuButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: @Composable () -> Unit = {
+        Icon(
+            imageVector = Icons.Default.Menu,
+            contentDescription = null,
+            tint = Color.White
+        )
+    }
+) {
+    val shadows = CuidaleThemeExtras.shadows
+
+    Box(
+        modifier = modifier
+            .size(56.dp)
+            .offset(x = 4.dp, y = 4.dp)
+            .background(shadows.hardShadowPrimary.copy(alpha = 0.3f), CircleShape)
+    ) {
+        IconButton(
+            onClick = onClick,
+            modifier = Modifier
+                .matchParentSize()
+                .offset(x = (-4).dp, y = (-4).dp)
+                .background(MaterialTheme.colorScheme.primary, CircleShape)
+        ) {
+            icon()
+        }
+    }
+}
+
+@Composable
+fun CuidaleUserCard(
+    nombre: String,
+    apellido: String,
+    fotoUrl: String,
+    onClick: () -> Unit
+) {
+    val shadows = CuidaleThemeExtras.shadows
+    val colors = MaterialTheme.colorScheme
+    val customColors = CuidaleThemeExtras.customColors
+
+    HardShadowPanel(
+        backgroundColor = customColors.panelBackground,
+        shadowColor = shadows.hardShadowPrimary.copy(alpha = 0.3f),
+        modifier = Modifier.clickable { onClick() }
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(CircleShape)
+                    .background(customColors.avatarBackground),
+                contentAlignment = Alignment.Center
+            ) {
+                if (fotoUrl.isNotEmpty() && !fotoUrl.startsWith("res:")) {
+                    AsyncImage(
+                        model = fotoUrl,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        error = androidx.compose.ui.graphics.painter.ColorPainter(customColors.avatarBackground)
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = null,
+                        modifier = Modifier.size(32.dp),
+                        tint = colors.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Column {
+                Text(
+                    text = "$nombre $apellido",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = colors.onSurface
+                )
+            }
+        }
+    }
+}

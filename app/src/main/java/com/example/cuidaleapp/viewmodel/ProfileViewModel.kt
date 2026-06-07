@@ -37,6 +37,17 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     private val _remoteState = MutableStateFlow<RemoteState>(RemoteState.Idle)
     val remoteState: StateFlow<RemoteState> = _remoteState.asStateFlow()
 
+    private val _otherUserData = MutableStateFlow<UserData?>(null)
+    val otherUserData: StateFlow<UserData?> = _otherUserData.asStateFlow()
+
+    private val _otherProfileState = MutableStateFlow<RemoteState>(RemoteState.Idle)
+    val otherProfileState: StateFlow<RemoteState> = _otherProfileState.asStateFlow()
+
+
+    private val _otherFichaState = MutableStateFlow<FichaState>(FichaState.Loading)
+    val otherFichaState: StateFlow<FichaState> = _otherFichaState.asStateFlow()
+
+
     sealed class RemoteState {
         object Idle : RemoteState()
         object Loading : RemoteState()
@@ -45,7 +56,6 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     }
 
     init {
-        // Initial sync when ViewModel is created
         refreshFromFirestore()
     }
 
@@ -92,20 +102,16 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 ref.putFile(uri).await()
                 val downloadUrl = ref.downloadUrl.await().toString().replace("\"", "")
 
-                // 2. Update Firestore
                 db.collection("usuarios").document(uid).update("fotoUrl", downloadUrl).await()
 
-                // 3. Delete old photo ONLY after successful upload of the new one
                 if (oldPhotoUrl.isNotEmpty() && oldPhotoUrl.contains("firebasestorage.googleapis.com")) {
                     try {
                         val oldRef = storage.getReferenceFromUrl(oldPhotoUrl)
                         oldRef.delete().await()
                     } catch (e: Exception) {
-                        // Ignore deletion errors for old data
                     }
                 }
 
-                // 4. Update Local Session & State
                 val updatedUser = _userData.value.copy(fotoUrl = downloadUrl)
                 userSession.saveUser(updatedUser)
                 _userData.value = updatedUser
@@ -181,6 +187,44 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun loadOtherUserProfile(targetUid: String) {
+        if (targetUid.isEmpty()) return
+
+        viewModelScope.launch {
+            _otherProfileState.value = RemoteState.Loading
+            _otherFichaState.value = FichaState.Loading
+            _otherUserData.value = null // Clear previous data
+
+            try {
+                // 1. Fetch User Profile
+                val userDoc = db.collection("usuarios").document(targetUid).get().await()
+
+                if (userDoc.exists()) {
+                    val user = userDoc.toObject(UserData::class.java)?.copy(uid = targetUid)
+                    _otherUserData.value = user
+                    _otherProfileState.value = RemoteState.Success
+
+                    // 2. Fetch Ficha (Technical File)
+                    val fichaDoc = db.collection("fichas").document(targetUid).get().await()
+                    if (fichaDoc.exists()) {
+                        _otherFichaState.value = FichaState.View(fichaDoc.data ?: emptyMap())
+                    } else {
+                        _otherFichaState.value = FichaState.NotFound
+                    }
+                } else {
+                    _otherProfileState.value = RemoteState.Error("El usuario con ID $targetUid no existe en la base de datos.")
+                    _otherFichaState.value = FichaState.Error("Usuario no encontrado")
+                }
+            } catch (e: Exception) {
+                val errorMsg = e.localizedMessage ?: "Error desconocido al cargar perfil"
+                _otherProfileState.value = RemoteState.Error(errorMsg)
+                _otherFichaState.value = FichaState.Error(errorMsg)
+            }
+        }
+    }
+
+
+
     fun refreshUserData() {
         _userData.value = userSession.getUser()
     }
@@ -191,3 +235,4 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         onComplete()
     }
 }
+
