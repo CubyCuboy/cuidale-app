@@ -42,7 +42,8 @@ fun MenuScreen(
     onLogout: () -> Unit,
     onViewProfile: () -> Unit,
     onViewFicha: () -> Unit,
-    onUserClick: (String) -> Unit
+    onUserClick: (String) -> Unit,
+    onTabSelected: (String) -> Unit
 ) {
     val gradient = CuidaleThemeExtras.gradient
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -143,6 +144,9 @@ fun MenuScreen(
                                 )
                             }
                         )
+                    },
+                    bottomBar = {
+                        CuidaleBottomBar(selectedTab = "home", onTabSelected = onTabSelected)
                     },
                     containerColor = Color.Transparent
                 ) { innerPadding ->

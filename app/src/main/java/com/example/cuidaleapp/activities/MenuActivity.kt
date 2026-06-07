@@ -2,9 +2,8 @@ package com.example.cuidaleapp.activities
 
 import android.content.Intent
 import android.os.Bundle
-import androidx.activity.compose.BackHandler
-import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.*
@@ -27,6 +26,8 @@ sealed class MenuNavigation {
     data class Ficha(val startInEditMode: Boolean = false, val returnTo: MenuNavigation = Profile) : MenuNavigation()
     object Search : MenuNavigation()
     object Settings : MenuNavigation()
+    object Chats : MenuNavigation()
+    object Notifications : MenuNavigation()
     data class OtherFicha(val uid: String) : MenuNavigation()
 }
 
@@ -56,20 +57,10 @@ class MenuActivity : ComponentActivity() {
                     is Ficha -> (currentScreen as Ficha).returnTo
                     Search -> Main
                     Settings -> Profile
+                    Chats -> Main
+                    Notifications -> Main
                     is OtherFicha -> Main
-                    Main -> Main 
-                }
-            }
-
-            BackHandler(enabled = currentScreen != Main) {
-                currentScreen = when (currentScreen) {
-                    Profile -> Main
-                    EditProfile -> Profile
-                    is Ficha -> (currentScreen as Ficha).returnTo
-                    Search -> Main
-                    Settings -> Profile
-                    is OtherFicha -> Main
-                    Main -> Main // Should not happen due to enabled condition
+                    Main -> Main
                 }
             }
 
@@ -83,7 +74,7 @@ class MenuActivity : ComponentActivity() {
             }
 
             CuidaleAppTheme(darkTheme = isDark) {
-                when (currentScreen) {
+                when (val cs = currentScreen) {
                     Main -> {
                         MenuScreen(
                             userData = userData,
@@ -93,7 +84,14 @@ class MenuActivity : ComponentActivity() {
                             onLogout = { menuViewModel.logout() },
                             onViewProfile = { currentScreen = Profile },
                             onViewFicha = { currentScreen = Ficha(startInEditMode = false, returnTo = Main) },
-                            onUserClick = { uid -> currentScreen = OtherFicha(uid) }
+                            onUserClick = { uid -> currentScreen = OtherFicha(uid) },
+                            onTabSelected = { tab ->
+                                currentScreen = when (tab) {
+                                    "chats" -> Chats
+                                    "notifications" -> Notifications
+                                    else -> Main
+                                }
+                            }
                         )
                     }
                     Profile -> {
@@ -127,13 +125,12 @@ class MenuActivity : ComponentActivity() {
                         )
                     }
                     is Ficha -> {
-                        val fichaNav = currentScreen as Ficha
                         FichaScreen(
                             viewModel = fichaViewModel,
                             profileViewModel = profileViewModel,
-                            startInEditMode = fichaNav.startInEditMode,
+                            startInEditMode = cs.startInEditMode,
                             onNavigateBack = { 
-                                currentScreen = fichaNav.returnTo
+                                currentScreen = cs.returnTo
                             }
                         )
                     }
@@ -143,11 +140,27 @@ class MenuActivity : ComponentActivity() {
                             onUserClick = { uid -> currentScreen = OtherFicha(uid) }
                         )
                     }
-
+                    Chats -> {
+                        ChatsScreen(onTabSelected = { tab ->
+                            currentScreen = when (tab) {
+                                "notifications" -> Notifications
+                                "home" -> Main
+                                else -> Chats
+                            }
+                        })
+                    }
+                    Notifications -> {
+                        NotificationsScreen(onTabSelected = { tab ->
+                            currentScreen = when (tab) {
+                                "chats" -> Chats
+                                "home" -> Main
+                                else -> Notifications
+                            }
+                        })
+                    }
                     is OtherFicha -> {
-                        val otherScreen = currentScreen as OtherFicha
-                        LaunchedEffect(otherScreen.uid) {
-                            profileViewModel.loadOtherUserProfile(otherScreen.uid)
+                        LaunchedEffect(cs.uid) {
+                            profileViewModel.loadOtherUserProfile(cs.uid)
                         }
                         OtherFichaScreen(
                             profileViewModel = profileViewModel,
