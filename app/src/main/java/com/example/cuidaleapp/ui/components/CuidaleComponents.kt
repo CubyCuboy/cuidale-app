@@ -1736,6 +1736,8 @@ fun CuidaleDrawerContent(
     nombre: String,
     apellido: String,
     fotoUrl: String,
+    comuna: String = "",
+    especialidad: String = "",
     isDark: Boolean,
     onToggleTheme: () -> Unit,
     onProfileClick: () -> Unit,
@@ -1817,6 +1819,52 @@ fun CuidaleDrawerContent(
                 color = colors.onSurface,
                 textAlign = TextAlign.Center
             )
+            
+            // Mostrar comuna si está disponible
+            if (comuna.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.background(colors.primary.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Place,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = colors.primary
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = comuna,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colors.primary,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+            
+            // Mostrar especialidad si está disponible
+            if (especialidad.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.background(colors.secondary.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.School,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = colors.secondary
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = especialidad,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colors.secondary,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(48.dp))

@@ -289,7 +289,8 @@ fun ProfileScreen(
 
                     when (fichaState) {
                         is FichaState.Loading -> {
-                            CircularProgressIndicator(color = accentColor, modifier = Modifier.padding(24.dp))
+                            // Skeleton loading animation for ficha section
+                            FichaSkeletonLoader()
                         }
                         is FichaState.View -> {
                             ProfileDetailView(

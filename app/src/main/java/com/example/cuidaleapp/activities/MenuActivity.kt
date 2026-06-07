@@ -88,6 +88,7 @@ class MenuActivity : ComponentActivity() {
                         MenuScreen(
                             userData = userData,
                             searchViewModel = searchViewModel,
+                            fichaViewModel = fichaViewModel,
                             isDark = isDark,
                             onToggleTheme = { menuViewModel.toggleTheme() },
                             onLogout = { menuViewModel.logout() },

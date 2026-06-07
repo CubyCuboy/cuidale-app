@@ -150,9 +150,8 @@ fun FichaScreen(
                                     // Esto previene el parpadeo
                                     null
                                 } else {
-                                    Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                                        CircularProgressIndicator(color = accentColor)
-                                    }
+                                    // Skeleton loading animation for ficha screen
+                                    FichaSkeletonLoader(fullScreen = true, accentColor = accentColor)
                                 }
                             }
                             is FichaState.View -> {

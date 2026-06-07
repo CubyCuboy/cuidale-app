@@ -30,6 +30,7 @@ import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.SearchState
 import com.example.cuidaleapp.viewmodel.SearchViewModel
+import com.example.cuidaleapp.viewmodel.FichaViewModel
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,6 +38,7 @@ import kotlinx.coroutines.launch
 fun MenuScreen(
     userData: UserData,
     searchViewModel: SearchViewModel,
+    fichaViewModel: FichaViewModel? = null,
     isDark: Boolean,
     onToggleTheme: () -> Unit,
     onLogout: () -> Unit,
@@ -52,6 +54,14 @@ fun MenuScreen(
     val isRefreshing by searchViewModel.isRefreshing.collectAsState()
     val selectedRegion by searchViewModel.selectedRegion.collectAsState()
     val selectedCommunes by searchViewModel.selectedCommunes.collectAsState()
+    
+    // Obtener datos de ficha si el viewModel está disponible
+    val fichaData by (fichaViewModel?.state ?: remember { mutableStateOf(com.example.cuidaleapp.viewmodel.FichaState.Loading) }).collectAsState()
+    val fichaDataMap = if (fichaData is com.example.cuidaleapp.viewmodel.FichaState.View) {
+        (fichaData as com.example.cuidaleapp.viewmodel.FichaState.View).data
+    } else {
+        emptyMap()
+    }
     
     val pullToRefreshState = rememberPullToRefreshState()
     val sheetState = rememberModalBottomSheetState()
@@ -93,6 +103,8 @@ fun MenuScreen(
                             nombre = userData.nombre,
                             apellido = userData.apellido_pa,
                             fotoUrl = userData.fotoUrl,
+                            comuna = userData.comuna,
+                            especialidad = fichaDataMap["especializacion"]?.toString() ?: "",
                             isDark = isDark,
                             onToggleTheme = onToggleTheme,
                             onProfileClick = {
