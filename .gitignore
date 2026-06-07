@@ -3,41 +3,42 @@
 *.class
 *.o
 *.obj
-*.so
-*.a
-*.dll
-*.exe
 *.out
+build/
+dist/
 
 # Dependencies
 .gradle/
-build/
-dist/
+node_modules/
+venv/
+.venv/
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+target/
 
 # Logs and temp files
 *.log
 *.tmp
 *.swp
 
-# Editors
-.idea/
-*.iml
-*.iws
-.vscode/
-
 # Environment
 .env
 .env.local
 *.env.*
 
-# Coverage reports
+# Editors
+.vscode/
+.idea/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Coverage
 coverage/
 htmlcov/
 .coverage
-
-# OS generated files
-.DS_Store
-Thumbs.db
 
 # Compressed files
 *.zip

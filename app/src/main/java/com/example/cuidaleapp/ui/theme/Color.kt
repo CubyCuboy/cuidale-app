@@ -3,29 +3,29 @@ package com.example.cuidaleapp.ui.theme
 import androidx.compose.ui.graphics.Color
 
 
-// Light Theme - Refined palette for elegance and reduced eye strain
-val CuidaleBlueTopLight = Color(0xFF5B7C99)  // Muted blue-grey
-val CuidaleBlueBottomLight = Color(0xFF6B9AA8)  // Softer teal
-val CuidaleSurfaceLight = Color(0xFFF5F7FA)  // Very light grey-blue, almost white
-val CuidaleSurfaceSoftLight = Color(0xFFE8EEF2)  // Soft grey-blue for panels
-val CuidaleSurfaceSoftLightVariant = Color(0xFFDCE4EA)  // For gradient
-val CuidalePrimaryLight = Color(0xFF4A5FB8)  // Refined deep blue
-val CuidalePrimaryVariantLight = Color(0xFF5E5CB8)  // Muted purple-blue
+// Light Theme - Vibrant and lively palette with gradient background
+val CuidaleBlueTopLight = Color(0xFF4A90E2)  // Vibrant sky blue
+val CuidaleBlueBottomLight = Color(0xFF50C878)  // Emerald green for gradient
+val CuidaleSurfaceLight = Color(0xFFF0F4F8)  // Soft light blue-grey
+val CuidaleSurfaceSoftLight = Color(0xFFE3EBF2)  // Soft blue-grey for panels
+val CuidaleSurfaceSoftLightVariant = Color(0xFFD6E0EB)  // For gradient
+val CuidalePrimaryLight = Color(0xFF3B82F6)  // Vibrant blue
+val CuidalePrimaryVariantLight = Color(0xFF8B5CF6)  // Vibrant purple
 val CuidaleOnPrimaryLight = Color(0xFFFFFFFF)
-val CuidaleOnSurfaceLight = Color(0xFF2D3748)  // Soft black, not harsh
-val CuidaleOnSurfaceSoftLight = Color(0xFF5A6C7D)  // Muted grey-blue text
-val CuidaleBorderLight = Color(0xFFD1D9E0)  // Subtle border
-val CuidaleLinkLight = Color(0xFF4C56B8)  // Refined link color
-val CuidaleErrorLight = Color(0xFFC5303A)  // Softer red
-val CuidaleWarningLight = Color(0xFFD97742)  // Muted orange
-val CuidaleErrorContainerLight = Color(0xFFFEE8E8)  // Very light red tint
-val CuidaleWarningContainerLight = Color(0xFFFFF0E8)  // Very light orange tint
-val CuidaleSuccessLight = Color(0xFF2D9D78)  // Refined green
-val CuidaleSuccessStrongLight = Color(0xFF268A5E)  // Deeper green
+val CuidaleOnSurfaceLight = Color(0xFF1E293B)  // Deep slate
+val CuidaleOnSurfaceSoftLight = Color(0xFF475569)  // Muted slate text
+val CuidaleBorderLight = Color(0xFFCBD5E1)  // Subtle border
+val CuidaleLinkLight = Color(0xFF3B82F6)  // Bright link color
+val CuidaleErrorLight = Color(0xFFEF4444)  // Vivid red
+val CuidaleWarningLight = Color(0xFFF59E0B)  // Vivid amber
+val CuidaleErrorContainerLight = Color(0xFFFEE2E2)  // Very light red tint
+val CuidaleWarningContainerLight = Color(0xFFFFF3E0)  // Very light amber tint
+val CuidaleSuccessLight = Color(0xFF10B981)  // Vivid emerald
+val CuidaleSuccessStrongLight = Color(0xFF059669)  // Deeper emerald
 
-val CuidaleShadowBlueLight = Color(0x404A5FB8)  // Transparent shadow
-val CuidaleShadowMintLight = Color(0x406B9AA8)  // Transparent teal shadow
-val CuidaleShadowLavenderLight = Color(0x407E7CB8)  // Transparent lavender shadow
+val CuidaleShadowBlueLight = Color(0x603B82F6)  // Transparent shadow
+val CuidaleShadowMintLight = Color(0x6050C878)  // Transparent teal shadow
+val CuidaleShadowLavenderLight = Color(0x608B5CF6)  // Transparent lavender shadow
 
 val CuidaleBlueTopDark = Color(0xFF0D1B2A)
 val CuidaleBlueBottomDark = Color(0xFF133B5C)

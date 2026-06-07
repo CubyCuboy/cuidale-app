@@ -37,6 +37,12 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     private val _remoteState = MutableStateFlow<RemoteState>(RemoteState.Idle)
     val remoteState: StateFlow<RemoteState> = _remoteState.asStateFlow()
 
+    // Temporary photo URL for edit session - only committed on save
+    private var _tempPhotoUrl: String? = null
+    private var _pendingPhotoOperation: PhotoOperation? = null
+    
+    enum class PhotoOperation { UPLOAD, DELETE }
+
     private val _otherUserData = MutableStateFlow<UserData?>(null)
     val otherUserData: StateFlow<UserData?> = _otherUserData.asStateFlow()
 
@@ -65,6 +71,18 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         prefs.edit().putBoolean("dark_mode", newValue).apply()
     }
 
+    // Revert pending photo changes and restore original
+    fun revertPendingPhotoChanges() {
+        val originalUrl = _userData.value.fotoUrl
+        _tempPhotoUrl = null
+        _pendingPhotoOperation = null
+        
+        // Restore UI to original state
+        val restoredUser = _userData.value.copy(fotoUrl = originalUrl)
+        userSession.saveUser(restoredUser)
+        _userData.value = restoredUser
+    }
+    
     fun refreshFromFirestore() {
         val uid = auth.currentUser?.uid ?: return
         viewModelScope.launch {
@@ -88,35 +106,42 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     fun resetRemoteState() {
         _remoteState.value = RemoteState.Idle
     }
+    
+    // Get the display photo URL (committed or pending)
+    fun getDisplayPhotoUrl(): String {
+        return _tempPhotoUrl ?: _userData.value.fotoUrl
+    }
+    
+    // Check if there's a pending photo change
+    fun hasPendingPhotoChange(): Boolean = _tempPhotoUrl != null || _pendingPhotoOperation != null
+    
+    // Reset pending photo changes
+    fun resetPendingPhotoChanges() {
+        _tempPhotoUrl = null
+        _pendingPhotoOperation = null
+    }
 
     fun uploadProfilePicture(uri: Uri) {
         val uid = auth.currentUser?.uid ?: return
         val oldPhotoUrl = _userData.value.fotoUrl
 
         viewModelScope.launch {
-            _remoteState.value = RemoteState.Loading
             try {
                 // 1. Upload new photo first with unique name
-                val filename = "profile_${System.currentTimeMillis()}.jpg"
-                val ref = storage.reference.child("profiles/$uid/$filename")
+                val filename = \"profile_${System.currentTimeMillis()}.jpg\"
+                val ref = storage.reference.child(\"profiles/$uid/$filename\")
                 ref.putFile(uri).await()
                 val downloadUrl = ref.downloadUrl.await().toString().replace("\"", "")
 
-                db.collection("usuarios").document(uid).update("fotoUrl", downloadUrl).await()
-
-                if (oldPhotoUrl.isNotEmpty() && oldPhotoUrl.contains("firebasestorage.googleapis.com")) {
-                    try {
-                        val oldRef = storage.getReferenceFromUrl(oldPhotoUrl)
-                        oldRef.delete().await()
-                    } catch (e: Exception) {
-                    }
-                }
-
+                // Store temporarily - don't update Firestore yet
+                _tempPhotoUrl = downloadUrl
+                _pendingPhotoOperation = PhotoOperation.UPLOAD
+                
+                // Update UI state immediately for preview
                 val updatedUser = _userData.value.copy(fotoUrl = downloadUrl)
                 userSession.saveUser(updatedUser)
                 _userData.value = updatedUser
                 
-                _remoteState.value = RemoteState.Success
             } catch (e: Exception) {
                 _remoteState.value = RemoteState.Error(e.message ?: "Error al subir imagen")
             }
@@ -128,30 +153,61 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         val oldPhotoUrl = _userData.value.fotoUrl
 
         viewModelScope.launch {
-            _remoteState.value = RemoteState.Loading
             try {
-                // 1. Update Firestore first
-                db.collection("usuarios").document(uid).update("fotoUrl", "").await()
-
-                // 2. Then delete from storage
+                // Mark for deletion - will be processed on save
+                _tempPhotoUrl = ""
+                _pendingPhotoOperation = PhotoOperation.DELETE
+                
+                // Update UI state immediately for preview
+                val updatedUser = _userData.value.copy(fotoUrl = "")
+                userSession.saveUser(updatedUser)
+                _userData.value = updatedUser
+                
+            } catch (e: Exception) {
+                _remoteState.value = RemoteState.Error(e.message ?: "Error al eliminar imagen")
+            }
+        }
+    }
+    
+    // Commit pending photo changes to Firestore
+    private suspend fun commitPhotoChanges(uid: String) {
+        val operation = _pendingPhotoOperation ?: return
+        val oldPhotoUrl = _userData.value.fotoUrl
+        
+        when (operation) {
+            PhotoOperation.UPLOAD -> {
+                // Update Firestore with new photo URL
+                db.collection("usuarios").document(uid).update("fotoUrl", _tempPhotoUrl ?: "").await()
+                
+                // Delete old photo from storage if exists
                 if (oldPhotoUrl.isNotEmpty() && oldPhotoUrl.contains("firebasestorage.googleapis.com")) {
                     try {
                         val oldRef = storage.getReferenceFromUrl(oldPhotoUrl)
                         oldRef.delete().await()
                     } catch (e: Exception) {
-                        // Ignore storage deletion errors to ensure UI consistency
+                        // Ignore storage deletion errors
                     }
                 }
-
-                val updatedUser = _userData.value.copy(fotoUrl = "")
-                userSession.saveUser(updatedUser)
-                _userData.value = updatedUser
+            }
+            PhotoOperation.DELETE -> {
+                // Update Firestore to remove photo URL
+                db.collection("usuarios").document(uid).update("fotoUrl", "").await()
                 
-                _remoteState.value = RemoteState.Success
-            } catch (e: Exception) {
-                _remoteState.value = RemoteState.Error(e.message ?: "Error al eliminar imagen")
+                // Delete photo from storage if exists
+                if (oldPhotoUrl.isNotEmpty() && oldPhotoUrl.contains("firebasestorage.googleapis.com")) {
+                    try {
+                        val oldRef = storage.getReferenceFromUrl(oldPhotoUrl)
+                        oldRef.delete().await()
+                    } catch (e: Exception) {
+                        // Ignore storage deletion errors
+                    }
+                }
             }
         }
+        
+        // Clear pending state
+        _tempPhotoUrl = null
+        _pendingPhotoOperation = null
     }
 
     fun updateProfile(updatedUser: UserData) {
@@ -161,10 +217,17 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             _remoteState.value = RemoteState.Loading
             try {
                 val sanitizedPhone = PhoneUtils.formatChileanPhone(updatedUser.telefono)
-                val finalUser = updatedUser.copy(telefono = sanitizedPhone)
+                var finalUser = updatedUser.copy(telefono = sanitizedPhone)
+
+                // Commit pending photo changes first if any
+                if (hasPendingPhotoChange()) {
+                    commitPhotoChanges(uid)
+                    // Update finalUser with the new photo URL
+                    finalUser = finalUser.copy(fotoUrl = getDisplayPhotoUrl())
+                }
 
                 // Update in Firestore
-                val userMap = mapOf(
+                val userMap = mutableMapOf(
                     "nombre" to finalUser.nombre,
                     "nombre_s" to finalUser.nombre_s,
                     "apellido_pa" to finalUser.apellido_pa,
@@ -174,11 +237,20 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     "comuna" to finalUser.comuna,
                     "descripcion" to finalUser.descripcion
                 )
+                
+                // Add fotoUrl to update if there was a photo change
+                if (hasPendingPhotoChange()) {
+                    userMap["fotoUrl"] = getDisplayPhotoUrl()
+                }
+                
                 db.collection("usuarios").document(uid).update(userMap).await()
                 
                 // Update in Session
                 userSession.saveUser(finalUser)
                 _userData.value = finalUser
+                
+                // Reset pending photo changes after successful save
+                resetPendingPhotoChanges()
                 
                 _remoteState.value = RemoteState.Success
             } catch (e: Exception) {
