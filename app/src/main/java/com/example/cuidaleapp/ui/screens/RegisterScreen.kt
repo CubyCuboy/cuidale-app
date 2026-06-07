@@ -410,7 +410,7 @@ fun RegisterPersonalStep(
             CuidaleTextField(
                 value = telefono,
                 onValueChange = viewModel::onTelefonoChange,
-                placeholder = "+569...",
+                placeholder = "Ej: 912345678",
                 containerColor = CuidaleThemeExtras.customColors.inputBackground,
                 keyboardType = KeyboardType.Phone,
                 imeAction = androidx.compose.ui.text.input.ImeAction.Done,

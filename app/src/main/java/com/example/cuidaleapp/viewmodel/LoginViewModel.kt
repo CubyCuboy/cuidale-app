@@ -57,7 +57,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                         if (userData != null) {
                             if (userData.verificado) {
                                 userSession.saveUser(userData)
-                                _uiState.value = LoginUiState.Success
+                                _uiState.value = LoginUiState.Transition(userData)
                             } else {
                                 auth.signOut()
                                 userSession.clear()

@@ -39,11 +39,14 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing
 
+    private val _isPartialLoading = MutableStateFlow(false)
+    val isPartialLoading: StateFlow<Boolean> = _isPartialLoading
+
     init {
         checkProfile()
     }
 
-    fun checkProfile() {
+    fun checkProfile(isSilent: Boolean = false) {
         val user = auth.currentUser
         if (user == null) {
             _state.value = FichaState.Error("No hay sesión activa")
@@ -51,7 +54,12 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         viewModelScope.launch {
-            _state.value = FichaState.Loading
+            // Solo mostramos Loading si no hay datos previos o si no es una carga silenciosa
+            val currentState = _state.value
+            if (!isSilent && currentState !is FichaState.View) {
+                _state.value = FichaState.Loading
+            }
+            
             _isRefreshing.value = true
             try {
                 val userDoc = db.collection("usuarios").document(user.uid).get().await()
@@ -72,9 +80,10 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
                     _state.value = FichaState.NotFound
                 }
             } catch (e: Exception) {
-                _state.value = FichaState.Error(e.message ?: "Error al cargar perfil")
+                if (!isSilent) _state.value = FichaState.Error(e.message ?: "Error al cargar perfil")
             } finally {
                 _isRefreshing.value = false
+                _isPartialLoading.value = false
             }
         }
     }
@@ -96,7 +105,8 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
         experiencia: String,
         comunas: List<String>,
         horarios: List<String>,
-        descripcion: String
+        descripcion: String,
+        onSuccess: () -> Unit = {}
     ) {
         val user = auth.currentUser ?: return
         
@@ -114,6 +124,7 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 db.collection("fichas").document(user.uid).set(data).await()
                 checkProfile()
+                onSuccess()
             } catch (e: Exception) {
                 _state.value = FichaState.Error("Error al guardar perfil: ${e.message}")
             }
@@ -141,7 +152,8 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
         medicamentos: List<Map<String, Any>>,
         condicionesExtra: String,
         comunasPreferencia: List<String> = emptyList(),
-        horariosPreferencia: List<String> = emptyList()
+        horariosPreferencia: List<String> = emptyList(),
+        onSuccess: () -> Unit = {}
     ) {
         val user = auth.currentUser ?: return
 
@@ -175,8 +187,44 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 db.collection("fichas").document(user.uid).set(data).await()
                 checkProfile()
+                onSuccess()
             } catch (e: Exception) {
                 _state.value = FichaState.Error("Error al guardar perfil: ${e.message}")
+            }
+        }
+    }
+
+    fun updateSearchPreferences(
+        comunas: List<String>,
+        horarios: List<String>,
+        onSuccess: () -> Unit = {}
+    ) {
+        val user = auth.currentUser ?: return
+        val currentRole = _role.value
+
+        viewModelScope.launch {
+            _isPartialLoading.value = true
+            try {
+                val data = if (currentRole == "cuidador") {
+                    mapOf(
+                        "comunas" to comunas,
+                        "horarios" to horarios,
+                        "ultima_actualizacion" to com.google.firebase.Timestamp.now()
+                    )
+                } else {
+                    mapOf(
+                        "comunas_preferencia" to comunas,
+                        "horarios_preferencia" to horarios,
+                        "ultima_actualizacion" to com.google.firebase.Timestamp.now()
+                    )
+                }
+                
+                db.collection("fichas").document(user.uid).update(data).await()
+                checkProfile(isSilent = true)
+                onSuccess()
+            } catch (e: Exception) {
+                _isPartialLoading.value = false
+                _state.value = FichaState.Error("Error al actualizar preferencias: ${e.message}")
             }
         }
     }

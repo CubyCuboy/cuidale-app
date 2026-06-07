@@ -3,6 +3,7 @@ package com.example.cuidaleapp.data
 import android.content.Context
 import android.content.SharedPreferences
 import com.example.cuidaleapp.models.UserData
+import com.google.firebase.Timestamp
 
 class UserSession(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("cuidale_prefs", Context.MODE_PRIVATE)
@@ -20,15 +21,26 @@ class UserSession(context: Context) {
             putString("user_telefono", user.telefono)
             putString("user_fotoUrl", user.fotoUrl)
             putBoolean("user_telefonoVerificado", user.telefonoVerificado)
+            putBoolean("user_verificado", user.verificado)
             putString("user_descripcion", user.descripcion)
             putString("user_id_region", user.id_region)
             putString("user_region", user.region)
             putString("user_comuna", user.comuna)
+
+            user.createdAt?.let { 
+                if (it is Timestamp) putLong("user_createdAt", it.seconds)
+            }
+            user.updatedAt?.let {
+                if (it is Timestamp) putLong("user_updatedAt", it.seconds)
+            }
             apply()
         }
     }
 
     fun getUser(): UserData {
+        val createdAtSec = prefs.getLong("user_createdAt", -1L)
+        val updatedAtSec = prefs.getLong("user_updatedAt", -1L)
+        
         return UserData(
             uid = prefs.getString("user_uid", "") ?: "",
             nombre = prefs.getString("user_nombre", "") ?: "",
@@ -41,15 +53,17 @@ class UserSession(context: Context) {
             telefono = prefs.getString("user_telefono", "") ?: "",
             fotoUrl = prefs.getString("user_fotoUrl", "") ?: "",
             telefonoVerificado = prefs.getBoolean("user_telefonoVerificado", false),
+            verificado = prefs.getBoolean("user_verificado", false),
             descripcion = prefs.getString("user_descripcion", "") ?: "",
             id_region = prefs.getString("user_id_region", "") ?: "",
             region = prefs.getString("user_region", "") ?: "",
-            comuna = prefs.getString("user_comuna", "") ?: ""
+            comuna = prefs.getString("user_comuna", "") ?: "",
+            createdAt = if (createdAtSec != -1L) Timestamp(createdAtSec, 0) else null,
+            updatedAt = if (updatedAtSec != -1L) Timestamp(updatedAtSec, 0) else null
         )
     }
 
     fun clear() {
-        // Keep theme settings but clear user data
         val isDark = prefs.getBoolean("dark_mode", false)
         prefs.edit().clear().apply()
         prefs.edit().putBoolean("dark_mode", isDark).apply()

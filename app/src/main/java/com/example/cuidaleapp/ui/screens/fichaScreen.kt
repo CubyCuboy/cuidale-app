@@ -50,6 +50,7 @@ fun FichaScreen(
 
     val pullToRefreshState = rememberPullToRefreshState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val isPartialLoading by viewModel.isPartialLoading.collectAsState()
     val scrollState = rememberScrollState()
 
     val customColors = CuidaleThemeExtras.customColors
@@ -138,26 +139,41 @@ fun FichaScreen(
                     AnimatedContent(
                         targetState = state,
                         transitionSpec = {
-                            if (initialState is FichaState.Loading || targetState is FichaState.Loading) {
-                                EnterTransition.None togetherWith ExitTransition.None
-                            } else {
-                                fadeIn(animationSpec = tween(400)) togetherWith fadeOut(animationSpec = tween(400))
-                            }
+                            fadeIn(animationSpec = tween(400)) togetherWith fadeOut(animationSpec = tween(400))
                         },
                         label = "fichaContent"
                     ) { targetState ->
                         when (targetState) {
                             is FichaState.Loading -> {
-                                Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                                    CircularProgressIndicator(color = accentColor)
+                                if (isRefreshing) {
+                                    // Si estamos refrescando (ya hay datos), no mostrar loading a pantalla completa
+                                    // Esto previene el parpadeo
+                                    null
+                                } else {
+                                    Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                                        CircularProgressIndicator(color = accentColor)
+                                    }
                                 }
                             }
                             is FichaState.View -> {
-                                ProfileDetailView(
-                                    role = role,
-                                    data = targetState.data,
-                                    onEdit = { viewModel.startEditing() }
-                                )
+                                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                    ProfileDetailView(
+                                        role = role,
+                                        data = targetState.data,
+                                        onEdit = { viewModel.startEditing() }
+                                    )
+                                    SearchPreferencesCard(
+                                        role = role,
+                                        data = targetState.data,
+                                        availableCommunes = availableCommunes,
+                                        onUpdate = { c, h -> viewModel.updateSearchPreferences(c, h) },
+                                        accentColor = accentColor,
+                                        panelBg = panelBg,
+                                        textColor = textColor,
+                                        secondaryTextColor = secondaryTextColor,
+                                        isLoading = isPartialLoading
+                                    )
+                                }
                             }
                             is FichaState.NotFound -> {
                                 FichaPlaceholder(
@@ -323,32 +339,14 @@ fun CaregiverEditFlow(
                         containerColor = customColors.inputBackground,
                         textColor = textColor
                     )
-                    Spacer(modifier = Modifier.height(20.dp))
-                    CuidaleMultiSelectDropdown(
-                        label = "COMUNAS DE TRABAJO", 
-                        options = availableCommunes, 
-                        selectedOptions = selectedCommunes,
-                        maxSelection = 3,
-                        onOptionToggled = { 
-                            if (selectedCommunes.contains(it)) selectedCommunes -= it 
-                            else if (selectedCommunes.size < 3) selectedCommunes += it 
-                        }
-                    )
-                    Spacer(modifier = Modifier.height(20.dp))
-                    CuidaleMultiSelectDropdown(
-                        label = "HORARIOS DE DISPONIBILIDAD",
-                        options = listOf("Mañana", "Tarde", "Noche", "Fines de Semana"),
-                        selectedOptions = selectedHorarios,
-                        onOptionToggled = {
-                            if (selectedHorarios.contains(it)) selectedHorarios -= it
-                            else selectedHorarios += it
-                        }
-                    )
                     Spacer(modifier = Modifier.height(32.dp))
-                    HardShadowButton(
-                        text = "SIGUIENTE", onClick = { step = 2 },
-                        containerColor = accentColor, contentColor = Color.White, shadowColor = shadowPalette.hardShadowPrimary, isDark = isDark
-                    )
+                        HardShadowButton(
+                            text = "SIGUIENTE", onClick = { step = 2 },
+                            containerColor = accentColor,
+                            contentColor = Color.White,
+                            shadowColor = shadowPalette.hardShadowPrimary,
+                            isDark = isDark
+                        )
                 }
             }
         } else {
@@ -381,19 +379,25 @@ fun CaregiverEditFlow(
                         HardShadowButton(
                             text = "VOLVER",
                             onClick = { step = 1 },
-                            modifier = Modifier.weight(1f),
-                            containerColor = if (isDark) Color.White.copy(alpha = 0.1f) else Color.Gray,
-                            contentColor = Color.White,
-                            shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.3f),
+                            modifier = Modifier.weight(1f).height(58.dp),
+                            containerColor = if (isDark) Color.White.copy(alpha = 0.1f) else Color(0xFFF5F5F5),
+                            contentColor = if (isDark) Color.White else Color.DarkGray,
+                            shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = if (isDark) 0.15f else 0.1f),
                             isDark = isDark
                         )
                         HardShadowButton(
                             text = "FINALIZAR",
                             onClick = {
-                                viewModel.createCaregiverFicha(especializacion, experiencia, selectedCommunes, selectedHorarios, descripcion)
-                                onFinishSuccess()
+                                viewModel.createCaregiverFicha(
+                                    especializacion, 
+                                    experiencia, 
+                                    selectedCommunes, 
+                                    selectedHorarios, 
+                                    descripcion,
+                                    onSuccess = onFinishSuccess
+                                )
                             },
-                            modifier = Modifier.weight(1.5f),
+                            modifier = Modifier.weight(1.5f).height(58.dp),
                             containerColor = accentColor,
                             contentColor = Color.White,
                             shadowColor = shadowPalette.hardShadowPrimary,
@@ -441,13 +445,23 @@ fun FamilyEditFlow(
     var discapacidadOtro by remember { mutableStateOf(initialData?.get("discapacidad_otro") as? String ?: "") }
     var enfermedades by remember { mutableStateOf(initialData?.get("enfermedades") as? List<String> ?: emptyList()) }
     var enfermedadOtro by remember { mutableStateOf(initialData?.get("enfermedad_otro") as? String ?: "") }
-    var dieta by remember { mutableStateOf(initialData?.get("dieta") as? Map<String, String> ?: mapOf("desayuno" to "", "almuerzo" to "", "cena" to "")) }
+    
+    val defaultDieta = mapOf(
+        "desayuno" to "",
+        "colacion_manana" to "",
+        "almuerzo" to "",
+        "colacion_tarde" to "",
+        "once" to "",
+        "cena" to "",
+        "colacion_noche" to ""
+    )
+    var dieta by remember { mutableStateOf(initialData?.get("dieta") as? Map<String, String> ?: defaultDieta) }
     var medicamentos by remember { mutableStateOf(initialData?.get("medicamentos") as? List<Map<String, Any>> ?: emptyList()) }
     var condicionesExtra by remember { mutableStateOf(initialData?.get("condiciones") as? String ?: "") }
     var selectedCommunesPref by remember { mutableStateOf(initialData?.get("comunas_preferencia") as? List<String> ?: emptyList()) }
     var selectedHorariosPref by remember { mutableStateOf(initialData?.get("horarios_preferencia") as? List<String> ?: emptyList()) }
 
-    LaunchedEffect(vivesConFamiliar) {
+    LaunchedEffect(vivesConFamiliar, currentUserData.region, currentUserData.comuna) {
         if (vivesConFamiliar) {
             region = currentUserData.region
             comuna = currentUserData.comuna
@@ -456,6 +470,9 @@ fun FamilyEditFlow(
 
     val regionsList = ChileData.regions.map { it.name }
     val communesForRegion = ChileData.regions.find { it.name == region }?.comunas?.sorted() ?: emptyList()
+
+    val isStep1Valid = nombreCompleto.isNotBlank() && edad.isNotBlank() && genero.isNotBlank() &&
+        region.isNotBlank() && comuna.isNotBlank() && calle.isNotBlank() && numero.isNotBlank()
 
     Column {
         when (step) {
@@ -490,7 +507,7 @@ fun FamilyEditFlow(
                                 InputFieldLabel(text = "EDAD", color = textColor)
                                 CuidaleTextField(
                                     value = edad,
-                                    onValueChange = { if (it.isEmpty() || it.all { char -> char.isDigit() }) edad = it },
+                                    onValueChange = { if ((it.isEmpty() || it.all { char -> char.isDigit() }) && it.length <= 3) edad = it },
                                     placeholder = "Ej: 70",
                                     containerColor = customColors.inputBackground,
                                     keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
@@ -544,10 +561,45 @@ fun FamilyEditFlow(
                             }
                         }
 
+                        Spacer(modifier = Modifier.height(16.dp))
+                        InputFieldLabel(text = "DIRECCIÓN DEL PACIENTE", color = textColor)
+                        CuidaleTextField(
+                            value = calle,
+                            onValueChange = { input -> 
+                                calle = input.lowercase().split(" ").joinToString(" ") { it.replaceFirstChar { char -> char.uppercase() } }
+                            },
+                            placeholder = "Calle / Pasaje",
+                            containerColor = customColors.inputBackground,
+                            textColor = textColor
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            CuidaleTextField(
+                                value = numero,
+                                onValueChange = { if (it.all { char -> char.isDigit() } && it.length <= 6) numero = it },
+                                placeholder = "N°",
+                                modifier = Modifier.weight(1f),
+                                containerColor = customColors.inputBackground,
+                                textColor = textColor,
+                                keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                            )
+                            CuidaleTextField(
+                                value = depto,
+                                onValueChange = { input ->
+                                    depto = input.uppercase()
+                                },
+                                placeholder = "Depto/Block (Opcional)",
+                                modifier = Modifier.weight(1f),
+                                containerColor = customColors.inputBackground,
+                                textColor = textColor
+                            )
+                        }
+
                         Spacer(modifier = Modifier.height(32.dp))
                         HardShadowButton(
                             text = "SIGUIENTE",
                             onClick = { step = 2 },
+                            enabled = isStep1Valid,
                             containerColor = accentColor,
                             contentColor = Color.White,
                             shadowColor = shadowPalette.hardShadowPrimary,
@@ -612,16 +664,16 @@ fun FamilyEditFlow(
                             HardShadowButton(
                                 text = "VOLVER",
                                 onClick = { step = 1 },
-                                modifier = Modifier.weight(1f),
-                                containerColor = if (isDark) Color.White.copy(alpha = 0.1f) else Color.Gray,
-                                contentColor = Color.White,
-                                shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.3f),
+                                modifier = Modifier.weight(1f).height(58.dp),
+                                containerColor = if (isDark) Color.White.copy(alpha = 0.1f) else Color(0xFFF5F5F5),
+                                contentColor = if (isDark) Color.White else Color.DarkGray,
+                                shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = if (isDark) 0.15f else 0.1f),
                                 isDark = isDark
                             )
                             HardShadowButton(
                                 text = "SIGUIENTE",
                                 onClick = { step = 3 },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.weight(1f).height(58.dp),
                                 containerColor = accentColor,
                                 contentColor = Color.White,
                                 shadowColor = shadowPalette.hardShadowPrimary,
@@ -639,46 +691,51 @@ fun FamilyEditFlow(
                         color = accentColor,
                         modifier = Modifier.padding(start = 8.dp)
                     )
-                    
-                    ModernMedicamentosSection(medicamentos, onMedicamentosChange = { medicamentos = it }, cardColor, accentColor)
-                    
+
                     HardShadowPanel(
                         backgroundColor = cardColor,
                         shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
                         cornerRadius = 24.dp,
                         contentPadding = PaddingValues(20.dp)
                     ) {
-                        Column {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Search, null, tint = accentColor, modifier = Modifier.size(24.dp))
+                                Icon(Icons.Default.Restaurant, null, tint = accentColor, modifier = Modifier.size(24.dp))
                                 Spacer(modifier = Modifier.width(12.dp))
-                                Text("PREFERENCIAS DE BÚSQUEDA", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = textColor)
+                                Text("PLAN DE ALIMENTACIÓN", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = textColor)
                             }
-                            Spacer(modifier = Modifier.height(20.dp))
+                            
+                            val dietFields = listOf(
+                                "desayuno" to "DESAYUNO",
+                                "colacion_manana" to "COLACIÓN MAÑANA",
+                                "almuerzo" to "ALMUERZO",
+                                "colacion_tarde" to "COLACIÓN TARDE",
+                                "once" to "ONCE",
+                                "cena" to "CENA",
+                                "colacion_noche" to "COLACIÓN NOCHE"
+                            )
 
-                            CuidaleMultiSelectDropdown(
-                                label = "COMUNAS DE INTERÉS",
-                                options = availableCommunes,
-                                selectedOptions = selectedCommunesPref,
-                                maxSelection = 3,
-                                onOptionToggled = {
-                                    if (selectedCommunesPref.contains(it)) selectedCommunesPref -= it
-                                    else if (selectedCommunesPref.size < 3) selectedCommunesPref += it
+                            dietFields.forEach { (key, label) ->
+                                Column {
+                                    InputFieldLabel(text = label, color = textColor)
+                                    CuidaleTextField(
+                                        value = dieta[key] ?: "",
+                                        onValueChange = { v ->
+                                            val newDieta = dieta.toMutableMap()
+                                            newDieta[key] = v
+                                            dieta = newDieta
+                                        },
+                                        placeholder = "Indicaciones para $label...",
+                                        containerColor = customColors.inputBackground,
+                                        textColor = textColor
+                                    )
                                 }
-                            )
-                            Spacer(modifier = Modifier.height(20.dp))
-                            CuidaleMultiSelectDropdown(
-                                label = "HORARIOS DE INTERÉS",
-                                options = listOf("Mañana", "Tarde", "Noche", "Fines de Semana"),
-                                selectedOptions = selectedHorariosPref,
-                                onOptionToggled = {
-                                    if (selectedHorariosPref.contains(it)) selectedHorariosPref -= it
-                                    else selectedHorariosPref += it
-                                }
-                            )
+                            }
                         }
                     }
-
+                    
+                    ModernMedicamentosSection(medicamentos, onMedicamentosChange = { medicamentos = it }, cardColor, accentColor)
+                    
                     HardShadowPanel(
                         backgroundColor = cardColor,
                         shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
@@ -702,19 +759,26 @@ fun FamilyEditFlow(
                                 HardShadowButton(
                                     text = "VOLVER",
                                     onClick = { step = 2 },
-                                    modifier = Modifier.weight(1f),
-                                    containerColor = if (isDark) Color.White.copy(alpha = 0.1f) else Color.Gray,
-                                    contentColor = Color.White,
-                                    shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.3f),
+                                    modifier = Modifier.weight(1f).height(58.dp),
+                                    containerColor = if (isDark) Color.White.copy(alpha = 0.1f) else Color(0xFFF5F5F5),
+                                    contentColor = if (isDark) Color.White else Color.DarkGray,
+                                    shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = if (isDark) 0.15f else 0.1f),
                                     isDark = isDark
                                 )
                                 HardShadowButton(
                                     text = "FINALIZAR",
                                     onClick = {
-                                        viewModel.createFamilyFicha(nombreCompleto, edad, genero, vivesConFamiliar, region, comuna, calle, numero, depto, nivelDependencia, movilidad, comunicacion, discapacidades, discapacidadOtro, enfermedades, enfermedadOtro, dieta, medicamentos, condicionesExtra, selectedCommunesPref, selectedHorariosPref)
-                                        onFinishSuccess()
+                                        viewModel.createFamilyFicha(
+                                            nombreCompleto, edad, genero, vivesConFamiliar, 
+                                            region, comuna, calle, numero, depto, 
+                                            nivelDependencia, movilidad, comunicacion, 
+                                            discapacidades, discapacidadOtro, enfermedades, enfermedadOtro, 
+                                            dieta, medicamentos, condicionesExtra, 
+                                            selectedCommunesPref, selectedHorariosPref,
+                                            onSuccess = onFinishSuccess
+                                        )
                                     },
-                                    modifier = Modifier.weight(1.5f),
+                                    modifier = Modifier.weight(1.5f).height(58.dp),
                                     containerColor = accentColor,
                                     contentColor = Color.White,
                                     shadowColor = shadowPalette.hardShadowPrimary,
@@ -904,9 +968,9 @@ fun ModernMedicamentosSection(
         HardShadowButton(
             text = "AÑADIR MEDICAMENTO",
             onClick = { onMedicamentosChange(medicamentos + mapOf("nombre" to "", "administraciones" to listOf(mapOf("hora" to "", "dosis" to "")), "observaciones" to "")) },
-            containerColor = if (isDark) Color.White.copy(alpha = 0.1f) else Color.DarkGray,
+            containerColor = accentColor,
             contentColor = Color.White,
-            shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = if (isDark) 0.3f else 0.5f),
+            shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = if (isDark) 0.2f else 0.3f),
             icon = Icons.Default.Add,
             isDark = isDark
         )

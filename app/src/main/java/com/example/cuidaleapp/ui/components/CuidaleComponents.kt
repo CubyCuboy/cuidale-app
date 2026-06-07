@@ -298,7 +298,182 @@ fun ProfileDetailView(
     role: String,
     data: Map<String, Any>,
     isEditMode: Boolean = false,
+    isSummary: Boolean = false,
+    onEdit: () -> Unit,
+    onExpand: (() -> Unit)? = null
+) {
+    if (isSummary && onExpand != null) {
+        FichaSummaryCard(
+            role = role,
+            data = data,
+            onExpand = onExpand,
+            onEdit = onEdit
+        )
+    } else {
+        FullProfileDetailView(role, data, isEditMode, onEdit, onExpand)
+    }
+}
+
+@Composable
+fun FichaSummaryCard(
+    role: String,
+    data: Map<String, Any>,
+    onExpand: () -> Unit,
     onEdit: () -> Unit
+) {
+    val customColors = CuidaleThemeExtras.customColors
+    val shadowPalette = CuidaleThemeExtras.shadows
+    val accentColor = if (role == "cuidador") MaterialTheme.colorScheme.primary else customColors.successStrong
+    val textColor = MaterialTheme.colorScheme.onSurface
+    val secondaryTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val panelBg = customColors.panelBackground
+
+    HardShadowPanel(
+        backgroundColor = panelBg,
+        shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
+        cornerRadius = 24.dp
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (role == "cuidador") "MI EXPERIENCIA" else "DATOS DEL PACIENTE",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = accentColor
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (role == "representante") {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        modifier = Modifier.size(48.dp),
+                        shape = CircleShape,
+                        color = accentColor.copy(alpha = 0.1f)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Person, null, tint = accentColor)
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = data["nombre_completo"]?.toString() ?: "No especificado",
+                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                            color = textColor
+                        )
+                        Text(
+                            text = "${data["edad"] ?: "--"} años • ${data["genero"] ?: "No especificado"}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = secondaryTextColor
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                HorizontalDivider(color = textColor.copy(alpha = 0.05f))
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
+            val preferences = if (role == "cuidador") {
+                Pair(data["comunas"] as? List<String> ?: emptyList(), data["horarios"] as? List<String> ?: emptyList())
+            } else {
+                Pair(data["comunas_preferencia"] as? List<String> ?: emptyList(), data["horarios_preferencia"] as? List<String> ?: emptyList())
+            }
+
+            SummaryItem(
+                icon = Icons.Default.Place,
+                label = if (role == "cuidador") "Trabaja en" else "Busca en",
+                value = preferences.first.joinToString(", ").ifEmpty { "No especificado" },
+                accentColor = accentColor,
+                textColor = textColor,
+                secondaryTextColor = secondaryTextColor
+            )
+
+            SummaryItem(
+                icon = Icons.Default.Schedule,
+                label = "Disponibilidad",
+                value = preferences.second.joinToString(", ").ifEmpty { "No especificado" },
+                accentColor = accentColor,
+                textColor = textColor,
+                secondaryTextColor = secondaryTextColor
+            )
+
+            if (role == "cuidador") {
+                SummaryItem(
+                    icon = Icons.Default.School,
+                    label = "Especialidad",
+                    value = data["especializacion"]?.toString() ?: "No especificado",
+                    accentColor = accentColor,
+                    textColor = textColor,
+                    secondaryTextColor = secondaryTextColor
+                )
+            } else {
+                SummaryItem(
+                    icon = Icons.Default.Accessibility,
+                    label = "Dependencia",
+                    value = data["nivel_dependencia"]?.toString() ?: "No especificado",
+                    accentColor = accentColor,
+                    textColor = textColor,
+                    secondaryTextColor = secondaryTextColor
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            TextButton(
+                onClick = onEdit, // Cambiado de onExpand a onEdit para que navegue directamente
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(0.dp)
+            ) {
+                Text(
+                    "VER FICHA COMPLETA", 
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black), // Letra más grande y negra
+                    color = accentColor
+                )
+                Icon(Icons.Default.KeyboardArrowRight, null, tint = accentColor, modifier = Modifier.size(24.dp))
+            }
+        }
+    }
+}
+
+@Composable
+fun SummaryItem(
+    icon: ImageVector,
+    label: String,
+    value: String,
+    accentColor: Color,
+    textColor: Color,
+    secondaryTextColor: Color
+) {
+    Row(modifier = Modifier.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, modifier = Modifier.size(16.dp), tint = secondaryTextColor.copy(alpha = 0.6f))
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = "$label: ",
+            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+            color = secondaryTextColor
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            color = textColor,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+fun FullProfileDetailView(
+    role: String,
+    data: Map<String, Any>,
+    isEditMode: Boolean = false,
+    onEdit: () -> Unit,
+    onExpand: (() -> Unit)? = null
 ) {
     val customColors = CuidaleThemeExtras.customColors
     val shadowPalette = CuidaleThemeExtras.shadows
@@ -325,44 +500,47 @@ fun ProfileDetailView(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "RESUMEN DE FICHA",
+                        text = "DETALLES DE FICHA",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = accentColor
                     )
-                    if (!isEditMode) {
-                        IconButton(
-                            onClick = onEdit,
-                            modifier = Modifier.background(accentColor.copy(alpha = 0.15f), CircleShape).size(36.dp)
-                        ) {
-                            Icon(Icons.Default.Edit, contentDescription = "Editar", tint = accentColor, modifier = Modifier.size(18.dp))
+                    Row {
+                        if (onExpand != null) {
+                            TextButton(onClick = onExpand) {
+                                Text("Ver menos", color = accentColor, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        if (!isEditMode) {
+                            IconButton(
+                                onClick = onEdit,
+                                modifier = Modifier.background(accentColor.copy(alpha = 0.15f), CircleShape).size(36.dp)
+                            ) {
+                                Icon(Icons.Default.Edit, contentDescription = "Editar", tint = accentColor, modifier = Modifier.size(18.dp))
+                            }
                         }
                     }
                 }
                 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = textColor.copy(alpha = if (customColors.isDark) 0.2f else 0.1f))
                 
-                val excludedKeys = mutableSetOf("fotos", "tipo", "ultima_actualizacion", "horarios")
+                val excludedKeys = mutableSetOf("fotos", "tipo", "ultima_actualizacion", "horarios", "comunas", "horarios_preferencia", "comunas_preferencia")
 
                 val preferredOrder = if (role == "cuidador") {
                     listOf("especializacion", "experiencia", "comunas", "descripcion")
                 } else {
                     listOf(
-                        "nombre_completo", "edad", "genero", 
-                        "vives_con_familiar", "region", "comuna", "calle", "numero", "depto",
-                        "comunas_preferencia", "horarios_preferencia",
-                        "nivel_dependencia", "movilidad", "comunicacion",
-                        "discapacidades", "discapacidad_otro", "enfermedades", "enfermedad_otro", 
-                        "dieta", "medicamentos", "condiciones"
+                        "nombre_completo", "nivel_dependencia", "enfermedades", "edad",
+                        "movilidad", "comunicacion", "genero",
+                        "dieta", "medicamentos"
                     )
                 }
 
                 val dataToShow = data.filterKeys { it !in excludedKeys }
-                val sortedKeys = dataToShow.keys.sortedWith { k1, k2 ->
-                    val i1 = preferredOrder.indexOf(k1).let { if (it == -1) Int.MAX_VALUE else it }
-                    val i2 = preferredOrder.indexOf(k2).let { if (it == -1) Int.MAX_VALUE else it }
-                    i1.compareTo(i2)
+                val sortedKeys = dataToShow.keys.sortedBy { key ->
+                    val index = preferredOrder.indexOf(key)
+                    if (index == -1) Int.MAX_VALUE else index
                 }
-                
+
                 sortedKeys.forEach { key ->
                     val value = dataToShow[key]!!
                     val label = when(key) {
@@ -570,6 +748,162 @@ fun ProfileDetailView(
 }
 
 @Composable
+fun SearchPreferencesCard(
+    role: String,
+    data: Map<String, Any>,
+    availableCommunes: List<String>,
+    onUpdate: (List<String>, List<String>) -> Unit,
+    accentColor: Color,
+    panelBg: Color,
+    textColor: Color,
+    secondaryTextColor: Color,
+    isLoading: Boolean = false
+) {
+    var isEditing by remember { mutableStateOf(false) }
+    
+    val currentCommunes = if (role == "cuidador") 
+        data["comunas"] as? List<String> ?: emptyList()
+    else 
+        data["comunas_preferencia"] as? List<String> ?: emptyList()
+        
+    val currentHorarios = if (role == "cuidador") 
+        data["horarios"] as? List<String> ?: emptyList()
+    else 
+        data["horarios_preferencia"] as? List<String> ?: emptyList()
+
+    var tempCommunes by remember(isEditing, currentCommunes) { mutableStateOf(currentCommunes) }
+    var tempHorarios by remember(isEditing, currentHorarios) { mutableStateOf(currentHorarios) }
+
+    val shadowPalette = CuidaleThemeExtras.shadows
+
+    HardShadowPanel(
+        backgroundColor = panelBg,
+        shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
+        cornerRadius = 24.dp,
+        contentPadding = PaddingValues(20.dp)
+    ) {
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Search, null, tint = accentColor, modifier = Modifier.size(24.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        "PREFERENCIAS DE BÚSQUEDA", 
+                        style = MaterialTheme.typography.titleMedium, 
+                        fontWeight = FontWeight.Bold, 
+                        color = textColor
+                    )
+                }
+                if (!isEditing) {
+                    IconButton(
+                        onClick = { isEditing = true },
+                        modifier = Modifier.background(accentColor.copy(alpha = 0.15f), CircleShape).size(36.dp)
+                    ) {
+                        Icon(Icons.Default.Edit, contentDescription = "Editar Preferencias", tint = accentColor, modifier = Modifier.size(18.dp))
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (isEditing) {
+                SearchPreferencesFields(
+                    role = role,
+                    communes = tempCommunes,
+                    horarios = tempHorarios,
+                    availableCommunes = availableCommunes,
+                    onCommunesChanged = { tempCommunes = it },
+                    onHorariosChanged = { tempHorarios = it }
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    HardShadowButton(
+                        text = "CANCELAR",
+                        onClick = { isEditing = false },
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        containerColor = if (CuidaleThemeExtras.customColors.isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFEEEEEE),
+                        contentColor = secondaryTextColor,
+                        shadowColor = Color.Transparent,
+                        isDark = CuidaleThemeExtras.customColors.isDark
+                    )
+                    HardShadowButton(
+                        text = if (isLoading) "GUARDANDO..." else "GUARDAR",
+                        onClick = {
+                            onUpdate(tempCommunes, tempHorarios)
+                            isEditing = false
+                        },
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        containerColor = accentColor,
+                        contentColor = Color.White,
+                        shadowColor = shadowPalette.hardShadowPrimary,
+                        isDark = CuidaleThemeExtras.customColors.isDark,
+                        enabled = !isLoading
+                    )
+                }
+            } else {
+                SummaryItem(
+                    icon = Icons.Default.Place,
+                    label = if (role == "cuidador") "Comunas de trabajo" else "Comunas de interés",
+                    value = currentCommunes.joinToString(", ").ifEmpty { "No especificadas" },
+                    accentColor = accentColor,
+                    textColor = textColor,
+                    secondaryTextColor = secondaryTextColor
+                )
+                SummaryItem(
+                    icon = Icons.Default.Schedule,
+                    label = if (role == "cuidador") "Horarios disponibles" else "Horarios de interés",
+                    value = currentHorarios.joinToString(", ").ifEmpty { "No especificados" },
+                    accentColor = accentColor,
+                    textColor = textColor,
+                    secondaryTextColor = secondaryTextColor
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun SearchPreferencesFields(
+    role: String,
+    communes: List<String>,
+    horarios: List<String>,
+    availableCommunes: List<String>,
+    onCommunesChanged: (List<String>) -> Unit,
+    onHorariosChanged: (List<String>) -> Unit
+) {
+    Column {
+        CuidaleMultiSelectDropdown(
+            label = if (role == "cuidador") "COMUNAS DE TRABAJO" else "COMUNAS DE INTERÉS",
+            options = availableCommunes,
+            selectedOptions = communes,
+            maxSelection = 3,
+            onOptionToggled = {
+                val newList = if (communes.contains(it)) communes - it
+                else if (communes.size < 3) communes + it
+                else communes
+                onCommunesChanged(newList)
+            }
+        )
+        Spacer(modifier = Modifier.height(20.dp))
+        CuidaleMultiSelectDropdown(
+            label = if (role == "cuidador") "HORARIOS DE DISPONIBILIDAD" else "HORARIOS DE INTERÉS",
+            options = listOf("Mañana", "Tarde", "Noche", "Fines de Semana"),
+            selectedOptions = horarios,
+            onOptionToggled = {
+                val newList = if (horarios.contains(it)) horarios - it
+                else horarios + it
+                onHorariosChanged(newList)
+            }
+        )
+    }
+}
+
+
+@Composable
 fun HardShadowPanel(
     backgroundColor: Color,
     modifier: Modifier = Modifier,
@@ -622,6 +956,7 @@ fun HardShadowPanel(
         modifier = modifier
             .fillMaxWidth()
             .offset { IntOffset(shakeOffset.value.roundToInt(), 0) }
+            .padding(bottom = 8.dp) // Añadido padding para que no se vea cortada la sombra
     ) {
         Box(
             modifier = Modifier
@@ -749,16 +1084,19 @@ fun HardShadowButton(
         label = "buttonScale"
     )
 
+    val shadowOffset = 5.dp
+
     Box(
         modifier = modifier
             .graphicsLayer(scaleX = scale, scaleY = scale)
             .offset { IntOffset(shakeOffset.value.roundToInt(), 0) }
+            .padding(bottom = shadowOffset, end = shadowOffset) // Crear espacio para la sombra dentro del contenedor
     ) {
         if (enabled || isErrorMode) {
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    .offset(x = 6.dp, y = 6.dp)
+                    .offset(x = shadowOffset, y = shadowOffset)
                     .clip(RoundedCornerShape(cornerRadius))
                     .background(animatedShadowColor)
             )

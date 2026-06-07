@@ -1,5 +1,7 @@
 package com.example.cuidaleapp.models
 
+import com.google.firebase.Timestamp
+
 data class UserData(
     val uid: String = "",
     val nombre: String = "",
@@ -16,5 +18,7 @@ data class UserData(
     val telefono: String = "",
     val telefonoVerificado: Boolean = false,
     val verificado: Boolean = false,
-    val descripcion: String = ""
+    val descripcion: String = "",
+    val createdAt: Timestamp? = null,
+    val updatedAt: Timestamp? = null
 )

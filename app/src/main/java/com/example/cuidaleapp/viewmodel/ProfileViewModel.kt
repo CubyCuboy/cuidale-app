@@ -10,6 +10,8 @@ import com.example.cuidaleapp.utils.PhoneUtils
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
+import android.net.Uri
+import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,6 +21,7 @@ import kotlinx.coroutines.tasks.await
 class ProfileViewModel(application: Application) : AndroidViewModel(application) {
     private val auth = FirebaseAuth.getInstance()
     private val db = FirebaseFirestore.getInstance()
+    private val storage = FirebaseStorage.getInstance()
     private val prefs = application.getSharedPreferences("cuidale_prefs", Context.MODE_PRIVATE)
     private val userSession = UserSession(application)
 
@@ -27,6 +30,9 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
 
     private val _userData = MutableStateFlow(userSession.getUser())
     val userData: StateFlow<UserData> = _userData.asStateFlow()
+
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
     private val _remoteState = MutableStateFlow<RemoteState>(RemoteState.Idle)
     val remoteState: StateFlow<RemoteState> = _remoteState.asStateFlow()
@@ -38,10 +44,108 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         data class Error(val message: String) : RemoteState()
     }
 
+    init {
+        // Initial sync when ViewModel is created
+        refreshFromFirestore()
+    }
+
     fun toggleTheme() {
         val newValue = !_isDarkMode.value
         _isDarkMode.value = newValue
         prefs.edit().putBoolean("dark_mode", newValue).apply()
+    }
+
+    fun refreshFromFirestore() {
+        val uid = auth.currentUser?.uid ?: return
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            try {
+                val document = db.collection("usuarios").document(uid).get().await()
+                val remoteUser = document.toObject(UserData::class.java)
+                if (remoteUser != null) {
+                    userSession.saveUser(remoteUser)
+                    _userData.value = remoteUser
+                }
+            } catch (e: Exception) {
+                // Fallback to local session if firestore fails
+                _userData.value = userSession.getUser()
+            } finally {
+                _isRefreshing.value = false
+            }
+        }
+    }
+
+    fun resetRemoteState() {
+        _remoteState.value = RemoteState.Idle
+    }
+
+    fun uploadProfilePicture(uri: Uri) {
+        val uid = auth.currentUser?.uid ?: return
+        val oldPhotoUrl = _userData.value.fotoUrl
+
+        viewModelScope.launch {
+            _remoteState.value = RemoteState.Loading
+            try {
+                // 1. Upload new photo first with unique name
+                val filename = "profile_${System.currentTimeMillis()}.jpg"
+                val ref = storage.reference.child("profiles/$uid/$filename")
+                ref.putFile(uri).await()
+                val downloadUrl = ref.downloadUrl.await().toString().replace("\"", "")
+
+                // 2. Update Firestore
+                db.collection("usuarios").document(uid).update("fotoUrl", downloadUrl).await()
+
+                // 3. Delete old photo ONLY after successful upload of the new one
+                if (oldPhotoUrl.isNotEmpty() && oldPhotoUrl.contains("firebasestorage.googleapis.com")) {
+                    try {
+                        val oldRef = storage.getReferenceFromUrl(oldPhotoUrl)
+                        oldRef.delete().await()
+                    } catch (e: Exception) {
+                        // Ignore deletion errors for old data
+                    }
+                }
+
+                // 4. Update Local Session & State
+                val updatedUser = _userData.value.copy(fotoUrl = downloadUrl)
+                userSession.saveUser(updatedUser)
+                _userData.value = updatedUser
+                
+                _remoteState.value = RemoteState.Success
+            } catch (e: Exception) {
+                _remoteState.value = RemoteState.Error(e.message ?: "Error al subir imagen")
+            }
+        }
+    }
+
+    fun deleteProfilePicture() {
+        val uid = auth.currentUser?.uid ?: return
+        val oldPhotoUrl = _userData.value.fotoUrl
+
+        viewModelScope.launch {
+            _remoteState.value = RemoteState.Loading
+            try {
+                // 1. Update Firestore first
+                db.collection("usuarios").document(uid).update("fotoUrl", "").await()
+
+                // 2. Then delete from storage
+                if (oldPhotoUrl.isNotEmpty() && oldPhotoUrl.contains("firebasestorage.googleapis.com")) {
+                    try {
+                        val oldRef = storage.getReferenceFromUrl(oldPhotoUrl)
+                        oldRef.delete().await()
+                    } catch (e: Exception) {
+                        // Ignore storage deletion errors to ensure UI consistency
+                    }
+                }
+
+                val updatedUser = _userData.value.copy(fotoUrl = "")
+                userSession.saveUser(updatedUser)
+                _userData.value = updatedUser
+                
+                _remoteState.value = RemoteState.Success
+            } catch (e: Exception) {
+                _remoteState.value = RemoteState.Error(e.message ?: "Error al eliminar imagen")
+            }
+        }
     }
 
     fun updateProfile(updatedUser: UserData) {
