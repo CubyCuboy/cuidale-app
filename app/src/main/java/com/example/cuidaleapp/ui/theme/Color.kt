@@ -4,28 +4,28 @@ import androidx.compose.ui.graphics.Color
 
 
 // Light Theme - "Vitality & Trust" Healthcare Palette
-val CuidaleBlueTopLight = Color(0xFFE8F4FC)  // Soft blue-tinted slate (not pure white)
-val CuidaleBlueBottomLight = Color(0xFFD4EBFA)  // Soft Blue gradient
-val CuidaleSurfaceLight = Color(0xFFE8F4FC)  // Soft blue-tinted surface
-val CuidaleSurfaceSoftLight = Color(0xFFF0F7FC)  // Very soft blue-white
-val CuidaleSurfaceSoftLightVariant = Color(0xFFD6EAF8)  // Soft blue variant
-val CuidalePrimaryLight = Color(0xFF0EA5E9)  // Sky 500 (Vibrant & Trustworthy)
-val CuidalePrimaryVariantLight = Color(0xFF0369A1)  // Sky 700
+val CuidaleBlueTopLight = Color(0xFFD6EAF8)  // Soft blue-tinted slate (not pure white)
+val CuidaleBlueBottomLight = Color(0xFFC4E0F5)  // Soft Blue gradient
+val CuidaleSurfaceLight = Color(0xFFD6EAF8)  // Soft blue-tinted surface
+val CuidaleSurfaceSoftLight = Color(0xFFE0F0F8)  // Very soft blue-white
+val CuidaleSurfaceSoftLightVariant = Color(0xFFC4DCE8)  // Soft blue variant
+val CuidalePrimaryLight = Color(0xFF0288D1)  // Sky 600 (More vibrant & trustworthy)
+val CuidalePrimaryVariantLight = Color(0xFF01579B)  // Sky 800
 val CuidaleOnPrimaryLight = Color(0xFFFFFFFF)
-val CuidaleOnSurfaceLight = Color(0xFF0F172A)  // Slate 900
-val CuidaleOnSurfaceSoftLight = Color(0xFF546B7A)  // Softer slate for placeholders
-val CuidaleBorderLight = Color(0xFFB8D4E8)  // Soft blue border
-val CuidaleLinkLight = Color(0xFF3B82F6)  // Blue 500
-val CuidaleErrorLight = Color(0xFFEF4444)  // Red 500
-val CuidaleWarningLight = Color(0xFFF59E0B)  // Amber 500
+val CuidaleOnSurfaceLight = Color(0xFF1A233A)  // Darker slate for better contrast
+val CuidaleOnSurfaceSoftLight = Color(0xFF4A5568)  // Better visible placeholder color
+val CuidaleBorderLight = Color(0xFFA8C5DB)  // Soft blue border
+val CuidaleLinkLight = Color(0xFF1976D2)  // Blue 600
+val CuidaleErrorLight = Color(0xFFD32F2F)  // Red 600
+val CuidaleWarningLight = Color(0xFFF57C00)  // Amber 600
 val CuidaleErrorContainerLight = Color(0xFFFFEBEE)  // Red 50 with tint
 val CuidaleWarningContainerLight = Color(0xFFFFF3E0)  // Amber with tint
-val CuidaleSuccessLight = Color(0xFF10B981)  // Emerald 500 (Health/Success)
-val CuidaleSuccessStrongLight = Color(0xFF047857)  // Emerald 700
+val CuidaleSuccessLight = Color(0xFF00897B)  // Teal 600 (Health/Success)
+val CuidaleSuccessStrongLight = Color(0xFF00695C)  // Teal 700
 
-val CuidaleShadowBlueLight = Color(0x604A90B8)  // More visible transparent shadow
-val CuidaleShadowMintLight = Color(0x604A8B9B)  // More visible teal shadow
-val CuidaleShadowLavenderLight = Color(0x607E7CB8)  // More visible lavender shadow
+val CuidaleShadowBlueLight = Color(0x80388BC9)  // More visible vibrant shadow
+val CuidaleShadowMintLight = Color(0x802E7D7D)  // More visible teal shadow
+val CuidaleShadowLavenderLight = Color(0x805E5FA3)  // More visible lavender shadow
 
 val CuidaleBlueTopDark = Color(0xFF0D1B2A)
 val CuidaleBlueBottomDark = Color(0xFF133B5C)
