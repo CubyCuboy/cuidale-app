@@ -65,7 +65,7 @@ fun ChatsScreen(
                 Text(
                     text = "Mensajes",
                     style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black),
-                    color = Color.White,
+                    color = CuidaleThemeExtras.customColors.onGradient,
                     modifier = Modifier.padding(24.dp)
                 )
 
@@ -73,7 +73,7 @@ fun ChatsScreen(
                     Text(
                         text = "USUARIOS GUARDADOS",
                         style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 1.2.sp),
-                        color = Color.White.copy(alpha = 0.7f),
+                        color = CuidaleThemeExtras.customColors.onGradient.copy(alpha = 0.7f),
                         modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
                     )
                     
@@ -131,17 +131,17 @@ fun ChatsScreen(
                                 imageVector = Icons.Default.Bookmark,
                                 contentDescription = null,
                                 modifier = Modifier.size(64.dp),
-                                tint = Color.White.copy(alpha = 0.4f)
+                                tint = CuidaleThemeExtras.customColors.onGradient.copy(alpha = 0.4f)
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
                                 "No tienes usuarios guardados",
-                                color = Color.White,
+                                color = CuidaleThemeExtras.customColors.onGradient,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
                                 "Guarda perfiles que te interesen para contactarlos aquí.",
-                                color = Color.White.copy(alpha = 0.7f),
+                                color = CuidaleThemeExtras.customColors.onGradient.copy(alpha = 0.7f),
                                 textAlign = TextAlign.Center,
                                 style = MaterialTheme.typography.bodyMedium
                             )

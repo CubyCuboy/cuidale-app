@@ -1,48 +1,64 @@
 ```
 # Kotlin/Android build artifacts
 *.class
-*.dex
 *.jar
+*.war
 *.aar
 *.so
-*.dylib
 *.dll
+*.dylib
 
-# Android specific
+# Build directories
 build/
 .gradle/
+*/build/
+
+# Local configuration file (sdk path, etc)
 local.properties
+
+# Android Studio Navigation editor temp files
+.navigation/
+
+# Android Studio captures folder
 captures/
 
-# Dependencies
-.libs/
-lib/
-
-# IDE
-.idea/
+# IntelliJ IDEA artifacts
 *.iml
 *.ipr
 *.iws
-.vscode/
+.idea/
 
-# Compiled Python (if any)
-*.pyc
-__pycache__/
+# Temporary folders for code coverage testing
+coverage/
+*.gcda
+*.gcno
 
-# Logs
+# Log files
 *.log
 
-# Environment
+# Environment variables
 .env
 .env.local
 *.env.*
 
+# Bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Distribution / packaging
+.dist/
+*.tar.gz
+*.whl
+
+# IDE specific
+.vscode/
+*.swp
+*.swo
+*.tmp
+
 # OS generated files
 .DS_Store
 Thumbs.db
-
-# Temp files
-*.tmp
-*.temp
-*~
 ```

@@ -201,7 +201,7 @@ fun OtherFichaScreen(
                                 Text(
                                     text = "${otherUserData?.nombre} ${otherUserData?.apellido_pa}",
                                     style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                                    color = Color.White.copy(alpha = 0.9f)
+                                    color = Color.White.copy(alpha = 0.95f)
                                 )
                             }
                         }
@@ -218,7 +218,7 @@ fun OtherFichaScreen(
                             modifier = Modifier
                                 .size(110.dp)
                                 .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.2f))
+                                .background(Color.White.copy(alpha = 0.25f))
                                 .padding(4.dp),
                             shape = CircleShape,
                             color = Color.White,
