@@ -42,9 +42,11 @@ fun ChatsScreen(
     val gradient = CuidaleThemeExtras.gradient
     val managedUsers by favoritosViewModel.managedUsers.collectAsState()
     val favoritos by favoritosViewModel.favoritos.collectAsState()
+    val noDeseados by favoritosViewModel.noDeseados.collectAsState()
     val customColors = CuidaleThemeExtras.customColors
 
     val savedUsers = managedUsers.filter { favoritos.contains(it.uid) }
+    val unwantedUsers = managedUsers.filter { noDeseados.contains(it.uid) }
     
     Scaffold(
         bottomBar = {
@@ -76,7 +78,7 @@ fun ChatsScreen(
                     )
                     
                     LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().weight(1f),
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
@@ -123,7 +125,7 @@ fun ChatsScreen(
                         }
                     }
                 } else {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
                             Icon(
                                 imageVector = Icons.Default.Bookmark,
@@ -143,6 +145,67 @@ fun ChatsScreen(
                                 textAlign = TextAlign.Center,
                                 style = MaterialTheme.typography.bodyMedium
                             )
+                        }
+                    }
+                }
+                
+                // No deseados section
+                if (unwantedUsers.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "NO DESEADOS",
+                        style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 1.2.sp),
+                        color = customColors.warning.copy(alpha = 0.9f),
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+                    )
+                    
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth().height(150.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(unwantedUsers) { user ->
+                            HardShadowPanel(
+                                backgroundColor = customColors.warningContainer.copy(alpha = 0.3f),
+                                shadowColor = customColors.warning.copy(alpha = 0.1f),
+                                modifier = Modifier.clickable { onUserClick(user.uid) }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier.size(40.dp).clip(CircleShape).background(customColors.avatarBackground),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (user.fotoUrl.isNotEmpty()) {
+                                            AsyncImage(
+                                                model = user.fotoUrl,
+                                                contentDescription = null,
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop
+                                            )
+                                        } else {
+                                            Icon(Icons.Default.Person, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp))
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            "${user.nombre} ${user.apellido_pa}",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Medium,
+                                            color = customColors.warning
+                                        )
+                                        Text(
+                                            "Usuario no deseado",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Icon(Icons.Default.ChevronRight, null, tint = customColors.warning, modifier = Modifier.size(16.dp))
+                                }
+                            }
                         }
                     }
                 }
