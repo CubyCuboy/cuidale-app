@@ -148,22 +148,28 @@ class MenuActivity : ComponentActivity() {
                         )
                     }
                     Chats -> {
-                        ChatsScreen(onTabSelected = { tab ->
-                            currentScreen = when (tab) {
-                                "notifications" -> Notifications
-                                "home" -> Main
-                                else -> Chats
-                            }
-                        })
+                        ChatsScreen(
+                            onTabSelected = { tab ->
+                                currentScreen = when (tab) {
+                                    "notifications" -> Notifications
+                                    "home" -> Main
+                                    else -> Chats
+                                }
+                            },
+                            onUserClick = { uid -> currentScreen = OtherFicha(uid, returnTo = Chats) }
+                        )
                     }
                     Notifications -> {
-                        NotificationsScreen(onTabSelected = { tab ->
-                            currentScreen = when (tab) {
-                                "chats" -> Chats
-                                "home" -> Main
-                                else -> Notifications
-                            }
-                        })
+                        NotificationsScreen(
+                            onTabSelected = { tab ->
+                                currentScreen = when (tab) {
+                                    "chats" -> Chats
+                                    "home" -> Main
+                                    else -> Notifications
+                                }
+                            },
+                            onUserClick = { uid -> currentScreen = OtherFicha(uid, returnTo = Notifications) }
+                        )
                     }
                     is OtherFicha -> {
                         LaunchedEffect(cs.uid) {
