@@ -16,7 +16,10 @@ import com.example.cuidaleapp.ui.components.CuidaleBottomBar
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 
 @Composable
-fun NotificationsScreen(onTabSelected: (String) -> Unit) {
+fun NotificationsScreen(
+    onTabSelected: (String) -> Unit,
+    onUserClick: (String) -> Unit
+) {
     val gradient = CuidaleThemeExtras.gradient
     
     Scaffold(
