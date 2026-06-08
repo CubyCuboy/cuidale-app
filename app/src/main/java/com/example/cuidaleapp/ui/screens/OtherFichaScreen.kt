@@ -363,7 +363,7 @@ fun OtherFichaScreen(
                             )
 
                             HardShadowButton(
-                                text = if (isNoDeseado) "VOLVER A VER" else "NO DESEADO",
+                                text = if (isNoDeseado) "VOLVER A VER EN SUGERENCIAS" else "NO DESEADO",
                                 modifier = Modifier.weight(1f).scale(unwantedScale),
                                 interactionSource = unwantedInteractionSource,
                                 containerColor = if (isNoDeseado) accentColor.copy(alpha = 0.1f) else customColors.warning.copy(alpha = 0.1f),
