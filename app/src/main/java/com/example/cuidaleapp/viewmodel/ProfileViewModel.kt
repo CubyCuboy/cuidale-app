@@ -47,6 +47,10 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     private val _otherFichaState = MutableStateFlow<FichaState>(FichaState.Loading)
     val otherFichaState: StateFlow<FichaState> = _otherFichaState.asStateFlow()
 
+    // Trigger to notify all screens when profile photo is updated
+    private val _photoUpdateTrigger = MutableStateFlow(0L)
+    val photoUpdateTrigger: StateFlow<Long> = _photoUpdateTrigger.asStateFlow()
+
 
     sealed class RemoteState {
         object Idle : RemoteState()
@@ -115,6 +119,9 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 userSession.saveUser(updatedUser)
                 _userData.value = updatedUser
                 
+                // Notify other screens to rebuild with new image
+                _photoUpdateTrigger.value = System.currentTimeMillis()
+                
                 _remoteState.value = RemoteState.Success
             } catch (e: Exception) {
                 _remoteState.value = RemoteState.Error(e.message ?: "Error al subir imagen")
@@ -145,6 +152,9 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 val updatedUser = _userData.value.copy(fotoUrl = "")
                 userSession.saveUser(updatedUser)
                 _userData.value = updatedUser
+                
+                // Notify other screens to rebuild with new image
+                _photoUpdateTrigger.value = System.currentTimeMillis()
                 
                 _remoteState.value = RemoteState.Success
             } catch (e: Exception) {
