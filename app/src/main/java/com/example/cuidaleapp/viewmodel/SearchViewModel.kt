@@ -21,7 +21,12 @@ data class SearchResult(
     val foto_url: String = "",
     val region: String = "",
     val comuna: String = "",
-    val comunas: List<String> = emptyList()
+    val comunas: List<String> = emptyList(),
+    val tipo: String = "",
+    val edad: String = "",
+    val nivel_dependencia: String = "",
+    val especializacion: String = "",
+    val horarios: List<String> = emptyList()
 )
 
 sealed class SearchState {
@@ -55,8 +60,9 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     private var currentResults = mutableListOf<SearchResult>()
     private val targetCollection = "fichas"
     private var targetTipo: String = ""
+    private var noDeseados: List<String> = emptyList()
     
-    private val PAGE_SIZE = 10L
+    private val PAGE_SIZE = 15L
 
     fun initSearch(userRole: String) {
         val newTargetTipo = if (userRole == "cuidador") "familiar" else "cuidador"
@@ -65,7 +71,20 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         }
         
         targetTipo = newTargetTipo
-        resetAndFetch()
+        viewModelScope.launch {
+            loadNoDeseados()
+            resetAndFetch()
+        }
+    }
+
+    private suspend fun loadNoDeseados() {
+        val uid = auth.currentUser?.uid ?: return
+        try {
+            val doc = db.collection("usuarios").document(uid).get().await()
+            noDeseados = (doc.get("no_deseados") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+        } catch (e: Exception) {
+            noDeseados = emptyList()
+        }
     }
 
     fun clearFilters() {
@@ -75,7 +94,10 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun refresh() {
-        resetAndFetch()
+        viewModelScope.launch {
+            loadNoDeseados()
+            resetAndFetch()
+        }
     }
 
     private fun resetAndFetch() {
@@ -147,11 +169,16 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                         foto_url = fotos.firstOrNull() ?: "",
                         region = doc.getString("region") ?: "",
                         comuna = doc.getString("comuna") ?: "",
-                        comunas = @Suppress("UNCHECKED_CAST") (doc.get("comunas") as? List<String> ?: emptyList())
+                        comunas = @Suppress("UNCHECKED_CAST") (doc.get("comunas") as? List<String> ?: emptyList()),
+                        tipo = doc.getString("tipo") ?: "",
+                        edad = doc.get("edad")?.toString() ?: "",
+                        nivel_dependencia = doc.getString("nivel_dependencia") ?: "",
+                        especializacion = doc.getString("especializacion") ?: "",
+                        horarios = @Suppress("UNCHECKED_CAST") (doc.get("horarios") as? List<String> ?: emptyList())
                     )
-                }
+                }.filter { it.id !in noDeseados }
 
-                if (newItems.size < PAGE_SIZE) {
+                if (result.documents.size < PAGE_SIZE) {
                     isLastPage = true
                 }
 

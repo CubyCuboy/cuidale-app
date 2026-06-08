@@ -13,6 +13,7 @@
 .gradle/
 build/
 dist/
+local.properties
 
 # Logs and temp files
 *.log

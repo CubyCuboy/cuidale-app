@@ -22,7 +22,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.cuidaleapp.R
 import com.example.cuidaleapp.data.ChileData
 import com.example.cuidaleapp.models.UserData
@@ -42,6 +41,7 @@ fun MenuScreen(
     onLogout: () -> Unit,
     onViewProfile: () -> Unit,
     onViewFicha: () -> Unit,
+    onViewSettings: () -> Unit,
     onUserClick: (String) -> Unit,
     onTabSelected: (String) -> Unit
 ) {
@@ -80,13 +80,14 @@ fun MenuScreen(
         }
     }
 
+    // Force RTL for the drawer to open from the right, but keep content LTR
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         ModalNavigationDrawer(
             drawerState = drawerState,
             drawerContent = {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                     ModalDrawerSheet(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxHeight().width(320.dp),
                         drawerContainerColor = Color.Transparent,
                         drawerTonalElevation = 0.dp
                     ) {
@@ -94,6 +95,7 @@ fun MenuScreen(
                             nombre = userData.nombre,
                             apellido = userData.apellido_pa,
                             fotoUrl = userData.fotoUrl,
+                            rol = userData.rol,
                             isDark = isDark,
                             onToggleTheme = onToggleTheme,
                             onProfileClick = {
@@ -103,6 +105,10 @@ fun MenuScreen(
                             onFichaClick = {
                                 scope.launch { drawerState.close() }
                                 onViewFicha()
+                            },
+                            onSettingsClick = {
+                                scope.launch { drawerState.close() }
+                                onViewSettings()
                             },
                             onLogoutClick = {
                                 scope.launch { drawerState.close() }
@@ -208,6 +214,13 @@ fun MenuScreen(
                                                         nombre = result.nombre,
                                                         apellido = result.apellido_pa,
                                                         fotoUrl = result.foto_url,
+                                                        comuna = result.comuna,
+                                                        comunas = result.comunas,
+                                                        tipo = result.tipo,
+                                                        edad = result.edad,
+                                                        nivelDependencia = result.nivel_dependencia,
+                                                        especializacion = result.especializacion,
+                                                        horarios = result.horarios,
                                                         onClick = { onUserClick(result.id) }
                                                     )
                                                 }

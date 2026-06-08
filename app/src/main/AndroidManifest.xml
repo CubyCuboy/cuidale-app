@@ -93,6 +93,12 @@
             android:label="Configuración"
             android:theme="@style/Theme.CuidaleApp" />
 
+        <activity
+            android:name=".activities.SocialManagementActivity"
+            android:exported="false"
+            android:label="Gestión de Usuarios"
+            android:theme="@style/Theme.CuidaleApp" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

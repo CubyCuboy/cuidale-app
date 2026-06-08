@@ -16,6 +16,7 @@ import com.example.cuidaleapp.viewmodel.MenuViewModel
 import com.example.cuidaleapp.viewmodel.ProfileViewModel
 import com.example.cuidaleapp.viewmodel.FichaViewModel
 import com.example.cuidaleapp.viewmodel.SearchViewModel
+import com.example.cuidaleapp.viewmodel.VinculosViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.cuidaleapp.activities.MenuNavigation.*
 
@@ -25,10 +26,11 @@ sealed class MenuNavigation {
     object EditProfile : MenuNavigation()
     data class Ficha(val startInEditMode: Boolean = false, val returnTo: MenuNavigation = Profile) : MenuNavigation()
     object Search : MenuNavigation()
-    object Settings : MenuNavigation()
+    data class Settings(val returnTo: MenuNavigation = Profile) : MenuNavigation()
     object Chats : MenuNavigation()
     object Notifications : MenuNavigation()
-    data class OtherFicha(val uid: String) : MenuNavigation()
+    object SocialManagement : MenuNavigation()
+    data class OtherFicha(val uid: String, val returnTo: MenuNavigation = Main) : MenuNavigation()
 }
 
 class MenuActivity : ComponentActivity() {
@@ -42,6 +44,7 @@ class MenuActivity : ComponentActivity() {
             val profileViewModel: ProfileViewModel = viewModel()
             val fichaViewModel: FichaViewModel = viewModel()
             val searchViewModel: SearchViewModel = viewModel()
+            val vinculosViewModel: VinculosViewModel = viewModel()
 
             val isDark by menuViewModel.isDarkMode.collectAsState()
             val userData by menuViewModel.userData.collectAsState()
@@ -49,17 +52,26 @@ class MenuActivity : ComponentActivity() {
             
             var currentScreen by remember { mutableStateOf<MenuNavigation>(Main) }
 
+            LaunchedEffect(intent) {
+                val target = intent.getStringExtra("TARGET_SCREEN")
+                val uid = intent.getStringExtra("USER_UID")
+                if (target == "OTHER_FICHA" && uid != null) {
+                    currentScreen = OtherFicha(uid, returnTo = SocialManagement)
+                }
+            }
+
             // Handle system back button
             BackHandler(enabled = currentScreen != Main) {
-                currentScreen = when (currentScreen) {
+                currentScreen = when (val cs = currentScreen) {
                     Profile -> Main
                     EditProfile -> Profile
-                    is Ficha -> (currentScreen as Ficha).returnTo
+                    is Ficha -> cs.returnTo
                     Search -> Main
-                    Settings -> Profile
+                    is Settings -> cs.returnTo
                     Chats -> Main
                     Notifications -> Main
-                    is OtherFicha -> Main
+                    is OtherFicha -> cs.returnTo
+                    SocialManagement -> Profile
                     Main -> Main
                 }
             }
@@ -84,7 +96,8 @@ class MenuActivity : ComponentActivity() {
                             onLogout = { menuViewModel.logout() },
                             onViewProfile = { currentScreen = Profile },
                             onViewFicha = { currentScreen = Ficha(startInEditMode = false, returnTo = Main) },
-                            onUserClick = { uid -> currentScreen = OtherFicha(uid) },
+                            onViewSettings = { currentScreen = Settings(returnTo = Main) },
+                            onUserClick = { uid -> currentScreen = OtherFicha(uid, returnTo = Main) },
                             onTabSelected = { tab ->
                                 currentScreen = when (tab) {
                                     "chats" -> Chats
@@ -98,23 +111,10 @@ class MenuActivity : ComponentActivity() {
                         ProfileScreen(
                             viewModel = profileViewModel,
                             fichaViewModel = fichaViewModel,
-                            onNavigateBack = {
-                                menuViewModel.updateUserData()
-                                currentScreen = Main
-                            },
-                            onSettingsClick = { currentScreen = Settings }
-                        )
-                    }
-                    Settings -> {
-                        SettingsScreen(
-                            viewModel = profileViewModel,
-                            isDark = isDark,
-                            onBack = { currentScreen = Profile },
-                            onLogoutClick = { menuViewModel.logout() },
-                            onResetPass = {
-                                val intent = Intent(this@MenuActivity, RecoveryPasswordActivity::class.java)
-                                intent.putExtra("FROM_PROFILE", true)
-                                startActivity(intent)
+                            onNavigateBack = { currentScreen = Main },
+                            onSettingsClick = { currentScreen = Settings() },
+                            onSocialClick = {
+                                currentScreen = SocialManagement
                             }
                         )
                     }
@@ -129,15 +129,22 @@ class MenuActivity : ComponentActivity() {
                             viewModel = fichaViewModel,
                             profileViewModel = profileViewModel,
                             startInEditMode = cs.startInEditMode,
-                            onNavigateBack = { 
-                                currentScreen = cs.returnTo
-                            }
+                            onNavigateBack = { currentScreen = cs.returnTo }
                         )
                     }
                     Search -> {
                         SearchProfileScreen(
                             onNavigateBack = { currentScreen = Main },
-                            onUserClick = { uid -> currentScreen = OtherFicha(uid) }
+                            onUserClick = { uid -> currentScreen = OtherFicha(uid, returnTo = Search) }
+                        )
+                    }
+                    is Settings -> {
+                        SettingsScreen(
+                            viewModel = profileViewModel,
+                            isDark = isDark,
+                            onBack = { currentScreen = cs.returnTo },
+                            onLogoutClick = { menuViewModel.logout() },
+                            onResetPass = { /* Handle reset pass */ }
                         )
                     }
                     Chats -> {
@@ -164,12 +171,24 @@ class MenuActivity : ComponentActivity() {
                         }
                         OtherFichaScreen(
                             profileViewModel = profileViewModel,
-                            onNavigateBack = { currentScreen = Main }
+                            vinculosViewModel = vinculosViewModel,
+                            onNavigateBack = { currentScreen = cs.returnTo }
+                        )
+                    }
+                    SocialManagement -> {
+                        SocialManagementScreen(
+                            onNavigateBack = { currentScreen = Profile },
+                            onUserClick = { uid -> currentScreen = OtherFicha(uid, returnTo = SocialManagement) }
                         )
                     }
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

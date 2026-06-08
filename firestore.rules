@@ -2,56 +2,34 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Función para verificar si el usuario está autenticado
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-
-    // Función para verificar si el usuario es dueño del documento
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
-    }
-
-    // Reglas para la colección de usuarios
     match /usuarios/{userId} {
-      allow read, write: if isOwner(userId);
-      // Permitir búsqueda por correo durante el registro/login si es necesario
-      allow list: if isAuthenticated();
+      allow list: if true;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow get, update, delete: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null;
     }
 
-    // Reglas para perfiles de cuidadores
-    match /perfil_cuidador/{userId} {
-      // Los cuidadores pueden editar su propio perfil
-      allow write: if isOwner(userId);
-      // Cualquier usuario autenticado puede ver perfiles de cuidadores
-      allow read: if isAuthenticated();
+    match /fichas/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Reglas para perfiles de familiares (Fichas)
-    match /perfil_familiar/{userId} {
-      // Solo el dueño puede leer y escribir su ficha (contiene datos sensibles)
-      // O si hay un vínculo aceptado
-      allow write: if isOwner(userId);
-      allow read: if isOwner(userId) || isVinculoAceptado(userId);
+    match /perfil_cuidador/{docId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == docId;
     }
 
-    // Colección de vínculos (Contactos)
+    match /perfil_familiar/{docId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == docId;
+    }
+
+    // Reglas para la colección de vínculos (Contactos)
     match /vinculos/{vinculoId} {
-      allow read, write: if isAuthenticated() && (request.auth.uid in getVinculoUids(vinculoId));
-    }
-
-    // Funciones auxiliares
-    function getVinculoUids(vinculoId) {
-      // El ID del vínculo es uid1_uid2
-      return vinculoId.split("_");
-    }
-
-    function isVinculoAceptado(targetUserId) {
-      let myUid = request.auth.uid;
-      let id1 = myUid + "_" + targetUserId;
-      let id2 = targetUserId + "_" + myUid;
-      return exists(/databases/$(database)/documents/vinculos/$(id1)) && get(/databases/$(database)/documents/vinculos/$(id1)).data.estado == "aceptado"
-          || exists(/databases/$(database)/documents/vinculos/$(id2)) && get(/databases/$(database)/documents/vinculos/$(id2)).data.estado == "aceptado";
+      allow read: if request.auth != null && (request.auth.uid in vinculoId.split("_"));
+      allow create: if request.auth != null
+                    && (request.auth.uid == request.resource.data.uid1 || request.auth.uid == request.resource.data.uid2);
+      allow update, delete: if request.auth != null && (request.auth.uid in vinculoId.split("_"));
     }
   }
 }

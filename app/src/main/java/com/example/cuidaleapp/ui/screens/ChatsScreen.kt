@@ -15,9 +15,36 @@ import androidx.compose.ui.unit.dp
 import com.example.cuidaleapp.ui.components.CuidaleBottomBar
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.lifecycle.viewmodel.compose.viewModel
+import coil3.compose.AsyncImage
+import com.example.cuidaleapp.ui.components.HardShadowPanel
+import com.example.cuidaleapp.viewmodel.FavoritosViewModel
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+
 @Composable
-fun ChatsScreen(onTabSelected: (String) -> Unit) {
+fun ChatsScreen(
+    onTabSelected: (String) -> Unit,
+    onUserClick: (String) -> Unit,
+    favoritosViewModel: FavoritosViewModel = viewModel()
+) {
     val gradient = CuidaleThemeExtras.gradient
+    val managedUsers by favoritosViewModel.managedUsers.collectAsState()
+    val favoritos by favoritosViewModel.favoritos.collectAsState()
+    val customColors = CuidaleThemeExtras.customColors
+
+    val savedUsers = managedUsers.filter { favoritos.contains(it.uid) }
     
     Scaffold(
         bottomBar = {
@@ -29,27 +56,96 @@ fun ChatsScreen(onTabSelected: (String) -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .background(Brush.verticalGradient(listOf(gradient.top, gradient.bottom)))
-                .padding(innerPadding),
-            contentAlignment = Alignment.Center
+                .padding(innerPadding)
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.Chat,
-                    contentDescription = null,
-                    modifier = Modifier.size(80.dp),
-                    tint = Color.White.copy(alpha = 0.6f)
-                )
-                Spacer(modifier = Modifier.height(16.dp))
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Header
                 Text(
-                    text = "Próximamente: Chats",
-                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                    color = Color.White
+                    text = "Mensajes",
+                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black),
+                    color = Color.White,
+                    modifier = Modifier.padding(24.dp)
                 )
-                Text(
-                    text = "Aquí podrás comunicarte con otros usuarios.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.8f)
-                )
+
+                if (savedUsers.isNotEmpty()) {
+                    Text(
+                        text = "USUARIOS GUARDADOS",
+                        style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 1.2.sp),
+                        color = Color.White.copy(alpha = 0.7f),
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+                    )
+                    
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(savedUsers) { user ->
+                            HardShadowPanel(
+                                backgroundColor = customColors.panelBackground,
+                                modifier = Modifier.clickable { onUserClick(user.uid) }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier.size(48.dp).clip(CircleShape).background(customColors.avatarBackground),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (user.fotoUrl.isNotEmpty()) {
+                                            AsyncImage(
+                                                model = user.fotoUrl,
+                                                contentDescription = null,
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop
+                                            )
+                                        } else {
+                                            Icon(Icons.Default.Person, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            "${user.nombre} ${user.apellido_pa}",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            "Toca para ver perfil y solicitar chat",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Icon(Icons.Default.ChevronRight, null, tint = customColors.linkColor)
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
+                            Icon(
+                                imageVector = Icons.Default.Bookmark,
+                                contentDescription = null,
+                                modifier = Modifier.size(64.dp),
+                                tint = Color.White.copy(alpha = 0.4f)
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                "No tienes usuarios guardados",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "Guarda perfiles que te interesen para contactarlos aquí.",
+                                color = Color.White.copy(alpha = 0.7f),
+                                textAlign = TextAlign.Center,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                }
             }
         }
     }

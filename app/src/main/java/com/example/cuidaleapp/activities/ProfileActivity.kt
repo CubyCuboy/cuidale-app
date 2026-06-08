@@ -31,6 +31,9 @@ class ProfileActivity : ComponentActivity() {
                     onNavigateBack = { finish() },
                     onSettingsClick = {
                         startActivity(Intent(this, SettingsActivity::class.java))
+                    },
+                    onSocialClick = {
+                        startActivity(Intent(this, SocialManagementActivity::class.java))
                     }
                 )
             }

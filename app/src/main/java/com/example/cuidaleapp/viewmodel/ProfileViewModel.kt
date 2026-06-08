@@ -77,7 +77,6 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     _userData.value = remoteUser
                 }
             } catch (e: Exception) {
-                // Fallback to local session if firestore fails
                 _userData.value = userSession.getUser()
             } finally {
                 _isRefreshing.value = false

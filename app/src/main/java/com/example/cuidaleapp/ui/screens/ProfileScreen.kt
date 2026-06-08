@@ -42,7 +42,8 @@ fun ProfileScreen(
     viewModel: ProfileViewModel,
     fichaViewModel: FichaViewModel,
     onNavigateBack: () -> Unit,
-    onSettingsClick: () -> Unit
+    onSettingsClick: () -> Unit,
+    onSocialClick: () -> Unit
 ) {
     val userData by viewModel.userData.collectAsState()
     val fichaState by fichaViewModel.state.collectAsState()
@@ -279,7 +280,6 @@ fun ProfileScreen(
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    // Ficha Section
                     Text(
                         text = if (userData.rol == "cuidador") "MI FICHA TÉCNICA" else "FICHA DEL FAMILIAR",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
