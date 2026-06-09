@@ -47,13 +47,11 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         if (currentUser != null) {
             viewModelScope.launch {
                 try {
-                    val query = db.collection("usuarios")
-                        .whereEqualTo("correo", currentUser.email)
-                        .get()
-                        .await()
+                    // Acceso directo por UID es más eficiente y seguro con las reglas de Firestore
+                    val doc = db.collection("usuarios").document(currentUser.uid).get().await()
                     
-                    if (!query.isEmpty) {
-                        val userData = query.documents[0].toObject(UserData::class.java)
+                    if (doc.exists()) {
+                        val userData = doc.toObject(UserData::class.java)
                         if (userData != null) {
                             if (userData.verificado) {
                                 userSession.saveUser(userData)
@@ -67,9 +65,27 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                             _uiState.value = LoginUiState.Idle
                         }
                     } else {
-                        auth.signOut()
-                        userSession.clear()
-                        _uiState.value = LoginUiState.Idle
+                        // Si no existe el documento por UID, intentar por correo por compatibilidad (opcional)
+                        val query = db.collection("usuarios")
+                            .whereEqualTo("correo", currentUser.email)
+                            .get()
+                            .await()
+                        
+                        if (!query.isEmpty) {
+                            val userData = query.documents[0].toObject(UserData::class.java)
+                            if (userData != null && userData.verificado) {
+                                userSession.saveUser(userData)
+                                _uiState.value = LoginUiState.Transition(userData)
+                            } else {
+                                auth.signOut()
+                                userSession.clear()
+                                _uiState.value = LoginUiState.Idle
+                            }
+                        } else {
+                            auth.signOut()
+                            userSession.clear()
+                            _uiState.value = LoginUiState.Idle
+                        }
                     }
                 } catch (e: Exception) {
                     val cachedUser = userSession.getUser()

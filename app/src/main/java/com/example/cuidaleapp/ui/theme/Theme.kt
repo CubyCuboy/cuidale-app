@@ -70,6 +70,9 @@ data class CuidaleCustomColors(
     val avatarBackground: Color,
     val inputBackground: Color,
     val linkColor: Color,
+    val aqua: Color,
+    val lime: Color,
+    val mint: Color,
     val isDark: Boolean
 )
 
@@ -100,6 +103,9 @@ private val LocalCuidaleCustomColors = staticCompositionLocalOf {
         avatarBackground = Color.White,
         inputBackground = Color.White,
         linkColor = CuidaleLinkLight,
+        aqua = CuidaleAqua,
+        lime = CuidaleLime,
+        mint = CuidaleMint,
         isDark = false
     )
 }
@@ -141,11 +147,11 @@ fun CuidaleAppTheme(
         )
     }
 
-    val panelBackground = if (darkTheme) colorScheme.surfaceVariant else Color(0xFFD6EAF8)
+    val panelBackground = if (darkTheme) colorScheme.surfaceVariant else Color(0xFFE3F2FD)
     val panelGradient = if (darkTheme) {
         Brush.verticalGradient(listOf(colorScheme.surfaceVariant, colorScheme.surfaceVariant))
     } else {
-        Brush.verticalGradient(listOf(Color(0xFFD6EAF8), Color(0xFFC4E0F5)))
+        Brush.verticalGradient(listOf(Color(0xFFBBDEFB), Color(0xFF90CAF9)))
     }
 
     val customColors = if (darkTheme) {
@@ -160,6 +166,9 @@ fun CuidaleAppTheme(
             avatarBackground = Color(0xFF2C2F33), // Grey for dark
             inputBackground = CuidaleSurfaceDark,
             linkColor = CuidaleLinkDark,
+            aqua = CuidaleAquaDark,
+            lime = CuidaleLimeDark,
+            mint = CuidaleMintDark,
             isDark = true
         )
     } else {
@@ -171,9 +180,12 @@ fun CuidaleAppTheme(
             onGradient = Color(0xFF1A233A),
             panelBackground = panelBackground,
             panelGradient = panelGradient,
-            avatarBackground = Color(0xFFC4DCE8), // Soft blue for light theme avatars
-            inputBackground = Color(0xFFE0F0F8),
+            avatarBackground = Color(0xFFBBDEFB), // Soft blue for light theme avatars
+            inputBackground = Color(0xFFE3F2FD),
             linkColor = CuidaleLinkLight,
+            aqua = CuidaleAqua,
+            lime = CuidaleLime,
+            mint = CuidaleMint,
             isDark = false
         )
     }

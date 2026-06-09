@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.example.cuidaleapp.models.UserData
 import com.example.cuidaleapp.ui.screens.*
 import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
 import com.example.cuidaleapp.viewmodel.MenuViewModel
@@ -31,9 +32,24 @@ sealed class MenuNavigation {
     object Notifications : MenuNavigation()
     object SocialManagement : MenuNavigation()
     data class OtherFicha(val uid: String, val returnTo: MenuNavigation = Main) : MenuNavigation()
+    data class Chat(val chatId: String, val otherUser: UserData, val returnTo: MenuNavigation = Chats) : MenuNavigation()
 }
 
 class MenuActivity : ComponentActivity() {
+    override fun onResume() {
+        super.onResume()
+        // Status online
+        val chatViewModel = androidx.lifecycle.ViewModelProvider(this)[com.example.cuidaleapp.viewmodel.ChatViewModel::class.java]
+        chatViewModel.setUserStatus(true)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Status offline
+        val chatViewModel = androidx.lifecycle.ViewModelProvider(this)[com.example.cuidaleapp.viewmodel.ChatViewModel::class.java]
+        chatViewModel.setUserStatus(false)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -60,7 +76,6 @@ class MenuActivity : ComponentActivity() {
                 }
             }
 
-            // Handle system back button
             BackHandler(enabled = currentScreen != Main) {
                 currentScreen = when (val cs = currentScreen) {
                     Profile -> Main
@@ -70,6 +85,7 @@ class MenuActivity : ComponentActivity() {
                     is Settings -> cs.returnTo
                     Chats -> Main
                     Notifications -> Main
+                    is Chat -> cs.returnTo
                     is OtherFicha -> cs.returnTo
                     SocialManagement -> Profile
                     Main -> Main
@@ -149,6 +165,13 @@ class MenuActivity : ComponentActivity() {
                     }
                     Chats -> {
                         ChatsScreen(
+                            userData = userData,
+                            isDark = isDark,
+                            onToggleTheme = { menuViewModel.toggleTheme() },
+                            onLogout = { menuViewModel.logout() },
+                            onViewProfile = { currentScreen = Profile },
+                            onViewFicha = { currentScreen = Ficha(startInEditMode = false, returnTo = Chats) },
+                            onViewSettings = { currentScreen = Settings(returnTo = Chats) },
                             onTabSelected = { tab ->
                                 currentScreen = when (tab) {
                                     "notifications" -> Notifications
@@ -156,19 +179,42 @@ class MenuActivity : ComponentActivity() {
                                     else -> Chats
                                 }
                             },
-                            onUserClick = { uid -> currentScreen = OtherFicha(uid, returnTo = Chats) }
+                            onUserClick = { uid -> currentScreen = OtherFicha(uid, returnTo = Chats) },
+                            onChatClick = { chatId, otherUser ->
+                                currentScreen = Chat(chatId, otherUser, returnTo = Chats)
+                            }
                         )
                     }
                     Notifications -> {
                         NotificationsScreen(
+                            userData = userData,
+                            isDark = isDark,
+                            onToggleTheme = { menuViewModel.toggleTheme() },
+                            onLogout = { menuViewModel.logout() },
+                            onViewProfile = { currentScreen = Profile },
+                            onViewFicha = { currentScreen = Ficha(startInEditMode = false, returnTo = Notifications) },
+                            onViewSettings = { currentScreen = Settings(returnTo = Notifications) },
                             onTabSelected = { tab ->
                                 currentScreen = when (tab) {
                                     "chats" -> Chats
                                     "home" -> Main
                                     else -> Notifications
                                 }
-                            },
-                            onUserClick = { uid -> currentScreen = OtherFicha(uid, returnTo = Notifications) }
+                            }
+                        )
+                    }
+                    is Chat -> {
+                        ChatScreen(
+                            chatId = cs.chatId,
+                            otherUser = cs.otherUser,
+                            myUid = userData.uid,
+                            myName = userData.nombre,
+                            isDark = isDark,
+                            viewModel = viewModel<com.example.cuidaleapp.viewmodel.ChatViewModel>(),
+                            onNavigateBack = { currentScreen = cs.returnTo },
+                            onViewOtherProfile = { uid ->
+                                currentScreen = OtherFicha(uid, returnTo = cs)
+                            }
                         )
                     }
                     is OtherFicha -> {
@@ -178,7 +224,10 @@ class MenuActivity : ComponentActivity() {
                         OtherFichaScreen(
                             profileViewModel = profileViewModel,
                             vinculosViewModel = vinculosViewModel,
-                            onNavigateBack = { currentScreen = cs.returnTo }
+                            onNavigateBack = { currentScreen = cs.returnTo },
+                            onChatNavigate = { chatId, otherUser ->
+                                currentScreen = Chat(chatId, otherUser, returnTo = cs)
+                            }
                         )
                     }
                     SocialManagement -> {
