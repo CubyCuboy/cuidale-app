@@ -1,5 +1,7 @@
 package com.example.cuidaleapp.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -31,6 +33,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextAlign
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import coil3.compose.AsyncImage
 import com.example.cuidaleapp.data.ChileData
@@ -121,6 +124,17 @@ fun EditProfileScreen(
         }
     }
 
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            val file = File(context.cacheDir, "temp_profile_${System.currentTimeMillis()}.jpg")
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            tempPhotoUri = uri
+            cameraLauncher.launch(uri)
+        }
+    }
+
     if (showConfirmPhotoDialog && selectedImageUri != null) {
         AlertDialog(
             onDismissRequest = { showConfirmPhotoDialog = false },
@@ -172,11 +186,17 @@ fun EditProfileScreen(
                     
                     Button(
                         onClick = {
-                            val file = File(context.cacheDir, "temp_profile_${System.currentTimeMillis()}.jpg")
-                            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                            tempPhotoUri = uri
-                            cameraLauncher.launch(uri)
-                            showImageSourceDialog = false
+                            val permissionCheckResult = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
+                            if (permissionCheckResult == PackageManager.PERMISSION_GRANTED) {
+                                val file = File(context.cacheDir, "temp_profile_${System.currentTimeMillis()}.jpg")
+                                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                                tempPhotoUri = uri
+                                cameraLauncher.launch(uri)
+                                showImageSourceDialog = false
+                            } else {
+                                permissionLauncher.launch(Manifest.permission.CAMERA)
+                                showImageSourceDialog = false
+                            }
                         },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)

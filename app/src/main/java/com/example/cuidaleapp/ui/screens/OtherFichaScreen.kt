@@ -45,6 +45,7 @@ import com.example.cuidaleapp.ui.components.ProfileDetailView
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.FichaState
 import com.example.cuidaleapp.viewmodel.ProfileViewModel
+import com.example.cuidaleapp.models.UserData
 import androidx.compose.material.icons.automirrored.filled.Chat
 import kotlinx.coroutines.launch
 
@@ -54,7 +55,8 @@ fun OtherFichaScreen(
     profileViewModel: ProfileViewModel,
     vinculosViewModel: VinculosViewModel,
     favoritosViewModel: FavoritosViewModel = androidx.lifecycle.viewmodel.compose.viewModel(),
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onChatNavigate: (String, UserData) -> Unit
 ) {
     val otherUserData by profileViewModel.otherUserData.collectAsState()
     val otherFichaState by profileViewModel.otherFichaState.collectAsState()
@@ -64,8 +66,17 @@ fun OtherFichaScreen(
     val favoritosList by favoritosViewModel.favoritos.collectAsState()
 
     val isFavorito = otherUserData?.let { favoritosList.contains(it.uid) } ?: false
-    val isNoDeseado = otherUserData?.let { favoritosViewModel.noDeseados.value.contains(it.uid) } ?: false
+    val noDeseadosList by favoritosViewModel.noDeseados.collectAsState()
+    val isNoDeseado = otherUserData?.let { noDeseadosList.contains(it.uid) } ?: false
     var showUnwantedDialog by remember { mutableStateOf(false) }
+
+    val misVinculos by vinculosViewModel.misVinculos.collectAsState()
+    val vinculoExistente = remember(misVinculos, otherUserData) {
+        otherUserData?.let { target ->
+            misVinculos.find { it.uids.contains(target.uid) }
+        }
+    }
+    var showCancelRequestDialog by remember { mutableStateOf(false) }
 
     val scrollState = rememberScrollState()
     val customColors = CuidaleThemeExtras.customColors
@@ -74,9 +85,9 @@ fun OtherFichaScreen(
     // Use the role from the loaded user data
     val displayRole = otherUserData?.rol ?: ""
     val accentColor = when (displayRole) {
-        "cuidador" -> MaterialTheme.colorScheme.primary
-        "representante" -> customColors.successStrong
-        else -> MaterialTheme.colorScheme.secondary
+        "cuidador" -> customColors.aqua
+        "representante" -> customColors.mint
+        else -> customColors.lime
     }
 
     LaunchedEffect(vinculosUiState) {
@@ -329,24 +340,15 @@ fun OtherFichaScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(bottom = 24.dp),
+                                .padding(vertical = 12.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            val favInteractionSource = remember { MutableInteractionSource() }
-                            val isFavPressed by favInteractionSource.collectIsPressedAsState()
-                            val favScale by animateFloatAsState(
-                                targetValue = if (isFavPressed) 0.92f else 1f,
-                                animationSpec = tween(durationMillis = 100),
-                                label = "favScale"
-                            )
-
                             HardShadowButton(
                                 text = if (isFavorito) "GUARDADO" else "GUARDAR",
-                                modifier = Modifier.weight(1f).scale(favScale),
-                                interactionSource = favInteractionSource,
-                                containerColor = if (isFavorito) accentColor.copy(alpha = 0.1f) else Color.White,
-                                contentColor = if (isFavorito) accentColor else MaterialTheme.colorScheme.onSurface,
-                                shadowColor = CuidaleThemeExtras.shadows.hardShadowPrimary.copy(alpha = 0.1f),
+                                modifier = Modifier.weight(1f).height(56.dp),
+                                containerColor = if (isFavorito) accentColor else Color.White,
+                                contentColor = if (isFavorito) Color.White else MaterialTheme.colorScheme.onSurface,
+                                shadowColor = accentColor.copy(alpha = 0.3f),
                                 icon = if (isFavorito) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
                                 enabled = favoritosUiState !is FavoritosUiState.Loading,
                                 onClick = {
@@ -354,47 +356,75 @@ fun OtherFichaScreen(
                                 }
                             )
 
-                            val unwantedInteractionSource = remember { MutableInteractionSource() }
-                            val isUnwantedPressed by unwantedInteractionSource.collectIsPressedAsState()
-                            val unwantedScale by animateFloatAsState(
-                                targetValue = if (isUnwantedPressed) 0.92f else 1f,
-                                animationSpec = tween(durationMillis = 100),
-                                label = "unwantedScale"
-                            )
-
                             HardShadowButton(
-                                text = if (isNoDeseado) "VOLVER A VER EN SUGERENCIAS" else "NO DESEADO",
-                                modifier = Modifier.weight(1f).scale(unwantedScale),
-                                interactionSource = unwantedInteractionSource,
-                                containerColor = if (isNoDeseado) accentColor.copy(alpha = 0.1f) else customColors.warning.copy(alpha = 0.1f),
-                                contentColor = if (isNoDeseado) accentColor else customColors.warning,
-                                shadowColor = if (isNoDeseado) accentColor.copy(alpha = 0.2f) else customColors.warning.copy(alpha = 0.2f),
+                                text = if (isNoDeseado) "MOSTRAR" else "NO DESEADO",
+                                modifier = Modifier.weight(1f).height(56.dp),
+                                containerColor = if (isNoDeseado) customColors.warning else Color.White,
+                                contentColor = if (isNoDeseado) Color.White else customColors.warning,
+                                shadowColor = if (isNoDeseado) customColors.warning.copy(alpha = 0.3f) else customColors.warning.copy(alpha = 0.1f),
                                 icon = if (isNoDeseado) Icons.Default.Visibility else Icons.Default.Block,
                                 onClick = { showUnwantedDialog = true }
                             )
                         }
 
-                        val chatInteractionSource = remember { MutableInteractionSource() }
-                        val isChatPressed by chatInteractionSource.collectIsPressedAsState()
-                        val chatScale by animateFloatAsState(
-                            targetValue = if (isChatPressed) 0.96f else 1f,
-                            animationSpec = tween(durationMillis = 100),
-                            label = "chatScale"
-                        )
+                        val scope = rememberCoroutineScope()
+                        val buttonText = when {
+                            vinculoExistente?.estado == "aceptado" -> "IR AL CHAT"
+                            vinculoExistente?.solicitante == vinculosViewModel.myUid -> "CHAT YA SOLICITADO"
+                            vinculoExistente?.solicitante != null -> "RESPONDER SOLICITUD"
+                            else -> "SOLICITAR CHAT"
+                        }
 
                         HardShadowButton(
-                            text = if (vinculosUiState is VinculosUiState.Loading) "ENVIANDO..." else "SOLICITAR CHAT",
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp).scale(chatScale),
-                            interactionSource = chatInteractionSource,
-                            containerColor = accentColor,
-                            contentColor = Color.White,
-                            shadowColor = accentColor.copy(alpha = 0.3f),
+                            text = if (vinculosUiState is VinculosUiState.Loading) "PROCESANDO..." else buttonText,
+                            modifier = Modifier.fillMaxWidth().height(60.dp).padding(vertical = 8.dp),
+                            containerColor = if (vinculoExistente?.solicitante == vinculosViewModel.myUid && vinculoExistente.estado == "pendiente") Color.LightGray else accentColor,
+                            contentColor = if (vinculoExistente?.solicitante == vinculosViewModel.myUid && vinculoExistente.estado == "pendiente") Color.DarkGray else Color.White,
+                            shadowColor = accentColor.copy(alpha = 0.4f),
                             icon = Icons.AutoMirrored.Filled.Chat,
                             enabled = vinculosUiState !is VinculosUiState.Loading,
                             onClick = {
-                                otherUserData?.let { vinculosViewModel.enviarSolicitud(it.uid) }
+                                otherUserData?.let { user ->
+                                    scope.launch {
+                                        when {
+                                            vinculoExistente?.estado == "aceptado" -> {
+                                                onChatNavigate(vinculoExistente.id, user)
+                                            }
+                                            vinculoExistente?.solicitante == vinculosViewModel.myUid -> {
+                                                showCancelRequestDialog = true
+                                            }
+                                            vinculoExistente?.solicitante != null -> {
+                                                // Si yo soy el receptor, tal vez navegar a la bandeja o aceptar aquí
+                                                snackbarHostState.showSnackbar("Tienes una solicitud pendiente de este usuario.")
+                                            }
+                                            else -> {
+                                                vinculosViewModel.enviarSolicitud(user.uid)
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         )
+
+                        if (showCancelRequestDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showCancelRequestDialog = false },
+                                title = { Text("Cancelar solicitud") },
+                                text = { Text("¿Deseas cancelar la solicitud de chat enviada? Podrás solicitarlo de nuevo más adelante si lo deseas.") },
+                                confirmButton = {
+                                    TextButton(
+                                        onClick = {
+                                            showCancelRequestDialog = false
+                                            otherUserData?.let { vinculosViewModel.cancelarSolicitud(it.uid) }
+                                        },
+                                        colors = ButtonDefaults.textButtonColors(contentColor = customColors.warning)
+                                    ) { Text("ELIMINAR SOLICITUD") }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showCancelRequestDialog = false }) { Text("MANTENER") }
+                                }
+                            )
+                        }
 
                         when (val targetState = otherFichaState) {
                             is FichaState.Loading -> {

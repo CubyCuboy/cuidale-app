@@ -4,28 +4,34 @@ import androidx.compose.ui.graphics.Color
 
 
 // Light Theme - "Vitality & Trust" Healthcare Palette
-val CuidaleBlueTopLight = Color(0xFFD6EAF8)  // Soft blue-tinted slate (not pure white)
-val CuidaleBlueBottomLight = Color(0xFFC4E0F5)  // Soft Blue gradient
-val CuidaleSurfaceLight = Color(0xFFD6EAF8)  // Soft blue-tinted surface
-val CuidaleSurfaceSoftLight = Color(0xFFE0F0F8)  // Very soft blue-white
-val CuidaleSurfaceSoftLightVariant = Color(0xFFC4DCE8)  // Soft blue variant
-val CuidalePrimaryLight = Color(0xFF0288D1)  // Sky 600 (More vibrant & trustworthy)
-val CuidalePrimaryVariantLight = Color(0xFF01579B)  // Sky 800
+val CuidaleBlueTopLight = Color(0xFF48CAE4)  // More vibrant sky blue
+val CuidaleBlueBottomLight = Color(0xFF0077B6)  // Strong blue
+val CuidaleSurfaceLight = Color(0xFFADE8F4)  // Less white, more aqua
+val CuidaleSurfaceSoftLight = Color(0xFF90E0EF)  // Even more aqua
+val CuidaleSurfaceSoftLightVariant = Color(0xFF48CAE4)
+val CuidalePrimaryLight = Color(0xFF03045E)  // Navy primary
+val CuidalePrimaryVariantLight = Color(0xFF023E8A)
 val CuidaleOnPrimaryLight = Color(0xFFFFFFFF)
-val CuidaleOnSurfaceLight = Color(0xFF1A233A)  // Darker slate for better contrast
-val CuidaleOnSurfaceSoftLight = Color(0xFF4A5568)  // Better visible placeholder color
-val CuidaleBorderLight = Color(0xFFA8C5DB)  // Soft blue border
-val CuidaleLinkLight = Color(0xFF1976D2)  // Blue 600
-val CuidaleErrorLight = Color(0xFFD32F2F)  // Red 600
-val CuidaleWarningLight = Color(0xFFF57C00)  // Amber 600
-val CuidaleErrorContainerLight = Color(0xFFFFEBEE)  // Red 50 with tint
-val CuidaleWarningContainerLight = Color(0xFFFFF3E0)  // Amber with tint
-val CuidaleSuccessLight = Color(0xFF00897B)  // Teal 600 (Health/Success)
-val CuidaleSuccessStrongLight = Color(0xFF00695C)  // Teal 700
+val CuidaleOnSurfaceLight = Color(0xFF03045E)
+val CuidaleOnSurfaceSoftLight = Color(0xFF0077B6)
+val CuidaleBorderLight = Color(0xFF00B4D8)
+val CuidaleLinkLight = Color(0xFF0077B6)
+val CuidaleErrorLight = Color(0xFFE63946)
+val CuidaleWarningLight = Color(0xFFFCA311)
+val CuidaleErrorContainerLight = Color(0xFFFFD6D9)
+val CuidaleWarningContainerLight = Color(0xFFFFEDD8)
+val CuidaleSuccessLight = Color(0xFF2A9D8F)
+val CuidaleSuccessStrongLight = Color(0xFF264653)
 
-val CuidaleShadowBlueLight = Color(0x80388BC9)  // More visible vibrant shadow
-val CuidaleShadowMintLight = Color(0x802E7D7D)  // More visible teal shadow
-val CuidaleShadowLavenderLight = Color(0x805E5FA3)  // More visible lavender shadow
+val CuidaleShadowBlueLight = Color(0xFF03045E).copy(alpha = 0.3f)
+val CuidaleShadowMintLight = Color(0xFF2A9D8F).copy(alpha = 0.3f)
+val CuidaleShadowLavenderLight = Color(0xFF7209B7).copy(alpha = 0.3f)
+
+// Green & Lime accents
+val CuidaleAqua = Color(0xFF00D2D3)
+val CuidaleLime = Color(0xFFCCFF00)
+val CuidaleMint = Color(0xFF1DD1A1)
+val CuidaleEmerald = Color(0xFF10AC84)
 
 val CuidaleBlueTopDark = Color(0xFF0D1B2A)
 val CuidaleBlueBottomDark = Color(0xFF133B5C)
@@ -48,6 +54,10 @@ val CuidaleSuccessStrongDark = Color(0xFF5ED6A5)
 val CuidaleShadowBlueDark = Color(0xFF7A6CFF)
 val CuidaleShadowMintDark = Color(0xFF2E7D91)
 val CuidaleShadowLavenderDark = Color(0xFF8C7BFF)
+
+val CuidaleAquaDark = Color(0xFF01A3A4)
+val CuidaleLimeDark = Color(0xFF99CC00)
+val CuidaleMintDark = Color(0xFF10AC84)
 
 val discordDark = Color(0xFF313338)
 val discordCard = Color(0xFF1E1F22)

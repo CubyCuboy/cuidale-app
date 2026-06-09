@@ -80,7 +80,6 @@ fun MenuScreen(
         }
     }
 
-    // Force RTL for the drawer to open from the right, but keep content LTR
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         ModalNavigationDrawer(
             drawerState = drawerState,

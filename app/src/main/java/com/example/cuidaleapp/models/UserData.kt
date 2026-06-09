@@ -24,6 +24,8 @@ data class UserData(
     val telefonoVerificado: Boolean = false,
     val verificado: Boolean = false,
     val descripcion: String = "",
+    val favoritos: List<String> = emptyList(),
+    val no_deseados: List<String> = emptyList(),
     val createdAt: Timestamp? = null,
     val updatedAt: Timestamp? = null
 )
