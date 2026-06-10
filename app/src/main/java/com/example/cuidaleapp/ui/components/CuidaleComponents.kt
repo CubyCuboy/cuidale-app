@@ -1444,24 +1444,53 @@ fun CuidaleUserCard(
 }
 
 @Composable
-fun CuidaleBottomBar(selectedTab: String, onTabSelected: (String) -> Unit) {
+fun CuidaleBottomBar(
+    selectedTab: String, 
+    unreadCount: Int = 0, 
+    pendingNotifs: Int = 0,
+    onTabSelected: (String) -> Unit
+) {
     val customColors = CuidaleThemeExtras.customColors
     Surface(color = customColors.panelBackground, tonalElevation = 8.dp, shadowElevation = 16.dp, modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars).height(72.dp).padding(horizontal = 32.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            BottomNavItem(icon = Icons.Default.Notifications, isSelected = selectedTab == "notifications", onClick = { onTabSelected("notifications") })
+            BottomNavItem(
+                icon = Icons.Default.Notifications, 
+                isSelected = selectedTab == "notifications", 
+                badgeCount = pendingNotifs,
+                onClick = { onTabSelected("notifications") }
+            )
             BottomNavItem(icon = Icons.Default.Home, isSelected = selectedTab == "home", onClick = { onTabSelected("home") }, isCenter = true)
-            BottomNavItem(icon = Icons.AutoMirrored.Filled.Chat, isSelected = selectedTab == "chats", onClick = { onTabSelected("chats") })
+            BottomNavItem(
+                icon = Icons.AutoMirrored.Filled.Chat, 
+                isSelected = selectedTab == "chats", 
+                badgeCount = unreadCount,
+                onClick = { onTabSelected("chats") }
+            )
         }
     }
 }
 
 @Composable
-private fun BottomNavItem(icon: ImageVector, isSelected: Boolean, onClick: () -> Unit, isCenter: Boolean = false) {
+private fun BottomNavItem(icon: ImageVector, isSelected: Boolean, onClick: () -> Unit, isCenter: Boolean = false, badgeCount: Int = 0) {
     val colors = MaterialTheme.colorScheme
     val backgroundColor by animateColorAsState(targetValue = if (isSelected) colors.primary else Color.Transparent, animationSpec = tween(300), label = "tabBg")
     val iconColor by animateColorAsState(targetValue = if (isSelected) Color.White else colors.onSurface.copy(alpha = 0.6f), animationSpec = tween(300), label = "tabIcon")
     val scale by animateFloatAsState(targetValue = if (isSelected) 1.15f else 1.0f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow), label = "tabScale")
     Box(modifier = Modifier.size(if (isCenter) 52.dp else 44.dp).graphicsLayer(scaleX = scale, scaleY = scale).clip(RoundedCornerShape(if (isCenter) 16.dp else 12.dp)).background(backgroundColor).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(imageVector = icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(if (isCenter) 28.dp else 24.dp))
+        BadgedBox(
+            badge = {
+                if (badgeCount > 0) {
+                    Badge(
+                        containerColor = Color.Red,
+                        contentColor = Color.White,
+                        modifier = Modifier.offset(x = 4.dp, y = (-4).dp)
+                    ) {
+                        Text(if (badgeCount > 99) "+99" else badgeCount.toString(), style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+        ) {
+            Icon(imageVector = icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(if (isCenter) 28.dp else 24.dp))
+        }
     }
 }

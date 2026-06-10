@@ -27,5 +27,8 @@ data class UserData(
     val favoritos: List<String> = emptyList(),
     val no_deseados: List<String> = emptyList(),
     val createdAt: Timestamp? = null,
-    val updatedAt: Timestamp? = null
+    val updatedAt: Timestamp? = null,
+    val fcmToken: String = "",
+    val guardados: List<String> = emptyList(),
+    val bloqueados: List<String> = emptyList()
 )

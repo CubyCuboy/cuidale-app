@@ -56,9 +56,10 @@ fun OtherFichaScreen(
     vinculosViewModel: VinculosViewModel,
     favoritosViewModel: FavoritosViewModel = androidx.lifecycle.viewmodel.compose.viewModel(),
     onNavigateBack: () -> Unit,
-    onChatNavigate: (String, UserData) -> Unit
+    onChatNavigate: (String, String, UserData) -> Unit
 ) {
     val otherUserData by profileViewModel.otherUserData.collectAsState()
+    val otherUserStatus by profileViewModel.otherUserStatus.collectAsState()
     val otherFichaState by profileViewModel.otherFichaState.collectAsState()
     val otherProfileState by profileViewModel.otherProfileState.collectAsState()
     val vinculosUiState by vinculosViewModel.uiState.collectAsState()
@@ -209,11 +210,20 @@ fun OtherFichaScreen(
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                     color = Color.White
                                 )
-                                Text(
-                                    text = "${otherUserData?.nombre} ${otherUserData?.apellido_pa}",
-                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                                    color = Color.White.copy(alpha = 0.95f)
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(if (otherUserStatus == "en línea") Color(0xFF4CAF50) else Color.Gray)
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = otherUserStatus.uppercase(),
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
+                                        color = Color.White.copy(alpha = 0.9f)
+                                    )
+                                }
                             }
                         }
                     }
@@ -388,7 +398,7 @@ fun OtherFichaScreen(
                                     scope.launch {
                                         when {
                                             vinculoExistente?.estado == "aceptado" -> {
-                                                onChatNavigate(vinculoExistente.id, user)
+                                                onChatNavigate(vinculoExistente.id, user.uid, user)
                                             }
                                             vinculoExistente?.solicitante == vinculosViewModel.myUid -> {
                                                 showCancelRequestDialog = true

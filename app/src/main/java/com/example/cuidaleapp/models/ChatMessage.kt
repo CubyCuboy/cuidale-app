@@ -5,12 +5,12 @@ data class ChatMessage(
     val senderId: String = "",
     val text: String = "",
     val timestamp: Long = System.currentTimeMillis(),
-    val isEdited: Boolean = false,
-    val isDeleted: Boolean = false,
-    val isPinned: Boolean = false,
+    val edited: Boolean = false,
+    val deleted: Boolean = false,
+    val pinned: Boolean = false,
     val imageUrl: String? = null,
     val videoUrl: String? = null,
     val fileUrl: String? = null,
     val fileName: String? = null,
-    val readBy: Map<String, Boolean> = emptyMap() // uid -> true
+    val readBy: Map<String, Boolean> = emptyMap()
 )

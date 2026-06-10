@@ -37,6 +37,8 @@ fun MenuScreen(
     userData: UserData,
     searchViewModel: SearchViewModel,
     isDark: Boolean,
+    unreadCount: Int = 0,
+    pendingNotifs: Int = 0,
     onToggleTheme: () -> Unit,
     onLogout: () -> Unit,
     onViewProfile: () -> Unit,
@@ -151,7 +153,12 @@ fun MenuScreen(
                         )
                     },
                     bottomBar = {
-                        CuidaleBottomBar(selectedTab = "home", onTabSelected = onTabSelected)
+                        CuidaleBottomBar(
+                            selectedTab = "home", 
+                            unreadCount = unreadCount, 
+                            pendingNotifs = pendingNotifs,
+                            onTabSelected = onTabSelected
+                        )
                     },
                     containerColor = Color.Transparent
                 ) { innerPadding ->

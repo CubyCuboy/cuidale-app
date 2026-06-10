@@ -3,6 +3,7 @@ package com.example.cuidaleapp.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.cuidaleapp.models.Notification
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.firestore.FirebaseFirestore
@@ -81,7 +82,6 @@ class VinculosViewModel(application: Application) : AndroidViewModel(application
 
         viewModelScope.launch {
             try {
-                // Firestore limit for 'whereIn' is 30. If more, we'd need chunks.
                 val chunks = uidsToFetch.chunked(30)
                 val fetchedUsers = mutableMapOf<String, UserData>()
                 
@@ -103,7 +103,6 @@ class VinculosViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun loadVinculos() {
-        // Redundante con observeVinculos pero mantenida por compatibilidad
         observeVinculos()
     }
 
@@ -133,24 +132,26 @@ class VinculosViewModel(application: Application) : AndroidViewModel(application
 
                 db.collection("vinculos").document(id).set(nuevoVinculo).await()
 
-                // Notificar vía Realtime Database para aviso instantáneo
-                realtime.child("notificaciones").child(targetUid).child(id).setValue(
-                    mapOf(
-                        "tipo" to "solicitud_vinculo",
-                        "emisor" to myUid,
-                        "timestamp" to System.currentTimeMillis()
-                    )
+                // Crear notificación en Firestore para el receptor
+                val notifRef = db.collection("usuarios").document(targetUid).collection("notificaciones").document()
+                val notification = Notification(
+                    id = notifRef.id,
+                    tipo = "solicitud_vinculo",
+                    emisor = myUid,
+                    receptor = targetUid,
+                    timestamp = System.currentTimeMillis(),
+                    data = mapOf("vinculoId" to id)
                 )
+                notifRef.set(notification).await()
 
                 _uiState.value = VinculosUiState.Success("Solicitud enviada")
                 loadVinculos()
             } catch (e: Exception) {
-                _uiState.value = VinculosUiState.Error("Error al enviar solicitud: ${e.message}")
+                _uiState.value = VinculosUiState.Error("Error al enviar solicitud")
             }
         }
     }
 
-    // En VinculosViewModel.kt - Ajustar aceptarSolicitud
     fun aceptarSolicitud(vinculoId: String) {
         val myUid = auth.currentUser?.uid ?: return
         viewModelScope.launch {
@@ -158,35 +159,28 @@ class VinculosViewModel(application: Application) : AndroidViewModel(application
             try {
                 db.collection("vinculos").document(vinculoId).update("estado", "aceptado").await()
 
-                // Limpiar notificaciones de solicitud
-                realtime.child("notificaciones").child(myUid).child(vinculoId).removeValue()
-
-                // Obtener el ID del otro usuario
                 val snapshot = db.collection("vinculos").document(vinculoId).get().await()
                 val uids = snapshot.get("uids") as? List<String> ?: emptyList()
                 val targetUid = uids.firstOrNull { it != myUid } ?: ""
 
-                // Notificar al otro que ya son contactos
-                val aviso = mapOf(
-                    "tipo" to "vinculo_aceptado",
-                    "emisor" to myUid,
-                    "timestamp" to System.currentTimeMillis(),
-                    "mensaje" to "¡Ahora pueden chatear!"
-                )
-                realtime.child("notificaciones").child(targetUid).push().setValue(aviso)
-
-                // Inicializar el chat en RTDB si es necesario
-                realtime.child("messages").child(vinculoId).limitToLast(1).get().addOnSuccessListener {
-                    if (!it.exists()) {
-                        // Si no hay mensajes, enviamos uno de bienvenida invisible o sistema
-                        // chatViewModel.sendMessage(vinculoId, "¡Solicitud aceptada! Ya pueden hablar.")
-                    }
+                if (targetUid.isNotEmpty()) {
+                    // Notificar al solicitante que su solicitud fue aceptada
+                    val notifRef = db.collection("usuarios").document(targetUid).collection("notificaciones").document()
+                    val notification = Notification(
+                        id = notifRef.id,
+                        tipo = "vinculo_aceptado",
+                        emisor = myUid,
+                        receptor = targetUid,
+                        timestamp = System.currentTimeMillis(),
+                        data = mapOf("vinculoId" to vinculoId, "chatId" to vinculoId)
+                    )
+                    notifRef.set(notification).await()
                 }
 
                 _uiState.value = VinculosUiState.Success("Solicitud aceptada")
-                observeVinculos() // Refrescar
+                observeVinculos()
             } catch (e: Exception) {
-                _uiState.value = VinculosUiState.Error("Error: ${e.message}")
+                _uiState.value = VinculosUiState.Error("Error al aceptar solicitud")
             }
         }
     }
@@ -197,10 +191,7 @@ class VinculosViewModel(application: Application) : AndroidViewModel(application
             _uiState.value = VinculosUiState.Loading
             try {
                 db.collection("vinculos").document(vinculoId).delete().await()
-                // Limpiar notificación
-                realtime.child("notificaciones").child(myUid).child(vinculoId).removeValue()
-
-                _uiState.value = VinculosUiState.Success("Solicitud rechazada/eliminada")
+                _uiState.value = VinculosUiState.Success("Solicitud rechazada")
                 loadVinculos()
             } catch (e: Exception) {
                 _uiState.value = VinculosUiState.Error("Error al rechazar solicitud")
@@ -234,16 +225,6 @@ class VinculosViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    suspend fun sonContactos(uid1: String, uid2: String): Boolean {
-        val id = if (uid1 < uid2) "${uid1}_$uid2" else "${uid2}_$uid1"
-        return try {
-            val doc = db.collection("vinculos").document(id).get().await()
-            doc.exists() && doc.getString("estado") == "aceptado"
-        } catch (e: Exception) {
-            false
-        }
-    }
-
     fun clearState() {
         _uiState.value = VinculosUiState.Idle
     }
@@ -253,4 +234,3 @@ class VinculosViewModel(application: Application) : AndroidViewModel(application
         vinculosListener?.remove()
     }
 }
-

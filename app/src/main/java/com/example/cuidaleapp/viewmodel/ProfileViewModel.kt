@@ -12,6 +12,10 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import android.net.Uri
 import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.database.ValueEventListener
+import com.google.firebase.database.DataSnapshot
+import com.google.firebase.database.DatabaseError
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,6 +26,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     private val auth = FirebaseAuth.getInstance()
     private val db = FirebaseFirestore.getInstance()
     private val storage = FirebaseStorage.getInstance()
+    private val rtdb = FirebaseDatabase.getInstance().reference
     private val prefs = application.getSharedPreferences("cuidale_prefs", Context.MODE_PRIVATE)
     private val userSession = UserSession(application)
 
@@ -43,14 +48,16 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     private val _otherProfileState = MutableStateFlow<RemoteState>(RemoteState.Idle)
     val otherProfileState: StateFlow<RemoteState> = _otherProfileState.asStateFlow()
 
-
     private val _otherFichaState = MutableStateFlow<FichaState>(FichaState.Loading)
     val otherFichaState: StateFlow<FichaState> = _otherFichaState.asStateFlow()
 
-    // Trigger to notify all screens when profile photo is updated
+    private val _otherUserStatus = MutableStateFlow("desconectado")
+    val otherUserStatus: StateFlow<String> = _otherUserStatus.asStateFlow()
+
+    private var statusListener: ValueEventListener? = null
+
     private val _photoUpdateTrigger = MutableStateFlow(0L)
     val photoUpdateTrigger: StateFlow<Long> = _photoUpdateTrigger.asStateFlow()
-
 
     sealed class RemoteState {
         object Idle : RemoteState()
@@ -99,7 +106,6 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             _remoteState.value = RemoteState.Loading
             try {
-                // 1. Upload new photo first with unique name
                 val filename = "profile_${System.currentTimeMillis()}.jpg"
                 val ref = storage.reference.child("profiles/$uid/$filename")
                 ref.putFile(uri).await()
@@ -111,17 +117,13 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     try {
                         val oldRef = storage.getReferenceFromUrl(oldPhotoUrl)
                         oldRef.delete().await()
-                    } catch (e: Exception) {
-                    }
+                    } catch (e: Exception) { }
                 }
 
                 val updatedUser = _userData.value.copy(fotoUrl = downloadUrl)
                 userSession.saveUser(updatedUser)
                 _userData.value = updatedUser
-                
-                // Notify other screens to rebuild with new image
                 _photoUpdateTrigger.value = System.currentTimeMillis()
-                
                 _remoteState.value = RemoteState.Success
             } catch (e: Exception) {
                 _remoteState.value = RemoteState.Error(e.message ?: "Error al subir imagen")
@@ -136,26 +138,19 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             _remoteState.value = RemoteState.Loading
             try {
-                // 1. Update Firestore first
                 db.collection("usuarios").document(uid).update("fotoUrl", "").await()
 
-                // 2. Then delete from storage
                 if (oldPhotoUrl.isNotEmpty() && oldPhotoUrl.contains("firebasestorage.googleapis.com")) {
                     try {
                         val oldRef = storage.getReferenceFromUrl(oldPhotoUrl)
                         oldRef.delete().await()
-                    } catch (e: Exception) {
-                        // Ignore storage deletion errors to ensure UI consistency
-                    }
+                    } catch (e: Exception) { }
                 }
 
                 val updatedUser = _userData.value.copy(fotoUrl = "")
                 userSession.saveUser(updatedUser)
                 _userData.value = updatedUser
-                
-                // Notify other screens to rebuild with new image
                 _photoUpdateTrigger.value = System.currentTimeMillis()
-                
                 _remoteState.value = RemoteState.Success
             } catch (e: Exception) {
                 _remoteState.value = RemoteState.Error(e.message ?: "Error al eliminar imagen")
@@ -165,14 +160,12 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
 
     fun updateProfile(updatedUser: UserData) {
         val uid = auth.currentUser?.uid ?: return
-        
         viewModelScope.launch {
             _remoteState.value = RemoteState.Loading
             try {
                 val sanitizedPhone = PhoneUtils.formatChileanPhone(updatedUser.telefono)
                 val finalUser = updatedUser.copy(telefono = sanitizedPhone)
 
-                // Update in Firestore
                 val userMap = mapOf(
                     "nombre" to finalUser.nombre,
                     "nombre_s" to finalUser.nombre_s,
@@ -184,11 +177,8 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     "descripcion" to finalUser.descripcion
                 )
                 db.collection("usuarios").document(uid).update(userMap).await()
-                
-                // Update in Session
                 userSession.saveUser(finalUser)
                 _userData.value = finalUser
-                
                 _remoteState.value = RemoteState.Success
             } catch (e: Exception) {
                 _remoteState.value = RemoteState.Error(e.message ?: "Error al actualizar perfil")
@@ -199,13 +189,23 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     fun loadOtherUserProfile(targetUid: String) {
         if (targetUid.isEmpty()) return
 
+        statusListener?.let { rtdb.child("status").child(targetUid).removeEventListener(it) }
+
         viewModelScope.launch {
             _otherProfileState.value = RemoteState.Loading
             _otherFichaState.value = FichaState.Loading
-            _otherUserData.value = null // Clear previous data
+            _otherUserData.value = null
+            _otherUserStatus.value = "desconectado"
 
             try {
-                // 1. Fetch User Profile
+                statusListener = object : ValueEventListener {
+                    override fun onDataChange(snapshot: DataSnapshot) {
+                        _otherUserStatus.value = snapshot.child("estado").getValue(String::class.java) ?: "desconectado"
+                    }
+                    override fun onCancelled(error: DatabaseError) {}
+                }
+                rtdb.child("status").child(targetUid).addValueEventListener(statusListener!!)
+
                 val userDoc = db.collection("usuarios").document(targetUid).get().await()
 
                 if (userDoc.exists()) {
@@ -213,7 +213,6 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     _otherUserData.value = user
                     _otherProfileState.value = RemoteState.Success
 
-                    // 2. Fetch Ficha (Technical File)
                     val fichaDoc = db.collection("fichas").document(targetUid).get().await()
                     if (fichaDoc.exists()) {
                         _otherFichaState.value = FichaState.View(fichaDoc.data ?: emptyMap())
@@ -221,18 +220,15 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                         _otherFichaState.value = FichaState.NotFound
                     }
                 } else {
-                    _otherProfileState.value = RemoteState.Error("El usuario con ID $targetUid no existe en la base de datos.")
+                    _otherProfileState.value = RemoteState.Error("El usuario no existe.")
                     _otherFichaState.value = FichaState.Error("Usuario no encontrado")
                 }
             } catch (e: Exception) {
-                val errorMsg = e.localizedMessage ?: "Error desconocido al cargar perfil"
-                _otherProfileState.value = RemoteState.Error(errorMsg)
-                _otherFichaState.value = FichaState.Error(errorMsg)
+                _otherProfileState.value = RemoteState.Error(e.localizedMessage ?: "Error al cargar perfil")
+                _otherFichaState.value = FichaState.Error(e.localizedMessage ?: "Error")
             }
         }
     }
-
-
 
     fun refreshUserData() {
         _userData.value = userSession.getUser()
@@ -243,5 +239,13 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         userSession.clear()
         onComplete()
     }
-}
 
+    override fun onCleared() {
+        super.onCleared()
+        statusListener?.let { listener ->
+            _otherUserData.value?.uid?.let { uid ->
+                rtdb.child("status").child(uid).removeEventListener(listener)
+            }
+        }
+    }
+}
