@@ -29,8 +29,14 @@ class FavoritosViewModel(application: Application) : AndroidViewModel(applicatio
     private val _favoritos = MutableStateFlow<List<String>>(emptyList())
     val favoritos: StateFlow<List<String>> = _favoritos
 
+    private val _guardados = MutableStateFlow<List<String>>(emptyList())
+    val guardados: StateFlow<List<String>> = _guardados
+
     private val _noDeseados = MutableStateFlow<List<String>>(emptyList())
     val noDeseados: StateFlow<List<String>> = _noDeseados
+
+    private val _bloqueados = MutableStateFlow<List<String>>(emptyList())
+    val bloqueados: StateFlow<List<String>> = _bloqueados
 
     private val _managedUsers = MutableStateFlow<List<UserData>>(emptyList())
     val managedUsers: StateFlow<List<UserData>> = _managedUsers
@@ -39,19 +45,22 @@ class FavoritosViewModel(application: Application) : AndroidViewModel(applicatio
         loadSocialData()
     }
 
-    private fun loadSocialData() {
+    fun loadSocialData() {
         val uid = auth.currentUser?.uid ?: return
         viewModelScope.launch {
             try {
                 val doc = db.collection("usuarios").document(uid).get().await()
                 val favs = (doc.get("favoritos") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+                val saved = (doc.get("guardados") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
                 val hidden = (doc.get("no_deseados") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+                val blocked = (doc.get("bloqueados") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
                 
                 _favoritos.value = favs
+                _guardados.value = saved
                 _noDeseados.value = hidden
+                _bloqueados.value = blocked
 
-                // Load actual user data for these IDs
-                val allIds = (favs + hidden).distinct()
+                val allIds = (favs + saved + hidden + blocked).distinct()
                 if (allIds.isNotEmpty()) {
                     val users = db.collection("usuarios")
                         .whereIn("uid", allIds)
@@ -62,7 +71,7 @@ class FavoritosViewModel(application: Application) : AndroidViewModel(applicatio
                     _managedUsers.value = emptyList()
                 }
             } catch (e: Exception) {
-                // Silently fail
+                // Silent fail
             }
         }
     }
@@ -77,9 +86,31 @@ class FavoritosViewModel(application: Application) : AndroidViewModel(applicatio
                 val action = if (isFav) FieldValue.arrayRemove(targetUid) else FieldValue.arrayUnion(targetUid)
                 db.collection("usuarios").document(myUid).update("favoritos", action).await()
                 loadSocialData()
-                _uiState.value = FavoritosUiState.Success(if (isFav) "Eliminado de favoritos" else "Guardado en favoritos")
+                _uiState.value = FavoritosUiState.Success(if (isFav) "Eliminado de favoritos" else "Añadido a favoritos")
+                
+                // Si lo añadimos a favoritos, automáticamente lo guardamos también si no estaba
+                if (!isFav && !_guardados.value.contains(targetUid)) {
+                    db.collection("usuarios").document(myUid).update("guardados", FieldValue.arrayUnion(targetUid)).await()
+                }
             } catch (e: Exception) {
                 _uiState.value = FavoritosUiState.Error("Error al actualizar favoritos")
+            }
+        }
+    }
+
+    fun toggleGuardado(targetUid: String) {
+        val myUid = auth.currentUser?.uid ?: return
+        val isSaved = _guardados.value.contains(targetUid)
+
+        viewModelScope.launch {
+            _uiState.value = FavoritosUiState.Loading
+            try {
+                val action = if (isSaved) FieldValue.arrayRemove(targetUid) else FieldValue.arrayUnion(targetUid)
+                db.collection("usuarios").document(myUid).update("guardados", action).await()
+                loadSocialData()
+                _uiState.value = FavoritosUiState.Success(if (isSaved) "Eliminado de guardados" else "Guardado en contactos")
+            } catch (e: Exception) {
+                _uiState.value = FavoritosUiState.Error("Error al actualizar guardados")
             }
         }
     }
@@ -94,9 +125,26 @@ class FavoritosViewModel(application: Application) : AndroidViewModel(applicatio
                 val action = if (isHidden) FieldValue.arrayRemove(targetUid) else FieldValue.arrayUnion(targetUid)
                 db.collection("usuarios").document(myUid).update("no_deseados", action).await()
                 loadSocialData()
-                _uiState.value = FavoritosUiState.Success(if (isHidden) "Usuario restaurado" else "Usuario marcado como no deseado")
+                _uiState.value = FavoritosUiState.Success(if (isHidden) "Usuario restaurado en búsquedas" else "Usuario ocultado de búsquedas")
             } catch (e: Exception) {
                 _uiState.value = FavoritosUiState.Error("Error al actualizar preferencias")
+            }
+        }
+    }
+
+    fun toggleBloqueo(targetUid: String) {
+        val myUid = auth.currentUser?.uid ?: return
+        val isBlocked = _bloqueados.value.contains(targetUid)
+
+        viewModelScope.launch {
+            _uiState.value = FavoritosUiState.Loading
+            try {
+                val action = if (isBlocked) FieldValue.arrayRemove(targetUid) else FieldValue.arrayUnion(targetUid)
+                db.collection("usuarios").document(myUid).update("bloqueados", action).await()
+                loadSocialData()
+                _uiState.value = FavoritosUiState.Success(if (isBlocked) "Usuario desbloqueado" else "Usuario bloqueado")
+            } catch (e: Exception) {
+                _uiState.value = FavoritosUiState.Error("Error al actualizar bloqueo")
             }
         }
     }

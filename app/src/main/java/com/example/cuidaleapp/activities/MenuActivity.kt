@@ -20,6 +20,13 @@ import com.example.cuidaleapp.viewmodel.SearchViewModel
 import com.example.cuidaleapp.viewmodel.VinculosViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.cuidaleapp.activities.MenuNavigation.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.launch
 
 sealed class MenuNavigation {
     object Main : MenuNavigation()
@@ -32,7 +39,7 @@ sealed class MenuNavigation {
     object Notifications : MenuNavigation()
     object SocialManagement : MenuNavigation()
     data class OtherFicha(val uid: String, val returnTo: MenuNavigation = Main) : MenuNavigation()
-    data class Chat(val chatId: String, val otherUser: UserData, val returnTo: MenuNavigation = Chats) : MenuNavigation()
+    data class Chat(val chatId: String, val otherUid: String, val otherUser: UserData? = null, val returnTo: MenuNavigation = Chats) : MenuNavigation()
 }
 
 class MenuActivity : ComponentActivity() {
@@ -52,8 +59,25 @@ class MenuActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         enableEdgeToEdge()
-        hideSystemUI()
+        
+        // Solicitar permisos de notificación (Android 13+)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            val permission = android.Manifest.permission.POST_NOTIFICATIONS
+            if (androidx.core.content.ContextCompat.checkSelfPermission(this, permission) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                androidx.core.app.ActivityCompat.requestPermissions(this, arrayOf(permission), 101)
+            }
+        }
+
+        // Registrar Token de FCM
+        com.google.firebase.messaging.FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+            val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+            if (uid != null) {
+                com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                    .collection("usuarios").document(uid).update("fcmToken", token)
+            }
+        }
 
         setContent {
             val menuViewModel: MenuViewModel = viewModel()
@@ -61,11 +85,22 @@ class MenuActivity : ComponentActivity() {
             val fichaViewModel: FichaViewModel = viewModel()
             val searchViewModel: SearchViewModel = viewModel()
             val vinculosViewModel: VinculosViewModel = viewModel()
+            val favoritosViewModel: com.example.cuidaleapp.viewmodel.FavoritosViewModel = viewModel()
 
             val isDark by menuViewModel.isDarkMode.collectAsState()
             val userData by menuViewModel.userData.collectAsState()
             val isLoggedOut by menuViewModel.isLoggedOut.collectAsState()
             
+            val chatViewModel: com.example.cuidaleapp.viewmodel.ChatViewModel = viewModel()
+            val notificationsViewModel: com.example.cuidaleapp.viewmodel.NotificationsViewModel = viewModel()
+            
+            val unreadCount by chatViewModel.totalUnreadCount.collectAsState()
+            val pendingNotifs by notificationsViewModel.unreadCount.collectAsState()
+
+            LaunchedEffect(Unit) {
+                chatViewModel.listenChats()
+            }
+
             var currentScreen by remember { mutableStateOf<MenuNavigation>(Main) }
 
             LaunchedEffect(intent) {
@@ -108,6 +143,8 @@ class MenuActivity : ComponentActivity() {
                             userData = userData,
                             searchViewModel = searchViewModel,
                             isDark = isDark,
+                            unreadCount = unreadCount,
+                            pendingNotifs = pendingNotifs,
                             onToggleTheme = { menuViewModel.toggleTheme() },
                             onLogout = { menuViewModel.logout() },
                             onViewProfile = { currentScreen = Profile },
@@ -172,6 +209,8 @@ class MenuActivity : ComponentActivity() {
                             onViewProfile = { currentScreen = Profile },
                             onViewFicha = { currentScreen = Ficha(startInEditMode = false, returnTo = Chats) },
                             onViewSettings = { currentScreen = Settings(returnTo = Chats) },
+                            unreadCount = unreadCount,
+                            pendingNotifs = pendingNotifs,
                             onTabSelected = { tab ->
                                 currentScreen = when (tab) {
                                     "notifications" -> Notifications
@@ -181,8 +220,11 @@ class MenuActivity : ComponentActivity() {
                             },
                             onUserClick = { uid -> currentScreen = OtherFicha(uid, returnTo = Chats) },
                             onChatClick = { chatId, otherUser ->
-                                currentScreen = Chat(chatId, otherUser, returnTo = Chats)
-                            }
+                                currentScreen = Chat(chatId, otherUser.uid, otherUser, returnTo = Chats)
+                            },
+                            favoritosViewModel = favoritosViewModel,
+                            chatViewModel = chatViewModel,
+                            vinculosViewModel = vinculosViewModel
                         )
                     }
                     Notifications -> {
@@ -194,28 +236,60 @@ class MenuActivity : ComponentActivity() {
                             onViewProfile = { currentScreen = Profile },
                             onViewFicha = { currentScreen = Ficha(startInEditMode = false, returnTo = Notifications) },
                             onViewSettings = { currentScreen = Settings(returnTo = Notifications) },
+                            unreadCount = unreadCount,
+                            pendingNotifs = pendingNotifs,
                             onTabSelected = { tab ->
                                 currentScreen = when (tab) {
                                     "chats" -> Chats
                                     "home" -> Main
                                     else -> Notifications
                                 }
+                            },
+                            onNotificationClick = { notification ->
+                                when (notification.tipo) {
+                                    "solicitud_vinculo" -> {
+                                        currentScreen = OtherFicha(uid = notification.emisor, returnTo = Notifications)
+                                    }
+                                    "vinculo_aceptado" -> {
+                                        val chatId = notification.data["chatId"] ?: ""
+                                        if (chatId.isNotEmpty()) {
+                                            currentScreen = Chat(chatId = chatId, otherUid = notification.emisor, returnTo = Notifications)
+                                        }
+                                    }
+                                }
                             }
                         )
                     }
                     is Chat -> {
-                        ChatScreen(
-                            chatId = cs.chatId,
-                            otherUser = cs.otherUser,
-                            myUid = userData.uid,
-                            myName = userData.nombre,
-                            isDark = isDark,
-                            viewModel = viewModel<com.example.cuidaleapp.viewmodel.ChatViewModel>(),
-                            onNavigateBack = { currentScreen = cs.returnTo },
-                            onViewOtherProfile = { uid ->
-                                currentScreen = OtherFicha(uid, returnTo = cs)
+                        var otherUserData by remember { mutableStateOf(cs.otherUser) }
+                        
+                        LaunchedEffect(cs.otherUid) {
+                            if (otherUserData == null) {
+                                val doc = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                    .collection("usuarios").document(cs.otherUid).get().await()
+                                otherUserData = doc.toObject(UserData::class.java)
                             }
-                        )
+                        }
+
+                        if (otherUserData != null) {
+                            ChatScreen(
+                                chatId = cs.chatId,
+                                otherUser = otherUserData!!,
+                                myUid = userData.uid,
+                                myName = userData.nombre,
+                                isDark = isDark,
+                                viewModel = chatViewModel,
+                                favoritosViewModel = favoritosViewModel,
+                                onNavigateBack = { currentScreen = cs.returnTo },
+                                onViewOtherProfile = { uid ->
+                                    currentScreen = OtherFicha(uid, returnTo = cs)
+                                }
+                            )
+                        } else {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator()
+                            }
+                        }
                     }
                     is OtherFicha -> {
                         LaunchedEffect(cs.uid) {
@@ -224,16 +298,19 @@ class MenuActivity : ComponentActivity() {
                         OtherFichaScreen(
                             profileViewModel = profileViewModel,
                             vinculosViewModel = vinculosViewModel,
+                            favoritosViewModel = favoritosViewModel,
                             onNavigateBack = { currentScreen = cs.returnTo },
-                            onChatNavigate = { chatId, otherUser ->
-                                currentScreen = Chat(chatId, otherUser, returnTo = cs)
+                            onChatNavigate = { chatId, otherUid, otherUser ->
+                                currentScreen = Chat(chatId, otherUid, otherUser, returnTo = cs)
                             }
                         )
                     }
                     SocialManagement -> {
                         SocialManagementScreen(
                             onNavigateBack = { currentScreen = Profile },
-                            onUserClick = { uid -> currentScreen = OtherFicha(uid, returnTo = SocialManagement) }
+                            onUserClick = { uid -> currentScreen = OtherFicha(uid, returnTo = SocialManagement) },
+                            favoritosViewModel = favoritosViewModel,
+                            vinculosViewModel = vinculosViewModel
                         )
                     }
                 }
@@ -248,14 +325,10 @@ class MenuActivity : ComponentActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) {
-            hideSystemUI()
-        }
+        // Eliminamos hideSystemUI() para que el teclado funcione correctamente con Compose
     }
 
     private fun hideSystemUI() {
-        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
-        windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
+        // Desactivado para evitar errores de insets con el teclado
     }
 }

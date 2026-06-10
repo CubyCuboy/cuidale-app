@@ -20,13 +20,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.Cancel
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.*
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -47,6 +42,8 @@ import kotlinx.coroutines.launch
 fun ChatsScreen(
     userData: UserData,
     isDark: Boolean,
+    unreadCount: Int = 0,
+    pendingNotifs: Int = 0,
     onToggleTheme: () -> Unit,
     onLogout: () -> Unit,
     onViewProfile: () -> Unit,
@@ -63,6 +60,7 @@ fun ChatsScreen(
     val managedUsers by favoritosViewModel.managedUsers.collectAsState()
     val favoritos by favoritosViewModel.favoritos.collectAsState()
     val noDeseados by favoritosViewModel.noDeseados.collectAsState()
+    val bloqueados by favoritosViewModel.bloqueados.collectAsState()
     val chatList by chatViewModel.chatList.collectAsState()
     val misVinculos by vinculosViewModel.misVinculos.collectAsState()
     val vinculosUsers by vinculosViewModel.vinculosUsers.collectAsState()
@@ -135,7 +133,12 @@ fun ChatsScreen(
                         }
                     },
                     bottomBar = {
-                        CuidaleBottomBar(selectedTab = "chats", onTabSelected = onTabSelected)
+                        CuidaleBottomBar(
+                            selectedTab = "chats", 
+                            unreadCount = unreadCount, 
+                            pendingNotifs = pendingNotifs,
+                            onTabSelected = onTabSelected
+                        )
                     },
                     containerColor = Color.Transparent
                 ) { innerPadding ->
@@ -194,6 +197,11 @@ fun ChatsScreen(
                                     onClick = { selectedTab = 2 },
                                     text = { Text("NO DESEADOS", style = MaterialTheme.typography.labelLarge) }
                                 )
+                                Tab(
+                                    selected = selectedTab == 3,
+                                    onClick = { selectedTab = 3 },
+                                    text = { Text("BLOQUEADOS", style = MaterialTheme.typography.labelLarge) }
+                                )
                             }
 
                             when (selectedTab) {
@@ -201,6 +209,7 @@ fun ChatsScreen(
                                     chatList = chatList,
                                     managedUsers = managedUsers,
                                     favoritos = favoritos,
+                                    bloqueados = bloqueados,
                                     isDark = isDark,
                                     onChatClick = onChatClick,
                                     onUserClick = onUserClick
@@ -219,6 +228,12 @@ fun ChatsScreen(
                                     isDark = isDark,
                                     onRemove = { favoritosViewModel.toggleNoDeseado(it) }
                                 )
+                                3 -> BlockedListSection(
+                                    bloqueados = bloqueados,
+                                    managedUsers = managedUsers,
+                                    isDark = isDark,
+                                    onRemove = { favoritosViewModel.toggleBloqueo(it) }
+                                )
                             }
                         }
                     }
@@ -233,6 +248,7 @@ fun ChatListSection(
     chatList: List<ChatViewModel.ChatPreview>,
     managedUsers: List<UserData>,
     favoritos: List<String>,
+    bloqueados: List<String>,
     isDark: Boolean,
     onChatClick: (String, UserData) -> Unit,
     onUserClick: (String) -> Unit
@@ -263,10 +279,12 @@ fun ChatListSection(
             }
             items(sortedChats) { chat ->
                 val isFav = favoritos.contains(chat.otherUser.uid)
+                val isBlocked = bloqueados.contains(chat.otherUser.uid)
                 RecentChatRow(
                     chat = chat, 
                     isDark = isDark, 
                     isFavorite = isFav,
+                    isBlocked = isBlocked,
                     onClick = { onChatClick(chat.chatId, chat.otherUser) }
                 )
             }
@@ -506,6 +524,50 @@ fun UnwantedListSection(
     }
 }
 
+@Composable
+fun BlockedListSection(
+    bloqueados: List<String>,
+    managedUsers: List<UserData>,
+    isDark: Boolean,
+    onRemove: (String) -> Unit
+) {
+    val customColors = CuidaleThemeExtras.customColors
+    val blockedUsers = managedUsers.filter { bloqueados.contains(it.uid) }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        items(blockedUsers) { user ->
+            HardShadowPanel(
+                backgroundColor = if (isDark) customColors.panelBackground else Color.White,
+                shadowColor = Color.Red.copy(alpha = 0.2f)
+            ) {
+                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "${user.nombre} ${user.apellido_pa}",
+                        modifier = Modifier.weight(1f),
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Gray
+                    )
+                    TextButton(onClick = { onRemove(user.uid) }) {
+                        Text("DESBLOQUEAR", color = Color.Red)
+                    }
+                }
+            }
+        }
+
+        if (blockedUsers.isEmpty()) {
+            item {
+                Box(modifier = Modifier.fillParentMaxHeight(0.7f), contentAlignment = Alignment.Center) {
+                    Text("No tienes usuarios bloqueados", color = Color.White.copy(alpha = 0.6f))
+                }
+            }
+        }
+    }
+}
+
 private fun formatMessageDate(timestamp: Long): String {
     val now = java.util.Calendar.getInstance()
     val msgDate = java.util.Calendar.getInstance().apply { timeInMillis = timestamp }
@@ -522,17 +584,17 @@ private fun formatMessageDate(timestamp: Long): String {
 }
 
 @Composable
-fun RecentChatRow(chat: ChatViewModel.ChatPreview, isDark: Boolean, isFavorite: Boolean = false, onClick: () -> Unit) {
+fun RecentChatRow(chat: ChatViewModel.ChatPreview, isDark: Boolean, isFavorite: Boolean = false, isBlocked: Boolean = false, onClick: () -> Unit) {
     val customColors = CuidaleThemeExtras.customColors
     val itemAccent = if (chat.otherUser.rol == "cuidador") customColors.aqua else customColors.mint
     
     HardShadowPanel(
-        backgroundColor = if (isDark) customColors.panelBackground else Color.White,
-        shadowColor = if (isFavorite) Color.Yellow.copy(alpha = 0.3f) else itemAccent.copy(alpha = 0.3f),
+        backgroundColor = if (isBlocked) (if (isDark) Color(0xFF2B2D31) else Color(0xFFF2F3F5)) else (if (isDark) customColors.panelBackground else Color.White),
+        shadowColor = if (isBlocked) Color.Transparent else (if (isFavorite) Color.Yellow.copy(alpha = 0.3f) else itemAccent.copy(alpha = 0.3f)),
         modifier = Modifier.clickable { onClick() }
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(12.dp).alpha(if (isBlocked) 0.6f else 1.0f),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
@@ -545,7 +607,11 @@ fun RecentChatRow(chat: ChatViewModel.ChatPreview, isDark: Boolean, isFavorite: 
                     Icon(Icons.Default.Person, null, tint = itemAccent)
                 }
                 
-                if (isFavorite) {
+                if (isBlocked) {
+                    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.Block, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    }
+                } else if (isFavorite) {
                     Icon(
                         Icons.Default.Star,
                         null,
@@ -567,9 +633,9 @@ fun RecentChatRow(chat: ChatViewModel.ChatPreview, isDark: Boolean, isFavorite: 
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         modifier = Modifier.weight(1f),
-                        color = if (isFavorite) (if (isDark) customColors.lime else customColors.successStrong) else MaterialTheme.colorScheme.onSurface
+                        color = if (isBlocked) Color.Gray else (if (isFavorite) (if (isDark) customColors.lime else customColors.successStrong) else MaterialTheme.colorScheme.onSurface)
                     )
-                    if (chat.lastMessage != null) {
+                    if (chat.lastMessage != null && !isBlocked) {
                         Text(
                             text = formatMessageDate(chat.lastMessage.timestamp),
                             style = MaterialTheme.typography.labelSmall,
@@ -578,16 +644,20 @@ fun RecentChatRow(chat: ChatViewModel.ChatPreview, isDark: Boolean, isFavorite: 
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    val msgText = if (chat.lastMessage?.isDeleted == true) "Mensaje borrado" else chat.lastMessage?.text ?: "Inicia una conversación"
+                    val msgText = when {
+                        isBlocked -> "Usuario bloqueado"
+                        chat.lastMessage?.deleted == true -> "Mensaje borrado"
+                        else -> chat.lastMessage?.text ?: "Inicia una conversación"
+                    }
                     Text(
                         text = msgText,
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (chat.unreadCount > 0) (if (isDark) Color.White else Color.Black) else Color.Gray,
-                        fontWeight = if (chat.unreadCount > 0) FontWeight.Bold else FontWeight.Normal,
+                        color = if (chat.unreadCount > 0 && !isBlocked) (if (isDark) Color.White else Color.Black) else Color.Gray,
+                        fontWeight = if (chat.unreadCount > 0 && !isBlocked) FontWeight.Bold else FontWeight.Normal,
                         maxLines = 1,
                         modifier = Modifier.weight(1f)
                     )
-                    if (chat.unreadCount > 0) {
+                    if (chat.unreadCount > 0 && !isBlocked) {
                         Box(
                             modifier = Modifier.size(20.dp).background(customColors.lime, CircleShape),
                             contentAlignment = Alignment.Center

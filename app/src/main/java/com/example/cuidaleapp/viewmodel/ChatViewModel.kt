@@ -26,6 +26,9 @@ class ChatViewModel : ViewModel() {
     private val _chatList = MutableStateFlow<List<ChatPreview>>(emptyList())
     val chatList: StateFlow<List<ChatPreview>> = _chatList
 
+    private val _totalUnreadCount = MutableStateFlow(0)
+    val totalUnreadCount: StateFlow<Int> = _totalUnreadCount
+
     private val _isUploading = MutableStateFlow(false)
     val isUploading: StateFlow<Boolean> = _isUploading
 
@@ -41,6 +44,9 @@ class ChatViewModel : ViewModel() {
     private val _pinnedMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val pinnedMessages: StateFlow<List<ChatMessage>> = _pinnedMessages
 
+    private val _isOtherTyping = MutableStateFlow(false)
+    val isOtherTyping: StateFlow<Boolean> = _isOtherTyping
+
     data class ChatPreview(
         val otherUser: UserData,
         val lastMessage: ChatMessage?,
@@ -50,18 +56,55 @@ class ChatViewModel : ViewModel() {
 
     private var messagesListener: ValueEventListener? = null
     private var statusListener: ValueEventListener? = null
+    private var typingListener: ValueEventListener? = null
+    private var chatsListener: com.google.firebase.firestore.ListenerRegistration? = null
     private var blockingListener: com.google.firebase.firestore.ListenerRegistration? = null
+    private val chatMessageListeners = mutableMapOf<String, ValueEventListener>()
     private var currentChatId: String? = null
 
     fun setUserStatus(isOnline: Boolean) {
         val uid = auth.currentUser?.uid ?: return
-        val status = if (isOnline) "en línea" else "desconectado"
-        database.child("status").child(uid).setValue(
-            mapOf(
-                "estado" to status,
+        val statusRef = database.child("status").child(uid)
+        
+        if (isOnline) {
+            val status = mapOf(
+                "estado" to "en línea",
                 "lastSeen" to ServerValue.TIMESTAMP
             )
-        )
+            statusRef.setValue(status)
+            statusRef.onDisconnect().setValue(mapOf(
+                "estado" to "desconectado",
+                "lastSeen" to ServerValue.TIMESTAMP
+            ))
+        } else {
+            statusRef.setValue(mapOf(
+                "estado" to "desconectado",
+                "lastSeen" to ServerValue.TIMESTAMP
+            ))
+        }
+    }
+
+    fun setTyping(chatId: String, isTyping: Boolean) {
+        val myUid = auth.currentUser?.uid ?: return
+        val typingRef = database.child("typing").child(chatId).child(myUid)
+        if (isTyping) {
+            typingRef.setValue(true)
+            typingRef.onDisconnect().removeValue()
+        } else {
+            typingRef.removeValue()
+        }
+    }
+
+    fun listenTyping(chatId: String, otherUid: String) {
+        typingListener?.let { database.child("typing").child(chatId).child(otherUid).removeEventListener(it) }
+        
+        typingListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                _isOtherTyping.value = snapshot.exists() && snapshot.getValue(Boolean::class.java) == true
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        }
+        database.child("typing").child(chatId).child(otherUid).addValueEventListener(typingListener!!)
     }
 
     fun listenUserStatus(otherUid: String) {
@@ -81,19 +124,18 @@ class ChatViewModel : ViewModel() {
         val myUid = auth.currentUser?.uid ?: return
         blockingListener?.remove()
         
-        // Escuchar si EL OTRO USUARIO ME bloqueó a MÍ
         blockingListener = db.collection("usuarios").document(otherUid)
             .addSnapshotListener { snapshot, e ->
                 if (e != null) return@addSnapshotListener
-                val noDeseados = snapshot?.get("no_deseados") as? List<String> ?: emptyList()
-                _isBlocked.value = noDeseados.contains(myUid)
+                val bloqueados = snapshot?.get("bloqueados") as? List<String> ?: emptyList()
+                _isBlocked.value = bloqueados.contains(myUid)
             }
     }
 
     fun listenMessages(chatId: String) {
         if (currentChatId == chatId) return
         
-        removeListener()
+        removeActiveListener()
         currentChatId = chatId
 
         messagesListener = object : ValueEventListener {
@@ -104,9 +146,8 @@ class ChatViewModel : ViewModel() {
                 }
                 val sortedList = list.sortedBy { it.timestamp }
                 _messages.value = sortedList
-                _pinnedMessages.value = sortedList.filter { it.isPinned && !it.isDeleted }
+                _pinnedMessages.value = sortedList.filter { it.pinned && !it.deleted }
                 
-                // Marcar como leído
                 val myUid = auth.currentUser?.uid ?: return
                 list.forEach { msg ->
                     if (msg.senderId != myUid && !msg.readBy.containsKey(myUid)) {
@@ -176,25 +217,27 @@ class ChatViewModel : ViewModel() {
         return name
     }
 
-    private fun removeListener() {
+    private fun removeActiveListener() {
         currentChatId?.let { chatId ->
             messagesListener?.let { listener ->
                 database.child("messages").child(chatId).removeEventListener(listener)
             }
+            typingListener?.let { listener ->
+                database.child("typing").child(chatId).removeEventListener(listener)
+            }
         }
         messagesListener = null
+        typingListener = null
     }
 
     fun listenChats() {
         val myUid = auth.currentUser?.uid ?: return
+        if (chatsListener != null) return // Already listening
 
-        db.collection("vinculos")
+        chatsListener = db.collection("vinculos")
             .whereArrayContains("uids", myUid)
             .addSnapshotListener { snapshot, e ->
-                if (e != null) {
-                    Log.e("ChatViewModel", "Error en listenChats: ${e.message}")
-                    return@addSnapshotListener
-                }
+                if (e != null) return@addSnapshotListener
 
                 val aceptados = snapshot?.documents?.filter {
                     it.getString("estado") == "aceptado"
@@ -214,6 +257,7 @@ class ChatViewModel : ViewModel() {
 
                 if (userIds.isEmpty()) {
                     _chatList.value = emptyList()
+                    _totalUnreadCount.value = 0
                     return@addSnapshotListener
                 }
 
@@ -229,35 +273,38 @@ class ChatViewModel : ViewModel() {
                 val otherUid = userIds[index]
                 val otherUser = usersMap[otherUid] ?: UserData(uid = otherUid, nombre = "Usuario")
                 
-                database.child("messages").child(chatId).limitToLast(1)
-                    .addValueEventListener(object : ValueEventListener {
-                        override fun onDataChange(snapshot: DataSnapshot) {
-                            val lastMsg = snapshot.children.firstOrNull()?.getValue(ChatMessage::class.java)
-                            
-                            database.child("messages").child(chatId).get().addOnSuccessListener { allMsgs ->
-                                var unread = 0
-                                allMsgs.children.forEach { m ->
-                                    val msg = m.getValue(ChatMessage::class.java)
-                                    if (msg != null && msg.senderId != myUid && !msg.readBy.containsKey(myUid)) {
-                                        unread++
-                                    }
-                                }
-                                
-                                val newPreview = ChatPreview(otherUser, lastMsg, unread, chatId)
-                                val currentList = _chatList.value.toMutableList()
-                                currentList.removeAll { it.chatId == chatId }
-                                currentList.add(newPreview)
-                                _chatList.value = currentList.sortedByDescending { it.lastMessage?.timestamp ?: 0L }
+                if (chatMessageListeners.containsKey(chatId)) return@forEachIndexed
+                
+                val listener = object : ValueEventListener {
+                    override fun onDataChange(snapshot: DataSnapshot) {
+                        val lastMsg = snapshot.children.lastOrNull()?.getValue(ChatMessage::class.java)
+                        
+                        var unread = 0
+                        snapshot.children.forEach { m ->
+                            val msg = m.getValue(ChatMessage::class.java)
+                            if (msg != null && msg.senderId != myUid && !msg.readBy.containsKey(myUid)) {
+                                unread++
                             }
                         }
-                        override fun onCancelled(error: DatabaseError) {}
-                    })
+                        
+                        val newPreview = ChatPreview(otherUser, lastMsg, unread, chatId)
+                        val currentList = _chatList.value.toMutableList()
+                        currentList.removeAll { it.chatId == chatId }
+                        currentList.add(newPreview)
+                        val sorted = currentList.sortedByDescending { it.lastMessage?.timestamp ?: 0L }
+                        _chatList.value = sorted
+                        _totalUnreadCount.value = sorted.sumOf { it.unreadCount }
+                    }
+                    override fun onCancelled(error: DatabaseError) {}
+                }
+                chatMessageListeners[chatId] = listener
+                database.child("messages").child(chatId).addValueEventListener(listener)
             }
         }
     }
 
     fun sendMessage(chatId: String, text: String, imageUrl: String? = null, videoUrl: String? = null, fileUrl: String? = null, fileName: String? = null, isSystem: Boolean = false) {
-        if (_isBlocked.value && !isSystem) return // No enviar si estamos bloqueados
+        if (_isBlocked.value && !isSystem) return
 
         val myUid = auth.currentUser?.uid ?: return
         val msgRef = database.child("messages").child(chatId).push()
@@ -275,12 +322,27 @@ class ChatViewModel : ViewModel() {
             readBy = if (isSystem) emptyMap() else mapOf(myUid to true)
         )
         msgRef.setValue(message)
+
+        // Crear notificación si no es mensaje de sistema
+        if (!isSystem) {
+            val otherUid = chatId.split("_").firstOrNull { it != myUid } ?: 
+                         chatId.split("_").lastOrNull { it != myUid } ?: ""
+            
+            if (otherUid.isNotEmpty()) {
+                val notifRef = db.collection("usuarios").document(otherUid).collection("notificaciones").document()
+                val notification = com.example.cuidaleapp.models.Notification(
+                    id = notifRef.id,
+                    tipo = "nuevo_mensaje",
+                    emisor = myUid,
+                    receptor = otherUid,
+                    timestamp = System.currentTimeMillis(),
+                    data = mapOf("chatId" to chatId, "text" to text.take(50))
+                )
+                notifRef.set(notification)
+            }
+        }
     }
 
-    /**
-     * Mueve los mensajes antiguos (más de 7 días) de Realtime Database a Firestore
-     * para evitar saturar la base de datos en tiempo real.
-     */
     fun archiveOldMessages(chatId: String) {
         val sevenDaysAgo = System.currentTimeMillis() - (7 * 24 * 60 * 60 * 1000)
         
@@ -291,40 +353,39 @@ class ChatViewModel : ViewModel() {
             .addOnSuccessListener { snapshot ->
                 if (snapshot.exists()) {
                     val batch = db.batch()
+                    val messagesToArchive = mutableListOf<DataSnapshot>()
+                    
                     snapshot.children.forEach { child ->
                         val msg = child.getValue(ChatMessage::class.java) ?: return@forEach
-                        val docRef = db.collection("archived_messages").document(chatId)
-                            .collection("history").document(msg.id)
-                        batch.set(docRef, msg)
+                        if (!msg.pinned) {
+                            val docRef = db.collection("archived_messages").document(chatId)
+                                .collection("history").document(msg.id)
+                            batch.set(docRef, msg)
+                            messagesToArchive.add(child)
+                        }
                     }
                     
-                    batch.commit().addOnSuccessListener {
-                        // Una vez guardados en Firestore, los borramos de RTDB
-                        snapshot.children.forEach { it.ref.removeValue() }
-                        Log.d("ChatViewModel", "Mensajes antiguos archivados correctamente")
+                    if (messagesToArchive.isNotEmpty()) {
+                        batch.commit().addOnSuccessListener {
+                            messagesToArchive.forEach { it.ref.removeValue() }
+                        }
                     }
                 }
             }
     }
 
     fun editMessage(chatId: String, messageId: String, newText: String) {
-        val updates = mapOf(
-            "text" to newText,
-            "isEdited" to true
-        )
+        val updates = mapOf("text" to newText, "edited" to true)
         database.child("messages").child(chatId).child(messageId).updateChildren(updates)
     }
 
     fun deleteMessage(chatId: String, messageId: String) {
-        val updates = mapOf(
-            "text" to "Este mensaje fue eliminado",
-            "isDeleted" to true
-        )
+        val updates = mapOf("text" to "Este mensaje fue eliminado", "deleted" to true)
         database.child("messages").child(chatId).child(messageId).updateChildren(updates)
     }
 
     fun togglePin(chatId: String, messageId: String, currentPinned: Boolean, senderName: String) {
-        database.child("messages").child(chatId).child(messageId).child("isPinned").setValue(!currentPinned)
+        database.child("messages").child(chatId).child(messageId).child("pinned").setValue(!currentPinned)
         val action = if (!currentPinned) "fijó" else "desfijó"
         sendMessage(chatId, "$senderName $action un mensaje", isSystem = true)
     }
@@ -336,7 +397,12 @@ class ChatViewModel : ViewModel() {
 
     override fun onCleared() {
         super.onCleared()
-        removeListener()
+        removeActiveListener()
+        chatsListener?.remove()
         blockingListener?.remove()
+        chatMessageListeners.forEach { (id, listener) ->
+            database.child("messages").child(id).removeEventListener(listener)
+        }
+        chatMessageListeners.clear()
     }
 }
