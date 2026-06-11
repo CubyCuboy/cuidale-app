@@ -180,6 +180,7 @@ fun ProfileDetailView(
     isEditMode: Boolean = false,
     isSummary: Boolean = false,
     isExternal: Boolean = false,
+    showEditButton: Boolean = !isExternal,
     onEdit: () -> Unit,
     onExpand: (() -> Unit)? = null
 ) {
@@ -191,7 +192,7 @@ fun ProfileDetailView(
             onEdit = onEdit
         )
     } else {
-        FullProfileDetailView(role, data, isEditMode, isExternal, onEdit, onExpand)
+        FullProfileDetailView(role, data, isEditMode, isExternal, showEditButton, onEdit, onExpand)
     }
 }
 
@@ -354,6 +355,7 @@ fun FullProfileDetailView(
     data: Map<String, Any>,
     isEditMode: Boolean = false,
     isExternal: Boolean = false,
+    showEditButton: Boolean = !isExternal,
     onEdit: () -> Unit,
     onExpand: (() -> Unit)? = null
 ) {
@@ -392,7 +394,7 @@ fun FullProfileDetailView(
                                 Text("Ver menos", color = accentColor, fontWeight = FontWeight.Bold)
                             }
                         }
-                        if (!isEditMode && !isExternal) {
+                        if (!isEditMode && showEditButton) {
                             IconButton(
                                 onClick = onEdit,
                                 modifier = Modifier.background(accentColor.copy(alpha = 0.15f), CircleShape).size(36.dp)

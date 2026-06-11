@@ -400,10 +400,13 @@ fun OtherFichaScreen(
                         }
 
                         val scope = rememberCoroutineScope()
+                        val isSolicitante = vinculoExistente?.solicitante == vinculosViewModel.myUid
+                        val isPendiente = vinculoExistente?.estado == "pendiente"
+                        
                         val buttonText = when {
                             vinculoExistente?.estado == "aceptado" -> "IR AL CHAT"
-                            vinculoExistente?.solicitante == vinculosViewModel.myUid -> "CHAT YA SOLICITADO"
-                            vinculoExistente?.solicitante != null -> "RESPONDER SOLICITUD"
+                            isSolicitante && isPendiente -> "CHAT YA SOLICITADO"
+                            !isSolicitante && isPendiente -> null // Se muestran ACEPTAR/RECHAZAR abajo
                             else -> "SOLICITAR CHAT"
                         }
 
@@ -411,8 +414,8 @@ fun OtherFichaScreen(
                             HardShadowButton(
                                 text = if (vinculosUiState is VinculosUiState.Loading) "PROCESANDO..." else buttonText,
                                 modifier = Modifier.fillMaxWidth().height(60.dp).padding(vertical = 8.dp),
-                                containerColor = if (vinculoExistente?.solicitante == vinculosViewModel.myUid && vinculoExistente.estado == "pendiente") Color.LightGray else accentColor,
-                                contentColor = if (vinculoExistente?.solicitante == vinculosViewModel.myUid && vinculoExistente.estado == "pendiente") Color.DarkGray else Color.White,
+                                containerColor = if (isSolicitante && isPendiente) Color.LightGray else accentColor,
+                                contentColor = if (isSolicitante && isPendiente) Color.DarkGray else Color.White,
                                 shadowColor = accentColor.copy(alpha = 0.4f),
                                 icon = Icons.AutoMirrored.Filled.Chat,
                                 enabled = vinculosUiState !is VinculosUiState.Loading,
@@ -423,7 +426,7 @@ fun OtherFichaScreen(
                                                 vinculoExistente?.estado == "aceptado" -> {
                                                     onChatNavigate(vinculoExistente.id, user.uid, user)
                                                 }
-                                                vinculoExistente?.solicitante == vinculosViewModel.myUid -> {
+                                                isSolicitante && isPendiente -> {
                                                     showCancelRequestDialog = true
                                                 }
                                                 else -> {
@@ -436,15 +439,15 @@ fun OtherFichaScreen(
                             )
                         }
 
-                        if (vinculoExistente?.solicitante != null && vinculoExistente.solicitante != vinculosViewModel.myUid && vinculoExistente.estado == "pendiente") {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (!isSolicitante && isPendiente) {
+                            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 HardShadowButton(
                                     text = "RECHAZAR",
                                     modifier = Modifier.weight(1f).height(50.dp),
                                     containerColor = Color.White,
                                     contentColor = Color.Red,
                                     shadowColor = Color.Red.copy(alpha = 0.1f),
-                                    onClick = { vinculosViewModel.rechazarSolicitud(vinculoExistente.id) }
+                                    onClick = { vinculosViewModel.rechazarSolicitud(vinculoExistente!!.id) }
                                 )
                                 HardShadowButton(
                                     text = "ACEPTAR SOLICITUD",
@@ -452,7 +455,7 @@ fun OtherFichaScreen(
                                     containerColor = customColors.successStrong,
                                     contentColor = Color.White,
                                     shadowColor = customColors.successStrong.copy(alpha = 0.3f),
-                                    onClick = { vinculosViewModel.aceptarSolicitud(vinculoExistente.id) }
+                                    onClick = { vinculosViewModel.aceptarSolicitud(vinculoExistente!!.id) }
                                 )
                             }
                         }
@@ -513,7 +516,6 @@ fun OtherFichaScreen(
                                 ProfileDetailView(
                                     role = displayRole,
                                     data = targetState.data,
-                                    showEditButton = false,
                                     isExternal = true,
                                     onEdit = { }
                                 )
