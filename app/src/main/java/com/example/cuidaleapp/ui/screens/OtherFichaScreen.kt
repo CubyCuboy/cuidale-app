@@ -34,6 +34,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.ui.draw.scale
 import com.example.cuidaleapp.ui.components.HardShadowButton
 import com.example.cuidaleapp.viewmodel.VinculosViewModel
@@ -46,8 +47,11 @@ import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.FichaState
 import com.example.cuidaleapp.viewmodel.ProfileViewModel
 import com.example.cuidaleapp.models.UserData
+import com.example.cuidaleapp.models.SolicitudCuidado
 import androidx.compose.material.icons.automirrored.filled.Chat
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,7 +60,8 @@ fun OtherFichaScreen(
     vinculosViewModel: VinculosViewModel,
     favoritosViewModel: FavoritosViewModel = androidx.lifecycle.viewmodel.compose.viewModel(),
     onNavigateBack: () -> Unit,
-    onChatNavigate: (String, String, UserData) -> Unit
+    onChatNavigate: (String, String, UserData) -> Unit,
+    onReviewRequest: (SolicitudCuidado) -> Unit
 ) {
     val otherUserData by profileViewModel.otherUserData.collectAsState()
     val otherUserStatus by profileViewModel.otherUserStatus.collectAsState()
@@ -79,16 +84,33 @@ fun OtherFichaScreen(
     }
     var showCancelRequestDialog by remember { mutableStateOf(false) }
 
+    var availableSolicitud by remember { mutableStateOf<SolicitudCuidado?>(null) }
+
     val scrollState = rememberScrollState()
     val customColors = CuidaleThemeExtras.customColors
     val snackbarHostState = remember { SnackbarHostState() }
-    
-    // Use the role from the loaded user data
+
     val displayRole = otherUserData?.rol ?: ""
     val accentColor = when (displayRole) {
         "cuidador" -> customColors.aqua
         "representante" -> customColors.mint
         else -> customColors.lime
+    }
+
+    LaunchedEffect(otherUserData?.uid) {
+        val uid = otherUserData?.uid ?: return@LaunchedEffect
+        if (displayRole == "representante") {
+            try {
+                val snapshot = FirebaseFirestore.getInstance().collection("solicitudes")
+                    .whereEqualTo("representanteUid", uid)
+                    .whereEqualTo("estado", "abierta")
+                    .limit(1)
+                    .get().await()
+                if (!snapshot.isEmpty) {
+                    availableSolicitud = snapshot.documents.first().toObject(SolicitudCuidado::class.java)
+                }
+            } catch (e: Exception) { }
+        }
     }
 
     LaunchedEffect(vinculosUiState) {
@@ -381,7 +403,7 @@ fun OtherFichaScreen(
                         val buttonText = when {
                             vinculoExistente?.estado == "aceptado" -> "IR AL CHAT"
                             vinculoExistente?.solicitante == vinculosViewModel.myUid -> "CHAT YA SOLICITADO"
-                            vinculoExistente?.solicitante != null -> null // Ocultar si soy el receptor (usaremos los otros botones)
+                            vinculoExistente?.solicitante != null -> "RESPONDER SOLICITUD"
                             else -> "SOLICITAR CHAT"
                         }
 
@@ -435,6 +457,30 @@ fun OtherFichaScreen(
                             }
                         }
 
+                        // Service Request availability (FOR CAREGIVERS)
+                        if (availableSolicitud != null && com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid != otherUserData?.uid) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    "Solicitud de cuidado Disponible",
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = accentColor
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                HardShadowButton(
+                                    text = "REVISAR SOLICITUD",
+                                    containerColor = MaterialTheme.colorScheme.secondary,
+                                    contentColor = Color.White,
+                                    shadowColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f),
+                                    icon = Icons.Default.Assignment,
+                                    onClick = { onReviewRequest(availableSolicitud!!) }
+                                )
+                            }
+                        }
+
                         if (showCancelRequestDialog) {
                             AlertDialog(
                                 onDismissRequest = { showCancelRequestDialog = false },
@@ -454,6 +500,8 @@ fun OtherFichaScreen(
                                 }
                             )
                         }
+
+                        Spacer(modifier = Modifier.height(24.dp))
 
                         when (val targetState = otherFichaState) {
                             is FichaState.Loading -> {

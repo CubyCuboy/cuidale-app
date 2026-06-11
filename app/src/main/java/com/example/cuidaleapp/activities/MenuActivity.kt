@@ -11,13 +11,10 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.example.cuidaleapp.models.UserData
+import com.example.cuidaleapp.models.SolicitudCuidado
 import com.example.cuidaleapp.ui.screens.*
 import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
-import com.example.cuidaleapp.viewmodel.MenuViewModel
-import com.example.cuidaleapp.viewmodel.ProfileViewModel
-import com.example.cuidaleapp.viewmodel.FichaViewModel
-import com.example.cuidaleapp.viewmodel.SearchViewModel
-import com.example.cuidaleapp.viewmodel.VinculosViewModel
+import com.example.cuidaleapp.viewmodel.*
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.cuidaleapp.activities.MenuNavigation.*
 import androidx.compose.foundation.layout.Box
@@ -38,6 +35,10 @@ sealed class MenuNavigation {
     data class Settings(val returnTo: MenuNavigation = Profile) : MenuNavigation()
     object Chats : MenuNavigation()
     object Notifications : MenuNavigation()
+    object Requests : MenuNavigation()
+    data class CreateRequest(val requestId: String? = null) : MenuNavigation()
+    data class ManageApplications(val solicitudId: String) : MenuNavigation()
+    data class ReviewRequest(val solicitud: SolicitudCuidado) : MenuNavigation()
     object SocialManagement : MenuNavigation()
     data class OtherFicha(val uid: String, val returnTo: MenuNavigation = Main) : MenuNavigation()
     data class Chat(val chatId: String, val otherUid: String, val otherUser: UserData? = null, val returnTo: MenuNavigation = Chats) : MenuNavigation()
@@ -46,15 +47,13 @@ sealed class MenuNavigation {
 class MenuActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
-        // Status online
-        val chatViewModel = androidx.lifecycle.ViewModelProvider(this)[com.example.cuidaleapp.viewmodel.ChatViewModel::class.java]
+        val chatViewModel = androidx.lifecycle.ViewModelProvider(this)[ChatViewModel::class.java]
         chatViewModel.setUserStatus(true)
     }
 
     override fun onPause() {
         super.onPause()
-        // Status offline
-        val chatViewModel = androidx.lifecycle.ViewModelProvider(this)[com.example.cuidaleapp.viewmodel.ChatViewModel::class.java]
+        val chatViewModel = androidx.lifecycle.ViewModelProvider(this)[ChatViewModel::class.java]
         chatViewModel.setUserStatus(false)
     }
 
@@ -62,8 +61,7 @@ class MenuActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         enableEdgeToEdge()
-        
-        // Solicitar permisos de notificación (Android 13+)
+
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             val permission = android.Manifest.permission.POST_NOTIFICATIONS
             if (androidx.core.content.ContextCompat.checkSelfPermission(this, permission) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
@@ -71,7 +69,6 @@ class MenuActivity : ComponentActivity() {
             }
         }
 
-        // Registrar Token de FCM
         com.google.firebase.messaging.FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
             val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
             if (uid != null) {
@@ -86,15 +83,16 @@ class MenuActivity : ComponentActivity() {
             val fichaViewModel: FichaViewModel = viewModel()
             val searchViewModel: SearchViewModel = viewModel()
             val vinculosViewModel: VinculosViewModel = viewModel()
-            val favoritosViewModel: com.example.cuidaleapp.viewmodel.FavoritosViewModel = viewModel()
+            val favoritosViewModel: FavoritosViewModel = viewModel()
+            val solicitudViewModel: SolicitudViewModel = viewModel()
 
             val isDark by menuViewModel.isDarkMode.collectAsState()
             val userData by menuViewModel.userData.collectAsState()
             val isLoggedOut by menuViewModel.isLoggedOut.collectAsState()
             val fichaState by fichaViewModel.state.collectAsState()
-            
-            val chatViewModel: com.example.cuidaleapp.viewmodel.ChatViewModel = viewModel()
-            val notificationsViewModel: com.example.cuidaleapp.viewmodel.NotificationsViewModel = viewModel()
+
+            val chatViewModel: ChatViewModel = viewModel()
+            val notificationsViewModel: NotificationsViewModel = viewModel()
             
             val unreadCount by chatViewModel.totalUnreadCount.collectAsState()
             val pendingNotifs by notificationsViewModel.unreadCount.collectAsState()
@@ -126,7 +124,7 @@ class MenuActivity : ComponentActivity() {
                 val target = intent.getStringExtra("TARGET_SCREEN")
                 val uid = intent.getStringExtra("USER_UID")
                 val chatId = intent.getStringExtra("chatId")
-                
+
                 when (target) {
                     "OTHER_FICHA" -> if (uid != null) currentScreen = OtherFicha(uid, returnTo = SocialManagement)
                     "CHATS" -> currentScreen = Chats
@@ -150,6 +148,10 @@ class MenuActivity : ComponentActivity() {
                     is Settings -> cs.returnTo
                     Chats -> Main
                     Notifications -> Main
+                    Requests -> Main
+                    is CreateRequest -> Requests
+                    is ManageApplications -> Requests
+                    is ReviewRequest -> Main
                     is Chat -> cs.returnTo
                     is OtherFicha -> cs.returnTo
                     SocialManagement -> Profile
@@ -186,6 +188,7 @@ class MenuActivity : ComponentActivity() {
                                 currentScreen = when (tab) {
                                     "chats" -> Chats
                                     "notifications" -> Notifications
+                                    "requests" -> Requests
                                     else -> Main
                                 }
                             }
@@ -199,6 +202,14 @@ class MenuActivity : ComponentActivity() {
                             onSettingsClick = { currentScreen = Settings() },
                             onSocialClick = {
                                 currentScreen = SocialManagement
+                            },
+                            onTabSelected = { tab ->
+                                currentScreen = when (tab) {
+                                    "chats" -> Chats
+                                    "notifications" -> Notifications
+                                    "requests" -> Requests
+                                    else -> Main
+                                }
                             }
                         )
                     }
@@ -246,6 +257,7 @@ class MenuActivity : ComponentActivity() {
                                 currentScreen = when (tab) {
                                     "notifications" -> Notifications
                                     "home" -> Main
+                                    "requests" -> Requests
                                     else -> Chats
                                 }
                             },
@@ -273,6 +285,7 @@ class MenuActivity : ComponentActivity() {
                                 currentScreen = when (tab) {
                                     "chats" -> Chats
                                     "home" -> Main
+                                    "requests" -> Requests
                                     else -> Notifications
                                 }
                             },
@@ -291,9 +304,51 @@ class MenuActivity : ComponentActivity() {
                             }
                         )
                     }
+                    Requests -> {
+                        SolicitudesScreen(
+                            viewModel = solicitudViewModel,
+                            userData = userData,
+                            unreadCount = unreadCount,
+                            pendingNotifs = pendingNotifs,
+                            onTabSelected = { tab ->
+                                currentScreen = when (tab) {
+                                    "chats" -> Chats
+                                    "notifications" -> Notifications
+                                    "home" -> Main
+                                    else -> Requests
+                                }
+                            },
+                            onCreateRequest = { currentScreen = CreateRequest(null) },
+                            onEditRequest = { id -> currentScreen = CreateRequest(id) },
+                            onViewPatientDetails = { uid -> currentScreen = OtherFicha(uid, returnTo = Requests) },
+                            onViewCaregiverProfile = { uid -> currentScreen = OtherFicha(uid, returnTo = Requests) }
+                        )
+                    }
+                    is CreateRequest -> {
+                        CreateSolicitudScreen(
+                            requestId = cs.requestId,
+                            viewModel = solicitudViewModel,
+                            fichaViewModel = fichaViewModel,
+                            onNavigateBack = { currentScreen = Requests }
+                        )
+                    }
+                    is ManageApplications -> {
+                        PostulacionesScreen(
+                            solicitudId = cs.solicitudId,
+                            viewModel = solicitudViewModel,
+                            onNavigateBack = { currentScreen = Requests },
+                            onViewCaregiver = { uid -> currentScreen = OtherFicha(uid, returnTo = cs) }
+                        )
+                    }
+                    is ReviewRequest -> {
+                        ReviewSolicitudScreen(
+                            solicitud = cs.solicitud,
+                            viewModel = solicitudViewModel,
+                            onNavigateBack = { currentScreen = Main }
+                        )
+                    }
                     is Chat -> {
                         var otherUserData by remember { mutableStateOf(cs.otherUser) }
-                        
                         LaunchedEffect(cs.otherUid) {
                             if (otherUserData == null) {
                                 val doc = com.google.firebase.firestore.FirebaseFirestore.getInstance()
@@ -301,7 +356,6 @@ class MenuActivity : ComponentActivity() {
                                 otherUserData = doc.toObject(UserData::class.java)
                             }
                         }
-
                         if (otherUserData != null) {
                             ChatScreen(
                                 chatId = cs.chatId,
@@ -333,7 +387,8 @@ class MenuActivity : ComponentActivity() {
                             onNavigateBack = { currentScreen = cs.returnTo },
                             onChatNavigate = { chatId, otherUid, otherUser ->
                                 currentScreen = Chat(chatId, otherUid, otherUser, returnTo = cs)
-                            }
+                            },
+                            onReviewRequest = { sol -> currentScreen = ReviewRequest(sol) }
                         )
                     }
                     SocialManagement -> {
