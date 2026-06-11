@@ -28,9 +28,7 @@ import coil3.compose.AsyncImage
 import com.example.cuidaleapp.activities.EditProfileActivity
 import com.example.cuidaleapp.activities.FichaActivity
 import com.example.cuidaleapp.activities.PhoneVerificationActivity
-import com.example.cuidaleapp.ui.components.HardShadowButton
-import com.example.cuidaleapp.ui.components.HardShadowPanel
-import com.example.cuidaleapp.ui.components.ProfileDetailView
+import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.FichaState
 import com.example.cuidaleapp.viewmodel.FichaViewModel
@@ -43,7 +41,8 @@ fun ProfileScreen(
     fichaViewModel: FichaViewModel,
     onNavigateBack: () -> Unit,
     onSettingsClick: () -> Unit,
-    onSocialClick: () -> Unit
+    onSocialClick: () -> Unit,
+    onTabSelected: (String) -> Unit = {}
 ) {
     val userData by viewModel.userData.collectAsState()
     val fichaState by fichaViewModel.state.collectAsState()
@@ -52,7 +51,6 @@ fun ProfileScreen(
     val pullToRefreshState = rememberPullToRefreshState()
     
     val scrollState = rememberScrollState()
-    val isFichaEditing = fichaState is FichaState.Editing || fichaState is FichaState.NotFound
     val context = LocalContext.current
     var isFichaExpanded by remember { mutableStateOf(false) }
 
@@ -63,262 +61,268 @@ fun ProfileScreen(
     val secondaryTextColor = MaterialTheme.colorScheme.onSurfaceVariant
     val panelBg = customColors.panelBackground
 
-    PullToRefreshBox(
-        state = pullToRefreshState,
-        isRefreshing = isRefreshing,
-        onRefresh = { 
-            if (!isFichaExpanded) {
-                viewModel.refreshFromFirestore()
-                fichaViewModel.checkProfile()
-            }
-        },
-        modifier = Modifier.fillMaxSize()
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+    Scaffold(
+        bottomBar = {
+            CuidaleBottomBar(selectedTab = "none", onTabSelected = onTabSelected)
+        }
+    ) { innerPadding ->
+        PullToRefreshBox(
+            state = pullToRefreshState,
+            isRefreshing = isRefreshing,
+            onRefresh = { 
+                if (!isFichaExpanded) {
+                    viewModel.refreshFromFirestore()
+                    fichaViewModel.checkProfile()
+                }
+            },
+            modifier = Modifier.fillMaxSize().padding(innerPadding)
         ) {
-            Column(
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .verticalScroll(scrollState)
+                    .background(MaterialTheme.colorScheme.background)
             ) {
-                // Modern Header / Banner (Matching FichaScreen)
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(140.dp)
-                        .background(accentColor)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .windowInsetsPadding(WindowInsets.safeDrawing)
-                            .padding(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(
-                            onClick = onNavigateBack,
-                            modifier = Modifier.background(Color.Black.copy(alpha = 0.3f), CircleShape)
-                        ) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = Color.White)
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = "MI PERFIL",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = Color.White
-                        )
-                        Spacer(modifier = Modifier.weight(1f))
-                        IconButton(
-                            onClick = onSettingsClick,
-                            modifier = Modifier.background(Color.Black.copy(alpha = 0.3f), CircleShape)
-                        ) {
-                            Icon(Icons.Default.Settings, "Ajustes", tint = Color.White)
-                        }
-                    }
-                }
-
-                // Profile Content Overlay
                 Column(
                     modifier = Modifier
-                        .padding(horizontal = 16.dp)
-                        .offset(y = (-40).dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
                 ) {
-                    // Centered Avatar
-                    Surface(
+                    // Header / Banner
+                    Box(
                         modifier = Modifier
-                            .size(110.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.2f))
-                            .padding(4.dp),
-                        shape = CircleShape,
-                        color = Color.White,
-                        tonalElevation = 8.dp
+                            .fillMaxWidth()
+                            .height(140.dp)
+                            .background(accentColor)
                     ) {
-                        if (userData.fotoUrl.isNotEmpty()) {
-                            AsyncImage(
-                                model = userData.fotoUrl,
-                                contentDescription = "Profile",
-                                modifier = Modifier.fillMaxSize().clip(CircleShape),
-                                contentScale = ContentScale.Crop
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
-                                contentAlignment = Alignment.Center
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .windowInsetsPadding(WindowInsets.safeDrawing)
+                                .padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(
+                                onClick = onNavigateBack,
+                                modifier = Modifier.background(Color.Black.copy(alpha = 0.3f), CircleShape)
                             ) {
-                                Icon(Icons.Default.Person, null, modifier = Modifier.size(64.dp), tint = secondaryTextColor)
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = Color.White)
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = "MI PERFIL",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.weight(1f))
+                            IconButton(
+                                onClick = onSettingsClick,
+                                modifier = Modifier.background(Color.Black.copy(alpha = 0.3f), CircleShape)
+                            ) {
+                                Icon(Icons.Default.Settings, "Ajustes", tint = Color.White)
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // User Info Card
-                    HardShadowPanel(
-                        backgroundColor = panelBg,
-                        shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
-                        cornerRadius = 24.dp
+                    // Profile Content Overlay
+                    Column(
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp)
+                            .offset(y = (-40).dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp),
-                            horizontalAlignment = Alignment.Start
+                        // Centered Avatar
+                        Surface(
+                            modifier = Modifier
+                                .size(110.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.2f))
+                                .padding(4.dp),
+                            shape = CircleShape,
+                            color = Color.White,
+                            tonalElevation = 8.dp
+                        ) {
+                            if (userData.fotoUrl.isNotEmpty()) {
+                                AsyncImage(
+                                    model = userData.fotoUrl,
+                                    contentDescription = "Profile",
+                                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.Person, null, modifier = Modifier.size(64.dp), tint = secondaryTextColor)
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // User Info Card
+                        HardShadowPanel(
+                            backgroundColor = panelBg,
+                            shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
+                            cornerRadius = 24.dp
                         ) {
                             Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalAlignment = Alignment.CenterHorizontally
+                                modifier = Modifier.padding(12.dp),
+                                horizontalAlignment = Alignment.Start
                             ) {
-                                Text(
-                                    text = "${userData.nombre} ${userData.apellido_pa}",
-                                    style = MaterialTheme.typography.headlineSmall.copy(
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = textColor
-                                    ),
-                                    textAlign = TextAlign.Center
-                                )
-                                
-                                Text(
-                                    text = userData.correo,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = secondaryTextColor,
-                                    textAlign = TextAlign.Center
-                                )
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = "${userData.nombre} ${userData.apellido_pa}",
+                                        style = MaterialTheme.typography.headlineSmall.copy(
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = textColor
+                                        ),
+                                        textAlign = TextAlign.Center
+                                    )
+                                    
+                                    Text(
+                                        text = userData.correo,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = secondaryTextColor,
+                                        textAlign = TextAlign.Center
+                                    )
 
-                                if (userData.telefono.isNotEmpty() && !userData.telefonoVerificado) {
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    Surface(
-                                        color = customColors.warningContainer,
-                                        shape = RoundedCornerShape(12.dp),
-                                        onClick = {
-                                            context.startActivity(Intent(context, PhoneVerificationActivity::class.java))
-                                        }
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                            verticalAlignment = Alignment.CenterVertically
+                                    if (userData.telefono.isNotEmpty() && !userData.telefonoVerificado) {
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        Surface(
+                                            color = customColors.warningContainer,
+                                            shape = RoundedCornerShape(12.dp),
+                                            onClick = {
+                                                context.startActivity(Intent(context, PhoneVerificationActivity::class.java))
+                                            }
                                         ) {
-                                            Icon(Icons.Default.VerifiedUser, null, modifier = Modifier.size(14.dp), tint = customColors.warning)
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                "Verificar ahora",
-                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                                color = customColors.warning
-                                            )
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(Icons.Default.VerifiedUser, null, modifier = Modifier.size(14.dp), tint = customColors.warning)
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    "Verificar ahora",
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                                    color = customColors.warning
+                                                )
+                                            }
                                         }
                                     }
                                 }
-                            }
 
-                            Spacer(modifier = Modifier.height(24.dp))
-                            
-                            HardShadowButton(
-                                text = "EDITAR PERFIL",
-                                onClick = { context.startActivity(Intent(context, EditProfileActivity::class.java)) },
-                                containerColor = accentColor,
-                                contentColor = Color.White,
-                                shadowColor = shadowPalette.hardShadowPrimary,
-                                isDark = customColors.isDark,
-                                icon = Icons.Default.Edit,
-                                cornerRadius = 16.dp
-                            )
-
-                            Spacer(modifier = Modifier.height(24.dp))
-                            HorizontalDivider(color = textColor.copy(alpha = 0.08f))
-                            Spacer(modifier = Modifier.height(20.dp))
-
-                            InfoItem(Icons.Default.Badge, "RUT", userData.rut, textColor, secondaryTextColor)
-                            
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                InfoItem(
-                                    Icons.Default.Phone, 
-                                    "TELÉFONO", 
-                                    userData.telefono.ifEmpty { "No especificado" }, 
-                                    textColor, 
-                                    secondaryTextColor,
-                                    modifier = Modifier.weight(1f)
+                                Spacer(modifier = Modifier.height(24.dp))
+                                
+                                HardShadowButton(
+                                    text = "EDITAR PERFIL",
+                                    onClick = { context.startActivity(Intent(context, EditProfileActivity::class.java)) },
+                                    containerColor = accentColor,
+                                    contentColor = Color.White,
+                                    shadowColor = shadowPalette.hardShadowPrimary,
+                                    isDark = customColors.isDark,
+                                    icon = Icons.Default.Edit,
+                                    cornerRadius = 16.dp
                                 )
-                                if (userData.telefono.isNotEmpty() && !userData.telefonoVerificado) {
-                                    Text(
-                                        "NO VERIFICADO",
-                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
-                                        color = customColors.warning,
-                                        modifier = Modifier.padding(start = 8.dp)
-                                    )
-                                }
-                            }
-                            
-                            InfoItem(Icons.Default.Place, "UBICACIÓN", "${userData.comuna}, ${userData.region}", textColor, secondaryTextColor)
-                            InfoItem(Icons.Default.Work, "ROL", userData.rol.replaceFirstChar { it.uppercase() }, textColor, secondaryTextColor)
 
-                            if (userData.descripcion.isNotEmpty()) {
-                                Spacer(modifier = Modifier.height(20.dp))
+                                Spacer(modifier = Modifier.height(24.dp))
                                 HorizontalDivider(color = textColor.copy(alpha = 0.08f))
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Row(verticalAlignment = Alignment.Top) {
-                                    Icon(
-                                        Icons.Default.FormatQuote,
-                                        contentDescription = null,
-                                        tint = accentColor.copy(alpha = 0.4f),
-                                        modifier = Modifier.size(24.dp)
+                                Spacer(modifier = Modifier.height(20.dp))
+
+                                InfoItem(Icons.Default.Badge, "RUT", userData.rut, textColor, secondaryTextColor)
+                                
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    InfoItem(
+                                        Icons.Default.Phone, 
+                                        "TELÉFONO", 
+                                        userData.telefono.ifEmpty { "No especificado" }, 
+                                        textColor, 
+                                        secondaryTextColor,
+                                        modifier = Modifier.weight(1f)
                                     )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = userData.descripcion,
-                                        style = MaterialTheme.typography.bodyMedium.copy(
-                                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                                            lineHeight = 20.sp
-                                        ),
-                                        color = textColor.copy(alpha = 0.8f)
-                                    )
+                                    if (userData.telefono.isNotEmpty() && !userData.telefonoVerificado) {
+                                        Text(
+                                            "NO VERIFICADO",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
+                                            color = customColors.warning,
+                                            modifier = Modifier.padding(start = 8.dp)
+                                        )
+                                    }
+                                }
+                                
+                                InfoItem(Icons.Default.Place, "UBICACIÓN", "${userData.comuna}, ${userData.region}", textColor, secondaryTextColor)
+                                InfoItem(Icons.Default.Work, "ROL", userData.rol.replaceFirstChar { it.uppercase() }, textColor, secondaryTextColor)
+
+                                if (userData.descripcion.isNotEmpty()) {
+                                    Spacer(modifier = Modifier.height(20.dp))
+                                    HorizontalDivider(color = textColor.copy(alpha = 0.08f))
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Row(verticalAlignment = Alignment.Top) {
+                                        Icon(
+                                            Icons.Default.FormatQuote,
+                                            contentDescription = null,
+                                            tint = accentColor.copy(alpha = 0.4f),
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = userData.descripcion,
+                                            style = MaterialTheme.typography.bodyMedium.copy(
+                                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                                lineHeight = 20.sp
+                                            ),
+                                            color = textColor.copy(alpha = 0.8f)
+                                        )
+                                    }
                                 }
                             }
                         }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        Text(
+                            text = if (userData.rol == "cuidador") "MI FICHA TÉCNICA" else "FICHA DEL FAMILIAR",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = accentColor,
+                            modifier = Modifier.fillMaxWidth().padding(start = 8.dp, bottom = 12.dp)
+                        )
+
+                        when (fichaState) {
+                            is FichaState.Loading -> {
+                                CircularProgressIndicator(color = accentColor, modifier = Modifier.padding(24.dp))
+                            }
+                            is FichaState.View -> {
+                                ProfileDetailView(
+                                    role = fichaRole,
+                                    data = (fichaState as FichaState.View).data,
+                                    isSummary = !isFichaExpanded,
+                                    onExpand = { isFichaExpanded = !isFichaExpanded },
+                                    onEdit = { 
+                                        val intent = Intent(context, FichaActivity::class.java)
+                                        context.startActivity(intent)
+                                    }
+                                )
+                            }
+                            is FichaState.NotFound -> {
+                                FichaPlaceholder(
+                                    role = userData.rol,
+                                    accentColor = accentColor,
+                                    panelBg = panelBg,
+                                    textColor = textColor,
+                                    secondaryTextColor = secondaryTextColor,
+                                    onCreateClick = {
+                                        context.startActivity(Intent(context, FichaActivity::class.java))
+                                    }
+                                )
+                            }
+                            else -> { }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(100.dp))
                     }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    Text(
-                        text = if (userData.rol == "cuidador") "MI FICHA TÉCNICA" else "FICHA DEL FAMILIAR",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = accentColor,
-                        modifier = Modifier.fillMaxWidth().padding(start = 8.dp, bottom = 12.dp)
-                    )
-
-                    when (fichaState) {
-                        is FichaState.Loading -> {
-                            CircularProgressIndicator(color = accentColor, modifier = Modifier.padding(24.dp))
-                        }
-                        is FichaState.View -> {
-                            ProfileDetailView(
-                                role = fichaRole,
-                                data = (fichaState as FichaState.View).data,
-                                isSummary = !isFichaExpanded,
-                                onExpand = { isFichaExpanded = !isFichaExpanded },
-                                onEdit = { 
-                                    val intent = Intent(context, FichaActivity::class.java)
-                                    context.startActivity(intent)
-                                }
-                            )
-                        }
-                        is FichaState.NotFound -> {
-                            FichaPlaceholder(
-                                role = userData.rol,
-                                accentColor = accentColor,
-                                panelBg = panelBg,
-                                textColor = textColor,
-                                secondaryTextColor = secondaryTextColor,
-                                onCreateClick = {
-                                    context.startActivity(Intent(context, FichaActivity::class.java))
-                                }
-                            )
-                        }
-                        else -> { /* Error handle? */ }
-                    }
-                    
-                    Spacer(modifier = Modifier.height(100.dp))
                 }
             }
         }

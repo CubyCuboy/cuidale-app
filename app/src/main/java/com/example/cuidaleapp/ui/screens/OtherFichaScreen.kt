@@ -34,6 +34,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.ui.draw.scale
 import com.example.cuidaleapp.ui.components.HardShadowButton
 import com.example.cuidaleapp.viewmodel.VinculosViewModel
@@ -46,8 +47,11 @@ import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.FichaState
 import com.example.cuidaleapp.viewmodel.ProfileViewModel
 import com.example.cuidaleapp.models.UserData
+import com.example.cuidaleapp.models.SolicitudCuidado
 import androidx.compose.material.icons.automirrored.filled.Chat
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,7 +60,8 @@ fun OtherFichaScreen(
     vinculosViewModel: VinculosViewModel,
     favoritosViewModel: FavoritosViewModel = androidx.lifecycle.viewmodel.compose.viewModel(),
     onNavigateBack: () -> Unit,
-    onChatNavigate: (String, String, UserData) -> Unit
+    onChatNavigate: (String, String, UserData) -> Unit,
+    onReviewRequest: (SolicitudCuidado) -> Unit
 ) {
     val otherUserData by profileViewModel.otherUserData.collectAsState()
     val otherUserStatus by profileViewModel.otherUserStatus.collectAsState()
@@ -79,16 +84,33 @@ fun OtherFichaScreen(
     }
     var showCancelRequestDialog by remember { mutableStateOf(false) }
 
+    var availableSolicitud by remember { mutableStateOf<SolicitudCuidado?>(null) }
+
     val scrollState = rememberScrollState()
     val customColors = CuidaleThemeExtras.customColors
     val snackbarHostState = remember { SnackbarHostState() }
     
-    // Use the role from the loaded user data
     val displayRole = otherUserData?.rol ?: ""
     val accentColor = when (displayRole) {
         "cuidador" -> customColors.aqua
         "representante" -> customColors.mint
         else -> customColors.lime
+    }
+
+    LaunchedEffect(otherUserData?.uid) {
+        val uid = otherUserData?.uid ?: return@LaunchedEffect
+        if (displayRole == "representante") {
+            try {
+                val snapshot = FirebaseFirestore.getInstance().collection("solicitudes")
+                    .whereEqualTo("representanteUid", uid)
+                    .whereEqualTo("estado", "abierta")
+                    .limit(1)
+                    .get().await()
+                if (!snapshot.isEmpty) {
+                    availableSolicitud = snapshot.documents.first().toObject(SolicitudCuidado::class.java)
+                }
+            } catch (e: Exception) { }
+        }
     }
 
     LaunchedEffect(vinculosUiState) {
@@ -271,81 +293,6 @@ fun OtherFichaScreen(
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // Perfil Data Section (Outside Ficha)
-                        otherUserData?.let { user ->
-                            HardShadowPanel(
-                                backgroundColor = customColors.panelBackground,
-                                shadowColor = CuidaleThemeExtras.shadows.hardShadowPrimary.copy(alpha = 0.1f)
-                            ) {
-                                Column(modifier = Modifier.padding(16.dp)) {
-                                    Text(
-                                        text = "DATOS DEL PERFIL",
-                                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                        color = accentColor
-                                    )
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    Text(
-                                        text = "${user.nombre} ${user.apellido_pa}",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    if (user.descripcion.isNotBlank()) {
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            text = user.descripcion,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    
-                                    ContactItem(
-                                        icon = Icons.Default.Email,
-                                        label = "Correo electrónico",
-                                        value = censorEmail(user.correo),
-                                        accentColor = accentColor
-                                    )
-                                    ContactItem(
-                                        icon = Icons.Default.Phone,
-                                        label = "Teléfono de contacto",
-                                        value = censorPhone(user.telefono),
-                                        accentColor = accentColor
-                                    )
-
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    
-                                    Surface(
-                                        color = accentColor.copy(alpha = 0.05f),
-                                        shape = MaterialTheme.shapes.medium
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(12.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Icon(
-                                                Icons.Default.Info,
-                                                contentDescription = null,
-                                                tint = accentColor,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(12.dp))
-                                            Text(
-                                                text = "Por seguridad, algunos datos están protegidos. Contacta al usuario para coordinar y conocer más detalles.",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(24.dp))
-
                         // Interaction Buttons Row
                         Row(
                             modifier = Modifier
@@ -404,7 +351,6 @@ fun OtherFichaScreen(
                                                 showCancelRequestDialog = true
                                             }
                                             vinculoExistente?.solicitante != null -> {
-                                                // Si yo soy el receptor, tal vez navegar a la bandeja o aceptar aquí
                                                 snackbarHostState.showSnackbar("Tienes una solicitud pendiente de este usuario.")
                                             }
                                             else -> {
@@ -415,6 +361,30 @@ fun OtherFichaScreen(
                                 }
                             }
                         )
+
+                        // Service Request availability (FOR CAREGIVERS)
+                        if (availableSolicitud != null && com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid != otherUserData?.uid) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    "Solicitud de cuidado Disponible",
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = accentColor
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                HardShadowButton(
+                                    text = "REVISAR SOLICITUD",
+                                    containerColor = MaterialTheme.colorScheme.secondary,
+                                    contentColor = Color.White,
+                                    shadowColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f),
+                                    icon = Icons.Default.Assignment,
+                                    onClick = { onReviewRequest(availableSolicitud!!) }
+                                )
+                            }
+                        }
 
                         if (showCancelRequestDialog) {
                             AlertDialog(
@@ -436,6 +406,8 @@ fun OtherFichaScreen(
                             )
                         }
 
+                        Spacer(modifier = Modifier.height(24.dp))
+
                         when (val targetState = otherFichaState) {
                             is FichaState.Loading -> {
                                 Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
@@ -446,8 +418,7 @@ fun OtherFichaScreen(
                                 ProfileDetailView(
                                     role = displayRole,
                                     data = targetState.data,
-                                    showEditButton = false,
-                                    isExternal = true,
+                                    isExternal = true, // RESTRICT MEDICATIONS AND DIET
                                     onEdit = { }
                                 )
                             }
@@ -489,50 +460,5 @@ fun OtherFichaScreen(
                 }
             }
         }
-    }
-}
-
-@Composable
-fun ContactItem(icon: ImageVector, label: String, value: String, accentColor: Color) {
-    Row(
-        modifier = Modifier.padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Surface(
-            modifier = Modifier.size(36.dp),
-            shape = CircleShape,
-            color = accentColor.copy(alpha = 0.1f)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(icon, null, modifier = Modifier.size(18.dp), tint = accentColor)
-            }
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        Column {
-            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(value, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
-        }
-    }
-}
-
-private fun censorEmail(email: String): String {
-    if (email.isBlank()) return "No disponible"
-    val parts = email.split("@")
-    if (parts.size != 2) return "****"
-    val name = parts[0]
-    val domain = parts[1]
-    return if (name.length > 2) {
-        name.take(1) + "***" + name.takeLast(1) + "@" + domain
-    } else {
-        "*@$domain"
-    }
-}
-
-private fun censorPhone(phone: String): String {
-    if (phone.isBlank()) return "No disponible"
-    return if (phone.length > 4) {
-        "*******" + phone.takeLast(4)
-    } else {
-        "********"
     }
 }
