@@ -12,5 +12,8 @@ data class ChatMessage(
     val videoUrl: String? = null,
     val fileUrl: String? = null,
     val fileName: String? = null,
+    val replyToId: String? = null,
+    val replyToText: String? = null,
+    val replyToName: String? = null,
     val readBy: Map<String, Boolean> = emptyMap()
 )

@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.example.cuidaleapp.utils.AppNavigationState
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.launch
 
@@ -90,6 +91,7 @@ class MenuActivity : ComponentActivity() {
             val isDark by menuViewModel.isDarkMode.collectAsState()
             val userData by menuViewModel.userData.collectAsState()
             val isLoggedOut by menuViewModel.isLoggedOut.collectAsState()
+            val fichaState by fichaViewModel.state.collectAsState()
             
             val chatViewModel: com.example.cuidaleapp.viewmodel.ChatViewModel = viewModel()
             val notificationsViewModel: com.example.cuidaleapp.viewmodel.NotificationsViewModel = viewModel()
@@ -103,11 +105,39 @@ class MenuActivity : ComponentActivity() {
 
             var currentScreen by remember { mutableStateOf<MenuNavigation>(Main) }
 
+            LaunchedEffect(currentScreen) {
+                val screenName = when(currentScreen) {
+                    Main -> "MAIN"
+                    Profile -> "PROFILE"
+                    EditProfile -> "EDIT_PROFILE"
+                    is Ficha -> "FICHA"
+                    Search -> "SEARCH"
+                    is Settings -> "SETTINGS"
+                    Chats -> "CHATS"
+                    Notifications -> "NOTIFICATIONS"
+                    SocialManagement -> "SOCIAL"
+                    is OtherFicha -> "OTHER_FICHA"
+                    is Chat -> "CHAT"
+                }
+                AppNavigationState.setScreen(screenName)
+            }
+
             LaunchedEffect(intent) {
                 val target = intent.getStringExtra("TARGET_SCREEN")
                 val uid = intent.getStringExtra("USER_UID")
-                if (target == "OTHER_FICHA" && uid != null) {
-                    currentScreen = OtherFicha(uid, returnTo = SocialManagement)
+                val chatId = intent.getStringExtra("chatId")
+                
+                when (target) {
+                    "OTHER_FICHA" -> if (uid != null) currentScreen = OtherFicha(uid, returnTo = SocialManagement)
+                    "CHATS" -> currentScreen = Chats
+                    "NOTIFICATIONS" -> currentScreen = Notifications
+                    "CHAT_DETAIL" -> {
+                        if (chatId != null && uid != null) {
+                            currentScreen = Chat(chatId, uid, returnTo = Chats)
+                        } else {
+                            currentScreen = Chats
+                        }
+                    }
                 }
             }
 
@@ -142,6 +172,7 @@ class MenuActivity : ComponentActivity() {
                         MenuScreen(
                             userData = userData,
                             searchViewModel = searchViewModel,
+                            fichaState = fichaState,
                             isDark = isDark,
                             unreadCount = unreadCount,
                             pendingNotifs = pendingNotifs,

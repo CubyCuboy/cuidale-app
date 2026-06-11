@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
@@ -18,7 +19,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -150,23 +154,127 @@ fun NotificationsScreen(
                                     }
                                 }
                             } else {
+                                val groupedMessages = remember(notifications) {
+                                    notifications.filter { it.tipo == "nuevo_mensaje" }
+                                        .groupBy { it.emisor }
+                                }
+                                val otherNotifs = remember(notifications) {
+                                    notifications.filter { it.tipo != "nuevo_mensaje" }
+                                }
+
                                 LazyColumn(
                                     modifier = Modifier.weight(1f).fillMaxWidth(),
                                     contentPadding = PaddingValues(16.dp),
                                     verticalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    items(notifications) { notif ->
-                                        val sender = users[notif.emisor]
-                                        NotificationItem(
-                                            notification = notif,
-                                            sender = sender,
-                                            isDark = isDark,
-                                            onClick = { 
-                                                notificationsViewModel.markAsRead(notif.id)
-                                                onNotificationClick(notif)
-                                            },
-                                            onDelete = { notificationsViewModel.deleteNotification(notif.id) }
-                                        )
+                                    if (groupedMessages.isNotEmpty()) {
+                                        item(key = "header_msgs") {
+                                            Text(
+                                                "MENSAJES PENDIENTES",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = if (isDark) Color.LightGray else Color.Gray,
+                                                modifier = Modifier.padding(bottom = 8.dp).animateItem()
+                                            )
+                                        }
+                                        
+                                        groupedMessages.forEach { (emisorId, msgs) ->
+                                            val sender = users[emisorId]
+                                            val chatId = msgs.firstOrNull()?.data?.get("chatId") ?: ""
+                                            
+                                            item(key = "group_$emisorId") {
+                                                HardShadowPanel(
+                                                    backgroundColor = if (isDark) customColors.panelBackground else Color.White,
+                                                    shadowColor = customColors.aqua.copy(alpha = 0.2f),
+                                                    modifier = Modifier.animateItem()
+                                                ) {
+                                                    Column(modifier = Modifier.padding(12.dp)) {
+                                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                                            Box(modifier = Modifier.size(44.dp).clip(CircleShape).background(customColors.aqua.copy(alpha = 0.1f))) {
+                                                                if (sender?.fotoUrl?.isNotEmpty() == true) {
+                                                                    AsyncImage(model = sender.fotoUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                                                } else {
+                                                                    Icon(Icons.AutoMirrored.Filled.Chat, null, modifier = Modifier.align(Alignment.Center), tint = customColors.aqua)
+                                                                }
+                                                            }
+                                                            Spacer(Modifier.width(16.dp))
+                                                            Column(modifier = Modifier.weight(1f)) {
+                                                                Text(
+                                                                    buildAnnotatedString {
+                                                                        append("Tienes ")
+                                                                        withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = customColors.aqua)) {
+                                                                            append("${msgs.size} mensajes")
+                                                                        }
+                                                                        append(" de ")
+                                                                        withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                                                                            append(sender?.nombre ?: "Usuario")
+                                                                        }
+                                                                    },
+                                                                    style = MaterialTheme.typography.bodyMedium,
+                                                                    color = if (isDark) Color.White else Color.Black
+                                                                )
+                                                            }
+                                                            Badge(containerColor = customColors.aqua) {
+                                                                Text(msgs.size.toString(), color = Color.White)
+                                                            }
+                                                        }
+                                                        
+                                                        Spacer(Modifier.height(12.dp))
+                                                        
+                                                        Row(
+                                                            modifier = Modifier.fillMaxWidth(),
+                                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                        ) {
+                                                            OutlinedButton(
+                                                                onClick = { notificationsViewModel.markChatGroupAsRead(chatId) },
+                                                                modifier = Modifier.weight(1f),
+                                                                shape = RoundedCornerShape(8.dp),
+                                                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Gray)
+                                                            ) {
+                                                                Icon(Icons.Default.Visibility, null, modifier = Modifier.size(16.dp))
+                                                                Spacer(Modifier.width(4.dp))
+                                                                Text("Leído", fontSize = 12.sp)
+                                                            }
+                                                            
+                                                            Button(
+                                                                onClick = { onNotificationClick(msgs.first()) },
+                                                                modifier = Modifier.weight(1f),
+                                                                shape = RoundedCornerShape(8.dp),
+                                                                colors = ButtonDefaults.buttonColors(containerColor = customColors.aqua)
+                                                            ) {
+                                                                Icon(Icons.AutoMirrored.Filled.Chat, null, modifier = Modifier.size(16.dp))
+                                                                Spacer(Modifier.width(4.dp))
+                                                                Text("Ir al Chat", fontSize = 12.sp)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    if (otherNotifs.isNotEmpty()) {
+                                        item(key = "header_alerts") {
+                                            Text(
+                                                "ALERTAS Y SOLICITUDES",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = if (isDark) Color.LightGray else Color.Gray,
+                                                modifier = Modifier.padding(top = 8.dp, bottom = 8.dp).animateItem()
+                                            )
+                                        }
+                                        items(otherNotifs, key = { it.id }) { notif ->
+                                            val sender = users[notif.emisor]
+                                            NotificationItem(
+                                                notification = notif,
+                                                sender = sender,
+                                                isDark = isDark,
+                                                modifier = Modifier.animateItem(),
+                                                onClick = { 
+                                                    notificationsViewModel.markAsRead(notif.id)
+                                                    onNotificationClick(notif)
+                                                },
+                                                onDelete = { notificationsViewModel.deleteNotification(notif.id) }
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -183,6 +291,7 @@ fun NotificationItem(
     notification: Notification,
     sender: UserData?,
     isDark: Boolean,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -196,7 +305,7 @@ fun NotificationItem(
     HardShadowPanel(
         backgroundColor = if (notification.leida) (if (isDark) Color(0xFF1B263B) else Color.White.copy(alpha = 0.9f)) else (if (isDark) Color(0xFF2B3A55) else Color.White),
         shadowColor = if (notification.leida) Color.Transparent else itemAccent.copy(alpha = 0.2f),
-        modifier = Modifier.clickable { onClick() }
+        modifier = modifier.clickable { onClick() }
     ) {
         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.size(48.dp).clip(CircleShape).background(itemAccent.copy(alpha = 0.1f))) {

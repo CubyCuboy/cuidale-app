@@ -381,40 +381,59 @@ fun OtherFichaScreen(
                         val buttonText = when {
                             vinculoExistente?.estado == "aceptado" -> "IR AL CHAT"
                             vinculoExistente?.solicitante == vinculosViewModel.myUid -> "CHAT YA SOLICITADO"
-                            vinculoExistente?.solicitante != null -> "RESPONDER SOLICITUD"
+                            vinculoExistente?.solicitante != null -> null // Ocultar si soy el receptor (usaremos los otros botones)
                             else -> "SOLICITAR CHAT"
                         }
 
-                        HardShadowButton(
-                            text = if (vinculosUiState is VinculosUiState.Loading) "PROCESANDO..." else buttonText,
-                            modifier = Modifier.fillMaxWidth().height(60.dp).padding(vertical = 8.dp),
-                            containerColor = if (vinculoExistente?.solicitante == vinculosViewModel.myUid && vinculoExistente.estado == "pendiente") Color.LightGray else accentColor,
-                            contentColor = if (vinculoExistente?.solicitante == vinculosViewModel.myUid && vinculoExistente.estado == "pendiente") Color.DarkGray else Color.White,
-                            shadowColor = accentColor.copy(alpha = 0.4f),
-                            icon = Icons.AutoMirrored.Filled.Chat,
-                            enabled = vinculosUiState !is VinculosUiState.Loading,
-                            onClick = {
-                                otherUserData?.let { user ->
-                                    scope.launch {
-                                        when {
-                                            vinculoExistente?.estado == "aceptado" -> {
-                                                onChatNavigate(vinculoExistente.id, user.uid, user)
-                                            }
-                                            vinculoExistente?.solicitante == vinculosViewModel.myUid -> {
-                                                showCancelRequestDialog = true
-                                            }
-                                            vinculoExistente?.solicitante != null -> {
-                                                // Si yo soy el receptor, tal vez navegar a la bandeja o aceptar aquí
-                                                snackbarHostState.showSnackbar("Tienes una solicitud pendiente de este usuario.")
-                                            }
-                                            else -> {
-                                                vinculosViewModel.enviarSolicitud(user.uid)
+                        if (buttonText != null) {
+                            HardShadowButton(
+                                text = if (vinculosUiState is VinculosUiState.Loading) "PROCESANDO..." else buttonText,
+                                modifier = Modifier.fillMaxWidth().height(60.dp).padding(vertical = 8.dp),
+                                containerColor = if (vinculoExistente?.solicitante == vinculosViewModel.myUid && vinculoExistente.estado == "pendiente") Color.LightGray else accentColor,
+                                contentColor = if (vinculoExistente?.solicitante == vinculosViewModel.myUid && vinculoExistente.estado == "pendiente") Color.DarkGray else Color.White,
+                                shadowColor = accentColor.copy(alpha = 0.4f),
+                                icon = Icons.AutoMirrored.Filled.Chat,
+                                enabled = vinculosUiState !is VinculosUiState.Loading,
+                                onClick = {
+                                    otherUserData?.let { user ->
+                                        scope.launch {
+                                            when {
+                                                vinculoExistente?.estado == "aceptado" -> {
+                                                    onChatNavigate(vinculoExistente.id, user.uid, user)
+                                                }
+                                                vinculoExistente?.solicitante == vinculosViewModel.myUid -> {
+                                                    showCancelRequestDialog = true
+                                                }
+                                                else -> {
+                                                    vinculosViewModel.enviarSolicitud(user.uid)
+                                                }
                                             }
                                         }
                                     }
                                 }
+                            )
+                        }
+
+                        if (vinculoExistente?.solicitante != null && vinculoExistente.solicitante != vinculosViewModel.myUid && vinculoExistente.estado == "pendiente") {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                HardShadowButton(
+                                    text = "RECHAZAR",
+                                    modifier = Modifier.weight(1f).height(50.dp),
+                                    containerColor = Color.White,
+                                    contentColor = Color.Red,
+                                    shadowColor = Color.Red.copy(alpha = 0.1f),
+                                    onClick = { vinculosViewModel.rechazarSolicitud(vinculoExistente.id) }
+                                )
+                                HardShadowButton(
+                                    text = "ACEPTAR SOLICITUD",
+                                    modifier = Modifier.weight(1.5f).height(50.dp),
+                                    containerColor = customColors.successStrong,
+                                    contentColor = Color.White,
+                                    shadowColor = customColors.successStrong.copy(alpha = 0.3f),
+                                    onClick = { vinculosViewModel.aceptarSolicitud(vinculoExistente.id) }
+                                )
                             }
-                        )
+                        }
 
                         if (showCancelRequestDialog) {
                             AlertDialog(

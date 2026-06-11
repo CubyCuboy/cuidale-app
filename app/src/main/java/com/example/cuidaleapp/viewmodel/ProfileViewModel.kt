@@ -188,6 +188,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
 
     fun loadOtherUserProfile(targetUid: String) {
         if (targetUid.isEmpty()) return
+        val myUid = auth.currentUser?.uid ?: ""
 
         statusListener?.let { rtdb.child("status").child(targetUid).removeEventListener(it) }
 
@@ -195,16 +196,23 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             _otherProfileState.value = RemoteState.Loading
             _otherFichaState.value = FichaState.Loading
             _otherUserData.value = null
-            _otherUserStatus.value = "desconectado"
+            _otherUserStatus.value = "estado oculto"
 
             try {
-                statusListener = object : ValueEventListener {
-                    override fun onDataChange(snapshot: DataSnapshot) {
-                        _otherUserStatus.value = snapshot.child("estado").getValue(String::class.java) ?: "desconectado"
+                // Verificar vínculo antes de escuchar estado
+                val vinculoId = if (myUid < targetUid) "${myUid}_$targetUid" else "${targetUid}_$myUid"
+                val vinculoDoc = db.collection("vinculos").document(vinculoId).get().await()
+                val isVinculado = vinculoDoc.exists() && vinculoDoc.getString("estado") == "aceptado"
+
+                if (isVinculado) {
+                    statusListener = object : ValueEventListener {
+                        override fun onDataChange(snapshot: DataSnapshot) {
+                            _otherUserStatus.value = snapshot.child("estado").getValue(String::class.java) ?: "desconectado"
+                        }
+                        override fun onCancelled(error: DatabaseError) {}
                     }
-                    override fun onCancelled(error: DatabaseError) {}
+                    rtdb.child("status").child(targetUid).addValueEventListener(statusListener!!)
                 }
-                rtdb.child("status").child(targetUid).addValueEventListener(statusListener!!)
 
                 val userDoc = db.collection("usuarios").document(targetUid).get().await()
 

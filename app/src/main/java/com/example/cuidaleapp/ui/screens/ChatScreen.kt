@@ -7,6 +7,7 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,6 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -31,11 +33,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil3.compose.AsyncImage
+import com.example.cuidaleapp.utils.AppNavigationState
 import com.example.cuidaleapp.models.ChatMessage
 import com.example.cuidaleapp.models.UserData
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
@@ -58,7 +63,6 @@ fun ChatScreen(
     favoritosViewModel: com.example.cuidaleapp.viewmodel.FavoritosViewModel? = null
 ) {
     val messages by viewModel.messages.collectAsState()
-    val isUploading by viewModel.isUploading.collectAsState()
     val otherStatus by viewModel.otherUserStatus.collectAsState()
     val isOtherTyping by viewModel.isOtherTyping.collectAsState()
     val isBlocked by viewModel.isBlocked.collectAsState()
@@ -112,24 +116,26 @@ fun ChatScreen(
     }
 
     val context = androidx.compose.ui.platform.LocalContext.current
-    val mediaPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let {
-            viewModel.uploadFile(chatId, it, context, onSuccess = {}, onError = {})
-        }
-    }
+
+    var selectedMessages = remember { mutableStateListOf<ChatMessage>() }
+    var replyingToMessage by remember { mutableStateOf<ChatMessage?>(null) }
+    
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var showPinConfirmDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(chatId) {
+        AppNavigationState.setActiveChat(chatId)
         viewModel.listenMessages(chatId)
         viewModel.listenUserStatus(otherUser.uid)
         viewModel.listenTyping(chatId, otherUser.uid)
         viewModel.setUserStatus(true)
         viewModel.archiveOldMessages(chatId)
+        viewModel.clearChatNotifications(chatId)
     }
 
     DisposableEffect(Unit) {
         onDispose {
+            AppNavigationState.setActiveChat(null)
             viewModel.setUserStatus(false)
             viewModel.setTyping(chatId, false)
         }
@@ -140,7 +146,9 @@ fun ChatScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    if (isSearchActive) {
+                    if (selectedMessages.isNotEmpty()) {
+                        Text("${selectedMessages.size} seleccionados")
+                    } else if (isSearchActive) {
                         TextField(
                             value = searchQuery,
                             onValueChange = { viewModel.setSearchQuery(it) },
@@ -196,12 +204,36 @@ fun ChatScreen(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+                    if (selectedMessages.isNotEmpty()) {
+                        IconButton(onClick = { selectedMessages.clear() }) {
+                            Icon(Icons.Default.Close, contentDescription = "Cancelar")
+                        }
+                    } else {
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+                        }
                     }
                 },
                 actions = {
-                    if (!isSearchActive) {
+                    if (selectedMessages.isNotEmpty()) {
+                        val allFromMe = selectedMessages.all { it.senderId == myUid }
+                        if (allFromMe) {
+                            IconButton(onClick = { showDeleteConfirmDialog = true }) { 
+                                Icon(Icons.Default.Delete, null, tint = Color.Red) 
+                            }
+                        }
+                        IconButton(onClick = { showPinConfirmDialog = true }) { 
+                            Icon(Icons.Default.PushPin, null) 
+                        }
+                        
+                        IconButton(onClick = {
+                            val textToCopy = selectedMessages.joinToString("\n") { it.text }
+                            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                            val clip = android.content.ClipData.newPlainText("Mensajes de Cuidale", textToCopy)
+                            clipboard.setPrimaryClip(clip)
+                            selectedMessages.clear()
+                        }) { Icon(Icons.Default.ContentCopy, null) }
+                    } else if (!isSearchActive) {
                         IconButton(onClick = { isSearchActive = true }) { Icon(Icons.Default.Search, null) }
                         IconButton(onClick = { showPinnedMessages = true }) { 
                             BadgedBox(badge = { if (pinnedMessages.isNotEmpty()) Badge { Text(pinnedMessages.size.toString()) } }) {
@@ -359,7 +391,7 @@ fun ChatScreen(
                             }
                         }
                     }
-                    items(filteredMessages.reversed()) { msg ->
+                    items(filteredMessages.reversed(), key = { it.id }) { msg ->
                         if (msg.senderId == "system") {
                             SystemMessage(msg.text, isDark)
                         } else {
@@ -372,17 +404,39 @@ fun ChatScreen(
                                     onShow = { expandedBlockedMessages.add(msg.id) }
                                 )
                             } else {
-                                ChatBubble(
-                                    msg = msg,
-                                    isMe = msg.senderId == myUid,
-                                    isDark = isDark,
-                                    onLongClick = {
-                                        if (!isBlocked) {
-                                            messageToMenu = msg
-                                            showMenu = true
+                                Box(modifier = Modifier.animateContentSize()) {
+                                    ChatBubble(
+                                        msg = msg,
+                                        isMe = msg.senderId == myUid,
+                                        isDark = isDark,
+                                        isSelected = selectedMessages.any { it.id == msg.id },
+                                        onLongClick = {
+                                            if (!isBlocked) {
+                                                if (selectedMessages.isEmpty()) {
+                                                    selectedMessages.add(msg)
+                                                }
+                                            }
+                                        },
+                                        onClick = {
+                                            if (selectedMessages.isNotEmpty()) {
+                                                if (selectedMessages.any { it.id == msg.id }) {
+                                                    selectedMessages.removeAll { it.id == msg.id }
+                                                } else {
+                                                    selectedMessages.add(msg)
+                                                }
+                                            }
+                                        },
+                                        onDoubleClick = {
+                                            if (msg.senderId == myUid && !msg.deleted) {
+                                                messageToEdit = msg
+                                                inputText = msg.text
+                                            }
+                                        },
+                                        onSwipeRight = {
+                                            replyingToMessage = msg
                                         }
-                                    }
-                                )
+                                    )
+                                }
                             }
                         }
                     }
@@ -472,70 +526,209 @@ fun ChatScreen(
                         }
                     }
                 } else {
-                    Row(
-                        modifier = Modifier.padding(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(
-                            onClick = { mediaPicker.launch("*/*") },
-                            enabled = !isUploading
-                        ) {
-                            if (isUploading) {
-                                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp, color = customColors.linkColor)
-                            } else {
-                                Icon(Icons.Default.Add, null, tint = customColors.linkColor)
+                    Column {
+                        if (replyingToMessage != null) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(if (isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.05f))
+                                    .padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(4.dp)
+                                        .height(40.dp)
+                                        .background(customColors.linkColor)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        if (replyingToMessage!!.senderId == myUid) "Tú" else otherUser.nombre,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = customColors.linkColor
+                                    )
+                                    Text(
+                                        replyingToMessage!!.text,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                }
+                                IconButton(onClick = { replyingToMessage = null }) {
+                                    Icon(Icons.Default.Close, null, modifier = Modifier.size(16.dp))
+                                }
                             }
                         }
-                        TextField(
-                            value = inputText,
-                            onValueChange = { 
-                                inputText = it
-                                viewModel.setTyping(chatId, it.isNotEmpty())
-                            },
-                            placeholder = { Text(if (messageToEdit != null) "EDITANDO MENSAJE..." else "Mensajear con @${otherUser.nombre}", color = if (isDark) Color.White.copy(alpha = 0.5f) else Color.Gray) },
-                            modifier = Modifier.weight(1f).clip(RoundedCornerShape(24.dp)),
-                            trailingIcon = {
-                                if (messageToEdit != null) {
-                                    IconButton(onClick = { 
-                                        messageToEdit = null
-                                        inputText = ""
-                                    }) {
-                                        Icon(Icons.Default.Close, null)
-                                    }
-                                }
-                            },
-                            colors = TextFieldDefaults.colors(
-                                unfocusedContainerColor = if (isDark) Color(0xFF133B5C) else Color(0xFFE9ECEF),
-                                focusedContainerColor = if (isDark) Color(0xFF133B5C) else Color(0xFFE9ECEF),
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent,
-                                focusedTextColor = if (isDark) Color.White else Color.Black,
-                                unfocusedTextColor = if (isDark) Color.White else Color.Black
-                            )
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        IconButton(
-                            onClick = {
-                                if (inputText.isNotBlank()) {
-                                    viewModel.setTyping(chatId, false)
-                                    if (messageToEdit != null) {
-                                        viewModel.editMessage(chatId, messageToEdit!!.id, inputText)
-                                        messageToEdit = null
-                                    } else {
-                                        viewModel.sendMessage(chatId, inputText)
-                                    }
-                                    inputText = ""
-                                }
-                            },
-                            enabled = inputText.isNotBlank(),
-                            modifier = Modifier.background(customColors.linkColor, CircleShape)
+                        
+                        Row(
+                            modifier = Modifier.padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.AutoMirrored.Filled.Send, null, tint = Color.White)
+                            TextField(
+                                value = inputText,
+                                onValueChange = { 
+                                    inputText = it
+                                    viewModel.setTyping(chatId, it.isNotEmpty())
+                                },
+                                placeholder = { Text(if (messageToEdit != null) "EDITANDO MENSAJE..." else "Mensajear con @${otherUser.nombre}", color = if (isDark) Color.White.copy(alpha = 0.5f) else Color.Gray) },
+                                modifier = Modifier.weight(1f).clip(RoundedCornerShape(24.dp)),
+                                trailingIcon = {
+                                    if (messageToEdit != null) {
+                                        IconButton(onClick = { 
+                                            messageToEdit = null
+                                            inputText = ""
+                                        }) {
+                                            Icon(Icons.Default.Close, null)
+                                        }
+                                    }
+                                },
+                                colors = TextFieldDefaults.colors(
+                                    unfocusedContainerColor = if (isDark) Color(0xFF133B5C) else Color(0xFFE9ECEF),
+                                    focusedContainerColor = if (isDark) Color(0xFF133B5C) else Color(0xFFE9ECEF),
+                                    focusedIndicatorColor = Color.Transparent,
+                                    unfocusedIndicatorColor = Color.Transparent,
+                                    focusedTextColor = if (isDark) Color.White else Color.Black,
+                                    unfocusedTextColor = if (isDark) Color.White else Color.Black
+                                )
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            IconButton(
+                                onClick = {
+                                    if (inputText.isNotBlank()) {
+                                        viewModel.setTyping(chatId, false)
+                                        if (messageToEdit != null) {
+                                            viewModel.editMessage(chatId, messageToEdit!!.id, inputText)
+                                            messageToEdit = null
+                                        } else {
+                                            viewModel.sendMessage(
+                                                chatId = chatId, 
+                                                text = inputText,
+                                                replyToId = replyingToMessage?.id,
+                                                replyToText = replyingToMessage?.text,
+                                                replyToName = if (replyingToMessage?.senderId == myUid) "Tú" else otherUser.nombre
+                                            )
+                                            replyingToMessage = null
+                                        }
+                                        inputText = ""
+                                    }
+                                },
+                                enabled = inputText.isNotBlank(),
+                                modifier = Modifier.background(customColors.linkColor, CircleShape)
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.Send, null, tint = Color.White)
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    if (showDeleteConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmDialog = false },
+            title = { Text("¿Eliminar ${selectedMessages.size} mensajes?") },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp)) {
+                    Text("Se eliminarán los siguientes mensajes:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    Spacer(Modifier.height(8.dp))
+                    LazyColumn(
+                        modifier = Modifier.weight(1f, fill = false),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(selectedMessages) { msg ->
+                            Surface(
+                                color = if (isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.05f),
+                                shape = RoundedCornerShape(4.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    msg.text,
+                                    modifier = Modifier.padding(8.dp),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 2,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        selectedMessages.forEach { viewModel.deleteMessage(chatId, it.id) }
+                        selectedMessages.clear()
+                        showDeleteConfirmDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                ) {
+                    Text("Eliminar para todos")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    if (showPinConfirmDialog) {
+        val allPinned = selectedMessages.all { it.pinned }
+        AlertDialog(
+            onDismissRequest = { showPinConfirmDialog = false },
+            title = { Text(if (allPinned) "¿Desfijar mensajes?" else "¿Fijar mensajes?") },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp)) {
+                    Text("Mensajes seleccionados:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    Spacer(Modifier.height(8.dp))
+                    LazyColumn(
+                        modifier = Modifier.weight(1f, fill = false),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(selectedMessages) { msg ->
+                            Surface(
+                                color = if (isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.05f),
+                                shape = RoundedCornerShape(4.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.PushPin, null, modifier = Modifier.size(14.dp), tint = if (msg.pinned) Color.Red else Color.Gray)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        msg.text,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    selectedMessages.forEach { 
+                        if (it.pinned == allPinned) {
+                            viewModel.togglePin(chatId, it.id, it.pinned, myName)
+                        }
+                    }
+                    selectedMessages.clear()
+                    showPinConfirmDialog = false
+                }) {
+                    Text(if (allPinned) "Desfijar todos" else "Fijar todos")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPinConfirmDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 
     if (showPinnedMessages) {
@@ -779,9 +972,14 @@ fun ChatBubble(
     msg: ChatMessage,
     isMe: Boolean,
     isDark: Boolean = false,
-    onLongClick: () -> Unit = {}
+    isSelected: Boolean = false,
+    onLongClick: () -> Unit = {},
+    onClick: () -> Unit = {},
+    onDoubleClick: () -> Unit = {},
+    onSwipeRight: () -> Unit = {}
 ) {
     val bubbleColor = when {
+        isSelected -> if (isDark) Color(0xFF32353B) else Color(0xFFD3E3FD)
         msg.deleted -> Color(0xFFD32F2F)
         isMe -> if (isDark) Color(0xFF4B0082).copy(alpha = 0.8f) else Color(0xFFD8BFD8)
         else -> if (isDark) Color(0xFF1E3A5F) else Color(0xFFB0C4DE)
@@ -789,35 +987,100 @@ fun ChatBubble(
     val textColor = if (msg.deleted || isDark) Color.White else Color.Black
     val alignment = if (isMe) Alignment.CenterEnd else Alignment.CenterStart
     val shape = if (isMe) RoundedCornerShape(16.dp, 16.dp, 2.dp, 16.dp) else RoundedCornerShape(16.dp, 16.dp, 16.dp, 2.dp)
+    val customColors = CuidaleThemeExtras.customColors
+
+    var swipeOffset by remember { mutableFloatStateOf(0f) }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = if (msg.pinned) 16.dp else 0.dp)
-            .pointerInput(Unit) {
+            .background(if (isSelected) Color.White.copy(alpha = 0.1f) else Color.Transparent)
+            .pointerInput(msg.id) {
                 detectTapGestures(
+                    onTap = { onClick() },
+                    onDoubleTap = { onDoubleClick() },
                     onLongPress = { onLongClick() }
+                )
+            }
+            .pointerInput(msg.id) {
+                detectHorizontalDragGestures(
+                    onHorizontalDrag = { _, dragAmount ->
+                        val newOffset = swipeOffset + dragAmount
+                        if (newOffset in 0f..150f) {
+                            swipeOffset = newOffset
+                        }
+                    },
+                    onDragEnd = {
+                        if (swipeOffset > 80f) {
+                            onSwipeRight()
+                        }
+                        swipeOffset = 0f
+                    },
+                    onDragCancel = {
+                        swipeOffset = 0f
+                    }
                 )
             },
         contentAlignment = alignment
     ) {
-        if (msg.pinned) {
-            Row(
-                modifier = Modifier.align(Alignment.TopCenter).offset(y = (-12).dp),
-                verticalAlignment = Alignment.CenterVertically
+        if (swipeOffset > 0) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .padding(start = 16.dp),
+                contentAlignment = Alignment.CenterStart
             ) {
-                Icon(Icons.Default.PushPin, null, modifier = Modifier.size(10.dp), tint = Color.Gray)
-                Spacer(Modifier.width(4.dp))
-                Text("Mensaje fijado", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                Icon(
+                    Icons.AutoMirrored.Filled.Reply,
+                    null,
+                    tint = customColors.linkColor.copy(alpha = (swipeOffset / 150f).coerceIn(0f, 1f)),
+                    modifier = Modifier.size((24 * (swipeOffset / 100f)).dp.coerceIn(0.dp, 24.dp))
+                )
             }
         }
-        Column(horizontalAlignment = if (isMe) Alignment.End else Alignment.Start) {
+
+        Column(
+            modifier = Modifier
+                .offset { IntOffset(swipeOffset.roundToInt(), 0) }
+                .padding(horizontal = 8.dp),
+            horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
+        ) {
             Surface(
                 color = bubbleColor,
                 shape = shape,
-                shadowElevation = 1.dp
+                shadowElevation = if (isSelected) 4.dp else 1.dp
             ) {
                 Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                    // Muestra el mensaje al que se responde
+                    if (msg.replyToId != null) {
+                        Row(
+                            modifier = Modifier
+                                .padding(bottom = 4.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(if (isDark) Color.Black.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.3f))
+                                .padding(8.dp)
+                        ) {
+                            Box(modifier = Modifier.width(2.dp).fillMaxHeight().background(customColors.linkColor))
+                            Spacer(Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    msg.replyToName ?: "Usuario",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = customColors.linkColor
+                                )
+                                Text(
+                                    msg.replyToText ?: "",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    color = textColor.copy(alpha = 0.7f)
+                                )
+                            }
+                        }
+                    }
+
                     if (msg.deleted) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Block, null, modifier = Modifier.size(14.dp), tint = Color.White.copy(alpha = 0.7f))
@@ -879,7 +1142,7 @@ fun ChatBubble(
                     Spacer(modifier = Modifier.width(4.dp))
                     val isRead = msg.readBy.size > 1
                     Icon(
-                        imageVector = if (isRead) Icons.Default.DoneAll else Icons.Default.Done,
+                        imageVector = if (isRead) Icons.Default.Visibility else Icons.AutoMirrored.Filled.Send,
                         contentDescription = null,
                         modifier = Modifier.size(12.dp),
                         tint = if (isRead) Color(0xFF00B4D8) else (if (isDark) Color.LightGray else Color.Gray)

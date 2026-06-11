@@ -17,10 +17,12 @@ import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
@@ -62,11 +64,24 @@ fun ChatsScreen(
     val noDeseados by favoritosViewModel.noDeseados.collectAsState()
     val bloqueados by favoritosViewModel.bloqueados.collectAsState()
     val chatList by chatViewModel.chatList.collectAsState()
+    val typingUsers by chatViewModel.typingUsers.collectAsState()
     val misVinculos by vinculosViewModel.misVinculos.collectAsState()
     val vinculosUsers by vinculosViewModel.vinculosUsers.collectAsState()
     val customColors = CuidaleThemeExtras.customColors
 
     var selectedTab by remember { mutableIntStateOf(0) }
+    var chatSearchQuery by remember { mutableStateOf("") }
+    
+    var chatToMenu by remember { mutableStateOf<ChatViewModel.ChatPreview?>(null) }
+    var showChatMenu by remember { mutableStateOf(false) }
+
+    val filteredChatList = remember(chatList, chatSearchQuery) {
+        if (chatSearchQuery.isBlank()) chatList
+        else chatList.filter { 
+            it.otherUser.nombre.contains(chatSearchQuery, ignoreCase = true) ||
+            it.otherUser.apellido_pa.contains(chatSearchQuery, ignoreCase = true)
+        }
+    }
 
     LaunchedEffect(Unit) {
         chatViewModel.listenChats()
@@ -204,15 +219,45 @@ fun ChatsScreen(
                                 )
                             }
 
+                            if (selectedTab == 0 && chatList.isNotEmpty()) {
+                                OutlinedTextField(
+                                    value = chatSearchQuery,
+                                    onValueChange = { chatSearchQuery = it },
+                                    placeholder = { Text("Buscar conversación...", color = Color.Gray) },
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                                    shape = CircleShape,
+                                    leadingIcon = { Icon(Icons.Default.Search, null, tint = Color.Gray) },
+                                    trailingIcon = {
+                                        if (chatSearchQuery.isNotEmpty()) {
+                                            IconButton(onClick = { chatSearchQuery = "" }) {
+                                                Icon(Icons.Default.Close, null, tint = Color.Gray)
+                                            }
+                                        }
+                                    },
+                                    singleLine = true,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedContainerColor = if (isDark) Color.White.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.5f),
+                                        unfocusedContainerColor = if (isDark) Color.White.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.5f),
+                                        focusedBorderColor = customColors.aqua,
+                                        unfocusedBorderColor = Color.Transparent
+                                    )
+                                )
+                            }
+
                             when (selectedTab) {
                                 0 -> ChatListSection(
-                                    chatList = chatList,
+                                    chatList = filteredChatList,
+                                    typingUsers = typingUsers,
                                     managedUsers = managedUsers,
                                     favoritos = favoritos,
                                     bloqueados = bloqueados,
                                     isDark = isDark,
                                     onChatClick = onChatClick,
-                                    onUserClick = onUserClick
+                                    onUserClick = onUserClick,
+                                    onLongClick = { 
+                                        chatToMenu = it
+                                        showChatMenu = true
+                                    }
                                 )
                                 1 -> RequestListSection(
                                     vinculos = misVinculos,
@@ -241,17 +286,74 @@ fun ChatsScreen(
             }
         }
     }
+
+    if (showChatMenu && chatToMenu != null) {
+        val isFav = favoritos.contains(chatToMenu!!.otherUser.uid)
+        val isBlocked = bloqueados.contains(chatToMenu!!.otherUser.uid)
+        
+        AlertDialog(
+            onDismissRequest = { showChatMenu = false },
+            confirmButton = {},
+            title = { Text(chatToMenu!!.otherUser.nombre + " " + chatToMenu!!.otherUser.apellido_pa) },
+            text = {
+                Column {
+                    TextButton(onClick = {
+                        chatViewModel.markChatAsRead(chatToMenu!!.chatId)
+                        showChatMenu = false
+                    }) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.DoneAll, null)
+                            Spacer(Modifier.width(12.dp))
+                            Text("Marcar como leído")
+                        }
+                    }
+                    TextButton(onClick = {
+                        favoritosViewModel.toggleFavorito(chatToMenu!!.otherUser.uid)
+                        showChatMenu = false
+                    }) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(if (isFav) Icons.Default.StarOutline else Icons.Default.Star, null, tint = if (isFav) Color.Unspecified else Color.Yellow)
+                            Spacer(Modifier.width(12.dp))
+                            Text(if (isFav) "Quitar de favoritos" else "Añadir a favoritos")
+                        }
+                    }
+                    TextButton(onClick = {
+                        showChatMenu = false
+                        onUserClick(chatToMenu!!.otherUser.uid)
+                    }) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Person, null)
+                            Spacer(Modifier.width(12.dp))
+                            Text("Ver perfil")
+                        }
+                    }
+                    TextButton(onClick = {
+                        favoritosViewModel.toggleBloqueo(chatToMenu!!.otherUser.uid)
+                        showChatMenu = false
+                    }) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(if (isBlocked) Icons.Default.CheckCircle else Icons.Default.Block, null, tint = if (isBlocked) Color.Green else Color.Red)
+                            Spacer(Modifier.width(12.dp))
+                            Text(if (isBlocked) "Desbloquear usuario" else "Bloquear usuario", color = if (isBlocked) Color.Unspecified else Color.Red)
+                        }
+                    }
+                }
+            }
+        )
+    }
 }
 
 @Composable
 fun ChatListSection(
     chatList: List<ChatViewModel.ChatPreview>,
+    typingUsers: Map<String, Boolean> = emptyMap(),
     managedUsers: List<UserData>,
     favoritos: List<String>,
     bloqueados: List<String>,
     isDark: Boolean,
     onChatClick: (String, UserData) -> Unit,
-    onUserClick: (String) -> Unit
+    onUserClick: (String) -> Unit,
+    onLongClick: (ChatViewModel.ChatPreview) -> Unit = {}
 ) {
     val customColors = CuidaleThemeExtras.customColors
     val savedUsers = managedUsers.filter { favoritos.contains(it.uid) }
@@ -280,12 +382,16 @@ fun ChatListSection(
             items(sortedChats) { chat ->
                 val isFav = favoritos.contains(chat.otherUser.uid)
                 val isBlocked = bloqueados.contains(chat.otherUser.uid)
+                val isTyping = typingUsers[chat.chatId] ?: false
+
                 RecentChatRow(
                     chat = chat, 
                     isDark = isDark, 
                     isFavorite = isFav,
                     isBlocked = isBlocked,
-                    onClick = { onChatClick(chat.chatId, chat.otherUser) }
+                    isTyping = isTyping,
+                    onClick = { onChatClick(chat.chatId, chat.otherUser) },
+                    onLongClick = { onLongClick(chat) }
                 )
             }
         }
@@ -360,20 +466,28 @@ fun ChatListSection(
 
         if (chatList.isEmpty() && savedUsers.isEmpty()) {
             item {
-                Box(modifier = Modifier.fillParentMaxHeight(0.7f), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
+                Box(
+                    modifier = Modifier.fillParentMaxHeight(0.7f).fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(
-                            imageVector = Icons.Default.Bookmark,
+                            imageVector = Icons.Default.ChatBubbleOutline,
                             contentDescription = null,
-                            modifier = Modifier.size(64.dp),
-                            tint = Color.White.copy(alpha = 0.4f)
+                            modifier = Modifier.size(80.dp),
+                            tint = if (isDark) Color.White.copy(alpha = 0.2f) else customColors.aqua.copy(alpha = 0.3f)
                         )
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(Modifier.height(16.dp))
                         Text(
-                            "No tienes chats activos ni guardados",
-                            color = Color.White,
+                            "Comienza a conectar",
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center
+                            color = if (isDark) Color.White.copy(alpha = 0.5f) else Color.Gray
+                        )
+                        Text(
+                            "Tus conversaciones aparecerán aquí",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isDark) Color.White.copy(alpha = 0.3f) else Color.Gray.copy(alpha = 0.7f)
                         )
                     }
                 }
@@ -584,14 +698,25 @@ private fun formatMessageDate(timestamp: Long): String {
 }
 
 @Composable
-fun RecentChatRow(chat: ChatViewModel.ChatPreview, isDark: Boolean, isFavorite: Boolean = false, isBlocked: Boolean = false, onClick: () -> Unit) {
+fun RecentChatRow(
+    chat: ChatViewModel.ChatPreview, 
+    isDark: Boolean, 
+    isFavorite: Boolean = false, 
+    isBlocked: Boolean = false, 
+    isTyping: Boolean = false,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit = {}
+) {
     val customColors = CuidaleThemeExtras.customColors
     val itemAccent = if (chat.otherUser.rol == "cuidador") customColors.aqua else customColors.mint
     
     HardShadowPanel(
         backgroundColor = if (isBlocked) (if (isDark) Color(0xFF2B2D31) else Color(0xFFF2F3F5)) else (if (isDark) customColors.panelBackground else Color.White),
         shadowColor = if (isBlocked) Color.Transparent else (if (isFavorite) Color.Yellow.copy(alpha = 0.3f) else itemAccent.copy(alpha = 0.3f)),
-        modifier = Modifier.clickable { onClick() }
+        modifier = Modifier.combinedClickable(
+            onClick = onClick,
+            onLongClick = onLongClick
+        )
     ) {
         Row(
             modifier = Modifier.padding(12.dp).alpha(if (isBlocked) 0.6f else 1.0f),
@@ -644,19 +769,40 @@ fun RecentChatRow(chat: ChatViewModel.ChatPreview, isDark: Boolean, isFavorite: 
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    val msgText = when {
-                        isBlocked -> "Usuario bloqueado"
-                        chat.lastMessage?.deleted == true -> "Mensaje borrado"
-                        else -> chat.lastMessage?.text ?: "Inicia una conversación"
+                    if (isTyping && !isBlocked) {
+                        Text(
+                            text = "escribiendo...",
+                            style = MaterialTheme.typography.bodySmall.copy(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic),
+                            color = customColors.aqua,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            modifier = Modifier.weight(1f)
+                        )
+                    } else {
+                        val msgText = when {
+                            isBlocked -> "Usuario bloqueado"
+                            chat.lastMessage?.deleted == true -> "Mensaje borrado"
+                            else -> chat.lastMessage?.text ?: "Inicia una conversación"
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            if (chat.lastMessage?.senderId != null && chat.lastMessage.senderId != chat.otherUser.uid && !isBlocked) {
+                                val isRead = chat.lastMessage.readBy.size > 1
+                                Icon(
+                                    imageVector = if (isRead) Icons.Default.Visibility else Icons.AutoMirrored.Filled.Send,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp).padding(end = 4.dp),
+                                    tint = if (isRead) Color(0xFF00B4D8) else Color.Gray
+                                )
+                            }
+                            Text(
+                                text = msgText,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (chat.unreadCount > 0 && !isBlocked) (if (isDark) Color.White else Color.Black) else Color.Gray,
+                                fontWeight = if (chat.unreadCount > 0 && !isBlocked) FontWeight.Bold else FontWeight.Normal,
+                                maxLines = 1
+                            )
+                        }
                     }
-                    Text(
-                        text = msgText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (chat.unreadCount > 0 && !isBlocked) (if (isDark) Color.White else Color.Black) else Color.Gray,
-                        fontWeight = if (chat.unreadCount > 0 && !isBlocked) FontWeight.Bold else FontWeight.Normal,
-                        maxLines = 1,
-                        modifier = Modifier.weight(1f)
-                    )
                     if (chat.unreadCount > 0 && !isBlocked) {
                         Box(
                             modifier = Modifier.size(20.dp).background(customColors.lime, CircleShape),

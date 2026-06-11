@@ -27,15 +27,20 @@ import com.example.cuidaleapp.data.ChileData
 import com.example.cuidaleapp.models.UserData
 import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
+import com.example.cuidaleapp.viewmodel.FichaState
 import com.example.cuidaleapp.viewmodel.SearchState
 import com.example.cuidaleapp.viewmodel.SearchViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import android.content.Context
+import androidx.compose.ui.platform.LocalContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MenuScreen(
     userData: UserData,
     searchViewModel: SearchViewModel,
+    fichaState: FichaState,
     isDark: Boolean,
     unreadCount: Int = 0,
     pendingNotifs: Int = 0,
@@ -50,6 +55,7 @@ fun MenuScreen(
     val gradient = CuidaleThemeExtras.gradient
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     
     val searchState by searchViewModel.state.collectAsState()
     val isRefreshing by searchViewModel.isRefreshing.collectAsState()
@@ -59,6 +65,22 @@ fun MenuScreen(
     val pullToRefreshState = rememberPullToRefreshState()
     val sheetState = rememberModalBottomSheetState()
     var showSearchSheet by remember { mutableStateOf(false) }
+    
+    var showFichaReminder by remember { mutableStateOf(false) }
+
+    LaunchedEffect(fichaState) {
+        if (fichaState is FichaState.NotFound) {
+            val prefs = context.getSharedPreferences("cuidale_reminders", Context.MODE_PRIVATE)
+            val lastReminder = prefs.getLong("last_ficha_reminder", 0L)
+            val now = System.currentTimeMillis()
+            
+            // Cada 2 horas
+            if (now - lastReminder > 2 * 60 * 60 * 1000) {
+                showFichaReminder = true
+                prefs.edit().putLong("last_ficha_reminder", now).apply()
+            }
+        }
+    }
     
     val listState = rememberLazyListState()
     val shouldLoadMore = remember {
@@ -182,79 +204,115 @@ fun MenuScreen(
                                 modifier = Modifier.padding(vertical = 16.dp)
                             )
 
-                            PullToRefreshBox(
-                                state = pullToRefreshState,
-                                isRefreshing = isRefreshing,
-                                onRefresh = { searchViewModel.refresh() },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                when (searchState) {
-                                    is SearchState.Loading -> {
-                                        if (!isRefreshing) {
-                                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                                CircularProgressIndicator(color = Color.White)
+                            if (fichaState is FichaState.NotFound) {
+                                FichaPlaceholder(
+                                    rol = userData.rol,
+                                    onClick = onViewFicha
+                                )
+                            } else {
+                                PullToRefreshBox(
+                                    state = pullToRefreshState,
+                                    isRefreshing = isRefreshing,
+                                    onRefresh = { searchViewModel.refresh() },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    when (searchState) {
+                                        is SearchState.Loading -> {
+                                            if (!isRefreshing) {
+                                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                                    CircularProgressIndicator(color = Color.White)
+                                                }
                                             }
                                         }
-                                    }
-                                    is SearchState.Success -> {
-                                        val resultsList = (searchState as SearchState.Success).results
-                                        val isLoadingMore = (searchState as SearchState.Success).isLoadingMore
-                                        
-                                        if (resultsList.isEmpty()) {
-                                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                                Text(
-                                                    text = "No se encontraron resultados",
-                                                    color = Color.White.copy(alpha = 0.7f),
-                                                    textAlign = TextAlign.Center
-                                                )
-                                            }
-                                        } else {
-                                            LazyColumn(
-                                                state = listState,
-                                                verticalArrangement = Arrangement.spacedBy(16.dp),
-                                                contentPadding = PaddingValues(bottom = 80.dp),
-                                                modifier = Modifier.fillMaxSize()
-                                            ) {
-                                                items(resultsList) { result ->
-                                                    CuidaleUserCard(
-                                                        nombre = result.nombre,
-                                                        apellido = result.apellido_pa,
-                                                        fotoUrl = result.foto_url,
-                                                        comuna = result.comuna,
-                                                        comunas = result.comunas,
-                                                        tipo = result.tipo,
-                                                        edad = result.edad,
-                                                        nivelDependencia = result.nivel_dependencia,
-                                                        especializacion = result.especializacion,
-                                                        horarios = result.horarios,
-                                                        onClick = { onUserClick(result.id) }
+                                        is SearchState.Success -> {
+                                            val resultsList = (searchState as SearchState.Success).results
+                                            val isLoadingMore = (searchState as SearchState.Success).isLoadingMore
+                                            
+                                            if (resultsList.isEmpty()) {
+                                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                                    Text(
+                                                        text = "No se encontraron resultados",
+                                                        color = Color.White.copy(alpha = 0.7f),
+                                                        textAlign = TextAlign.Center
                                                     )
                                                 }
-                                                
-                                                if (isLoadingMore) {
-                                                    item {
-                                                        Box(
-                                                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                                            contentAlignment = Alignment.Center
-                                                        ) {
-                                                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                                            } else {
+                                                LazyColumn(
+                                                    state = listState,
+                                                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                                                    contentPadding = PaddingValues(bottom = 80.dp),
+                                                    modifier = Modifier.fillMaxSize()
+                                                ) {
+                                                    items(resultsList) { result ->
+                                                        CuidaleUserCard(
+                                                            nombre = result.nombre,
+                                                            apellido = result.apellido_pa,
+                                                            fotoUrl = result.foto_url,
+                                                            comuna = result.comuna,
+                                                            comunas = result.comunas,
+                                                            tipo = result.tipo,
+                                                            edad = result.edad,
+                                                            nivelDependencia = result.nivel_dependencia,
+                                                            especializacion = result.especializacion,
+                                                            horarios = result.horarios,
+                                                            onClick = { onUserClick(result.id) }
+                                                        )
+                                                    }
+                                                    
+                                                    if (isLoadingMore) {
+                                                        item {
+                                                            Box(
+                                                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                                                contentAlignment = Alignment.Center
+                                                            ) {
+                                                                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                                                            }
                                                         }
                                                     }
                                                 }
                                             }
                                         }
-                                    }
-                                    is SearchState.Error -> {
-                                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                            Text(
-                                                text = (searchState as SearchState.Error).message,
-                                                color = MaterialTheme.colorScheme.error,
-                                                textAlign = TextAlign.Center
-                                            )
+                                        is SearchState.Error -> {
+                                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                                Text(
+                                                    text = (searchState as SearchState.Error).message,
+                                                    color = MaterialTheme.colorScheme.error,
+                                                    textAlign = TextAlign.Center
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             }
+                        }
+
+                        if (showFichaReminder) {
+                            AlertDialog(
+                                onDismissRequest = { showFichaReminder = false },
+                                icon = { Icon(Icons.Default.Warning, null, tint = Color.Yellow) },
+                                title = { Text("Ficha incompleta") },
+                                text = { 
+                                    Text(
+                                        if (userData.rol == "cuidador") 
+                                            "Aún no tienes una ficha creada. Recuerda que no puedes ofrecer tus servicios ni aparecer en búsquedas sin ella."
+                                        else 
+                                            "Aún no conocemos nada de el familiar que debe ser cuidado. Debes hacer una ficha para poder buscar cuidadores."
+                                    ) 
+                                },
+                                confirmButton = {
+                                    Button(onClick = { 
+                                        showFichaReminder = false
+                                        onViewFicha()
+                                    }) {
+                                        Text("CREAR FICHA AHORA")
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showFichaReminder = false }) {
+                                        Text("MÁS TARDE")
+                                    }
+                                }
+                            )
                         }
 
                         if (showSearchSheet) {
@@ -277,6 +335,62 @@ fun MenuScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun FichaPlaceholder(rol: String, onClick: () -> Unit) {
+    val customColors = CuidaleThemeExtras.customColors
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        HardShadowPanel(
+            backgroundColor = customColors.panelBackground,
+            shadowColor = Color.Black.copy(alpha = 0.1f),
+            cornerRadius = 24.dp
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Badge,
+                    contentDescription = null,
+                    modifier = Modifier.size(80.dp),
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Text(
+                    text = if (rol == "cuidador") 
+                        "Aun no puedes buscar a quien cuidar sin una ficha"
+                    else 
+                        "Aun no conocemos nada de el familiar que debe ser cuidado debes hacer una ficha",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "Completa tu ficha técnica para acceder a todos los servicios de Cuidale.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(32.dp))
+                HardShadowButton(
+                    text = "CREAR MI FICHA",
+                    onClick = onClick,
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = Color.White,
+                    isDark = customColors.isDark
+                )
             }
         }
     }

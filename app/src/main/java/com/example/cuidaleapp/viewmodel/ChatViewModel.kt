@@ -29,8 +29,8 @@ class ChatViewModel : ViewModel() {
     private val _totalUnreadCount = MutableStateFlow(0)
     val totalUnreadCount: StateFlow<Int> = _totalUnreadCount
 
-    private val _isUploading = MutableStateFlow(false)
-    val isUploading: StateFlow<Boolean> = _isUploading
+    private val _typingUsers = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    val typingUsers: StateFlow<Map<String, Boolean>> = _typingUsers
 
     private val _otherUserStatus = MutableStateFlow("desconectado")
     val otherUserStatus: StateFlow<String> = _otherUserStatus
@@ -60,6 +60,7 @@ class ChatViewModel : ViewModel() {
     private var chatsListener: com.google.firebase.firestore.ListenerRegistration? = null
     private var blockingListener: com.google.firebase.firestore.ListenerRegistration? = null
     private val chatMessageListeners = mutableMapOf<String, ValueEventListener>()
+    private val chatTypingListeners = mutableMapOf<String, ValueEventListener>()
     private var currentChatId: String? = null
 
     fun setUserStatus(isOnline: Boolean) {
@@ -108,15 +109,31 @@ class ChatViewModel : ViewModel() {
     }
 
     fun listenUserStatus(otherUid: String) {
+        val myUid = auth.currentUser?.uid ?: return
         statusListener?.let { database.child("status").child(otherUid).removeEventListener(it) }
         
-        statusListener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                _otherUserStatus.value = snapshot.child("estado").getValue(String::class.java) ?: "desconectado"
+        // Verificar si hay un vínculo aceptado antes de mostrar el estado
+        db.collection("vinculos")
+            .whereArrayContains("uids", myUid)
+            .get()
+            .addOnSuccessListener { snapshot ->
+                val hasVinculo = snapshot.documents.any { doc ->
+                    val uids = doc.get("uids") as? List<String> ?: emptyList()
+                    doc.getString("estado") == "aceptado" && uids.contains(otherUid)
+                }
+                
+                if (hasVinculo) {
+                    statusListener = object : ValueEventListener {
+                        override fun onDataChange(snapshot: DataSnapshot) {
+                            _otherUserStatus.value = snapshot.child("estado").getValue(String::class.java) ?: "desconectado"
+                        }
+                        override fun onCancelled(error: DatabaseError) {}
+                    }
+                    database.child("status").child(otherUid).addValueEventListener(statusListener!!)
+                } else {
+                    _otherUserStatus.value = "estado oculto"
+                }
             }
-            override fun onCancelled(error: DatabaseError) {}
-        }
-        database.child("status").child(otherUid).addValueEventListener(statusListener!!)
         listenToBlocking(otherUid)
     }
 
@@ -162,59 +179,6 @@ class ChatViewModel : ViewModel() {
 
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
-    }
-
-    fun uploadFile(chatId: String, fileUri: Uri, context: android.content.Context, onSuccess: (String) -> Unit, onError: (String) -> Unit) {
-        val fileSize = getFileSize(fileUri, context)
-        if (fileSize > 25 * 1024 * 1024) {
-            onError("El archivo excede el límite de 25MB")
-            return
-        }
-
-        _isUploading.value = true
-        val originalFileName = getFileName(fileUri, context)
-        val fileNameInStorage = "chat_files/${chatId}/${System.currentTimeMillis()}_$originalFileName"
-        val ref = storage.child(fileNameInStorage)
-        
-        ref.putFile(fileUri)
-            .addOnSuccessListener {
-                ref.downloadUrl.addOnSuccessListener { uri ->
-                    _isUploading.value = false
-                    val mimeType = context.contentResolver.getType(fileUri) ?: ""
-                    when {
-                        mimeType.startsWith("image") -> {
-                            sendMessage(chatId, "", imageUrl = uri.toString())
-                        }
-                        mimeType.startsWith("video") -> {
-                            sendMessage(chatId, "", videoUrl = uri.toString())
-                        }
-                        else -> {
-                            sendMessage(chatId, "", fileUrl = uri.toString(), fileName = originalFileName)
-                        }
-                    }
-                    onSuccess(uri.toString())
-                }
-            }
-            .addOnFailureListener {
-                _isUploading.value = false
-                onError(it.message ?: "Error al subir archivo")
-            }
-    }
-
-    private fun getFileSize(uri: Uri, context: android.content.Context): Long {
-        return context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: 0L
-    }
-
-    private fun getFileName(uri: Uri, context: android.content.Context): String {
-        var name = "archivo"
-        context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-            val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-            if (cursor.moveToFirst()) {
-                val index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                if (index != -1) name = cursor.getString(index)
-            }
-        }
-        return name
     }
 
     private fun removeActiveListener() {
@@ -299,11 +263,35 @@ class ChatViewModel : ViewModel() {
                 }
                 chatMessageListeners[chatId] = listener
                 database.child("messages").child(chatId).addValueEventListener(listener)
+                
+                // Añadir listener de escritura para la lista
+                if (!chatTypingListeners.containsKey(chatId)) {
+                    val tListener = object : ValueEventListener {
+                        override fun onDataChange(snapshot: DataSnapshot) {
+                            val isTyping = snapshot.exists() && snapshot.getValue(Boolean::class.java) == true
+                            _typingUsers.value = _typingUsers.value + (chatId to isTyping)
+                        }
+                        override fun onCancelled(error: DatabaseError) {}
+                    }
+                    chatTypingListeners[chatId] = tListener
+                    database.child("typing").child(chatId).child(otherUid).addValueEventListener(tListener)
+                }
             }
         }
     }
 
-    fun sendMessage(chatId: String, text: String, imageUrl: String? = null, videoUrl: String? = null, fileUrl: String? = null, fileName: String? = null, isSystem: Boolean = false) {
+    fun sendMessage(
+        chatId: String,
+        text: String,
+        imageUrl: String? = null,
+        videoUrl: String? = null,
+        fileUrl: String? = null,
+        fileName: String? = null,
+        replyToId: String? = null,
+        replyToText: String? = null,
+        replyToName: String? = null,
+        isSystem: Boolean = false
+    ) {
         if (_isBlocked.value && !isSystem) return
 
         val myUid = auth.currentUser?.uid ?: return
@@ -319,26 +307,37 @@ class ChatViewModel : ViewModel() {
             videoUrl = videoUrl,
             fileUrl = fileUrl,
             fileName = fileName,
+            replyToId = replyToId,
+            replyToText = replyToText,
+            replyToName = replyToName,
             readBy = if (isSystem) emptyMap() else mapOf(myUid to true)
         )
         msgRef.setValue(message)
 
-        // Crear notificación si no es mensaje de sistema
+        // Lanzar notificación si no es mensaje de sistema
         if (!isSystem) {
             val otherUid = chatId.split("_").firstOrNull { it != myUid } ?: 
                          chatId.split("_").lastOrNull { it != myUid } ?: ""
             
             if (otherUid.isNotEmpty()) {
-                val notifRef = db.collection("usuarios").document(otherUid).collection("notificaciones").document()
-                val notification = com.example.cuidaleapp.models.Notification(
-                    id = notifRef.id,
-                    tipo = "nuevo_mensaje",
-                    emisor = myUid,
-                    receptor = otherUid,
-                    timestamp = System.currentTimeMillis(),
-                    data = mapOf("chatId" to chatId, "text" to text.take(50))
-                )
-                notifRef.set(notification)
+                // Verificar si el usuario está conectado antes de crear el documento de notificación
+                // Esto ahorra ejecuciones de Cloud Functions si el usuario ya está en la app
+                database.child("status").child(otherUid).child("estado").get().addOnSuccessListener { snapshot ->
+                    val status = snapshot.getValue(String::class.java)
+                    if (status != "en línea") {
+                        val notifRef = db.collection("usuarios").document(otherUid).collection("notificaciones").document()
+                        val notification = com.example.cuidaleapp.models.Notification(
+                            id = notifRef.id,
+                            tipo = "nuevo_mensaje",
+                            emisor = myUid,
+                            receptor = otherUid,
+                            timestamp = System.currentTimeMillis(),
+                            leida = false,
+                            data = mapOf("chatId" to chatId, "text" to text.take(50))
+                        )
+                        notifRef.set(notification)
+                    }
+                }
             }
         }
     }
@@ -390,6 +389,32 @@ class ChatViewModel : ViewModel() {
         sendMessage(chatId, "$senderName $action un mensaje", isSystem = true)
     }
 
+    fun clearChatNotifications(chatId: String) {
+        val myUid = auth.currentUser?.uid ?: return
+        db.collection("usuarios").document(myUid).collection("notificaciones")
+            .whereEqualTo("tipo", "nuevo_mensaje")
+            .whereEqualTo("data.chatId", chatId)
+            .get()
+            .addOnSuccessListener { snapshot ->
+                val batch = db.batch()
+                snapshot.documents.forEach { batch.delete(it.reference) }
+                batch.commit()
+            }
+    }
+
+    fun markChatAsRead(chatId: String) {
+        val myUid = auth.currentUser?.uid ?: return
+        database.child("messages").child(chatId).get().addOnSuccessListener { snapshot ->
+            snapshot.children.forEach { child ->
+                val msg = child.getValue(ChatMessage::class.java)
+                if (msg != null && msg.senderId != myUid && !msg.readBy.containsKey(myUid)) {
+                    child.ref.child("readBy").child(myUid).setValue(true)
+                }
+            }
+            clearChatNotifications(chatId)
+        }
+    }
+
     private fun markAsRead(chatId: String, messageId: String) {
         val myUid = auth.currentUser?.uid ?: return
         database.child("messages").child(chatId).child(messageId).child("readBy").child(myUid).setValue(true)
@@ -403,6 +428,10 @@ class ChatViewModel : ViewModel() {
         chatMessageListeners.forEach { (id, listener) ->
             database.child("messages").child(id).removeEventListener(listener)
         }
+        chatTypingListeners.forEach { (id, listener) ->
+            database.child("typing").child(id).removeEventListener(listener)
+        }
         chatMessageListeners.clear()
+        chatTypingListeners.clear()
     }
 }
