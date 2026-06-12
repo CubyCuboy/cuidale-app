@@ -50,6 +50,22 @@ fun ReviewSolicitudScreen(
     val textColor = MaterialTheme.colorScheme.onSurface
     val secondaryTextColor = MaterialTheme.colorScheme.onSurfaceVariant
 
+    var hasAlreadyApplied by remember { mutableStateOf(false) }
+    val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+
+    LaunchedEffect(solicitud.id, currentUid) {
+        if (currentUid != null) {
+            try {
+                val snapshot = com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("postulaciones")
+                    .whereEqualTo("solicitudId", solicitud.id)
+                    .whereEqualTo("cuidadorUid", currentUid)
+                    .whereEqualTo("estado", "pendiente")
+                    .get().await()
+                hasAlreadyApplied = !snapshot.isEmpty
+            } catch (e: Exception) { }
+        }
+    }
+
     LaunchedEffect(solicitud.pacienteFichaId) {
         try {
             val doc = FirebaseFirestore.getInstance().collection("fichas")
@@ -247,10 +263,11 @@ fun ReviewSolicitudScreen(
                     )
                 } else {
                     HardShadowButton(
-                        text = "POSTULAR A SOLICITUD",
-                        containerColor = MaterialTheme.colorScheme.primary,
+                        text = if (hasAlreadyApplied) "POSTULACIÓN PENDIENTE" else "POSTULAR A SOLICITUD",
+                        containerColor = if (hasAlreadyApplied) Color.Gray else MaterialTheme.colorScheme.primary,
                         contentColor = Color.White,
-                        shadowColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                        shadowColor = if (hasAlreadyApplied) Color.Transparent else MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                        enabled = !hasAlreadyApplied,
                         onClick = {
                             viewModel.postularASolicitud(solicitud) { 
                                 onRedirectToRequests() 

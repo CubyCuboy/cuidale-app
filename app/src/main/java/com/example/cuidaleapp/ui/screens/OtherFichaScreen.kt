@@ -47,7 +47,11 @@ import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.FichaState
 import com.example.cuidaleapp.viewmodel.ProfileViewModel
 import com.example.cuidaleapp.models.UserData
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.sp
 import com.example.cuidaleapp.models.SolicitudCuidado
+import com.example.cuidaleapp.utils.DateUtils.formatDate
 import androidx.compose.material.icons.automirrored.filled.Chat
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
@@ -84,7 +88,8 @@ fun OtherFichaScreen(
     }
     var showCancelRequestDialog by remember { mutableStateOf(false) }
 
-    var availableSolicitud by remember { mutableStateOf<SolicitudCuidado?>(null) }
+    var availableSolicitudes by remember { mutableStateOf<List<SolicitudCuidado>>(emptyList()) }
+    var showRequestsListDialog by remember { mutableStateOf(false) }
 
     val scrollState = rememberScrollState()
     val customColors = CuidaleThemeExtras.customColors
@@ -104,11 +109,8 @@ fun OtherFichaScreen(
                 val snapshot = FirebaseFirestore.getInstance().collection("solicitudes")
                     .whereEqualTo("representanteUid", uid)
                     .whereEqualTo("estado", "abierta")
-                    .limit(1)
                     .get().await()
-                if (!snapshot.isEmpty) {
-                    availableSolicitud = snapshot.documents.first().toObject(SolicitudCuidado::class.java)
-                }
+                availableSolicitudes = snapshot.toObjects(SolicitudCuidado::class.java)
             } catch (e: Exception) { }
         }
     }
@@ -461,27 +463,71 @@ fun OtherFichaScreen(
                         }
 
                         // Service Request availability (FOR CAREGIVERS)
-                        if (availableSolicitud != null && com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid != otherUserData?.uid) {
+                        if (availableSolicitudes.isNotEmpty() && com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid != otherUserData?.uid) {
                             Spacer(modifier = Modifier.height(16.dp))
                             Column(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(
-                                    "Solicitud de cuidado Disponible",
+                                    if (availableSolicitudes.size > 1) "Solicitudes de cuidado Disponibles" else "Solicitud de cuidado Disponible",
                                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                                     color = accentColor
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 HardShadowButton(
-                                    text = "REVISAR SOLICITUD",
+                                    text = if (availableSolicitudes.size > 1) "REVISAR SOLICITUDES" else "REVISAR SOLICITUD",
                                     containerColor = MaterialTheme.colorScheme.secondary,
                                     contentColor = Color.White,
                                     shadowColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f),
                                     icon = Icons.Default.Assignment,
-                                    onClick = { onReviewRequest(availableSolicitud!!) }
+                                    onClick = { 
+                                        if (availableSolicitudes.size > 1) {
+                                            showRequestsListDialog = true
+                                        } else {
+                                            onReviewRequest(availableSolicitudes.first())
+                                        }
+                                    }
                                 )
                             }
+                        }
+
+                        if (showRequestsListDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showRequestsListDialog = false },
+                                title = { Text("Solicitudes Disponibles", fontWeight = FontWeight.Bold) },
+                                text = {
+                                    androidx.compose.foundation.lazy.LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.heightIn(max = 400.dp)) {
+                                        items(availableSolicitudes) { sol: com.example.cuidaleapp.models.SolicitudCuidado ->
+                                            Card(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                                                shape = RoundedCornerShape(12.dp)
+                                            ) {
+                                                Column(modifier = Modifier.padding(12.dp)) {
+                                                    Text(sol.horarioStr, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
+                                                    val fechaStr = if (sol.esIndefinido) "Indefinido" else "${formatDate(sol.fechaInicio?.toDate()?.time)} - ${formatDate(sol.fechaFin?.toDate()?.time)}"
+                                                    Text("Duración: $fechaStr", style = MaterialTheme.typography.bodySmall)
+                                                    Spacer(modifier = Modifier.height(8.dp))
+                                                    Button(
+                                                        onClick = {
+                                                            showRequestsListDialog = false
+                                                            onReviewRequest(sol)
+                                                        },
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        shape = RoundedCornerShape(8.dp)
+                                                    ) {
+                                                        Text("Ver solicitud", fontSize = 12.sp)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = { showRequestsListDialog = false }) { Text("CERRAR") }
+                                }
+                            )
                         }
 
                         if (showCancelRequestDialog) {

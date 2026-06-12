@@ -33,8 +33,8 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
     private val _solicitudesAceptadas = MutableStateFlow<List<SolicitudCuidado>>(emptyList())
     val solicitudesAceptadas: StateFlow<List<SolicitudCuidado>> = _solicitudesAceptadas
 
-    private val _misPostulaciones = MutableStateFlow<List<Pair<SolicitudCuidado, String>>>(emptyList())
-    val misPostulaciones: StateFlow<List<Pair<SolicitudCuidado, String>>> = _misPostulaciones
+    private val _misPostulaciones = MutableStateFlow<List<Pair<SolicitudCuidado, PostulacionCuidado>>>(emptyList())
+    val misPostulaciones: StateFlow<List<Pair<SolicitudCuidado, PostulacionCuidado>>> = _misPostulaciones
 
     private val _historial = MutableStateFlow<List<HistorialServicio>>(emptyList())
     val historial: StateFlow<List<HistorialServicio>> = _historial
@@ -143,7 +143,6 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                     .whereEqualTo("cuidadorUid", uid)
                     .get().await()
                 
-                // We delete only the ones associated with this specific user
                 for (doc in snapshot.documents) {
                     doc.reference.delete().await()
                 }
@@ -151,8 +150,16 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun eliminarPostulacionPorId(postulacionId: String) {
+        viewModelScope.launch {
+            try {
+                db.collection("postulaciones").document(postulacionId).delete().await()
+            } catch (e: Exception) { }
+        }
+    }
+
     fun eliminarPostulacionEspecifica(solicitudId: String) {
-        cancelarPostulacion(solicitudId) // Consolidated identical logic
+        cancelarPostulacion(solicitudId)
     }
 
     private fun listenToPostulaciones(solicitudIds: List<String>) {
@@ -191,12 +198,12 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                 if (snapshot != null) {
                     val postulaciones = snapshot.toObjects(PostulacionCuidado::class.java)
                     viewModelScope.launch {
-                        val result = mutableListOf<Pair<SolicitudCuidado, String>>()
+                        val result = mutableListOf<Pair<SolicitudCuidado, PostulacionCuidado>>()
                         postulaciones.forEach { post ->
                             val solDoc = db.collection("solicitudes").document(post.solicitudId).get().await()
                             val sol = solDoc.toObject(SolicitudCuidado::class.java)
                             if (sol != null && sol.estado == "abierta") {
-                                result.add(sol to post.estado)
+                                result.add(sol to post)
                             }
                         }
                         _misPostulaciones.value = result
@@ -307,7 +314,6 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                 // 2. Send Message to Chat
                 try {
                     val chatId = if (uid < solicitud.representanteUid) "${uid}_${solicitud.representanteUid}" else "${solicitud.representanteUid}_$uid"
-                    // Realtime Database for messages
                     val chatMsgRef = com.google.firebase.database.FirebaseDatabase.getInstance().reference
                         .child("messages").child(chatId).push()
                     
@@ -316,14 +322,15 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                         "senderId" to uid,
                         "text" to "Se realizó una postulación de servicio para ${solicitud.nombrePaciente}",
                         "type" to "aviso_postulacion",
-                        "metadata" to mapOf("solicitudId" to solicitud.id),
+                        "metadata" to mapOf(
+                            "solicitudId" to solicitud.id,
+                            "postulacionId" to id
+                        ),
                         "timestamp" to System.currentTimeMillis(),
                         "readBy" to mapOf(uid to true)
                     )
                     chatMsgRef.setValue(chatMsg).await()
-                } catch (e: Exception) {
-                    // Chat message failed, but application succeeded
-                }
+                } catch (e: Exception) { }
                 
             } catch (e: Exception) { 
                 // Log application error

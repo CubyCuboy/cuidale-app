@@ -1,6 +1,5 @@
 package com.example.cuidaleapp.ui.screens
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -130,7 +129,7 @@ fun SolicitudesScreen(
                         misPostulaciones = misPostulaciones,
                         onViewDetails = onViewPatientDetails,
                         onFinish = { requestToFinish = it },
-                        onCancelPostulacion = { viewModel.eliminarPostulacionEspecifica(it) }
+                        onCancelPostulacion = { viewModel.eliminarPostulacionPorId(it) }
                     )
                 }
             }
@@ -166,7 +165,7 @@ fun RepresentanteRequestsContent(
             EmptyPlaceholder("Aún no has creado solicitudes.")
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxSize()) {
-                items(solicitudes) { sol ->
+                items(solicitudes, key = { it.id }) { sol ->
                     val applicants = postulacionesMap[sol.id]?.filter { it.estado == "pendiente" } ?: emptyList()
                     
                     BaseSolicitudCard(
@@ -219,7 +218,7 @@ fun RepresentanteRequestsContent(
 @Composable
 fun CuidadorRequestsContent(
     solicitudesAceptadas: List<SolicitudCuidado>,
-    misPostulaciones: List<Pair<SolicitudCuidado, String>>,
+    misPostulaciones: List<Pair<SolicitudCuidado, PostulacionCuidado>>,
     onViewDetails: (String) -> Unit,
     onFinish: (SolicitudCuidado) -> Unit,
     onCancelPostulacion: (String) -> Unit
@@ -227,7 +226,7 @@ fun CuidadorRequestsContent(
     LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxSize()) {
         if (solicitudesAceptadas.isNotEmpty()) {
             item { Text("SERVICIOS ACTIVOS", style = MaterialTheme.typography.titleMedium, color = Color.White) }
-            items(solicitudesAceptadas) { sol ->
+            items(solicitudesAceptadas, key = { it.id }) { sol ->
                 BaseSolicitudCard(
                     title = sol.nombrePaciente,
                     subtitle = sol.horarioStr,
@@ -249,8 +248,9 @@ fun CuidadorRequestsContent(
                 Spacer(modifier = Modifier.height(16.dp))
                 Text("MIS POSTULACIONES", style = MaterialTheme.typography.titleMedium, color = Color.White)
             }
-            items(misPostulaciones) { (sol, estado) ->
-                PostulacionStatusCard(sol, estado, onCancel = { onCancelPostulacion(sol.id) })
+            // Use the Postulation ID as key for stability
+            items(misPostulaciones, key = { it.second.id }) { (sol, post) ->
+                PostulacionStatusCard(sol, post.estado, onCancel = { onCancelPostulacion(post.id) })
             }
         }
 
@@ -339,31 +339,41 @@ fun RowScope.ActionOutlinedButton(text: String, icon: ImageVector, color: Color,
 
 @Composable
 fun ApplicantMiniCard(applicant: PostulacionCuidado, onAccept: () -> Unit, onReject: () -> Unit, onViewProfile: () -> Unit) {
-    val customColors = CuidaleThemeExtras.customColors
     Card(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.95f)),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                AsyncImage(
-                    model = applicant.cuidadorFoto,
-                    contentDescription = null,
-                    modifier = Modifier.size(48.dp).clip(CircleShape),
-                    contentScale = ContentScale.Crop
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(applicant.cuidadorNombre, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                    TextButton(onClick = onViewProfile, contentPadding = PaddingValues(0.dp), modifier = Modifier.height(30.dp)) {
-                        Text("VER PERFIL COMPLETO", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Black), color = MaterialTheme.colorScheme.primary)
-                    }
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            AsyncImage(
+                model = applicant.cuidadorFoto,
+                contentDescription = null,
+                modifier = Modifier.size(48.dp).clip(CircleShape),
+                contentScale = ContentScale.Crop
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(applicant.cuidadorNombre, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                TextButton(
+                    onClick = onViewProfile, 
+                    contentPadding = PaddingValues(0.dp), 
+                    modifier = Modifier.height(30.dp)
+                ) {
+                    Text("VER PERFIL COMPLETO", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Black), color = MaterialTheme.colorScheme.primary)
                 }
             }
-            IconButton(onClick = onAccept) { Icon(Icons.Default.CheckCircle, "Aceptar", tint = Color(0xFF4CAF50), modifier = Modifier.size(28.dp)) }
-            IconButton(onClick = onReject) { Icon(Icons.Default.Cancel, "Rechazar", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(28.dp)) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onAccept, modifier = Modifier.size(40.dp)) { 
+                    Icon(Icons.Default.CheckCircle, "Aceptar", tint = Color(0xFF4CAF50), modifier = Modifier.size(32.dp)) 
+                }
+                IconButton(onClick = onReject, modifier = Modifier.size(40.dp)) { 
+                    Icon(Icons.Default.Cancel, "Rechazar", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(32.dp)) 
+                }
+            }
         }
     }
 }

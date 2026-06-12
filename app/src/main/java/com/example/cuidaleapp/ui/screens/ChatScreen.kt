@@ -1200,9 +1200,8 @@ fun ChatBubble(
                         if (msg.text.isNotBlank()) {
                             if (msg.type == "aviso_postulacion" || msg.type == "solicitud_compartida") {
                                 RequestAlertBubble(
-                                    text = msg.text,
+                                    msg = msg,
                                     isMe = isMe,
-                                    solicitudId = msg.metadata["solicitudId"] ?: "",
                                     onViewClick = { onViewPostulacion(msg.metadata["solicitudId"] ?: "") }
                                 )
                             } else {
@@ -1246,41 +1245,84 @@ fun ChatBubble(
 }
 
 @Composable
-fun RequestAlertBubble(text: String, isMe: Boolean, solicitudId: String, onViewClick: () -> Unit) {
-    var status by remember { mutableStateOf<String?>(null) }
+fun RequestAlertBubble(msg: ChatMessage, isMe: Boolean, onViewClick: () -> Unit) {
+    var status by remember(msg.id) { mutableStateOf<String?>(null) }
+    var applicationStatus by remember(msg.id) { mutableStateOf<String?>(null) }
     
-    LaunchedEffect(solicitudId) {
-        if (solicitudId.isNotEmpty()) {
-            try {
-                val doc = FirebaseFirestore.getInstance().collection("solicitudes").document(solicitudId).get().await()
-                status = if (doc.exists()) doc.getString("estado") ?: "abierta" else "inexistente"
-            } catch (e: Exception) {
-                status = "error"
+    val solicitudId = msg.metadata["solicitudId"] ?: ""
+    val postulacionId = msg.metadata["postulacionId"] ?: ""
+    
+    DisposableEffect(msg.id, solicitudId, postulacionId) {
+        if (solicitudId.isEmpty()) {
+            status = "inexistente"
+            return@DisposableEffect onDispose { }
+        }
+
+        val db = FirebaseFirestore.getInstance()
+        
+        // 1. Monitor request status
+        val solListener = db.collection("solicitudes").document(solicitudId)
+            .addSnapshotListener { snapshot, _ ->
+                status = if (snapshot != null && snapshot.exists()) {
+                    snapshot.getString("estado") ?: "abierta"
+                } else "inexistente"
             }
+        
+        // 2. Monitor specific application status
+        var postListener: com.google.firebase.firestore.ListenerRegistration? = null
+        if (postulacionId.isNotEmpty()) {
+            postListener = db.collection("postulaciones").document(postulacionId)
+                .addSnapshotListener { snapshot, _ ->
+                    applicationStatus = if (snapshot != null && snapshot.exists()) {
+                        snapshot.getString("estado")
+                    } else {
+                        null
+                    }
+                }
+        } else {
+            // Legacy fallback: attempt to find a relevant postulation by UID
+            val myUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+            val targetCuidadorUid = if (isMe) myUid else msg.senderId
+            if (targetCuidadorUid != null) {
+                postListener = db.collection("postulaciones")
+                    .whereEqualTo("solicitudId", solicitudId)
+                    .whereEqualTo("cuidadorUid", targetCuidadorUid)
+                    .addSnapshotListener { snapshot, _ ->
+                        if (snapshot != null && !snapshot.isEmpty) {
+                            // Take the oldest one or the one matching this request
+                            applicationStatus = snapshot.documents.first().getString("estado")
+                        }
+                    }
+            }
+        }
+
+        onDispose {
+            solListener.remove()
+            postListener?.remove()
         }
     }
 
-    val statusText = when(status) {
-        "abierta" -> "DISPONIBLE"
-        "cerrada" -> "YA TOMADA"
-        "finalizada" -> "FINALIZADA"
-        "inexistente" -> "CANCELADA/ELIMINADA"
-        "error" -> "ERROR"
+    val statusText = when {
+        status == "inexistente" -> "CANCELADA/ELIMINADA"
+        applicationStatus == "rechazada" -> "RECHAZADO"
+        applicationStatus == "aceptada" -> "ACEPTADA"
+        status == "abierta" -> "DISPONIBLE"
+        status == "cerrada" -> "YA TOMADA"
+        status == "finalizada" -> "FINALIZADA"
         else -> "..."
     }
     
-    val statusColor = when(status) {
-        "abierta" -> Color(0xFF4CAF50)
-        "cerrada" -> Color(0xFFF44336)
-        "finalizada" -> Color.Gray
-        "inexistente" -> Color.Gray
+    val statusColor = when(statusText) {
+        "DISPONIBLE", "ACEPTADA" -> Color(0xFF4CAF50)
+        "RECHAZADO" -> Color(0xFFF44336)
+        "CANCELADA/ELIMINADA", "FINALIZADA", "YA TOMADA" -> Color.Gray
         else -> Color.Gray.copy(alpha = 0.5f)
     }
 
     Column(modifier = Modifier.padding(vertical = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = text, 
+                text = msg.text,
                 style = MaterialTheme.typography.bodyMedium, 
                 fontWeight = FontWeight.Bold, 
                 modifier = Modifier.weight(1f),
@@ -1301,7 +1343,8 @@ fun RequestAlertBubble(text: String, isMe: Boolean, solicitudId: String, onViewC
             }
         }
         
-        if (status == "abierta") {
+        // Show button only if request is open AND application is not rejected
+        if (status == "abierta" && applicationStatus != "rechazada") {
             Spacer(modifier = Modifier.height(8.dp))
             Button(
                 onClick = onViewClick,
@@ -1314,7 +1357,7 @@ fun RequestAlertBubble(text: String, isMe: Boolean, solicitudId: String, onViewC
             ) {
                 Icon(Icons.Default.Assignment, null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("VER SOLICITUD", fontSize = 12.sp)
+                Text("VER POSTULACIÓN", fontSize = 12.sp)
             }
         }
     }
