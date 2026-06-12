@@ -148,7 +148,7 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
         discapacidadOtro: String,
         enfermedades: List<String>,
         enfermedadOtro: String,
-        dieta: Map<String, String>,
+        dieta: Map<String, Any>,
         medicamentos: List<Map<String, Any>>,
         condicionesExtra: String,
         comunasPreferencia: List<String> = emptyList(),

@@ -376,7 +376,10 @@ class MenuActivity : ComponentActivity() {
                             isAccepted = (userData.rol == "cuidador" && cs.solicitud.cuidadorUid == userData.uid) || (userData.rol == "representante" && cs.solicitud.estado == "cerrada"),
                             onNavigateBack = { currentScreen = Requests },
                             onViewFullFicha = { uid -> currentScreen = OtherFicha(uid, returnTo = ReviewRequest(cs.solicitud)) },
-                            onRedirectToRequests = { currentScreen = Requests }
+                            onRedirectToRequests = { currentScreen = Requests },
+                            onNavigateToChat = { chatId, otherUid -> 
+                                currentScreen = Chat(chatId, otherUid, returnTo = ReviewRequest(cs.solicitud))
+                            }
                         )
                     }
                         is Chat -> {
@@ -394,6 +397,7 @@ class MenuActivity : ComponentActivity() {
                                     otherUser = otherUserData!!,
                                     myUid = userData.uid,
                                     myName = userData.nombre,
+                                    myRole = userData.rol,
                                     isDark = isDark,
                                     viewModel = chatViewModel,
                                     favoritosViewModel = favoritosViewModel,

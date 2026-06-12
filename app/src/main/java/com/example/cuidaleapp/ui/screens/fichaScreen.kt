@@ -411,6 +411,7 @@ fun CaregiverEditFlow(
 }
 
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FamilyEditFlow(
     viewModel: FichaViewModel,
@@ -447,19 +448,65 @@ fun FamilyEditFlow(
     var enfermedadOtro by remember { mutableStateOf(initialData?.get("enfermedad_otro") as? String ?: "") }
     
     val defaultDieta = mapOf(
-        "desayuno" to "",
-        "colacion_manana" to "",
-        "almuerzo" to "",
-        "colacion_tarde" to "",
-        "once" to "",
-        "cena" to "",
-        "colacion_noche" to ""
+        "desayuno" to mapOf("indicaciones" to "", "hora" to ""),
+        "colacion_manana" to mapOf("indicaciones" to "", "hora" to ""),
+        "almuerzo" to mapOf("indicaciones" to "", "hora" to ""),
+        "colacion_tarde" to mapOf("indicaciones" to "", "hora" to ""),
+        "once" to mapOf("indicaciones" to "", "hora" to ""),
+        "cena" to mapOf("indicaciones" to "", "hora" to ""),
+        "colacion_noche" to mapOf("indicaciones" to "", "hora" to "")
     )
-    var dieta by remember { mutableStateOf(initialData?.get("dieta") as? Map<String, String> ?: defaultDieta) }
+    
+    // Normalizar datos antiguos (strings) a mapas
+    val normalizedInitialDieta = remember(initialData) {
+        val raw = initialData?.get("dieta") as? Map<String, Any> ?: emptyMap()
+        defaultDieta.mapValues { (key, defaultVal) ->
+            val existing = raw[key]
+            when (existing) {
+                is String -> mapOf("indicaciones" to existing, "hora" to "")
+                is Map<*, *> -> mapOf(
+                    "indicaciones" to (existing["indicaciones"] as? String ?: ""),
+                    "hora" to (existing["hora"] as? String ?: "")
+                )
+                else -> defaultVal
+            }
+        }
+    }
+    
+    var dieta by remember { mutableStateOf(normalizedInitialDieta) }
     var medicamentos by remember { mutableStateOf(initialData?.get("medicamentos") as? List<Map<String, Any>> ?: emptyList()) }
     var condicionesExtra by remember { mutableStateOf(initialData?.get("condiciones") as? String ?: "") }
     var selectedCommunesPref by remember { mutableStateOf(initialData?.get("comunas_preferencia") as? List<String> ?: emptyList()) }
     var selectedHorariosPref by remember { mutableStateOf(initialData?.get("horarios_preferencia") as? List<String> ?: emptyList()) }
+    
+    var showTimePickerForDiet by remember { mutableStateOf<String?>(null) }
+    val dietTimeState = rememberTimePickerState()
+
+    if (showTimePickerForDiet != null) {
+        TimePickerDialog(
+            onDismissRequest = { showTimePickerForDiet = null },
+            confirmButton = {
+                TextButton(onClick = {
+                    val hour = dietTimeState.hour.toString().padStart(2, '0')
+                    val min = dietTimeState.minute.toString().padStart(2, '0')
+                    val mealKey = showTimePickerForDiet!!
+                    val newDieta = dieta.toMutableMap()
+                    val mealData = newDieta[mealKey]!!.toMutableMap()
+                    mealData["hora"] = "$hour:$min"
+                    newDieta[mealKey] = mealData
+                    dieta = newDieta
+                    showTimePickerForDiet = null
+                }) { Text("OK", fontWeight = FontWeight.Bold, color = accentColor) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTimePickerForDiet = null }) {
+                    Text("CANCELAR", color = textColor.copy(alpha = 0.6f))
+                }
+            }
+        ) {
+            TimePicker(state = dietTimeState)
+        }
+    }
 
     LaunchedEffect(vivesConFamiliar, currentUserData.region, currentUserData.comuna) {
         if (vivesConFamiliar) {
@@ -716,13 +763,41 @@ fun FamilyEditFlow(
                             )
 
                             dietFields.forEach { (key, label) ->
-                                Column {
-                                    InputFieldLabel(text = label, color = textColor)
+                                val mealData = dieta[key] ?: mapOf("indicaciones" to "", "hora" to "")
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 8.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                        InputFieldLabel(text = label, color = textColor, modifier = Modifier.padding(bottom = 0.dp))
+                                        
+                                        Surface(
+                                            onClick = { showTimePickerForDiet = key },
+                                            color = customColors.inputBackground,
+                                            shape = RoundedCornerShape(8.dp),
+                                            modifier = Modifier.height(36.dp)
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 12.dp)) {
+                                                Icon(Icons.Default.Schedule, null, tint = accentColor, modifier = Modifier.size(14.dp))
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = mealData["hora"]?.ifEmpty { "Hora" } ?: "Hora",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (mealData["hora"].isNullOrEmpty()) textColor.copy(alpha = 0.4f) else accentColor
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
                                     CuidaleTextField(
-                                        value = dieta[key] ?: "",
+                                        value = mealData["indicaciones"] ?: "",
                                         onValueChange = { v ->
                                             val newDieta = dieta.toMutableMap()
-                                            newDieta[key] = v
+                                            val updatedMeal = mealData.toMutableMap()
+                                            updatedMeal["indicaciones"] = v
+                                            newDieta[key] = updatedMeal
                                             dieta = newDieta
                                         },
                                         placeholder = "Indicaciones para $label...",
@@ -773,7 +848,7 @@ fun FamilyEditFlow(
                                             region, comuna, calle, numero, depto, 
                                             nivelDependencia, movilidad, comunicacion, 
                                             discapacidades, discapacidadOtro, enfermedades, enfermedadOtro, 
-                                            dieta, medicamentos, condicionesExtra, 
+                                            dieta as Map<String, Any>, medicamentos, condicionesExtra,
                                             selectedCommunesPref, selectedHorariosPref,
                                             onSuccess = onFinishSuccess
                                         )

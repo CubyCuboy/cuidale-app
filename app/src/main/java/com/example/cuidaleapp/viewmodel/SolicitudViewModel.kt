@@ -368,7 +368,8 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                         "cuidadorUid" to targetUid,
                         "cuidadorNombre" to postulacion.cuidadorNombre,
                         "cuidadorFoto" to postulacion.cuidadorFoto,
-                        "estado" to "cerrada"
+                        "estado" to "cerrada",
+                        "aceptadoAt" to Timestamp.now()
                     )
                 ).await()
 
@@ -429,7 +430,9 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                     cuidadorUid = solicitud.cuidadorUid ?: "",
                     cuidadorNombre = solicitud.cuidadorNombre,
                     cuidadorEspecialidad = especialidad,
-                    fechaTermino = Timestamp.now()
+                    fechaInicio = solicitud.fechaInicio,
+                    fechaTermino = Timestamp.now(),
+                    aceptadoAt = solicitud.aceptadoAt
                 )
                 db.collection("historial_servicios").document(histId).set(historial).await()
 
@@ -490,6 +493,15 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                 }
             } catch (e: Exception) { }
         }
+    }
+
+    fun calificarServicio(historialId: String, calificacion: Double, observacion: String) {
+        db.collection("historial_servicios").document(historialId).update(
+            mapOf(
+                "calificacion" to calificacion,
+                "observacionCalificacion" to observacion
+            )
+        )
     }
 
     override fun onCleared() {

@@ -600,18 +600,57 @@ fun FullProfileDetailView(
                                         }
                                     }
                                 } else if (key == "dieta" && value is Map<*, *>) {
-                                    value.entries.filter { it.value.toString().isNotBlank() }.forEach { entry ->
-                                        Column(modifier = Modifier.padding(bottom = 8.dp)) {
-                                            Text(
-                                                text = entry.key.toString().replaceFirstChar { it.uppercase() },
-                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                                color = secondaryTextColor
-                                            )
-                                            Text(
-                                                text = entry.value.toString(),
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = textColor
-                                            )
+                                    value.entries.filter { entry ->
+                                        val v = entry.value
+                                        when (v) {
+                                            is String -> v.isNotBlank()
+                                            is Map<*, *> -> (v["indicaciones"] as? String)?.isNotBlank() == true || (v["hora"] as? String)?.isNotBlank() == true
+                                            else -> false
+                                        }
+                                    }.forEach { entry ->
+                                        val v = entry.value
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(bottom = 12.dp)
+                                                .background(textColor.copy(alpha = if (customColors.isDark) 0.15f else 0.03f), RoundedCornerShape(12.dp))
+                                                .border(1.dp, textColor.copy(alpha = if (customColors.isDark) 0.1f else 0.05f), RoundedCornerShape(12.dp))
+                                                .padding(12.dp)
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                                Text(
+                                                    text = entry.key.toString().replace("_", " ").uppercase(),
+                                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Black),
+                                                    color = accentColor
+                                                )
+                                                
+                                                if (v is Map<*, *>) {
+                                                    val hora = v["hora"] as? String ?: ""
+                                                    if (hora.isNotBlank()) {
+                                                        Surface(color = accentColor.copy(alpha = 0.1f), shape = CircleShape) {
+                                                            Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                                Icon(Icons.Default.Schedule, null, tint = accentColor, modifier = Modifier.size(12.dp))
+                                                                Spacer(modifier = Modifier.width(4.dp))
+                                                                Text(hora, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = accentColor)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            
+                                            val indicaciones = when(v) {
+                                                is String -> v
+                                                is Map<*, *> -> v["indicaciones"] as? String ?: ""
+                                                else -> ""
+                                            }
+                                            if (indicaciones.isNotBlank()) {
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(
+                                                    text = indicaciones,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = textColor
+                                                )
+                                            }
                                         }
                                     }
                                 } else {
@@ -1321,6 +1360,20 @@ fun MedicationListPanel(value: Any?, accentColor: Color, textColor: Color, secon
                             Text(text = "${admin["hora"]} — ${admin["dosis"]}", style = MaterialTheme.typography.bodyMedium, color = textColor)
                         }
                     }
+                    if ((m["observaciones"] as? String)?.isNotBlank() == true) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Surface(
+                            color = accentColor.copy(alpha = 0.1f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(
+                                text = "Nota: ${m["observaciones"]}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = textColor,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -1332,6 +1385,19 @@ fun DietListPanel(value: Any?, accentColor: Color, textColor: Color, secondaryTe
     if (value !is Map<*, *> || value.isEmpty()) return
     
     val customColors = CuidaleThemeExtras.customColors
+    
+    // Filtrar entradas vacías
+    val activeEntries = value.entries.filter { entry ->
+        val v = entry.value
+        when (v) {
+            is String -> v.isNotBlank()
+            is Map<*, *> -> (v["indicaciones"] as? String)?.isNotBlank() == true || (v["hora"] as? String)?.isNotBlank() == true
+            else -> false
+        }
+    }
+    
+    if (activeEntries.isEmpty()) return
+
     HardShadowPanel(
         backgroundColor = customColors.panelBackground,
         shadowColor = Color.Black.copy(alpha = 0.05f)
@@ -1343,10 +1409,52 @@ fun DietListPanel(value: Any?, accentColor: Color, textColor: Color, secondaryTe
                 Text("PLAN DE ALIMENTACIÓN", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = secondaryTextColor)
             }
             Spacer(modifier = Modifier.height(12.dp))
-            value.entries.filter { it.value.toString().isNotBlank() }.forEach { entry ->
-                Column(modifier = Modifier.padding(bottom = 8.dp)) {
-                    Text(text = entry.key.toString().replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = secondaryTextColor)
-                    Text(text = entry.value.toString(), style = MaterialTheme.typography.bodyMedium, color = textColor)
+            activeEntries.forEach { entry ->
+                val v = entry.value
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
+                        .background(textColor.copy(alpha = if (customColors.isDark) 0.15f else 0.03f), RoundedCornerShape(12.dp))
+                        .border(1.dp, textColor.copy(alpha = if (customColors.isDark) 0.1f else 0.05f), RoundedCornerShape(12.dp))
+                        .padding(12.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = entry.key.toString().replace("_", " ").uppercase(),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Black,
+                            color = accentColor
+                        )
+                        
+                        if (v is Map<*, *>) {
+                            val hora = v["hora"] as? String ?: ""
+                            if (hora.isNotBlank()) {
+                                Surface(
+                                    color = accentColor.copy(alpha = 0.1f),
+                                    shape = CircleShape
+                                ) {
+                                    Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Schedule, null, tint = accentColor, modifier = Modifier.size(12.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(hora, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = accentColor)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(4.dp))
+                    
+                    val indicaciones = when (v) {
+                        is String -> v
+                        is Map<*, *> -> v["indicaciones"] as? String ?: ""
+                        else -> ""
+                    }
+                    
+                    if (indicaciones.isNotBlank()) {
+                        Text(text = indicaciones, style = MaterialTheme.typography.bodyMedium, color = textColor)
+                    }
                 }
             }
         }
@@ -1355,11 +1463,21 @@ fun DietListPanel(value: Any?, accentColor: Color, textColor: Color, secondaryTe
 
 @Composable
 fun CuidaleDetailRow(icon: ImageVector, label: String, value: String, modifier: Modifier = Modifier) {
-    Row(modifier = modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, modifier = Modifier.size(16.dp), tint = Color.Gray)
+    Row(modifier = modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.Top) {
+        Icon(icon, null, modifier = Modifier.size(16.dp).padding(top = 2.dp), tint = Color.Gray)
         Spacer(modifier = Modifier.width(8.dp))
-        Text("$label: ", style = MaterialTheme.typography.bodySmall, color = Color.Gray, fontWeight = FontWeight.Bold)
-        Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+        Text(
+            text = "$label: ", 
+            style = MaterialTheme.typography.bodySmall, 
+            color = Color.Gray, 
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = value, 
+            style = MaterialTheme.typography.bodySmall, 
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.weight(1f)
+        )
     }
 }
 

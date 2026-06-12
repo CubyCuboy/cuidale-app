@@ -1,5 +1,6 @@
 package com.example.cuidaleapp.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -338,14 +339,27 @@ fun RowScope.ActionOutlinedButton(text: String, icon: ImageVector, color: Color,
 
 @Composable
 fun ApplicantMiniCard(applicant: PostulacionCuidado, onAccept: () -> Unit, onReject: () -> Unit, onViewProfile: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.9f)), shape = RoundedCornerShape(12.dp)) {
-        Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            AsyncImage(model = applicant.cuidadorFoto, contentDescription = null, modifier = Modifier.size(44.dp).clip(CircleShape), contentScale = ContentScale.Crop)
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(applicant.cuidadorNombre, fontWeight = FontWeight.Bold)
-                TextButton(onClick = onViewProfile, contentPadding = PaddingValues(0.dp), modifier = Modifier.height(24.dp)) {
-                    Text("REVISAR PERFIL", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.primary)
+    val customColors = CuidaleThemeExtras.customColors
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.95f)),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AsyncImage(
+                    model = applicant.cuidadorFoto,
+                    contentDescription = null,
+                    modifier = Modifier.size(48.dp).clip(CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(applicant.cuidadorNombre, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    TextButton(onClick = onViewProfile, contentPadding = PaddingValues(0.dp), modifier = Modifier.height(30.dp)) {
+                        Text("VER PERFIL COMPLETO", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Black), color = MaterialTheme.colorScheme.primary)
+                    }
                 }
             }
             IconButton(onClick = onAccept) { Icon(Icons.Default.CheckCircle, "Aceptar", tint = Color(0xFF4CAF50), modifier = Modifier.size(28.dp)) }

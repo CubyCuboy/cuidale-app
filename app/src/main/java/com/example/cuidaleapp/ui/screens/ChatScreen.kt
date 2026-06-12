@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -43,8 +44,11 @@ import coil3.compose.AsyncImage
 import com.example.cuidaleapp.utils.AppNavigationState
 import com.example.cuidaleapp.models.ChatMessage
 import com.example.cuidaleapp.models.UserData
+import com.example.cuidaleapp.models.SolicitudCuidado
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.ChatViewModel
+import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
@@ -56,6 +60,7 @@ fun ChatScreen(
     otherUser: UserData,
     myUid: String,
     myName: String,
+    myRole: String = "",
     isDark: Boolean = false,
     viewModel: ChatViewModel,
     onNavigateBack: () -> Unit,
@@ -77,6 +82,21 @@ fun ChatScreen(
     val bloqueados by favoritosViewModel?.bloqueados?.collectAsState() ?: remember { mutableStateOf(emptyList<String>()) }
     val noDeseados by favoritosViewModel?.noDeseados?.collectAsState() ?: remember { mutableStateOf(emptyList<String>()) }
     
+    var showShareRequests by remember { mutableStateOf(false) }
+    var myRequests by remember { mutableStateOf<List<SolicitudCuidado>>(emptyList()) }
+    
+    LaunchedEffect(showShareRequests) {
+        if (showShareRequests && myRole == "representante") {
+            try {
+                val snapshot = FirebaseFirestore.getInstance().collection("solicitudes")
+                    .whereEqualTo("representanteUid", myUid)
+                    .whereEqualTo("estado", "abierta")
+                    .get().await()
+                myRequests = snapshot.toObjects(SolicitudCuidado::class.java)
+            } catch (e: Exception) {}
+        }
+    }
+
     val isFavorite = favs.contains(otherUser.uid)
     val iHaveBlocked = bloqueados.contains(otherUser.uid)
     val iHaveUnwanted = noDeseados.contains(otherUser.uid)
@@ -578,6 +598,13 @@ fun ChatScreen(
                                 },
                                 placeholder = { Text(if (messageToEdit != null) "EDITANDO MENSAJE..." else "Mensajear con @${otherUser.nombre}", color = if (isDark) Color.White.copy(alpha = 0.5f) else Color.Gray) },
                                 modifier = Modifier.weight(1f).clip(RoundedCornerShape(24.dp)),
+                                leadingIcon = if (myRole == "representante" && messageToEdit == null) {
+                                    {
+                                        IconButton(onClick = { showShareRequests = true }) {
+                                            Icon(Icons.Default.AddCircle, null, tint = customColors.linkColor)
+                                        }
+                                    }
+                                } else null,
                                 trailingIcon = {
                                     if (messageToEdit != null) {
                                         IconButton(onClick = { 
@@ -800,6 +827,57 @@ fun ChatScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+
+    if (showShareRequests) {
+        ModalBottomSheet(
+            onDismissRequest = { showShareRequests = false },
+            containerColor = if (isDark) Color(0xFF1E1F22) else Color.White
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                Text("Compartir solicitud de cuidado", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                if (myRequests.isEmpty()) {
+                    Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                        Text("No tienes solicitudes abiertas actualmente.", color = Color.Gray)
+                    }
+                } else {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxHeight(0.5f)) {
+                        items(myRequests) { sol ->
+                            Card(
+                                onClick = {
+                                    viewModel.sendMessage(
+                                        chatId = chatId,
+                                        text = "Hola, me gustaría invitarte a revisar mi solicitud de cuidado para ${sol.nombrePaciente}",
+                                        type = "solicitud_compartida",
+                                        metadata = mapOf("solicitudId" to sol.id)
+                                    )
+                                    showShareRequests = false
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    AsyncImage(
+                                        model = sol.fotoPaciente,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(40.dp).clip(CircleShape),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                    Spacer(Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(sol.nombrePaciente, fontWeight = FontWeight.Bold)
+                                        Text(sol.horarioStr, style = MaterialTheme.typography.bodySmall)
+                                    }
+                                    Icon(Icons.AutoMirrored.Filled.Send, null, tint = customColors.linkColor)
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(32.dp))
             }
         }
     }
@@ -1120,10 +1198,11 @@ fun ChatBubble(
                             if (msg.text.isNotBlank()) Spacer(modifier = Modifier.height(4.dp))
                         }
                         if (msg.text.isNotBlank()) {
-                            if (msg.type == "aviso_postulacion") {
-                                ApplicationAlertBubble(
+                            if (msg.type == "aviso_postulacion" || msg.type == "solicitud_compartida") {
+                                RequestAlertBubble(
                                     text = msg.text,
                                     isMe = isMe,
+                                    solicitudId = msg.metadata["solicitudId"] ?: "",
                                     onViewClick = { onViewPostulacion(msg.metadata["solicitudId"] ?: "") }
                                 )
                             } else {
@@ -1167,22 +1246,76 @@ fun ChatBubble(
 }
 
 @Composable
-fun ApplicationAlertBubble(text: String, isMe: Boolean, onViewClick: () -> Unit) {
+fun RequestAlertBubble(text: String, isMe: Boolean, solicitudId: String, onViewClick: () -> Unit) {
+    var status by remember { mutableStateOf<String?>(null) }
+    
+    LaunchedEffect(solicitudId) {
+        if (solicitudId.isNotEmpty()) {
+            try {
+                val doc = FirebaseFirestore.getInstance().collection("solicitudes").document(solicitudId).get().await()
+                status = if (doc.exists()) doc.getString("estado") ?: "abierta" else "inexistente"
+            } catch (e: Exception) {
+                status = "error"
+            }
+        }
+    }
+
+    val statusText = when(status) {
+        "abierta" -> "DISPONIBLE"
+        "cerrada" -> "YA TOMADA"
+        "finalizada" -> "FINALIZADA"
+        "inexistente" -> "CANCELADA/ELIMINADA"
+        "error" -> "ERROR"
+        else -> "..."
+    }
+    
+    val statusColor = when(status) {
+        "abierta" -> Color(0xFF4CAF50)
+        "cerrada" -> Color(0xFFF44336)
+        "finalizada" -> Color.Gray
+        "inexistente" -> Color.Gray
+        else -> Color.Gray.copy(alpha = 0.5f)
+    }
+
     Column(modifier = Modifier.padding(vertical = 4.dp)) {
-        Text(text = text, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(8.dp))
-        Button(
-            onClick = onViewClick,
-            shape = RoundedCornerShape(8.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (isMe) Color.White.copy(alpha = 0.2f) else MaterialTheme.colorScheme.primary
-            ),
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-        ) {
-            Icon(Icons.Default.Assignment, null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("VER POSTULACIÓN", fontSize = 12.sp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = text, 
+                style = MaterialTheme.typography.bodyMedium, 
+                fontWeight = FontWeight.Bold, 
+                modifier = Modifier.weight(1f),
+                color = if (isMe) Color.White else Color.Black
+            )
+            Surface(
+                color = statusColor.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(4.dp),
+                border = BorderStroke(1.dp, statusColor.copy(alpha = 0.5f))
+            ) {
+                Text(
+                    text = statusText,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = statusColor,
+                    fontWeight = FontWeight.Black
+                )
+            }
+        }
+        
+        if (status == "abierta") {
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = onViewClick,
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isMe) Color.White.copy(alpha = 0.2f) else MaterialTheme.colorScheme.primary
+                ),
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+            ) {
+                Icon(Icons.Default.Assignment, null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("VER SOLICITUD", fontSize = 12.sp)
+            }
         }
     }
 }

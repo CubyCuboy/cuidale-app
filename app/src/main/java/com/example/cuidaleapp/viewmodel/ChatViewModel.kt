@@ -290,6 +290,8 @@ class ChatViewModel : ViewModel() {
         replyToId: String? = null,
         replyToText: String? = null,
         replyToName: String? = null,
+        type: String = "text",
+        metadata: Map<String, String> = emptyMap(),
         isSystem: Boolean = false
     ) {
         if (_isBlocked.value && !isSystem) return
@@ -310,6 +312,8 @@ class ChatViewModel : ViewModel() {
             replyToId = replyToId,
             replyToText = replyToText,
             replyToName = replyToName,
+            type = type,
+            metadata = metadata,
             readBy = if (isSystem) emptyMap() else mapOf(myUid to true)
         )
         msgRef.setValue(message)

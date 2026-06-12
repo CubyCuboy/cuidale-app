@@ -20,6 +20,7 @@ data class SolicitudCuidado(
     val cuidadorUid: String? = null,
     val cuidadorNombre: String = "",
     val cuidadorFoto: String = "",
+    val aceptadoAt: Timestamp? = null,
     val createdAt: Timestamp? = null
 )
 
@@ -44,7 +45,11 @@ data class HistorialServicio(
     val cuidadorUid: String = "",
     val cuidadorNombre: String = "",
     val cuidadorEspecialidad: String = "",
+    val fechaInicio: Timestamp? = null,
     val fechaTermino: Timestamp? = null,
+    val aceptadoAt: Timestamp? = null,
+    val calificacion: Double? = null,
+    val observacionCalificacion: String = "",
     val eliminadoPorRepresentante: Boolean = false,
     val eliminadoPorCuidador: Boolean = false
 )

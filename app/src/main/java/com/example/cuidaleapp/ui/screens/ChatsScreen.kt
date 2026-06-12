@@ -358,8 +358,7 @@ fun ChatListSection(
     val customColors = CuidaleThemeExtras.customColors
     val savedUsers = managedUsers.filter { favoritos.contains(it.uid) }
     
-    // Separamos los chats: favoritos primero, luego el resto
-    val sortedChats = chatList.sortedWith(compareByDescending<ChatViewModel.ChatPreview> { 
+    val sortedChats = chatList.sortedWith(compareByDescending<ChatViewModel.ChatPreview> {
         favoritos.contains(it.otherUser.uid) 
     }.thenByDescending { 
         it.lastMessage?.timestamp ?: 0L 

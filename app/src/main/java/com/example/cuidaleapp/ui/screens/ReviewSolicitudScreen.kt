@@ -20,12 +20,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.example.cuidaleapp.utils.DateUtils
 import com.example.cuidaleapp.models.SolicitudCuidado
 import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.SolicitudViewModel
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
+import java.text.SimpleDateFormat
+import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,7 +38,8 @@ fun ReviewSolicitudScreen(
     isAccepted: Boolean = false,
     onNavigateBack: () -> Unit,
     onViewFullFicha: (String) -> Unit,
-    onRedirectToRequests: () -> Unit
+    onRedirectToRequests: () -> Unit,
+    onNavigateToChat: ((String, String) -> Unit)? = null
 ) {
     val scrollState = rememberScrollState()
     var patientFicha by remember { mutableStateOf<Map<String, Any>?>(null) }
@@ -100,11 +104,9 @@ fun ReviewSolicitudScreen(
             } else if (patientFicha != null) {
                 Spacer(modifier = Modifier.height(24.dp))
                 
-                // 1. Title "Paciente"
                 Text("PACIENTE", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // 2. Photo and Name
                 Surface(
                     modifier = Modifier.size(100.dp),
                     shape = CircleShape,
@@ -126,22 +128,67 @@ fun ReviewSolicitudScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // 4. Panel "Representante"
+                // 4. Section: Representante & Chat
                 HardShadowPanel(
                     backgroundColor = customColors.panelBackground,
                     shadowColor = Color.Black.copy(alpha = 0.05f),
                     modifier = Modifier.padding(horizontal = 24.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("REPRESENTANTE", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
+                        Text("DATOS DEL REPRESENTANTE", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
                         Spacer(modifier = Modifier.height(12.dp))
                         CuidaleDetailRow(Icons.Default.Person, "Nombre", solicitud.representanteNombre)
-                        CuidaleDetailRow(Icons.Default.Badge, "RUT", solicitud.representanteRut)
                         CuidaleDetailRow(Icons.Default.Phone, "Teléfono", solicitud.representanteTelefono)
+                        
+                        if (isAccepted && onNavigateToChat != null) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(
+                                onClick = { 
+                                    val myUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
+                                    val otherUid = solicitud.representanteUid
+                                    val chatId = if (myUid < otherUid) "${myUid}_$otherUid" else "${otherUid}_$myUid"
+                                    onNavigateToChat(chatId, otherUid) 
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                            ) {
+                                Icon(Icons.Default.Chat, null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("IR AL CHAT")
+                            }
+                        }
                     }
                 }
 
-                // 5 & 6. Meds and Diet (Only if accepted)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // 5. Section: Datos Médicos del Paciente
+                HardShadowPanel(
+                    backgroundColor = customColors.panelBackground,
+                    shadowColor = Color.Black.copy(alpha = 0.05f),
+                    modifier = Modifier.padding(horizontal = 24.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("DATOS DEL PACIENTE", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        val enfermedades = (patientFicha!!["enfermedades"] as? List<*>)?.joinToString(", ") ?: "Ninguna"
+                        val movilidad = patientFicha!!["movilidad"]?.toString() ?: "No especificada"
+                        val genero = patientFicha!!["genero"]?.toString() ?: "No especificado"
+                        val observaciones = patientFicha!!["condiciones"]?.toString() ?: "Sin observaciones adicionales"
+
+                        CuidaleDetailRow(Icons.Default.HealthAndSafety, "Enfermedades", enfermedades)
+                        CuidaleDetailRow(Icons.Default.Accessibility, "Movilidad", movilidad)
+                        CuidaleDetailRow(Icons.Default.Wc, "Género", genero)
+                        
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text("Observaciones:", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.Gray)
+                        Text(observaciones, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+
+                // 6. Meds and Diet (Only if accepted)
                 if (isAccepted) {
                     Spacer(modifier = Modifier.height(16.dp))
                     MedicationListPanel(
@@ -159,24 +206,30 @@ fun ReviewSolicitudScreen(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
                 
-                // 7. Request Service Details
                 HardShadowPanel(
                     backgroundColor = Color.White,
                     shadowColor = Color.Black.copy(alpha = 0.05f),
                     modifier = Modifier.padding(horizontal = 24.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("INFORMACIÓN DEL SERVICIO", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        Text("DETALLES DEL SERVICIO", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.height(16.dp))
                         
+                        val calle = patientFicha!!["calle"]?.toString() ?: ""
+                        val numero = patientFicha!!["numero"]?.toString() ?: ""
+                        val depto = patientFicha!!["depto"]?.toString() ?: ""
+                        val comuna = patientFicha!!["comuna"]?.toString() ?: ""
+                        val direccionStr = if (calle.isNotEmpty()) "$calle $numero ${if(depto.isNotEmpty()) "Depto $depto" else ""}, $comuna" else "No especificada"
+
+                        CuidaleDetailRow(Icons.Default.Place, "Dirección", direccionStr)
                         CuidaleDetailRow(Icons.Default.Schedule, "Horario", solicitud.horarioStr)
                         CuidaleDetailRow(Icons.Default.DateRange, "Duración", if (solicitud.esIndefinido) "Indefinido" else "Temporal")
                         
                         if (!solicitud.esIndefinido) {
-                            Text("Desde: ${formatDate(solicitud.fechaInicio?.toDate()?.time)}", style = MaterialTheme.typography.bodyMedium)
-                            Text("Hasta: ${formatDate(solicitud.fechaFin?.toDate()?.time)}", style = MaterialTheme.typography.bodyMedium)
+                            Text("Desde: ${DateUtils.formatDate(solicitud.fechaInicio?.toDate()?.time)}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 24.dp))
+                            Text("Hasta: ${DateUtils.formatDate(solicitud.fechaFin?.toDate()?.time)}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 24.dp))
                         }
                     }
                 }

@@ -25,6 +25,7 @@ import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.FichaState
 import com.example.cuidaleapp.viewmodel.FichaViewModel
 import com.example.cuidaleapp.viewmodel.SolicitudViewModel
+import com.example.cuidaleapp.utils.DateUtils
 import com.example.cuidaleapp.models.SolicitudCuidado
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
@@ -208,7 +209,7 @@ fun CreateSolicitudScreen(
                                 ) {
                                     Column(Modifier.padding(12.dp)) {
                                         Text("INICIO", style = MaterialTheme.typography.labelSmall)
-                                        Text(formatDate(startDate), fontWeight = FontWeight.Bold)
+                                        Text(DateUtils.formatDate(startDate), fontWeight = FontWeight.Bold)
                                     }
                                 }
                                 OutlinedCard(
@@ -217,7 +218,7 @@ fun CreateSolicitudScreen(
                                 ) {
                                     Column(Modifier.padding(12.dp)) {
                                         Text("FIN", style = MaterialTheme.typography.labelSmall)
-                                        Text(formatDate(endDate), fontWeight = FontWeight.Bold)
+                                        Text(DateUtils.formatDate(endDate), fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
@@ -448,11 +449,4 @@ fun detectPeriodsFromHours(start: String, end: String): Set<String> {
 
     } catch (e: Exception) { }
     return set
-}
-
-fun formatDate(time: Long?): String {
-    if (time == null) return "Seleccionar"
-    val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
-    sdf.timeZone = TimeZone.getTimeZone("UTC")
-    return sdf.format(Date(time))
 }
