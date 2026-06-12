@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.cuidaleapp.models.PostulacionCuidado
 import com.example.cuidaleapp.models.SolicitudCuidado
+import com.example.cuidaleapp.models.HistorialServicio
 import com.example.cuidaleapp.models.UserData
 import com.example.cuidaleapp.models.Notification
 import com.google.firebase.Timestamp
@@ -35,13 +36,19 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
     private val _misPostulaciones = MutableStateFlow<List<Pair<SolicitudCuidado, String>>>(emptyList())
     val misPostulaciones: StateFlow<List<Pair<SolicitudCuidado, String>>> = _misPostulaciones
 
+    private val _historial = MutableStateFlow<List<HistorialServicio>>(emptyList())
+    val historial: StateFlow<List<HistorialServicio>> = _historial
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
+
+    private val finalizingIds = mutableSetOf<String>()
 
     private var solicitudesListener: ListenerRegistration? = null
     private var postulacionesListener: ListenerRegistration? = null
     private var cuidadorSolicitudesListener: ListenerRegistration? = null
     private var misPostulacionesListener: ListenerRegistration? = null
+    private var historialListener: ListenerRegistration? = null
 
     init {
         initListeners()
@@ -59,6 +66,27 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
             } else if (role == "cuidador") {
                 listenAsCuidador(uid)
             }
+            listenHistorial(uid, role)
+        }
+    }
+
+    private fun listenHistorial(uid: String, role: String) {
+        historialListener?.remove()
+        val query = if (role == "representante") {
+            db.collection("historial_servicios")
+                .whereEqualTo("representanteUid", uid)
+                .whereEqualTo("eliminadoPorRepresentante", false)
+        } else {
+            db.collection("historial_servicios")
+                .whereEqualTo("cuidadorUid", uid)
+                .whereEqualTo("eliminadoPorCuidador", false)
+        }
+        
+        historialListener = query.addSnapshotListener { snapshot, _ ->
+            if (snapshot != null) {
+                _historial.value = snapshot.toObjects(HistorialServicio::class.java)
+                    .sortedByDescending { it.fechaTermino }
+            }
         }
     }
 
@@ -70,6 +98,7 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                 if (error != null) return@addSnapshotListener
                 if (snapshot != null) {
                     val list = snapshot.toObjects(SolicitudCuidado::class.java)
+                        .filter { it.id !in finalizingIds }
                         .sortedByDescending { it.createdAt }
                     _misSolicitudes.value = list
                     
@@ -114,11 +143,16 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                     .whereEqualTo("cuidadorUid", uid)
                     .get().await()
                 
+                // We delete only the ones associated with this specific user
                 for (doc in snapshot.documents) {
                     doc.reference.delete().await()
                 }
             } catch (e: Exception) { }
         }
+    }
+
+    fun eliminarPostulacionEspecifica(solicitudId: String) {
+        cancelarPostulacion(solicitudId) // Consolidated identical logic
     }
 
     private fun listenToPostulaciones(solicitudIds: List<String>) {
@@ -146,6 +180,7 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
             .addSnapshotListener { snapshot, _ ->
                 if (snapshot != null) {
                     _solicitudesAceptadas.value = snapshot.toObjects(SolicitudCuidado::class.java)
+                        .filter { it.id !in finalizingIds }
                 }
             }
 
@@ -186,25 +221,34 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
             onError("No hay sesión activa")
             return
         }
-        val id = UUID.randomUUID().toString()
-        val solicitud = SolicitudCuidado(
-            id = id,
-            representanteUid = uid,
-            pacienteFichaId = pacienteFichaId,
-            nombrePaciente = nombrePaciente,
-            fotoPaciente = fotoPaciente,
-            fechaInicio = fechaInicio,
-            fechaFin = fechaFin,
-            esIndefinido = esIndefinido,
-            horarioStr = horarioStr,
-            periodos = periodos,
-            estado = "abierta",
-            createdAt = Timestamp.now()
-        )
-
+        
         viewModelScope.launch {
             _isLoading.value = true
             try {
+                val userDoc = db.collection("usuarios").document(uid).get().await()
+                val repNombre = "${userDoc.getString("nombre")} ${userDoc.getString("apellido_pa")}"
+                val repRut = userDoc.getString("rut") ?: ""
+                val repTel = userDoc.getString("telefono") ?: ""
+
+                val id = UUID.randomUUID().toString()
+                val solicitud = SolicitudCuidado(
+                    id = id,
+                    representanteUid = uid,
+                    representanteNombre = repNombre,
+                    representanteRut = repRut,
+                    representanteTelefono = repTel,
+                    pacienteFichaId = pacienteFichaId,
+                    nombrePaciente = nombrePaciente,
+                    fotoPaciente = fotoPaciente,
+                    fechaInicio = fechaInicio,
+                    fechaFin = fechaFin,
+                    esIndefinido = esIndefinido,
+                    horarioStr = horarioStr,
+                    periodos = periodos,
+                    estado = "abierta",
+                    createdAt = Timestamp.now()
+                )
+
                 db.collection("solicitudes").document(id).set(solicitud).await()
                 onSuccess()
             } catch (e: Exception) {
@@ -248,7 +292,7 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                 
                 db.collection("postulaciones").document(id).set(postulacion).await()
                 
-                // Notify representative
+                // 1. Notify representative (Notification collection)
                 val notifRef = db.collection("usuarios").document(solicitud.representanteUid).collection("notificaciones").document()
                 val notif = Notification(
                     id = notifRef.id,
@@ -259,10 +303,33 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                     data = mapOf("solicitudId" to solicitud.id, "postulacionId" to id)
                 )
                 notifRef.set(notif).await()
+
+                // 2. Send Message to Chat
+                try {
+                    val chatId = if (uid < solicitud.representanteUid) "${uid}_${solicitud.representanteUid}" else "${solicitud.representanteUid}_$uid"
+                    // Realtime Database for messages
+                    val chatMsgRef = com.google.firebase.database.FirebaseDatabase.getInstance().reference
+                        .child("messages").child(chatId).push()
+                    
+                    val chatMsg = mapOf(
+                        "id" to (chatMsgRef.key ?: UUID.randomUUID().toString()),
+                        "senderId" to uid,
+                        "text" to "Se realizó una postulación de servicio para ${solicitud.nombrePaciente}",
+                        "type" to "aviso_postulacion",
+                        "metadata" to mapOf("solicitudId" to solicitud.id),
+                        "timestamp" to System.currentTimeMillis(),
+                        "readBy" to mapOf(uid to true)
+                    )
+                    chatMsgRef.setValue(chatMsg).await()
+                } catch (e: Exception) {
+                    // Chat message failed, but application succeeded
+                }
                 
-                onReady()
-            } catch (e: Exception) { } finally {
+            } catch (e: Exception) { 
+                // Log application error
+            } finally {
                 _isLoading.value = false
+                onReady() // Always call onReady to allow redirection even if partial fail
             }
         }
     }
@@ -327,22 +394,100 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun finalizarServicio(solicitud: SolicitudCuidado) {
+    fun finalizarServicio(solicitud: SolicitudCuidado, onReady: () -> Unit) {
+        if (finalizingIds.contains(solicitud.id)) return
+        finalizingIds.add(solicitud.id)
+        _isLoading.value = true
+        
         viewModelScope.launch {
             try {
-                db.collection("solicitudes").document(solicitud.id).update("estado", "finalizada").await()
+                // Check if already deleted/finalized by other party
+                val check = db.collection("solicitudes").document(solicitud.id).get().await()
+                if (!check.exists()) {
+                    finalizingIds.remove(solicitud.id)
+                    onReady()
+                    return@launch
+                }
+
+                // 1. Create history record before deleting
+                val histId = UUID.randomUUID().toString()
                 
-                // Notify representative
-                val notifRef = db.collection("usuarios").document(solicitud.representanteUid).collection("notificaciones").document()
-                val notif = Notification(
-                    id = notifRef.id,
-                    tipo = "servicio_finalizado",
-                    emisor = currentUid ?: "",
-                    receptor = solicitud.representanteUid,
-                    timestamp = System.currentTimeMillis(),
-                    data = mapOf("solicitudId" to solicitud.id)
+                // Get caregiver specialty for history
+                val cuidadorDoc = db.collection("fichas").document(solicitud.cuidadorUid ?: "").get().await()
+                val especialidad = cuidadorDoc.getString("especializacion") ?: "No especificada"
+                val pacienteDoc = db.collection("fichas").document(solicitud.pacienteFichaId).get().await()
+                val pacienteEdad = pacienteDoc.get("edad")?.toString() ?: ""
+
+                val historial = HistorialServicio(
+                    id = histId,
+                    solicitudId = solicitud.id,
+                    representanteUid = solicitud.representanteUid,
+                    representanteNombre = solicitud.representanteNombre,
+                    representanteTelefono = solicitud.representanteTelefono,
+                    pacienteNombre = solicitud.nombrePaciente,
+                    pacienteEdad = pacienteEdad,
+                    cuidadorUid = solicitud.cuidadorUid ?: "",
+                    cuidadorNombre = solicitud.cuidadorNombre,
+                    cuidadorEspecialidad = especialidad,
+                    fechaTermino = Timestamp.now()
                 )
-                notifRef.set(notif).await()
+                db.collection("historial_servicios").document(histId).set(historial).await()
+
+                // 2. Delete request and applications
+                db.collection("solicitudes").document(solicitud.id).delete().await()
+                
+                // Cleanup applications for this request
+                try {
+                    val postSnapshot = db.collection("postulaciones").whereEqualTo("solicitudId", solicitud.id).get().await()
+                    for (doc in postSnapshot.documents) {
+                        doc.reference.delete().await()
+                    }
+                } catch (e: Exception) {
+                    // Non-critical cleanup error
+                }
+
+                // 3. Notify parties
+                val receptor = if (currentUid == solicitud.representanteUid) solicitud.cuidadorUid else solicitud.representanteUid
+                if (receptor != null) {
+                    val notifRef = db.collection("usuarios").document(receptor).collection("notificaciones").document()
+                    val notif = Notification(
+                        id = notifRef.id,
+                        tipo = "servicio_finalizado",
+                        emisor = currentUid ?: "",
+                        receptor = receptor,
+                        timestamp = System.currentTimeMillis(),
+                        data = mapOf("solicitudId" to solicitud.id)
+                    )
+                    notifRef.set(notif).await()
+                }
+                
+                onReady()
+            } catch (e: Exception) { 
+                finalizingIds.remove(solicitud.id)
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    fun eliminarDelHistorial(histId: String, role: String) {
+        val field = if (role == "representante") "eliminadoPorRepresentante" else "eliminadoPorCuidador"
+        db.collection("historial_servicios").document(histId).update(field, true)
+    }
+
+    fun borrarTodoElHistorial(role: String) {
+        val uid = currentUid ?: return
+        val field = if (role == "representante") "eliminadoPorRepresentante" else "eliminadoPorCuidador"
+        val queryField = if (role == "representante") "representanteUid" else "cuidadorUid"
+        
+        viewModelScope.launch {
+            try {
+                val snapshot = db.collection("historial_servicios")
+                    .whereEqualTo(queryField, uid)
+                    .get().await()
+                for (doc in snapshot.documents) {
+                    doc.reference.update(field, true).await()
+                }
             } catch (e: Exception) { }
         }
     }

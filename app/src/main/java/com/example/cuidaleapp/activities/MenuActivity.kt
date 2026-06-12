@@ -41,6 +41,7 @@ sealed class MenuNavigation {
     data class CreateRequest(val requestId: String? = null) : MenuNavigation()
     data class ManageApplications(val solicitudId: String) : MenuNavigation()
     data class ReviewRequest(val solicitud: SolicitudCuidado) : MenuNavigation()
+    object History : MenuNavigation()
     object SocialManagement : MenuNavigation()
     data class OtherFicha(val uid: String, val returnTo: MenuNavigation = Main) : MenuNavigation()
     data class Chat(val chatId: String, val otherUid: String, val otherUser: UserData? = null, val returnTo: MenuNavigation = Chats) : MenuNavigation()
@@ -100,6 +101,7 @@ class MenuActivity : ComponentActivity() {
             
             val unreadCount by chatViewModel.totalUnreadCount.collectAsState()
             val pendingNotifs by notificationsViewModel.unreadCount.collectAsState()
+            val solicitudesAceptadas by solicitudViewModel.solicitudesAceptadas.collectAsState()
 
             LaunchedEffect(Unit) {
                 chatViewModel.listenChats()
@@ -118,6 +120,7 @@ class MenuActivity : ComponentActivity() {
                     Chats -> "CHATS"
                     Notifications -> "NOTIFICATIONS"
                     SocialManagement -> "SOCIAL"
+                    History -> "HISTORY"
                     is OtherFicha -> "OTHER_FICHA"
                     is Chat -> "CHAT"
                     Requests -> "REQUESTS"
@@ -157,9 +160,10 @@ class MenuActivity : ComponentActivity() {
                     Chats -> Main
                     Notifications -> Main
                     Requests -> Main
+                    History -> Requests
                     is CreateRequest -> Requests
                     is ManageApplications -> Requests
-                    is ReviewRequest -> Main
+                    is ReviewRequest -> Requests
                     is Chat -> cs.returnTo
                     is OtherFicha -> cs.returnTo
                     SocialManagement -> Profile
@@ -336,8 +340,17 @@ class MenuActivity : ComponentActivity() {
                                 },
                                 onCreateRequest = { currentScreen = CreateRequest(null) },
                                 onEditRequest = { id -> currentScreen = CreateRequest(id) },
-                                onViewPatientDetails = { uid -> currentScreen = OtherFicha(uid, returnTo = Requests) },
-                                onViewCaregiverProfile = { uid -> currentScreen = OtherFicha(uid, returnTo = Requests) }
+                                onViewPatientDetails = { uid ->
+                                    // For caregiver viewing accepted service details
+                                    val sol = solicitudesAceptadas.find { it.pacienteFichaId == uid }
+                                    if (sol != null) {
+                                        currentScreen = ReviewRequest(sol)
+                                    } else {
+                                        currentScreen = OtherFicha(uid, returnTo = Requests)
+                                    }
+                                },
+                                onViewCaregiverProfile = { uid -> currentScreen = OtherFicha(uid, returnTo = Requests) },
+                                onNavigateToHistory = { currentScreen = History }
                             )
                         }
                         is CreateRequest -> {
@@ -357,12 +370,15 @@ class MenuActivity : ComponentActivity() {
                             )
                         }
                         is ReviewRequest -> {
-                            ReviewSolicitudScreen(
-                                solicitud = cs.solicitud,
-                                viewModel = solicitudViewModel,
-                                onNavigateBack = { currentScreen = Main }
-                            )
-                        }
+                        ReviewSolicitudScreen(
+                            solicitud = cs.solicitud,
+                            viewModel = solicitudViewModel,
+                            isAccepted = (userData.rol == "cuidador" && cs.solicitud.cuidadorUid == userData.uid) || (userData.rol == "representante" && cs.solicitud.estado == "cerrada"),
+                            onNavigateBack = { currentScreen = Requests },
+                            onViewFullFicha = { uid -> currentScreen = OtherFicha(uid, returnTo = ReviewRequest(cs.solicitud)) },
+                            onRedirectToRequests = { currentScreen = Requests }
+                        )
+                    }
                         is Chat -> {
                             var otherUserData by remember { mutableStateOf(cs.otherUser) }
                             LaunchedEffect(cs.otherUid) {
@@ -384,6 +400,9 @@ class MenuActivity : ComponentActivity() {
                                     onNavigateBack = { currentScreen = cs.returnTo },
                                     onViewOtherProfile = { uid ->
                                         currentScreen = OtherFicha(uid, returnTo = cs)
+                                    },
+                                    onRedirectToRequests = {
+                                        currentScreen = Requests
                                     }
                                 )
                             } else {
@@ -413,6 +432,14 @@ class MenuActivity : ComponentActivity() {
                                 onUserClick = { uid -> currentScreen = OtherFicha(uid, returnTo = SocialManagement) },
                                 favoritosViewModel = favoritosViewModel,
                                 vinculosViewModel = vinculosViewModel
+                            )
+                        }
+                        History -> {
+                            HistorialScreen(
+                                viewModel = solicitudViewModel,
+                                userData = userData,
+                                onNavigateBack = { currentScreen = Requests },
+                                onViewProfile = { uid -> currentScreen = OtherFicha(uid, returnTo = History) }
                             )
                         }
                     }

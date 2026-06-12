@@ -411,6 +411,9 @@ fun FullProfileDetailView(
                 if (isExternal) {
                     excludedKeys.add("medicamentos")
                     excludedKeys.add("dieta")
+                    excludedKeys.add("calle")
+                    excludedKeys.add("numero")
+                    excludedKeys.add("depto")
                 }
 
                 val preferredOrder = if (role == "cuidador") {
@@ -1280,6 +1283,83 @@ fun CuidaleUserCard(nombre: String, apellido: String, fotoUrl: String, comuna: S
             }
             Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = colors.onSurfaceVariant.copy(alpha = 0.4f))
         }
+    }
+}
+
+@Composable
+fun MedicationListPanel(value: Any?, accentColor: Color, textColor: Color, secondaryTextColor: Color) {
+    if (value !is List<*> || value.isEmpty()) return
+    
+    val customColors = CuidaleThemeExtras.customColors
+    HardShadowPanel(
+        backgroundColor = customColors.panelBackground,
+        shadowColor = Color.Black.copy(alpha = 0.05f)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Medication, null, tint = accentColor, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("MEDICAMENTOS", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = secondaryTextColor)
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            value.forEach { med ->
+                val m = med as Map<*, *>
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
+                        .background(textColor.copy(alpha = if (customColors.isDark) 0.15f else 0.03f), RoundedCornerShape(12.dp))
+                        .border(1.dp, textColor.copy(alpha = if (customColors.isDark) 0.1f else 0.05f), RoundedCornerShape(12.dp))
+                        .padding(12.dp)
+                ) {
+                    Text(text = m["nombre"].toString(), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = textColor)
+                    val admins = m["administraciones"] as? List<Map<String, String>>
+                    admins?.forEach { admin ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Schedule, null, tint = secondaryTextColor, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(text = "${admin["hora"]} — ${admin["dosis"]}", style = MaterialTheme.typography.bodyMedium, color = textColor)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DietListPanel(value: Any?, accentColor: Color, textColor: Color, secondaryTextColor: Color) {
+    if (value !is Map<*, *> || value.isEmpty()) return
+    
+    val customColors = CuidaleThemeExtras.customColors
+    HardShadowPanel(
+        backgroundColor = customColors.panelBackground,
+        shadowColor = Color.Black.copy(alpha = 0.05f)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Restaurant, null, tint = accentColor, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("PLAN DE ALIMENTACIÓN", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = secondaryTextColor)
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            value.entries.filter { it.value.toString().isNotBlank() }.forEach { entry ->
+                Column(modifier = Modifier.padding(bottom = 8.dp)) {
+                    Text(text = entry.key.toString().replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = secondaryTextColor)
+                    Text(text = entry.value.toString(), style = MaterialTheme.typography.bodyMedium, color = textColor)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CuidaleDetailRow(icon: ImageVector, label: String, value: String, modifier: Modifier = Modifier) {
+    Row(modifier = modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, modifier = Modifier.size(16.dp), tint = Color.Gray)
+        Spacer(modifier = Modifier.width(8.dp))
+        Text("$label: ", style = MaterialTheme.typography.bodySmall, color = Color.Gray, fontWeight = FontWeight.Bold)
+        Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
     }
 }
 

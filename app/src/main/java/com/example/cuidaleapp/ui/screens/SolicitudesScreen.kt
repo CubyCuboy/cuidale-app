@@ -41,7 +41,8 @@ fun SolicitudesScreen(
     onCreateRequest: () -> Unit,
     onEditRequest: (String) -> Unit,
     onViewPatientDetails: (String) -> Unit,
-    onViewCaregiverProfile: (String) -> Unit
+    onViewCaregiverProfile: (String) -> Unit,
+    onNavigateToHistory: () -> Unit
 ) {
     val misSolicitudes by viewModel.misSolicitudes.collectAsState()
     val solicitudesAceptadas by viewModel.solicitudesAceptadas.collectAsState()
@@ -51,6 +52,28 @@ fun SolicitudesScreen(
     
     val pullToRefreshState = rememberPullToRefreshState()
     val gradient = CuidaleThemeExtras.gradient
+
+    var requestToFinish by remember { mutableStateOf<SolicitudCuidado?>(null) }
+
+    if (requestToFinish != null) {
+        AlertDialog(
+            onDismissRequest = { requestToFinish = null },
+            title = { Text("¿Finalizar servicio?") },
+            text = { Text("¿Estás seguro de terminar el servicio? Esta acción cerrará la solicitud y la moverá al historial.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    requestToFinish?.let { sol ->
+                        viewModel.finalizarServicio(sol) {
+                            requestToFinish = null
+                        }
+                    }
+                }) { Text("SÍ, FINALIZAR", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { requestToFinish = null }) { Text("NO") }
+            }
+        )
+    }
 
     Scaffold(
         bottomBar = {
@@ -80,6 +103,14 @@ fun SolicitudesScreen(
                     modifier = Modifier.padding(vertical = 16.dp)
                 )
 
+                Row(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = { onNavigateToHistory() }) {
+                        Icon(Icons.Default.History, null, tint = Color.White)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("HISTORIAL", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+
                 if (userData.rol == "representante") {
                     RepresentanteRequestsContent(
                         solicitudes = misSolicitudes,
@@ -89,15 +120,16 @@ fun SolicitudesScreen(
                         onDelete = { viewModel.eliminarSolicitud(it) },
                         onAccept = { sol, post -> viewModel.aceptarCuidador(sol, post) {} },
                         onReject = { viewModel.rechazarPostulacion(it) },
-                        onViewCaregiverProfile = onViewCaregiverProfile
+                        onViewCaregiverProfile = onViewCaregiverProfile,
+                        onFinish = { requestToFinish = it }
                     )
                 } else {
                     CuidadorRequestsContent(
                         solicitudesAceptadas = solicitudesAceptadas,
                         misPostulaciones = misPostulaciones,
                         onViewDetails = onViewPatientDetails,
-                        onFinish = { viewModel.finalizarServicio(it) },
-                        onCancelPostulacion = { viewModel.cancelarPostulacion(it) }
+                        onFinish = { requestToFinish = it },
+                        onCancelPostulacion = { viewModel.eliminarPostulacionEspecifica(it) }
                     )
                 }
             }
@@ -114,7 +146,8 @@ fun RepresentanteRequestsContent(
     onDelete: (String) -> Unit,
     onAccept: (SolicitudCuidado, PostulacionCuidado) -> Unit,
     onReject: (PostulacionCuidado) -> Unit,
-    onViewCaregiverProfile: (String) -> Unit
+    onViewCaregiverProfile: (String) -> Unit,
+    onFinish: (SolicitudCuidado) -> Unit
 ) {
     Column {
         HardShadowButton(
@@ -160,7 +193,12 @@ fun RepresentanteRequestsContent(
                             if (sol.estado != "finalizada") {
                                 ActionButton(text = "EDITAR", icon = Icons.Default.Edit, color = MaterialTheme.colorScheme.secondary) { onEdit(sol.id) }
                             }
-                            ActionOutlinedButton(text = "ELIMINAR", icon = Icons.Default.Delete, color = MaterialTheme.colorScheme.error) { onDelete(sol.id) }
+                            
+                            if (sol.estado == "cerrada") {
+                                ActionButton(text = "FINALIZAR", icon = Icons.Default.Check, color = Color(0xFF4CAF50)) { onFinish(sol) }
+                            } else {
+                                ActionOutlinedButton(text = "ELIMINAR", icon = Icons.Default.Delete, color = MaterialTheme.colorScheme.error) { onDelete(sol.id) }
+                            }
                         }
                     }
                     
@@ -329,12 +367,20 @@ fun PostulacionStatusCard(solicitud: SolicitudCuidado, estado: String, onCancel:
                     Text(text = if (estado == "pendiente") "EN ESPERA DE APROBACIÓN" else estado.uppercase(), modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = when(estado) { "aceptada" -> Color(0xFF4CAF50); "rechazada" -> MaterialTheme.colorScheme.error; else -> Color.Blue })
                 }
             }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
             if (estado == "pendiente") {
-                Spacer(modifier = Modifier.height(8.dp))
                 OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
                     Icon(Icons.Default.Close, null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("CANCELAR POSTULACIÓN", fontSize = 11.sp)
+                }
+            } else if (estado == "rechazada") {
+                OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Gray)) {
+                    Icon(Icons.Default.Delete, null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("QUITAR DEL LISTADO", fontSize = 11.sp)
                 }
             }
         }

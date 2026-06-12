@@ -60,6 +60,7 @@ fun ChatScreen(
     viewModel: ChatViewModel,
     onNavigateBack: () -> Unit,
     onViewOtherProfile: (String) -> Unit,
+    onRedirectToRequests: () -> Unit,
     favoritosViewModel: com.example.cuidaleapp.viewmodel.FavoritosViewModel? = null
 ) {
     val messages by viewModel.messages.collectAsState()
@@ -426,14 +427,17 @@ fun ChatScreen(
                                                 }
                                             }
                                         },
+                                        onSwipeRight = {
+                                            replyingToMessage = msg
+                                        },
+                                        onViewPostulacion = { _ ->
+                                            onRedirectToRequests() // Redirect specifically to requests
+                                        },
                                         onDoubleClick = {
                                             if (msg.senderId == myUid && !msg.deleted) {
                                                 messageToEdit = msg
                                                 inputText = msg.text
                                             }
-                                        },
-                                        onSwipeRight = {
-                                            replyingToMessage = msg
                                         }
                                     )
                                 }
@@ -976,7 +980,8 @@ fun ChatBubble(
     onLongClick: () -> Unit = {},
     onClick: () -> Unit = {},
     onDoubleClick: () -> Unit = {},
-    onSwipeRight: () -> Unit = {}
+    onSwipeRight: () -> Unit = {},
+    onViewPostulacion: (String) -> Unit = {}
 ) {
     val bubbleColor = when {
         isSelected -> if (isDark) Color(0xFF32353B) else Color(0xFFD3E3FD)
@@ -1115,18 +1120,26 @@ fun ChatBubble(
                             if (msg.text.isNotBlank()) Spacer(modifier = Modifier.height(4.dp))
                         }
                         if (msg.text.isNotBlank()) {
-                            Text(
-                                text = buildAnnotatedString {
-                                    append(msg.text)
-                                    if (msg.edited) {
-                                        withStyle(SpanStyle(fontSize = 10.sp, color = textColor.copy(alpha = 0.5f))) {
-                                            append(" (editado)")
+                            if (msg.type == "aviso_postulacion") {
+                                ApplicationAlertBubble(
+                                    text = msg.text,
+                                    isMe = isMe,
+                                    onViewClick = { onViewPostulacion(msg.metadata["solicitudId"] ?: "") }
+                                )
+                            } else {
+                                Text(
+                                    text = buildAnnotatedString {
+                                        append(msg.text)
+                                        if (msg.edited) {
+                                            withStyle(SpanStyle(fontSize = 10.sp, color = textColor.copy(alpha = 0.5f))) {
+                                                append(" (editado)")
+                                            }
                                         }
-                                    }
-                                },
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = textColor
-                            )
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = textColor
+                                )
+                            }
                         }
                     }
                 }
@@ -1149,6 +1162,27 @@ fun ChatBubble(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun ApplicationAlertBubble(text: String, isMe: Boolean, onViewClick: () -> Unit) {
+    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+        Text(text = text, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(8.dp))
+        Button(
+            onClick = onViewClick,
+            shape = RoundedCornerShape(8.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (isMe) Color.White.copy(alpha = 0.2f) else MaterialTheme.colorScheme.primary
+            ),
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+        ) {
+            Icon(Icons.Default.Assignment, null, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("VER POSTULACIÓN", fontSize = 12.sp)
         }
     }
 }

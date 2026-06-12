@@ -15,5 +15,7 @@ data class ChatMessage(
     val replyToId: String? = null,
     val replyToText: String? = null,
     val replyToName: String? = null,
+    val type: String = "text", // "text", "aviso_postulacion"
+    val metadata: Map<String, String> = emptyMap(),
     val readBy: Map<String, Boolean> = emptyMap()
 )
