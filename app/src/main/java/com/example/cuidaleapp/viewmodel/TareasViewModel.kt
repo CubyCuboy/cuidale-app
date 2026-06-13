@@ -22,6 +22,9 @@ class TareasViewModel : ViewModel() {
     private val _tareasHoy = MutableStateFlow<List<RegistroTarea>>(emptyList())
     val tareasHoy: StateFlow<List<RegistroTarea>> = _tareasHoy
 
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error
+
     private var tareasListener: ListenerRegistration? = null
     private var registrosListener: ListenerRegistration? = null
 
@@ -112,9 +115,8 @@ class TareasViewModel : ViewModel() {
                 
                 if (!existing.isEmpty) return@launch
 
-                val plantillas = db.collection("fichas").document(pacienteFichaId)
-                    .collection("tareas_plantilla")
-                    .whereEqualTo("activa", true)
+                val plantillas = db.collection("solicitudes").document(solicitudId)
+                    .collection("tareas_servicio")
                     .get().await().toObjects(Tarea::class.java)
 
                 val tareasParaHoy = plantillas.filter { tarea ->
@@ -147,6 +149,79 @@ class TareasViewModel : ViewModel() {
                 }
                 batch.commit().await()
             } catch (e: Exception) {}
+        }
+    }
+
+    fun cargarTareasServicio(solicitudId: String) {
+        tareasListener?.remove()
+        tareasListener = db.collection("solicitudes").document(solicitudId)
+            .collection("tareas_servicio")
+            .addSnapshotListener { snapshot, _ ->
+                if (snapshot != null) {
+                    _tareasPlantilla.value = snapshot.toObjects(Tarea::class.java)
+                }
+            }
+    }
+
+    fun agregarTareaAServicio(solicitudId: String, tarea: Tarea) {
+        viewModelScope.launch {
+            try {
+                db.collection("solicitudes").document(solicitudId)
+                    .collection("tareas_servicio").document(tarea.id)
+                    .set(tarea).await()
+                
+                // If it applies today, also add to today's registry
+                if (debeEjecutarseHoy(tarea)) {
+                    agregarTareaARegistroHoy(solicitudId, tarea)
+                }
+            } catch (e: Exception) {}
+        }
+    }
+
+    fun eliminarTareaServicio(solicitudId: String, tareaId: String) {
+        viewModelScope.launch {
+            try {
+                // Delete from service template
+                db.collection("solicitudes").document(solicitudId)
+                    .collection("tareas_servicio").document(tareaId)
+                    .delete().await()
+                
+                // Also delete today's instance if not completed
+                val snapshot = db.collection("solicitudes").document(solicitudId)
+                    .collection("registros_tareas")
+                    .whereEqualTo("tareaId", tareaId)
+                    .whereEqualTo("fecha", getTodayDate())
+                    .get().await()
+                
+                for (doc in snapshot.documents) {
+                    if (doc.getBoolean("completada") != true) {
+                        doc.reference.delete().await()
+                    }
+                }
+            } catch (e: Exception) {
+                _error.value = "Error al eliminar tarea: ${e.localizedMessage}"
+            }
+        }
+    }
+
+    fun clearError() {
+        _error.value = null
+    }
+
+    private fun debeEjecutarseHoy(tarea: Tarea): Boolean {
+        val today = getTodayDate()
+        val calendar = Calendar.getInstance()
+        val dayOfWeek = calendar.get(Calendar.DAY_OF_WEEK)
+        val dayOfMonth = calendar.get(Calendar.DAY_OF_MONTH)
+        
+        return when (tarea.frecuencia) {
+            FrecuenciaTarea.DIARIA, FrecuenciaTarea.INDEFINIDA -> true
+            FrecuenciaTarea.SEMANAL -> {
+                val adjustDay = if (dayOfWeek == 1) 7 else dayOfWeek - 1
+                tarea.diasSeleccionados.contains(adjustDay)
+            }
+            FrecuenciaTarea.MENSUAL -> tarea.diasSeleccionados.contains(dayOfMonth)
+            FrecuenciaTarea.UNA_VEZ -> tarea.fechaEspecifica == today
         }
     }
 

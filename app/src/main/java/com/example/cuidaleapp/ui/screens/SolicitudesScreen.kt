@@ -198,10 +198,17 @@ fun RepresentanteRequestsContent(
                         
                         if (sol.estado == "cerrada") {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                ActionButton(text = "TAREAS", icon = Icons.Default.ListAlt, color = Color(0xFF4CAF50)) { onViewTasks(sol) }
-                                ActionButton(text = "EDITAR", icon = Icons.Default.Edit, color = MaterialTheme.colorScheme.secondary) { onEdit(sol.id) }
-                                ActionButton(text = "DETALLES", icon = Icons.Default.Info, color = MaterialTheme.colorScheme.primary) { onViewPatientDetails(sol.pacienteFichaId) }
+                                ActionButton(text = "TAREAS", icon = Icons.Default.ListAlt, color = Color(0xFF4CAF50), modifier = Modifier.weight(1f)) { onViewTasks(sol) }
+                                ActionButton(text = "EDITAR", icon = Icons.Default.Edit, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.weight(1f)) { onEdit(sol.id) }
                             }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            ActionButton(
+                                text = "DETALLES", 
+                                icon = Icons.Default.Info, 
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.fillMaxWidth()
+                            ) { onViewPatientDetails(sol.pacienteFichaId) }
+
                             Spacer(modifier = Modifier.height(8.dp))
                             HardShadowButton(
                                 text = "FINALIZAR SERVICIO",
@@ -349,11 +356,11 @@ fun AssignedCaregiverRow(name: String, photo: String, onViewProfile: () -> Unit)
 }
 
 @Composable
-fun RowScope.ActionButton(text: String, icon: ImageVector, color: Color, onClick: () -> Unit) {
-    Button(onClick = onClick, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = color)) {
+fun ActionButton(text: String, icon: ImageVector, color: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Button(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = color)) {
         Icon(icon, null, modifier = Modifier.size(16.dp))
         Spacer(modifier = Modifier.width(4.dp))
-        Text(text, fontSize = 11.sp)
+        Text(text, fontSize = 11.sp, maxLines = 1)
     }
 }
 
@@ -362,7 +369,7 @@ fun RowScope.ActionOutlinedButton(text: String, icon: ImageVector, color: Color,
     OutlinedButton(onClick = onClick, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = color)) {
         Icon(icon, null, modifier = Modifier.size(16.dp))
         Spacer(modifier = Modifier.width(4.dp))
-        Text(text, fontSize = 11.sp)
+        Text(text, fontSize = 11.sp, maxLines = 1)
     }
 }
 

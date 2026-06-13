@@ -34,17 +34,28 @@ fun ActiveServiceTasksScreen(
     onNavigateBack: () -> Unit
 ) {
     val tareasHoy by tareasViewModel.tareasHoy.collectAsState()
+    val error by tareasViewModel.error.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
     val gradient = CuidaleThemeExtras.gradient
     val isRepresentative = currentUserId == solicitud.representanteUid
     var showCreateDialog by remember { mutableStateOf<TipoTarea?>(null) }
     var editingRegistro by remember { mutableStateOf<RegistroTarea?>(null) }
 
     LaunchedEffect(solicitud.id) {
+        tareasViewModel.cargarTareasServicio(solicitud.id)
         tareasViewModel.generarInstanciasParaHoy(solicitud.id, solicitud.pacienteFichaId)
         tareasViewModel.cargarTareasDelDia(solicitud.id)
     }
 
+    LaunchedEffect(error) {
+        error?.let {
+            snackbarHostState.showSnackbar(it)
+            tareasViewModel.clearError()
+        }
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text("SEGUIMIENTO DIARIO", fontWeight = FontWeight.Bold, color = Color.White) },
@@ -103,7 +114,8 @@ fun ActiveServiceTasksScreen(
                                         currentUserId
                                     )
                                 },
-                                onEdit = if (isRepresentative) { { editingRegistro = registro } } else null
+                                onEdit = if (isRepresentative) { { editingRegistro = registro } } else null,
+                                onDelete = if (isRepresentative) { { tareasViewModel.eliminarTareaServicio(solicitud.id, registro.tareaId) } } else null
                             )
                         }
                     }
@@ -156,7 +168,8 @@ fun DailyTaskCard(
     registro: RegistroTarea,
     isReadOnly: Boolean = false,
     onToggle: (Boolean) -> Unit,
-    onEdit: (() -> Unit)? = null
+    onEdit: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null
 ) {
     val statusColor = if (registro.completada) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary
     val isDark = CuidaleThemeExtras.customColors.isDark
@@ -203,7 +216,7 @@ fun DailyTaskCard(
                 if (registro.completada) {
                     Text(
                         text = "Realizada a las ${registro.fechaCompletado?.toDate()?.let { 
-                            java.text.SimpleDateFormat("HH:mm").format(it) 
+                            java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(it) 
                         }}",
                         style = MaterialTheme.typography.labelSmall,
                         color = Color(0xFF4CAF50),
@@ -212,25 +225,32 @@ fun DailyTaskCard(
                 }
             }
             
-            if (isReadOnly) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (onEdit != null) {
-                        IconButton(onClick = onEdit) {
-                            Icon(Icons.Default.Edit, null, tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
-                        }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (onEdit != null) {
+                    IconButton(onClick = onEdit) {
+                        Icon(Icons.Default.Edit, null, tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
                     }
+                }
+                
+                if (onDelete != null) {
+                    IconButton(onClick = onDelete) {
+                        Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+                    }
+                }
+
+                if (isReadOnly) {
                     if (registro.completada) {
                         Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF4CAF50))
                     } else {
                         Icon(Icons.Default.RadioButtonUnchecked, null, tint = Color.Gray)
                     }
+                } else {
+                    Checkbox(
+                        checked = registro.completada,
+                        onCheckedChange = onToggle,
+                        colors = CheckboxDefaults.colors(checkedColor = Color(0xFF4CAF50))
+                    )
                 }
-            } else {
-                Checkbox(
-                    checked = registro.completada,
-                    onCheckedChange = onToggle,
-                    colors = CheckboxDefaults.colors(checkedColor = Color(0xFF4CAF50))
-                )
             }
         }
     }
