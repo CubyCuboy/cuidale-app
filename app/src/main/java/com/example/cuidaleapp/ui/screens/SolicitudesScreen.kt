@@ -43,6 +43,7 @@ fun SolicitudesScreen(
     onEditRequest: (String) -> Unit,
     onViewPatientDetails: (String) -> Unit,
     onViewCaregiverProfile: (String) -> Unit,
+    onViewTasks: (SolicitudCuidado) -> Unit,
     onNavigateToHistory: () -> Unit
 ) {
     val misSolicitudes by viewModel.misSolicitudes.collectAsState()
@@ -122,6 +123,8 @@ fun SolicitudesScreen(
                         onAccept = { sol, post -> viewModel.aceptarCuidador(sol, post) {} },
                         onReject = { viewModel.rechazarPostulacion(it) },
                         onViewCaregiverProfile = onViewCaregiverProfile,
+                        onViewPatientDetails = onViewPatientDetails,
+                        onViewTasks = onViewTasks,
                         onFinish = { requestToFinish = it }
                     )
                 } else {
@@ -129,6 +132,7 @@ fun SolicitudesScreen(
                         solicitudesAceptadas = solicitudesAceptadas,
                         misPostulaciones = misPostulaciones,
                         onViewDetails = onViewPatientDetails,
+                        onViewTasks = onViewTasks,
                         onFinish = { requestToFinish = it },
                         onCancelPostulacion = { viewModel.eliminarPostulacionEspecifica(it) }
                     )
@@ -148,6 +152,8 @@ fun RepresentanteRequestsContent(
     onAccept: (SolicitudCuidado, PostulacionCuidado) -> Unit,
     onReject: (PostulacionCuidado) -> Unit,
     onViewCaregiverProfile: (String) -> Unit,
+    onViewPatientDetails: (String) -> Unit,
+    onViewTasks: (SolicitudCuidado) -> Unit,
     onFinish: (SolicitudCuidado) -> Unit
 ) {
     Column {
@@ -188,16 +194,27 @@ fun RepresentanteRequestsContent(
                             )
                         }
                         
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(20.dp))
                         
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (sol.estado != "finalizada") {
+                        if (sol.estado == "cerrada") {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                ActionButton(text = "TAREAS", icon = Icons.Default.ListAlt, color = Color(0xFF4CAF50)) { onViewTasks(sol) }
                                 ActionButton(text = "EDITAR", icon = Icons.Default.Edit, color = MaterialTheme.colorScheme.secondary) { onEdit(sol.id) }
+                                ActionButton(text = "DETALLES", icon = Icons.Default.Info, color = MaterialTheme.colorScheme.primary) { onViewPatientDetails(sol.pacienteFichaId) }
                             }
-                            
-                            if (sol.estado == "cerrada") {
-                                ActionButton(text = "FINALIZAR", icon = Icons.Default.Check, color = Color(0xFF4CAF50)) { onFinish(sol) }
-                            } else {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            HardShadowButton(
+                                text = "FINALIZAR SERVICIO",
+                                containerColor = MaterialTheme.colorScheme.secondary,
+                                contentColor = Color.White,
+                                shadowColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f),
+                                icon = Icons.Default.Check,
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                onClick = { onFinish(sol) }
+                            )
+                        } else {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                ActionButton(text = "EDITAR", icon = Icons.Default.Edit, color = MaterialTheme.colorScheme.secondary) { onEdit(sol.id) }
                                 ActionOutlinedButton(text = "ELIMINAR", icon = Icons.Default.Delete, color = MaterialTheme.colorScheme.error) { onDelete(sol.id) }
                             }
                         }
@@ -221,6 +238,7 @@ fun CuidadorRequestsContent(
     solicitudesAceptadas: List<SolicitudCuidado>,
     misPostulaciones: List<Pair<SolicitudCuidado, String>>,
     onViewDetails: (String) -> Unit,
+    onViewTasks: (SolicitudCuidado) -> Unit,
     onFinish: (SolicitudCuidado) -> Unit,
     onCancelPostulacion: (String) -> Unit
 ) {
@@ -235,11 +253,21 @@ fun CuidadorRequestsContent(
                     status = "EN CURSO",
                     statusColor = MaterialTheme.colorScheme.primary
                 ) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ActionButton(text = "VER PACIENTE", icon = Icons.Default.Person, color = MaterialTheme.colorScheme.primary) { onViewDetails(sol.pacienteFichaId) }
-                        ActionButton(text = "FINALIZAR", icon = Icons.Default.Check, color = MaterialTheme.colorScheme.secondary) { onFinish(sol) }
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ActionButton(text = "TAREAS", icon = Icons.Default.ListAlt, color = Color(0xFF4CAF50)) { onViewTasks(sol) }
+                        ActionButton(text = "PACIENTE", icon = Icons.Default.Person, color = MaterialTheme.colorScheme.primary) { onViewDetails(sol.pacienteFichaId) }
                     }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    HardShadowButton(
+                        text = "FINALIZAR TURNO",
+                        containerColor = MaterialTheme.colorScheme.secondary,
+                        contentColor = Color.White,
+                        shadowColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f),
+                        icon = Icons.Default.Check,
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        onClick = { onFinish(sol) }
+                    )
                 }
             }
         }
@@ -339,7 +367,6 @@ fun RowScope.ActionOutlinedButton(text: String, icon: ImageVector, color: Color,
 
 @Composable
 fun ApplicantMiniCard(applicant: PostulacionCuidado, onAccept: () -> Unit, onReject: () -> Unit, onViewProfile: () -> Unit) {
-    val customColors = CuidaleThemeExtras.customColors
     Card(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.95f)),
@@ -362,8 +389,32 @@ fun ApplicantMiniCard(applicant: PostulacionCuidado, onAccept: () -> Unit, onRej
                     }
                 }
             }
-            IconButton(onClick = onAccept) { Icon(Icons.Default.CheckCircle, "Aceptar", tint = Color(0xFF4CAF50), modifier = Modifier.size(28.dp)) }
-            IconButton(onClick = onReject) { Icon(Icons.Default.Cancel, "Rechazar", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(28.dp)) }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = onAccept,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("ACEPTAR", fontSize = 11.sp)
+                }
+                OutlinedButton(
+                    onClick = onReject,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(Icons.Default.Close, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("RECHAZAR", fontSize = 11.sp)
+                }
+            }
         }
     }
 }

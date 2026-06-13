@@ -66,6 +66,7 @@ fun OtherFichaScreen(
     val otherUserData by profileViewModel.otherUserData.collectAsState()
     val otherUserStatus by profileViewModel.otherUserStatus.collectAsState()
     val otherFichaState by profileViewModel.otherFichaState.collectAsState()
+    val otherTareasPlantilla by profileViewModel.otherTareasPlantilla.collectAsState()
     val otherProfileState by profileViewModel.otherProfileState.collectAsState()
     val vinculosUiState by vinculosViewModel.uiState.collectAsState()
     val favoritosUiState by favoritosViewModel.uiState.collectAsState()
@@ -517,6 +518,7 @@ fun OtherFichaScreen(
                                     role = displayRole,
                                     data = targetState.data,
                                     isExternal = true,
+                                    tareasPlantilla = otherTareasPlantilla,
                                     onEdit = { }
                                 )
                             }

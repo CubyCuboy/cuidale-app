@@ -41,6 +41,8 @@ sealed class MenuNavigation {
     data class CreateRequest(val requestId: String? = null) : MenuNavigation()
     data class ManageApplications(val solicitudId: String) : MenuNavigation()
     data class ReviewRequest(val solicitud: SolicitudCuidado) : MenuNavigation()
+    data class ActiveTasks(val solicitud: SolicitudCuidado) : MenuNavigation()
+    data class ServiceReport(val informe: com.example.cuidaleapp.models.InformeTurno) : MenuNavigation()
     object History : MenuNavigation()
     object SocialManagement : MenuNavigation()
     data class OtherFicha(val uid: String, val returnTo: MenuNavigation = Main) : MenuNavigation()
@@ -127,6 +129,8 @@ class MenuActivity : ComponentActivity() {
                     is CreateRequest -> "CREATE_REQUEST"
                     is ManageApplications -> "MANAGE_APPLICATIONS"
                     is ReviewRequest -> "REVIEW_REQUEST"
+                    is ActiveTasks -> "ACTIVE_TASKS"
+                    is ServiceReport -> "SERVICE_REPORT"
                 }
                 AppNavigationState.setScreen(screenName)
             }
@@ -164,6 +168,8 @@ class MenuActivity : ComponentActivity() {
                     is CreateRequest -> Requests
                     is ManageApplications -> Requests
                     is ReviewRequest -> Requests
+                    is ActiveTasks -> Requests
+                    is ServiceReport -> Requests
                     is Chat -> cs.returnTo
                     is OtherFicha -> cs.returnTo
                     SocialManagement -> Profile
@@ -350,6 +356,7 @@ class MenuActivity : ComponentActivity() {
                                     }
                                 },
                                 onViewCaregiverProfile = { uid -> currentScreen = OtherFicha(uid, returnTo = Requests) },
+                                onViewTasks = { sol -> currentScreen = ActiveTasks(sol) },
                                 onNavigateToHistory = { currentScreen = History }
                             )
                         }
@@ -436,6 +443,21 @@ class MenuActivity : ComponentActivity() {
                                 onUserClick = { uid -> currentScreen = OtherFicha(uid, returnTo = SocialManagement) },
                                 favoritosViewModel = favoritosViewModel,
                                 vinculosViewModel = vinculosViewModel
+                            )
+                        }
+                        is ActiveTasks -> {
+                            val tareasViewModel: TareasViewModel = viewModel()
+                            ActiveServiceTasksScreen(
+                                solicitud = cs.solicitud,
+                                tareasViewModel = tareasViewModel,
+                                currentUserId = userData.uid,
+                                onNavigateBack = { currentScreen = Requests }
+                            )
+                        }
+                        is ServiceReport -> {
+                            InformeServicioScreen(
+                                informe = cs.informe,
+                                onNavigateBack = { currentScreen = Requests }
                             )
                         }
                         History -> {
