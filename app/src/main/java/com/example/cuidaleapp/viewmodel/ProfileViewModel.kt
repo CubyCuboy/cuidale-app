@@ -54,6 +54,9 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     private val _otherUserStatus = MutableStateFlow("desconectado")
     val otherUserStatus: StateFlow<String> = _otherUserStatus.asStateFlow()
 
+    private val _otherTareasPlantilla = MutableStateFlow<List<com.example.cuidaleapp.models.Tarea>>(emptyList())
+    val otherTareasPlantilla: StateFlow<List<com.example.cuidaleapp.models.Tarea>> = _otherTareasPlantilla.asStateFlow()
+
     private var statusListener: ValueEventListener? = null
 
     private val _photoUpdateTrigger = MutableStateFlow(0L)
@@ -198,42 +201,57 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             _otherUserData.value = null
             _otherUserStatus.value = "estado oculto"
 
+            // 1. Cargar datos básicos del usuario (Esto debería funcionar siempre según tus reglas previas)
             try {
-                // Verificar vínculo antes de escuchar estado
-                val vinculoId = if (myUid < targetUid) "${myUid}_$targetUid" else "${targetUid}_$myUid"
-                val vinculoDoc = db.collection("vinculos").document(vinculoId).get().await()
-                val isVinculado = vinculoDoc.exists() && vinculoDoc.getString("estado") == "aceptado"
-
-                if (isVinculado) {
-                    statusListener = object : ValueEventListener {
-                        override fun onDataChange(snapshot: DataSnapshot) {
-                            _otherUserStatus.value = snapshot.child("estado").getValue(String::class.java) ?: "desconectado"
-                        }
-                        override fun onCancelled(error: DatabaseError) {}
-                    }
-                    rtdb.child("status").child(targetUid).addValueEventListener(statusListener!!)
-                }
-
                 val userDoc = db.collection("usuarios").document(targetUid).get().await()
-
                 if (userDoc.exists()) {
                     val user = userDoc.toObject(UserData::class.java)?.copy(uid = targetUid)
                     _otherUserData.value = user
                     _otherProfileState.value = RemoteState.Success
-
-                    val fichaDoc = db.collection("fichas").document(targetUid).get().await()
-                    if (fichaDoc.exists()) {
-                        _otherFichaState.value = FichaState.View(fichaDoc.data ?: emptyMap())
-                    } else {
-                        _otherFichaState.value = FichaState.NotFound
-                    }
                 } else {
                     _otherProfileState.value = RemoteState.Error("El usuario no existe.")
                     _otherFichaState.value = FichaState.Error("Usuario no encontrado")
+                    return@launch
                 }
             } catch (e: Exception) {
                 _otherProfileState.value = RemoteState.Error(e.localizedMessage ?: "Error al cargar perfil")
-                _otherFichaState.value = FichaState.Error(e.localizedMessage ?: "Error")
+                return@launch
+            }
+
+            // 2. Intentar cargar la ficha (Si falla por permisos, no rompe el perfil)
+            try {
+                val fichaDoc = db.collection("fichas").document(targetUid).get().await()
+                if (fichaDoc.exists()) {
+                    _otherFichaState.value = FichaState.View(fichaDoc.data ?: emptyMap())
+                    
+                    // 3. Intentar cargar tareas (En un try-catch separado por si no hay permisos aún)
+                    try {
+                        val tareasSnapshot = db.collection("fichas").document(targetUid)
+                            .collection("tareas_plantilla")
+                            .whereEqualTo("activa", true)
+                            .get().await()
+                        _otherTareasPlantilla.value = tareasSnapshot.toObjects(com.example.cuidaleapp.models.Tarea::class.java)
+                    } catch (e: Exception) {
+                        _otherTareasPlantilla.value = emptyList()
+                    }
+                } else {
+                    _otherFichaState.value = FichaState.NotFound
+                }
+            } catch (e: Exception) {
+                _otherFichaState.value = FichaState.Error("Privado")
+            }
+
+            // 4. Intentar escuchar el estado (Realtime Database suele tener reglas distintas)
+            try {
+                statusListener = object : ValueEventListener {
+                    override fun onDataChange(snapshot: DataSnapshot) {
+                        _otherUserStatus.value = snapshot.child("estado").getValue(String::class.java) ?: "desconectado"
+                    }
+                    override fun onCancelled(error: DatabaseError) {}
+                }
+                rtdb.child("status").child(targetUid).addValueEventListener(statusListener!!)
+            } catch (e: Exception) {
+                _otherUserStatus.value = "desconectado"
             }
         }
     }

@@ -181,10 +181,12 @@ fun ChatsScreen(
                                 containerColor = Color.Transparent,
                                 contentColor = if (isDark) customColors.lime else customColors.successStrong,
                                 indicator = { tabPositions ->
-                                    TabRowDefaults.SecondaryIndicator(
-                                        Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                                        color = if (isDark) customColors.lime else customColors.successStrong
-                                    )
+                                    if (selectedTab < tabPositions.size) {
+                                        TabRowDefaults.SecondaryIndicator(
+                                            Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                                            color = if (isDark) customColors.lime else customColors.successStrong
+                                        )
+                                    }
                                 },
                                 divider = {}
                             ) {

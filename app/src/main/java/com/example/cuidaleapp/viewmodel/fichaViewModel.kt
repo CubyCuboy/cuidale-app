@@ -4,6 +4,12 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.cuidaleapp.data.ChileData
+import com.example.cuidaleapp.models.Tarea
+import com.example.cuidaleapp.models.FrecuenciaTarea
+import com.example.cuidaleapp.models.TipoTarea
+import com.google.firebase.firestore.ListenerRegistration
+import kotlinx.coroutines.flow.asStateFlow
+import java.util.UUID
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,6 +48,14 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
     private val _isPartialLoading = MutableStateFlow(false)
     val isPartialLoading: StateFlow<Boolean> = _isPartialLoading
 
+    private val _tareasPlantilla = MutableStateFlow<List<Tarea>>(emptyList())
+    val tareasPlantilla: StateFlow<List<Tarea>> = _tareasPlantilla
+
+    private val _tareasTemporales = MutableStateFlow<List<Tarea>>(emptyList())
+    val tareasTemporales: StateFlow<List<Tarea>> = _tareasTemporales
+
+    private var isEditingMode = false
+
     init {
         checkProfile()
     }
@@ -54,7 +68,6 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         viewModelScope.launch {
-            // Solo mostramos Loading si no hay datos previos o si no es una carga silenciosa
             val currentState = _state.value
             if (!isSilent && currentState !is FichaState.View) {
                 _state.value = FichaState.Loading
@@ -76,6 +89,7 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
 
                 if (profileDoc.exists()) {
                     _state.value = FichaState.View(profileDoc.data ?: emptyMap())
+                    listenToTareas(user.uid)
                 } else {
                     _state.value = FichaState.NotFound
                 }
@@ -90,14 +104,60 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
 
     fun startEditing() {
         when (val currentState = _state.value) {
-            is FichaState.View -> _state.value = FichaState.Editing(currentState.data)
-            is FichaState.NotFound -> _state.value = FichaState.Editing(emptyMap())
+            is FichaState.View -> {
+                isEditingMode = true
+                _tareasTemporales.value = _tareasPlantilla.value
+                _state.value = FichaState.Editing(currentState.data)
+            }
+            is FichaState.NotFound -> {
+                isEditingMode = true
+                _tareasTemporales.value = emptyList()
+                _state.value = FichaState.Editing(emptyMap())
+            }
             else -> {}
         }
     }
 
     fun cancelEditing() {
+        isEditingMode = false
         checkProfile()
+    }
+
+    fun saveTareaPlantilla(tarea: Tarea) {
+        if (isEditingMode) {
+            val actuales = _tareasTemporales.value.toMutableList()
+            val index = actuales.indexOfFirst { it.id == tarea.id }
+            if (index != -1) {
+                actuales[index] = tarea
+            } else {
+                actuales.add(tarea)
+            }
+            _tareasTemporales.value = actuales
+        } else {
+            val user = auth.currentUser ?: return
+            viewModelScope.launch {
+                try {
+                    db.collection("fichas").document(user.uid)
+                        .collection("tareas_plantilla").document(tarea.id)
+                        .set(tarea).await()
+                } catch (e: Exception) {}
+            }
+        }
+    }
+
+    fun deleteTareaPlantilla(tareaId: String) {
+        if (isEditingMode) {
+            _tareasTemporales.value = _tareasTemporales.value.filter { it.id != tareaId }
+        } else {
+            val user = auth.currentUser ?: return
+            viewModelScope.launch {
+                try {
+                    db.collection("fichas").document(user.uid)
+                        .collection("tareas_plantilla").document(tareaId)
+                        .update("activa", false).await()
+                } catch (e: Exception) {}
+            }
+        }
     }
 
     fun createCaregiverFicha(
@@ -120,9 +180,12 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
                     "comunas" to comunas,
                     "horarios" to horarios,
                     "descripcion" to descripcion.trim(),
+                    "activa" to true,
                     "ultima_actualizacion" to com.google.firebase.Timestamp.now()
                 )
                 db.collection("fichas").document(user.uid).set(data).await()
+                
+                isEditingMode = false
                 checkProfile()
                 onSuccess()
             } catch (e: Exception) {
@@ -148,8 +211,6 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
         discapacidadOtro: String,
         enfermedades: List<String>,
         enfermedadOtro: String,
-        dieta: Map<String, Any>,
-        medicamentos: List<Map<String, Any>>,
         condicionesExtra: String,
         comunasPreferencia: List<String> = emptyList(),
         horariosPreferencia: List<String> = emptyList(),
@@ -178,14 +239,28 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
                     "discapacidad_otro" to discapacidadOtro.trim(),
                     "enfermedades" to enfermedades,
                     "enfermedad_otro" to enfermedadOtro.trim(),
-                    "dieta" to dieta,
-                    "medicamentos" to medicamentos,
                     "condiciones" to condicionesExtra.trim(),
                     "comunas_preferencia" to comunasPreferencia,
                     "horarios_preferencia" to horariosPreferencia,
+                    "activa" to true,
                     "ultima_actualizacion" to com.google.firebase.Timestamp.now()
                 )
                 db.collection("fichas").document(user.uid).set(data).await()
+
+                // Persistir tareas temporales
+                val batch = db.batch()
+                val tareasRef = db.collection("fichas").document(user.uid).collection("tareas_plantilla")
+                
+                // Marcar todas las anteriores como inactivas para "reemplazar" el set
+                val oldTareas = db.collection("fichas").document(user.uid).collection("tareas_plantilla").get().await()
+                oldTareas.documents.forEach { batch.update(it.reference, "activa", false) }
+
+                _tareasTemporales.value.forEach { tarea ->
+                    batch.set(tareasRef.document(tarea.id), tarea.copy(activa = true))
+                }
+                batch.commit().await()
+
+                isEditingMode = false
                 checkProfile()
                 onSuccess()
             } catch (e: Exception) {
@@ -227,5 +302,25 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
                 _state.value = FichaState.Error("Error al actualizar preferencias: ${e.message}")
             }
         }
+    }
+
+    private var tareasListener: ListenerRegistration? = null
+    private fun listenToTareas(uid: String) {
+        tareasListener?.remove()
+        tareasListener = db.collection("fichas").document(uid)
+            .collection("tareas_plantilla")
+            .whereEqualTo("activa", true)
+            .addSnapshotListener { snapshot, _ ->
+                if (snapshot != null) {
+                    _tareasPlantilla.value = snapshot.toObjects(Tarea::class.java)
+                }
+            }
+    }
+
+
+
+    override fun onCleared() {
+        super.onCleared()
+        tareasListener?.remove()
     }
 }

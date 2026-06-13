@@ -11,6 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -29,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import coil3.compose.AsyncImage
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.layout.ContentScale
+import com.example.cuidaleapp.models.*
 import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.FichaState
@@ -82,7 +84,6 @@ fun FichaScreen(
                     .fillMaxSize()
                     .verticalScroll(scrollState)
             ) {
-                // Modern Header / Banner
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -146,8 +147,6 @@ fun FichaScreen(
                         when (targetState) {
                             is FichaState.Loading -> {
                                 if (isRefreshing) {
-                                    // Si estamos refrescando (ya hay datos), no mostrar loading a pantalla completa
-                                    // Esto previene el parpadeo
                                     null
                                 } else {
                                     Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
@@ -156,10 +155,12 @@ fun FichaScreen(
                                 }
                             }
                             is FichaState.View -> {
+                                val tareasPlantilla by viewModel.tareasPlantilla.collectAsState()
                                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                                     ProfileDetailView(
                                         role = role,
                                         data = targetState.data,
+                                        tareasPlantilla = tareasPlantilla,
                                         onEdit = { viewModel.startEditing() }
                                     )
                                     SearchPreferencesCard(
@@ -187,6 +188,8 @@ fun FichaScreen(
                             }
                             is FichaState.Editing -> {
                                 val editingData = (targetState as? FichaState.Editing)?.data
+                                val tareasTemporales by viewModel.tareasTemporales.collectAsState()
+                                
                                 if (role == "cuidador") {
                                     CaregiverEditFlow(
                                         viewModel = viewModel,
@@ -202,6 +205,7 @@ fun FichaScreen(
                                         profileViewModel = profileViewModel,
                                         availableCommunes = availableCommunes,
                                         initialData = editingData,
+                                        tareasTemporales = tareasTemporales,
                                         cardColor = panelBg,
                                         accentColor = accentColor,
                                         onFinishSuccess = { if (startInEditMode) onNavigateBack() }
@@ -418,6 +422,7 @@ fun FamilyEditFlow(
     profileViewModel: ProfileViewModel,
     availableCommunes: List<String>,
     initialData: Map<String, Any>?,
+    tareasTemporales: List<Tarea>,
     cardColor: Color,
     accentColor: Color,
     onFinishSuccess: () -> Unit
@@ -429,6 +434,8 @@ fun FamilyEditFlow(
     
     var step by remember { mutableIntStateOf(1) }
     val currentUserData by profileViewModel.userData.collectAsState()
+    var showTaskDialogByTipo by remember { mutableStateOf<TipoTarea?>(null) }
+    var editingTarea by remember { mutableStateOf<Tarea?>(null) }
     
     var nombreCompleto by remember { mutableStateOf(initialData?.get("nombre_completo") as? String ?: "") }
     var edad by remember { mutableStateOf(initialData?.get("edad") as? String ?: "") }
@@ -447,67 +454,10 @@ fun FamilyEditFlow(
     var enfermedades by remember { mutableStateOf(initialData?.get("enfermedades") as? List<String> ?: emptyList()) }
     var enfermedadOtro by remember { mutableStateOf(initialData?.get("enfermedad_otro") as? String ?: "") }
     
-    val defaultDieta = mapOf(
-        "desayuno" to mapOf("indicaciones" to "", "hora" to ""),
-        "colacion_manana" to mapOf("indicaciones" to "", "hora" to ""),
-        "almuerzo" to mapOf("indicaciones" to "", "hora" to ""),
-        "colacion_tarde" to mapOf("indicaciones" to "", "hora" to ""),
-        "once" to mapOf("indicaciones" to "", "hora" to ""),
-        "cena" to mapOf("indicaciones" to "", "hora" to ""),
-        "colacion_noche" to mapOf("indicaciones" to "", "hora" to "")
-    )
-    
-    // Normalizar datos antiguos (strings) a mapas
-    val normalizedInitialDieta = remember(initialData) {
-        val raw = initialData?.get("dieta") as? Map<String, Any> ?: emptyMap()
-        defaultDieta.mapValues { (key, defaultVal) ->
-            val existing = raw[key]
-            when (existing) {
-                is String -> mapOf("indicaciones" to existing, "hora" to "")
-                is Map<*, *> -> mapOf(
-                    "indicaciones" to (existing["indicaciones"] as? String ?: ""),
-                    "hora" to (existing["hora"] as? String ?: "")
-                )
-                else -> defaultVal
-            }
-        }
-    }
-    
-    var dieta by remember { mutableStateOf(normalizedInitialDieta) }
-    var medicamentos by remember { mutableStateOf(initialData?.get("medicamentos") as? List<Map<String, Any>> ?: emptyList()) }
     var condicionesExtra by remember { mutableStateOf(initialData?.get("condiciones") as? String ?: "") }
     var selectedCommunesPref by remember { mutableStateOf(initialData?.get("comunas_preferencia") as? List<String> ?: emptyList()) }
     var selectedHorariosPref by remember { mutableStateOf(initialData?.get("horarios_preferencia") as? List<String> ?: emptyList()) }
     
-    var showTimePickerForDiet by remember { mutableStateOf<String?>(null) }
-    val dietTimeState = rememberTimePickerState()
-
-    if (showTimePickerForDiet != null) {
-        TimePickerDialog(
-            onDismissRequest = { showTimePickerForDiet = null },
-            confirmButton = {
-                TextButton(onClick = {
-                    val hour = dietTimeState.hour.toString().padStart(2, '0')
-                    val min = dietTimeState.minute.toString().padStart(2, '0')
-                    val mealKey = showTimePickerForDiet!!
-                    val newDieta = dieta.toMutableMap()
-                    val mealData = newDieta[mealKey]!!.toMutableMap()
-                    mealData["hora"] = "$hour:$min"
-                    newDieta[mealKey] = mealData
-                    dieta = newDieta
-                    showTimePickerForDiet = null
-                }) { Text("OK", fontWeight = FontWeight.Bold, color = accentColor) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showTimePickerForDiet = null }) {
-                    Text("CANCELAR", color = textColor.copy(alpha = 0.6f))
-                }
-            }
-        ) {
-            TimePicker(state = dietTimeState)
-        }
-    }
-
     LaunchedEffect(vivesConFamiliar, currentUserData.region, currentUserData.comuna) {
         if (vivesConFamiliar) {
             region = currentUserData.region
@@ -732,85 +682,6 @@ fun FamilyEditFlow(
             }
             3 -> {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text(
-                        "DIETA Y MEDICAMENTOS", 
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), 
-                        color = accentColor,
-                        modifier = Modifier.padding(start = 8.dp)
-                    )
-
-                    HardShadowPanel(
-                        backgroundColor = cardColor,
-                        shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
-                        cornerRadius = 24.dp,
-                        contentPadding = PaddingValues(20.dp)
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Restaurant, null, tint = accentColor, modifier = Modifier.size(24.dp))
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text("PLAN DE ALIMENTACIÓN", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = textColor)
-                            }
-                            
-                            val dietFields = listOf(
-                                "desayuno" to "DESAYUNO",
-                                "colacion_manana" to "COLACIÓN MAÑANA",
-                                "almuerzo" to "ALMUERZO",
-                                "colacion_tarde" to "COLACIÓN TARDE",
-                                "once" to "ONCE",
-                                "cena" to "CENA",
-                                "colacion_noche" to "COLACIÓN NOCHE"
-                            )
-
-                            dietFields.forEach { (key, label) ->
-                                val mealData = dieta[key] ?: mapOf("indicaciones" to "", "hora" to "")
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(bottom = 8.dp)
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                                        InputFieldLabel(text = label, color = textColor, modifier = Modifier.padding(bottom = 0.dp))
-                                        
-                                        Surface(
-                                            onClick = { showTimePickerForDiet = key },
-                                            color = customColors.inputBackground,
-                                            shape = RoundedCornerShape(8.dp),
-                                            modifier = Modifier.height(36.dp)
-                                        ) {
-                                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 12.dp)) {
-                                                Icon(Icons.Default.Schedule, null, tint = accentColor, modifier = Modifier.size(14.dp))
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Text(
-                                                    text = mealData["hora"]?.ifEmpty { "Hora" } ?: "Hora",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = if (mealData["hora"].isNullOrEmpty()) textColor.copy(alpha = 0.4f) else accentColor
-                                                )
-                                            }
-                                        }
-                                    }
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    CuidaleTextField(
-                                        value = mealData["indicaciones"] ?: "",
-                                        onValueChange = { v ->
-                                            val newDieta = dieta.toMutableMap()
-                                            val updatedMeal = mealData.toMutableMap()
-                                            updatedMeal["indicaciones"] = v
-                                            newDieta[key] = updatedMeal
-                                            dieta = newDieta
-                                        },
-                                        placeholder = "Indicaciones para $label...",
-                                        containerColor = customColors.inputBackground,
-                                        textColor = textColor
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    
-                    ModernMedicamentosSection(medicamentos, onMedicamentosChange = { medicamentos = it }, cardColor, accentColor)
-                    
                     HardShadowPanel(
                         backgroundColor = cardColor,
                         shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
@@ -828,230 +699,194 @@ fun FamilyEditFlow(
                                 containerColor = customColors.inputBackground,
                                 textColor = textColor
                             )
-                            
-                            Spacer(modifier = Modifier.height(32.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                HardShadowButton(
-                                    text = "VOLVER",
-                                    onClick = { step = 2 },
-                                    modifier = Modifier.weight(1f).height(58.dp),
-                                    containerColor = if (isDark) Color.White.copy(alpha = 0.1f) else Color(0xFFF5F5F5),
-                                    contentColor = if (isDark) Color.White else Color.DarkGray,
-                                    shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = if (isDark) 0.15f else 0.1f),
-                                    isDark = isDark
-                                )
-                                HardShadowButton(
-                                    text = "FINALIZAR",
-                                    onClick = {
-                                        viewModel.createFamilyFicha(
-                                            nombreCompleto, edad, genero, vivesConFamiliar, 
-                                            region, comuna, calle, numero, depto, 
-                                            nivelDependencia, movilidad, comunicacion, 
-                                            discapacidades, discapacidadOtro, enfermedades, enfermedadOtro, 
-                                            dieta as Map<String, Any>, medicamentos, condicionesExtra,
-                                            selectedCommunesPref, selectedHorariosPref,
-                                            onSuccess = onFinishSuccess
-                                        )
-                                    },
-                                    modifier = Modifier.weight(1.5f).height(58.dp),
-                                    containerColor = accentColor,
-                                    contentColor = Color.White,
-                                    shadowColor = shadowPalette.hardShadowPrimary,
-                                    isDark = isDark
-                                )
-                            }
                         }
                     }
-                }
-            }
-        }
-    }
-}
 
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ModernMedicamentosSection(
-    medicamentos: List<Map<String, Any>>,
-    onMedicamentosChange: (List<Map<String, Any>>) -> Unit,
-    cardColor: Color,
-    accentColor: Color
-) {
-    val customColors = CuidaleThemeExtras.customColors
-    val shadowPalette = CuidaleThemeExtras.shadows
-    val textColor = MaterialTheme.colorScheme.onSurface
-    val isDark = customColors.isDark
-    
-    var showTimePickerForMed by remember { mutableStateOf<Pair<Int, Int>?>(null) }
-    val timeState = rememberTimePickerState()
-
-    if (showTimePickerForMed != null) {
-        TimePickerDialog(
-            onDismissRequest = { showTimePickerForMed = null },
-            confirmButton = {
-                TextButton(onClick = {
-                    val hour = timeState.hour.toString().padStart(2, '0')
-                    val min = timeState.minute.toString().padStart(2, '0')
-                    val (mIdx, aIdx) = showTimePickerForMed!!
-                    val newList = medicamentos.toMutableList()
-                    val med = newList[mIdx].toMutableMap()
-                    val admins = (med["administraciones"] as? List<Map<String, String>> ?: listOf()).toMutableList()
-                    val admin = admins[aIdx].toMutableMap()
-                    admin["hora"] = "$hour:$min"
-                    admins[aIdx] = admin
-                    med["administraciones"] = admins
-                    newList[mIdx] = med
-                    onMedicamentosChange(newList)
-                    showTimePickerForMed = null
-                }) { Text("OK", fontWeight = FontWeight.Bold, color = accentColor) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showTimePickerForMed = null }) {
-                    Text("CANCELAR", color = textColor.copy(alpha = 0.6f))
-                }
-            }
-        ) {
-            TimePicker(state = timeState)
-        }
-    }
-
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        medicamentos.forEachIndexed { mIdx, med ->
-            HardShadowPanel(
-                backgroundColor = if (isDark) customColors.panelBackground.copy(alpha = 0.7f) else Color.White,
-                shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.15f),
-                cornerRadius = 16.dp,
-                contentPadding = PaddingValues(16.dp)
-            ) {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                        Surface(
-                            color = accentColor.copy(alpha = 0.15f),
-                            shape = CircleShape,
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(Icons.Default.Medication, null, tint = accentColor, modifier = Modifier.size(18.dp))
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = "MEDICAMENTO #${mIdx + 1}",
-                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Black),
-                            color = textColor.copy(alpha = 0.7f)
-                        )
-                        Spacer(modifier = Modifier.weight(1f))
-                        IconButton(onClick = { onMedicamentosChange(medicamentos.toMutableList().apply { removeAt(mIdx) }) }, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Default.Delete, "Eliminar", tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
-                        }
-                    }
-                    
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    CuidaleTextField(
-                        value = med["nombre"] as? String ?: "",
-                        onValueChange = { v ->
-                            val nl = medicamentos.toMutableList()
-                            val nm = nl[mIdx].toMutableMap()
-                            nm["nombre"] = v
-                            nl[mIdx] = nm
-                            onMedicamentosChange(nl)
-                        },
-                        placeholder = "Nombre (ej: Paracetamol)",
-                        containerColor = customColors.inputBackground,
-                        textColor = textColor
-                    )
-                    
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
                     Text(
-                        "HORARIOS Y DOSIS",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
-                        color = textColor.copy(alpha = 0.5f)
+                        "RÉGIMEN DE CUIDADOS", 
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), 
+                        color = accentColor,
+                        modifier = Modifier.padding(start = 8.dp)
                     )
-                    
-                    val admins = med["administraciones"] as? List<Map<String, String>> ?: listOf()
-                    admins.forEachIndexed { aIdx, admin ->
-                        Row(modifier = Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Surface(
-                                onClick = { showTimePickerForMed = mIdx to aIdx },
-                                color = customColors.inputBackground,
-                                shape = RoundedCornerShape(12.dp),
-                                border = BorderStroke(1.dp, if (isDark) Color.White.copy(alpha = 0.2f) else Color.Black.copy(alpha = 0.1f)),
-                                modifier = Modifier.weight(1f).height(50.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center, modifier = Modifier.padding(horizontal = 8.dp)) {
-                                    Icon(Icons.Default.Schedule, null, tint = accentColor, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = admin["hora"]?.ifEmpty { "Hora" } ?: "Hora",
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                        color = if (admin["hora"].isNullOrEmpty()) textColor.copy(alpha = 0.4f) else textColor
+
+                    // Sección de Alimentación
+                    HardShadowPanel(
+                        backgroundColor = cardColor,
+                        shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
+                        cornerRadius = 24.dp,
+                        contentPadding = PaddingValues(20.dp)
+                    ) {
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Restaurant, null, tint = accentColor, modifier = Modifier.size(24.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text("PLAN DE ALIMENTACIÓN", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = textColor)
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                            
+                            val comidas = tareasTemporales.filter { it.tipo == TipoTarea.COMIDA }
+                            if (comidas.isEmpty()) {
+                                Text("No hay comidas programadas.", style = MaterialTheme.typography.bodySmall, color = textColor.copy(alpha = 0.6f))
+                            } else {
+                                comidas.forEach { tarea ->
+                                    TaskItemCard(
+                                        tarea = tarea, 
+                                        onDelete = { viewModel.deleteTareaPlantilla(tarea.id) },
+                                        onEdit = { editingTarea = tarea },
+                                        accentColor = accentColor
                                     )
                                 }
                             }
-
-                            CuidaleTextField(
-                                value = admin["dosis"] ?: "",
-                                onValueChange = { v ->
-                                    val nl = medicamentos.toMutableList()
-                                    val nm = nl[mIdx].toMutableMap()
-                                    val na = (nm["administraciones"] as? List<Map<String, String>>)?.toMutableList() ?: mutableListOf()
-                                    val nad = na[aIdx].toMutableMap()
-                                    nad["dosis"] = v
-                                    na[aIdx] = nad
-                                    nm["administraciones"] = na
-                                    nl[mIdx] = nm
-                                    onMedicamentosChange(nl)
-                                },
-                                placeholder = "Dosis",
-                                modifier = Modifier.weight(1.5f),
-                                containerColor = customColors.inputBackground,
-                                textColor = textColor
+                            Spacer(modifier = Modifier.height(16.dp))
+                            HardShadowButton(
+                                text = "AÑADIR COMIDA",
+                                icon = Icons.Default.Add,
+                                onClick = { showTaskDialogByTipo = TipoTarea.COMIDA },
+                                containerColor = accentColor,
+                                contentColor = Color.White,
+                                shadowColor = shadowPalette.hardShadowPrimary,
+                                isDark = isDark
                             )
-                            
-                            if (admins.size > 1) {
-                                IconButton(onClick = {
-                                    val nl = medicamentos.toMutableList()
-                                    val nm = nl[mIdx].toMutableMap()
-                                    val na = (nm["administraciones"] as? List<Map<String, String>>)?.toMutableList() ?: mutableListOf()
-                                    na.removeAt(aIdx)
-                                    nm["administraciones"] = na
-                                    nl[mIdx] = nm
-                                    onMedicamentosChange(nl)
-                                }, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.RemoveCircleOutline, "Remover", tint = textColor.copy(alpha = 0.4f)) }
-                            }
                         }
                     }
-                    TextButton(onClick = {
-                        val nl = medicamentos.toMutableList()
-                        val nm = nl[mIdx].toMutableMap()
-                        val na = (nm["administraciones"] as? List<Map<String, String>>)?.toMutableList() ?: mutableListOf()
-                        na.add(mapOf("hora" to "", "dosis" to ""))
-                        nm["administraciones"] = na
-                        nl[mIdx] = nm
-                        onMedicamentosChange(nl)
-                    }, modifier = Modifier.padding(top = 4.dp)) {
-                        Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp), tint = accentColor)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("AGREGAR HORARIO", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = accentColor)
+
+                    // Sección de Medicamentos
+                    HardShadowPanel(
+                        backgroundColor = cardColor,
+                        shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
+                        cornerRadius = 24.dp,
+                        contentPadding = PaddingValues(20.dp)
+                    ) {
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Medication, null, tint = accentColor, modifier = Modifier.size(24.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text("MEDICAMENTOS", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = textColor)
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                            
+                            val meds = tareasTemporales.filter { it.tipo == TipoTarea.MEDICACION }
+                            if (meds.isEmpty()) {
+                                Text("No hay medicamentos registrados.", style = MaterialTheme.typography.bodySmall, color = textColor.copy(alpha = 0.6f))
+                            } else {
+                                meds.forEach { tarea ->
+                                    TaskItemCard(
+                                        tarea = tarea, 
+                                        onDelete = { viewModel.deleteTareaPlantilla(tarea.id) },
+                                        onEdit = { editingTarea = tarea },
+                                        accentColor = accentColor
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                            HardShadowButton(
+                                text = "AÑADIR MEDICAMENTO",
+                                icon = Icons.Default.Add,
+                                onClick = { showTaskDialogByTipo = TipoTarea.MEDICACION },
+                                containerColor = accentColor,
+                                contentColor = Color.White,
+                                shadowColor = shadowPalette.hardShadowPrimary,
+                                isDark = isDark
+                            )
+                        }
+                    }
+
+                    // Otras Actividades
+                    HardShadowPanel(
+                        backgroundColor = cardColor,
+                        shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
+                        cornerRadius = 24.dp,
+                        contentPadding = PaddingValues(20.dp)
+                    ) {
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Assignment, null, tint = accentColor, modifier = Modifier.size(24.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text("OTRAS ACTIVIDADES", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = textColor)
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                            
+                            val otras = tareasTemporales.filter { it.tipo != TipoTarea.COMIDA && it.tipo != TipoTarea.MEDICACION }
+                            if (otras.isEmpty()) {
+                                Text("No hay otras actividades.", style = MaterialTheme.typography.bodySmall, color = textColor.copy(alpha = 0.6f))
+                            } else {
+                                otras.forEach { tarea ->
+                                    TaskItemCard(
+                                        tarea = tarea, 
+                                        onDelete = { viewModel.deleteTareaPlantilla(tarea.id) },
+                                        onEdit = { editingTarea = tarea },
+                                        accentColor = accentColor
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                            HardShadowButton(
+                                text = "AÑADIR ACTIVIDAD",
+                                icon = Icons.Default.Add,
+                                onClick = { showTaskDialogByTipo = TipoTarea.OTRO },
+                                containerColor = accentColor,
+                                contentColor = Color.White,
+                                shadowColor = shadowPalette.hardShadowPrimary,
+                                isDark = isDark
+                            )
+                        }
+                    }
+
+                    if (showTaskDialogByTipo != null || editingTarea != null) {
+                        TaskCreationDialog(
+                            onDismiss = { 
+                                showTaskDialogByTipo = null
+                                editingTarea = null
+                            },
+                            onConfirm = { 
+                                viewModel.saveTareaPlantilla(it)
+                                showTaskDialogByTipo = null
+                                editingTarea = null
+                            },
+                            accentColor = accentColor,
+                            defaultType = showTaskDialogByTipo ?: TipoTarea.OTRO,
+                            initialTarea = editingTarea
+                        )
+                    }
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        HardShadowButton(
+                            text = "VOLVER",
+                            onClick = { step = 2 },
+                            modifier = Modifier.weight(1f).height(58.dp),
+                            containerColor = if (isDark) Color.White.copy(alpha = 0.1f) else Color(0xFFF5F5F5),
+                            contentColor = if (isDark) Color.White else Color.DarkGray,
+                            shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = if (isDark) 0.15f else 0.1f),
+                            isDark = isDark
+                        )
+                        HardShadowButton(
+                            text = "FINALIZAR",
+                            onClick = {
+                                viewModel.createFamilyFicha(
+                                    nombreCompleto, edad, genero, vivesConFamiliar, 
+                                    region, comuna, calle, numero, depto, 
+                                    nivelDependencia, movilidad, comunicacion, 
+                                    discapacidades, discapacidadOtro, enfermedades, enfermedadOtro, 
+                                    condicionesExtra,
+                                    selectedCommunesPref, selectedHorariosPref,
+                                    onSuccess = onFinishSuccess
+                                )
+                            },
+                            modifier = Modifier.weight(1.5f).height(58.dp),
+                            containerColor = accentColor,
+                            contentColor = Color.White,
+                            shadowColor = shadowPalette.hardShadowPrimary,
+                            isDark = isDark
+                        )
                     }
                 }
             }
         }
-        
-        HardShadowButton(
-            text = "AÑADIR MEDICAMENTO",
-            onClick = { onMedicamentosChange(medicamentos + mapOf("nombre" to "", "administraciones" to listOf(mapOf("hora" to "", "dosis" to "")), "observaciones" to "")) },
-            containerColor = accentColor,
-            contentColor = Color.White,
-            shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = if (isDark) 0.2f else 0.3f),
-            icon = Icons.Default.Add,
-            isDark = isDark
-        )
     }
 }
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

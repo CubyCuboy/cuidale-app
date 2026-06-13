@@ -7,7 +7,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -43,6 +43,7 @@ fun ReviewSolicitudScreen(
 ) {
     val scrollState = rememberScrollState()
     var patientFicha by remember { mutableStateOf<Map<String, Any>?>(null) }
+    var patientTareas by remember { mutableStateOf<List<com.example.cuidaleapp.models.Tarea>>(emptyList()) }
     var isLoadingFicha by remember { mutableStateOf(true) }
     var showFinishConfirm by remember { mutableStateOf(false) }
 
@@ -68,9 +69,17 @@ fun ReviewSolicitudScreen(
 
     LaunchedEffect(solicitud.pacienteFichaId) {
         try {
-            val doc = FirebaseFirestore.getInstance().collection("fichas")
+            val db = FirebaseFirestore.getInstance()
+            val doc = db.collection("fichas")
                 .document(solicitud.pacienteFichaId).get().await()
             patientFicha = doc.data
+            
+            val tasksSnapshot = db.collection("fichas")
+                .document(solicitud.pacienteFichaId)
+                .collection("tareas_plantilla")
+                .whereEqualTo("activa", true)
+                .get().await()
+            patientTareas = tasksSnapshot.toObjects(com.example.cuidaleapp.models.Tarea::class.java)
         } catch (e: Exception) { } finally {
             isLoadingFicha = false
         }
@@ -204,22 +213,20 @@ fun ReviewSolicitudScreen(
                     }
                 }
 
-                // 6. Meds and Diet (Only if accepted)
-                if (isAccepted) {
+                // 6. Tasks (Only if accepted)
+                if (isAccepted && patientTareas.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(16.dp))
-                    MedicationListPanel(
-                        value = patientFicha!!["medicamentos"],
-                        accentColor = MaterialTheme.colorScheme.primary,
-                        textColor = textColor,
-                        secondaryTextColor = secondaryTextColor
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    DietListPanel(
-                        value = patientFicha!!["dieta"],
-                        accentColor = MaterialTheme.colorScheme.primary,
-                        textColor = textColor,
-                        secondaryTextColor = secondaryTextColor
-                    )
+                    Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.AutoMirrored.Filled.ListAlt, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("RÉGIMEN DE TAREAS", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = secondaryTextColor)
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        patientTareas.forEach { tarea ->
+                            TaskItemCardInView(tarea, MaterialTheme.colorScheme.primary, textColor, secondaryTextColor)
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))

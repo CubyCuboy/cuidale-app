@@ -181,6 +181,7 @@ fun ProfileDetailView(
     isSummary: Boolean = false,
     isExternal: Boolean = false,
     showEditButton: Boolean = !isExternal,
+    tareasPlantilla: List<Tarea> = emptyList(),
     onEdit: () -> Unit,
     onExpand: (() -> Unit)? = null
 ) {
@@ -192,7 +193,7 @@ fun ProfileDetailView(
             onEdit = onEdit
         )
     } else {
-        FullProfileDetailView(role, data, isEditMode, isExternal, showEditButton, onEdit, onExpand)
+        FullProfileDetailView(role, data, isEditMode, isExternal, showEditButton, tareasPlantilla, onEdit, onExpand)
     }
 }
 
@@ -356,6 +357,7 @@ fun FullProfileDetailView(
     isEditMode: Boolean = false,
     isExternal: Boolean = false,
     showEditButton: Boolean = !isExternal,
+    tareasPlantilla: List<Tarea> = emptyList(),
     onEdit: () -> Unit,
     onExpand: (() -> Unit)? = null
 ) {
@@ -407,10 +409,8 @@ fun FullProfileDetailView(
                 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = textColor.copy(alpha = if (customColors.isDark) 0.2f else 0.08f))
                 
-                val excludedKeys = mutableSetOf("fotos", "tipo", "ultima_actualizacion", "horarios", "comunas", "horarios_preferencia", "comunas_preferencia")
+                val excludedKeys = mutableSetOf("fotos", "tipo", "ultima_actualizacion", "horarios", "comunas", "horarios_preferencia", "comunas_preferencia", "dieta", "medicamentos")
                 if (isExternal) {
-                    excludedKeys.add("medicamentos")
-                    excludedKeys.add("dieta")
                     excludedKeys.add("calle")
                     excludedKeys.add("numero")
                     excludedKeys.add("depto")
@@ -421,8 +421,7 @@ fun FullProfileDetailView(
                 } else {
                     listOf(
                         "nombre_completo", "nivel_dependencia", "enfermedades", "edad",
-                        "movilidad", "comunicacion", "genero",
-                        "dieta", "medicamentos"
+                        "movilidad", "comunicacion", "genero"
                     )
                 }
 
@@ -430,6 +429,33 @@ fun FullProfileDetailView(
                 val sortedKeys = dataToShow.keys.sortedBy { key ->
                     val index = preferredOrder.indexOf(key)
                     if (index == -1) Int.MAX_VALUE else index
+                }
+
+                if (tareasPlantilla.isNotEmpty()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
+                            .background(textColor.copy(alpha = if (customColors.isDark) 0.08f else 0.03f), RoundedCornerShape(12.dp))
+                            .border(1.dp, textColor.copy(alpha = if (customColors.isDark) 0.15f else 0.06f), RoundedCornerShape(12.dp))
+                            .padding(12.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.AutoMirrored.Filled.ListAlt, null, tint = accentColor, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "RÉGIMEN DE TAREAS",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                color = secondaryTextColor
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        tareasPlantilla.forEach { tarea ->
+                            TaskItemCardInView(tarea, accentColor, textColor, secondaryTextColor)
+                        }
+                    }
                 }
 
                 sortedKeys.forEach { key ->
@@ -521,8 +547,6 @@ fun FullProfileDetailView(
                             } else {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     val sectionIcon = when(key) {
-                                        "dieta" -> Icons.Default.Restaurant
-                                        "medicamentos" -> Icons.Default.Medication
                                         "especializacion" -> Icons.Default.School
                                         "experiencia" -> Icons.Default.History
                                         "comunas", "region", "comuna" -> Icons.Default.Place
@@ -545,115 +569,7 @@ fun FullProfileDetailView(
                                 
                                 Spacer(modifier = Modifier.height(6.dp))
 
-                                if (key == "medicamentos" && value is List<*>) {
-                                    value.forEach { med ->
-                                        val m = med as Map<*, *>
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(bottom = 12.dp)
-                                                .background(textColor.copy(alpha = if (customColors.isDark) 0.15f else 0.03f), RoundedCornerShape(12.dp))
-                                                .border(1.dp, textColor.copy(alpha = if (customColors.isDark) 0.1f else 0.05f), RoundedCornerShape(12.dp))
-                                                .padding(12.dp)
-                                        ) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(Icons.Default.Medication, contentDescription = null, tint = accentColor, modifier = Modifier.size(16.dp))
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text(
-                                                    text = m["nombre"].toString(),
-                                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                                                    color = textColor
-                                                )
-                                            }
-                                            Spacer(modifier = Modifier.height(8.dp))
-                                            val admins = m["administraciones"] as? List<Map<String, String>>
-                                            if (admins != null) {
-                                                admins.forEach { admin ->
-                                                    Row(
-                                                        modifier = Modifier.padding(bottom = 4.dp),
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        Icon(Icons.Default.Schedule, contentDescription = null, tint = secondaryTextColor, modifier = Modifier.size(14.dp))
-                                                        Spacer(modifier = Modifier.width(6.dp))
-                                                        Text(
-                                                            text = "${admin["hora"]} — ${admin["dosis"]}",
-                                                            style = MaterialTheme.typography.bodyMedium,
-                                                            color = textColor
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                            if ((m["observaciones"] as? String)?.isNotBlank() == true) {
-                                                Spacer(modifier = Modifier.height(4.dp))
-                                                Surface(
-                                                    color = accentColor.copy(alpha = 0.2f),
-                                                    shape = RoundedCornerShape(8.dp)
-                                                ) {
-                                                    Text(
-                                                        text = "Nota: ${m["observaciones"]}",
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = textColor,
-                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                } else if (key == "dieta" && value is Map<*, *>) {
-                                    value.entries.filter { entry ->
-                                        val v = entry.value
-                                        when (v) {
-                                            is String -> v.isNotBlank()
-                                            is Map<*, *> -> (v["indicaciones"] as? String)?.isNotBlank() == true || (v["hora"] as? String)?.isNotBlank() == true
-                                            else -> false
-                                        }
-                                    }.forEach { entry ->
-                                        val v = entry.value
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(bottom = 12.dp)
-                                                .background(textColor.copy(alpha = if (customColors.isDark) 0.15f else 0.03f), RoundedCornerShape(12.dp))
-                                                .border(1.dp, textColor.copy(alpha = if (customColors.isDark) 0.1f else 0.05f), RoundedCornerShape(12.dp))
-                                                .padding(12.dp)
-                                        ) {
-                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                                                Text(
-                                                    text = entry.key.toString().replace("_", " ").uppercase(),
-                                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Black),
-                                                    color = accentColor
-                                                )
-                                                
-                                                if (v is Map<*, *>) {
-                                                    val hora = v["hora"] as? String ?: ""
-                                                    if (hora.isNotBlank()) {
-                                                        Surface(color = accentColor.copy(alpha = 0.1f), shape = CircleShape) {
-                                                            Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                                                                Icon(Icons.Default.Schedule, null, tint = accentColor, modifier = Modifier.size(12.dp))
-                                                                Spacer(modifier = Modifier.width(4.dp))
-                                                                Text(hora, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = accentColor)
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                            
-                                            val indicaciones = when(v) {
-                                                is String -> v
-                                                is Map<*, *> -> v["indicaciones"] as? String ?: ""
-                                                else -> ""
-                                            }
-                                            if (indicaciones.isNotBlank()) {
-                                                Spacer(modifier = Modifier.height(4.dp))
-                                                Text(
-                                                    text = indicaciones,
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    color = textColor
-                                                )
-                                            }
-                                        }
-                                    }
-                                } else {
+                                if (displayValue.isNotBlank()) {
                                     Text(
                                         text = displayValue,
                                         style = MaterialTheme.typography.bodyLarge,
@@ -1185,8 +1101,7 @@ fun CuidaleMultiSelectDropdown(
                     DropdownMenuItem(
                         text = { Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(checked = isSelected, onCheckedChange = null); Spacer(modifier = Modifier.width(8.dp)); Text(text = option, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface) } },
                         onClick = { if (isSelected || selectedOptions.size < maxSelection) onOptionToggled(option) },
-                        contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
-                    )
+                        contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding)
                 }
             }
         }
@@ -1325,141 +1240,7 @@ fun CuidaleUserCard(nombre: String, apellido: String, fotoUrl: String, comuna: S
     }
 }
 
-@Composable
-fun MedicationListPanel(value: Any?, accentColor: Color, textColor: Color, secondaryTextColor: Color) {
-    if (value !is List<*> || value.isEmpty()) return
-    
-    val customColors = CuidaleThemeExtras.customColors
-    HardShadowPanel(
-        backgroundColor = customColors.panelBackground,
-        shadowColor = Color.Black.copy(alpha = 0.05f)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Medication, null, tint = accentColor, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("MEDICAMENTOS", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = secondaryTextColor)
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            value.forEach { med ->
-                val m = med as Map<*, *>
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp)
-                        .background(textColor.copy(alpha = if (customColors.isDark) 0.15f else 0.03f), RoundedCornerShape(12.dp))
-                        .border(1.dp, textColor.copy(alpha = if (customColors.isDark) 0.1f else 0.05f), RoundedCornerShape(12.dp))
-                        .padding(12.dp)
-                ) {
-                    Text(text = m["nombre"].toString(), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = textColor)
-                    val admins = m["administraciones"] as? List<Map<String, String>>
-                    admins?.forEach { admin ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Schedule, null, tint = secondaryTextColor, modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(text = "${admin["hora"]} — ${admin["dosis"]}", style = MaterialTheme.typography.bodyMedium, color = textColor)
-                        }
-                    }
-                    if ((m["observaciones"] as? String)?.isNotBlank() == true) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Surface(
-                            color = accentColor.copy(alpha = 0.1f),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text(
-                                text = "Nota: ${m["observaciones"]}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = textColor,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
-@Composable
-fun DietListPanel(value: Any?, accentColor: Color, textColor: Color, secondaryTextColor: Color) {
-    if (value !is Map<*, *> || value.isEmpty()) return
-    
-    val customColors = CuidaleThemeExtras.customColors
-    
-    // Filtrar entradas vacías
-    val activeEntries = value.entries.filter { entry ->
-        val v = entry.value
-        when (v) {
-            is String -> v.isNotBlank()
-            is Map<*, *> -> (v["indicaciones"] as? String)?.isNotBlank() == true || (v["hora"] as? String)?.isNotBlank() == true
-            else -> false
-        }
-    }
-    
-    if (activeEntries.isEmpty()) return
-
-    HardShadowPanel(
-        backgroundColor = customColors.panelBackground,
-        shadowColor = Color.Black.copy(alpha = 0.05f)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Restaurant, null, tint = accentColor, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("PLAN DE ALIMENTACIÓN", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = secondaryTextColor)
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            activeEntries.forEach { entry ->
-                val v = entry.value
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp)
-                        .background(textColor.copy(alpha = if (customColors.isDark) 0.15f else 0.03f), RoundedCornerShape(12.dp))
-                        .border(1.dp, textColor.copy(alpha = if (customColors.isDark) 0.1f else 0.05f), RoundedCornerShape(12.dp))
-                        .padding(12.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            text = entry.key.toString().replace("_", " ").uppercase(),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Black,
-                            color = accentColor
-                        )
-                        
-                        if (v is Map<*, *>) {
-                            val hora = v["hora"] as? String ?: ""
-                            if (hora.isNotBlank()) {
-                                Surface(
-                                    color = accentColor.copy(alpha = 0.1f),
-                                    shape = CircleShape
-                                ) {
-                                    Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.Schedule, null, tint = accentColor, modifier = Modifier.size(12.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(hora, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = accentColor)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    Spacer(modifier = Modifier.height(4.dp))
-                    
-                    val indicaciones = when (v) {
-                        is String -> v
-                        is Map<*, *> -> v["indicaciones"] as? String ?: ""
-                        else -> ""
-                    }
-                    
-                    if (indicaciones.isNotBlank()) {
-                        Text(text = indicaciones, style = MaterialTheme.typography.bodyMedium, color = textColor)
-                    }
-                }
-            }
-        }
-    }
-}
 
 @Composable
 fun CuidaleDetailRow(icon: ImageVector, label: String, value: String, modifier: Modifier = Modifier) {
@@ -1503,6 +1284,69 @@ private fun BottomNavItem(icon: ImageVector, isSelected: Boolean, onClick: () ->
     Box(modifier = Modifier.size(if (isCenter) 52.dp else 44.dp).graphicsLayer(scaleX = scale, scaleY = scale).clip(RoundedCornerShape(if (isCenter) 16.dp else 12.dp)).background(backgroundColor).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
         BadgedBox(badge = { if (badgeCount > 0) Badge(containerColor = Color.Red, contentColor = Color.White, modifier = Modifier.offset(x = 4.dp, y = (-4).dp)) { Text(if (badgeCount > 99) "+99" else badgeCount.toString(), style = MaterialTheme.typography.labelSmall) } }) {
             Icon(imageVector = icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(if (isCenter) 28.dp else 24.dp))
+        }
+    }
+}
+
+@Composable
+fun TaskItemCardInView(tarea: Tarea, accentColor: Color, textColor: Color, secondaryTextColor: Color) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .background(accentColor.copy(alpha = 0.1f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = getIconForTaskType(tarea.tipo),
+                contentDescription = null,
+                tint = accentColor,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column {
+            Text(tarea.titulo, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = textColor)
+            Text("${tarea.horarioInicio} — ${getFrecuenciaText(tarea)}", style = MaterialTheme.typography.labelSmall, color = secondaryTextColor)
+        }
+    }
+}
+
+@Composable
+fun CuidaleTimePickerDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Seleccionar hora",
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp)
+                )
+                content()
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) { Text("CANCELAR") }
+                    TextButton(onClick = onConfirm) { Text("ACEPTAR") }
+                }
+            }
         }
     }
 }

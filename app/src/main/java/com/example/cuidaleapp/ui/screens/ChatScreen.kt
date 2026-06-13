@@ -16,9 +16,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Reply
-import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -83,9 +81,12 @@ fun ChatScreen(
     val noDeseados by favoritosViewModel?.noDeseados?.collectAsState() ?: remember { mutableStateOf(emptyList<String>()) }
     
     var showShareRequests by remember { mutableStateOf(false) }
+    var showShareTasks by remember { mutableStateOf(false) }
     var myRequests by remember { mutableStateOf<List<SolicitudCuidado>>(emptyList()) }
+    var activeSolicitud by remember { mutableStateOf<SolicitudCuidado?>(null) }
+    var activeTasks by remember { mutableStateOf<List<com.example.cuidaleapp.models.RegistroTarea>>(emptyList()) }
     
-    LaunchedEffect(showShareRequests) {
+    LaunchedEffect(showShareRequests, showShareTasks) {
         if (showShareRequests && myRole == "representante") {
             try {
                 val snapshot = FirebaseFirestore.getInstance().collection("solicitudes")
@@ -93,6 +94,29 @@ fun ChatScreen(
                     .whereEqualTo("estado", "abierta")
                     .get().await()
                 myRequests = snapshot.toObjects(SolicitudCuidado::class.java)
+            } catch (e: Exception) {}
+        }
+        
+        if (showShareTasks) {
+            try {
+                // Buscar solicitud activa entre ambos
+                val snapshot = FirebaseFirestore.getInstance().collection("solicitudes")
+                    .whereIn("representanteUid", listOf(myUid, otherUser.uid))
+                    .whereIn("cuidadorUid", listOf(myUid, otherUser.uid))
+                    .whereEqualTo("estado", "cerrada")
+                    .limit(1)
+                    .get().await()
+                
+                activeSolicitud = snapshot.toObjects(SolicitudCuidado::class.java).firstOrNull()
+                
+                activeSolicitud?.let { sol ->
+                    val tasksSnapshot = FirebaseFirestore.getInstance()
+                        .collection("solicitudes").document(sol.id)
+                        .collection("registros_tareas")
+                        .whereEqualTo("fecha", SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()))
+                        .get().await()
+                    activeTasks = tasksSnapshot.toObjects(com.example.cuidaleapp.models.RegistroTarea::class.java)
+                }
             } catch (e: Exception) {}
         }
     }
@@ -238,6 +262,18 @@ fun ChatScreen(
                 actions = {
                     if (selectedMessages.isNotEmpty()) {
                         val allFromMe = selectedMessages.all { it.senderId == myUid }
+                        
+                        if (selectedMessages.size == 1 && selectedMessages.first().senderId == myUid && !selectedMessages.first().deleted) {
+                            IconButton(onClick = {
+                                val msg = selectedMessages.first()
+                                messageToEdit = msg
+                                inputText = msg.text
+                                selectedMessages.clear()
+                            }) {
+                                Icon(Icons.Default.Edit, contentDescription = "Editar")
+                            }
+                        }
+
                         if (allFromMe) {
                             IconButton(onClick = { showDeleteConfirmDialog = true }) { 
                                 Icon(Icons.Default.Delete, null, tint = Color.Red) 
@@ -598,10 +634,17 @@ fun ChatScreen(
                                 },
                                 placeholder = { Text(if (messageToEdit != null) "EDITANDO MENSAJE..." else "Mensajear con @${otherUser.nombre}", color = if (isDark) Color.White.copy(alpha = 0.5f) else Color.Gray) },
                                 modifier = Modifier.weight(1f).clip(RoundedCornerShape(24.dp)),
-                                leadingIcon = if (myRole == "representante" && messageToEdit == null) {
+                                leadingIcon = if (messageToEdit == null) {
                                     {
-                                        IconButton(onClick = { showShareRequests = true }) {
-                                            Icon(Icons.Default.AddCircle, null, tint = customColors.linkColor)
+                                        IconButton(onClick = { 
+                                            if (myRole == "representante") showShareRequests = true
+                                            else showShareTasks = true
+                                        }) {
+                                            Icon(
+                                                if (myRole == "representante") Icons.Default.AddCircle else Icons.Default.Assignment,
+                                                null, 
+                                                tint = customColors.linkColor
+                                            )
                                         }
                                     }
                                 } else null,
@@ -827,6 +870,57 @@ fun ChatScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+
+    if (showShareTasks) {
+        ModalBottomSheet(
+            onDismissRequest = { showShareTasks = false },
+            containerColor = if (isDark) Color(0xFF1E1F22) else Color.White
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                Text("Compartir tarea del día", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                if (activeTasks.isEmpty()) {
+                    Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                        Text("No hay tareas programadas para hoy.", color = Color.Gray)
+                    }
+                } else {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxHeight(0.5f)) {
+                        items(activeTasks) { reg ->
+                            Card(
+                                onClick = {
+                                    val statusText = if (reg.completada) "COMPLETADA" else "PENDIENTE"
+                                    viewModel.sendMessage(
+                                        chatId = chatId,
+                                        text = "Sobre la tarea: ${reg.titulo} (${reg.horarioPrevisto}) - Estado: $statusText",
+                                        type = "tarea_compartida",
+                                        metadata = mapOf("tareaId" to reg.id, "solicitudId" to reg.solicitudId)
+                                    )
+                                    showShareTasks = false
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        if (reg.completada) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                        null,
+                                        tint = if (reg.completada) Color(0xFF4CAF50) else Color.Gray
+                                    )
+                                    Spacer(Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(reg.titulo, fontWeight = FontWeight.Bold)
+                                        Text("Hora: ${reg.horarioPrevisto}", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                    Icon(Icons.AutoMirrored.Filled.Send, null, tint = customColors.linkColor)
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(32.dp))
             }
         }
     }
@@ -1198,25 +1292,34 @@ fun ChatBubble(
                             if (msg.text.isNotBlank()) Spacer(modifier = Modifier.height(4.dp))
                         }
                         if (msg.text.isNotBlank()) {
-                            if (msg.type == "aviso_postulacion" || msg.type == "solicitud_compartida") {
-                                RequestAlertBubble(
-                                    msg = msg,
-                                    isMe = isMe,
-                                    onViewClick = { onViewPostulacion(msg.metadata["solicitudId"] ?: "") }
-                                )
-                            } else {
-                                Text(
-                                    text = buildAnnotatedString {
-                                        append(msg.text)
-                                        if (msg.edited) {
-                                            withStyle(SpanStyle(fontSize = 10.sp, color = textColor.copy(alpha = 0.5f))) {
-                                                append(" (editado)")
+                            when (msg.type) {
+                                "aviso_postulacion", "solicitud_compartida" -> {
+                                    RequestAlertBubble(
+                                        msg = msg,
+                                        isMe = isMe,
+                                        onViewClick = { onViewPostulacion(msg.metadata["solicitudId"] ?: "") }
+                                    )
+                                }
+                                "tarea_compartida" -> {
+                                    TaskSharedBubble(
+                                        text = msg.text,
+                                        isMe = isMe
+                                    )
+                                }
+                                else -> {
+                                    Text(
+                                        text = buildAnnotatedString {
+                                            append(msg.text)
+                                            if (msg.edited) {
+                                                withStyle(SpanStyle(fontSize = 10.sp, color = textColor.copy(alpha = 0.5f))) {
+                                                    append(" (editado)")
+                                                }
                                             }
-                                        }
-                                    },
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = textColor
-                                )
+                                        },
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = textColor
+                                    )
+                                }
                             }
                         }
                     }
@@ -1460,6 +1563,40 @@ private fun formatMessageDate(timestamp: Long): String {
         }
         else -> {
             SimpleDateFormat("d MMM yyyy, HH:mm", Locale.getDefault()).format(Date(timestamp))
+        }
+    }
+}
+
+@Composable
+fun TaskSharedBubble(
+    text: String,
+    isMe: Boolean
+) {
+    val accentColor = if (isMe) Color.White else MaterialTheme.colorScheme.primary
+    val bg = if (isMe) Color.Black.copy(alpha = 0.1f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+    
+    Surface(
+        color = bg,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.padding(vertical = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.AutoMirrored.Filled.ListAlt,
+                null,
+                tint = accentColor,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (isMe) Color.White else MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }
