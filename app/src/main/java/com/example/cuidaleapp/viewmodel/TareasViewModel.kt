@@ -6,10 +6,14 @@ import com.example.cuidaleapp.models.*
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.FieldValue
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import com.example.cuidaleapp.utils.NotificationHelper
+import android.content.Context
+import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -24,6 +28,65 @@ class TareasViewModel : ViewModel() {
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
+
+    private var monitoringJob: kotlinx.coroutines.Job? = null
+
+    fun iniciarMonitoreoTareas(context: Context) {
+        monitoringJob?.cancel()
+        monitoringJob = viewModelScope.launch {
+            while (true) {
+                verificarRecordatorios(context)
+                delay(60000) // Verificar cada minuto
+            }
+        }
+    }
+
+    private fun verificarRecordatorios(context: Context) {
+        val ahora = Calendar.getInstance()
+        val horaActual = ahora.get(Calendar.HOUR_OF_DAY)
+        val minutoActual = ahora.get(Calendar.MINUTE)
+        
+        _tareasHoy.value.forEach { tarea ->
+            if (tarea.completada) return@forEach
+            
+            val partes = tarea.horarioPrevisto.split(":")
+            if (partes.size != 2) return@forEach
+            
+            val horaTarea = partes[0].toInt()
+            val minutoTarea = partes[1].toInt()
+            
+            val calendarTarea = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, horaTarea)
+                set(Calendar.MINUTE, minutoTarea)
+                set(Calendar.SECOND, 0)
+            }
+            
+            val diffMillis = calendarTarea.timeInMillis - ahora.timeInMillis
+            val diffMinutes = diffMillis / 60000
+            
+            // Recordatorio 15 minutos antes
+            if (diffMinutes in 14..15) {
+                NotificationHelper.showNotification(
+                    context, 
+                    "Tarea Próxima: ${tarea.titulo}",
+                    "Inicia en 15 minutos (${tarea.horarioPrevisto})"
+                )
+            }
+            
+            // Recordatorio de tarea pendiente (cada 30 min de retraso)
+            if (diffMinutes < 0) {
+                val delayMinutes = -diffMinutes
+                if (delayMinutes > 0 && delayMinutes % 30 == 0L) {
+                    NotificationHelper.showNotification(
+                        context,
+                        "Tarea Pendiente: ${tarea.titulo}",
+                        "Debía realizarse a las ${tarea.horarioPrevisto}. Sigue pendiente."
+                    )
+                }
+            }
+        }
+    }
+
 
     private var tareasListener: ListenerRegistration? = null
     private var registrosListener: ListenerRegistration? = null
@@ -54,12 +117,18 @@ class TareasViewModel : ViewModel() {
     }
 
     fun agregarTareaAPlantilla(pacienteFichaId: String, tarea: Tarea) {
+        if (pacienteFichaId.isEmpty()) {
+            _error.value = "ID de ficha no válido"
+            return
+        }
         viewModelScope.launch {
             try {
                 db.collection("fichas").document(pacienteFichaId)
                     .collection("tareas_plantilla").document(tarea.id)
                     .set(tarea).await()
-            } catch (e: Exception) {}
+            } catch (e: Exception) {
+                _error.value = "Error al guardar en ficha: ${e.localizedMessage}"
+            }
         }
     }
 
@@ -67,6 +136,16 @@ class TareasViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 val today = getTodayDate()
+                
+                // Evitar duplicados para la misma tarea el mismo día
+                val existing = db.collection("solicitudes").document(solicitudId)
+                    .collection("registros_tareas")
+                    .whereEqualTo("tareaId", tarea.id)
+                    .whereEqualTo("fecha", today)
+                    .get().await()
+                
+                if (!existing.isEmpty) return@launch
+
                 val regId = UUID.randomUUID().toString()
                 val registro = RegistroTarea(
                     id = regId,
@@ -75,29 +154,82 @@ class TareasViewModel : ViewModel() {
                     fecha = today,
                     horarioPrevisto = tarea.horarioInicio,
                     titulo = tarea.titulo,
-                    tipo = tarea.tipo
+                    tipo = tarea.tipo,
+                    descripcion = tarea.descripcion,
+                    frecuencia = tarea.frecuencia
                 )
                 db.collection("solicitudes").document(solicitudId)
                     .collection("registros_tareas").document(regId)
                     .set(registro).await()
-            } catch (e: Exception) {}
+            } catch (e: Exception) {
+                _error.value = "Error al guardar tarea de hoy: ${e.localizedMessage}"
+            }
         }
     }
 
-    fun marcarTareaCompletada(solicitudId: String, registroId: String, completada: Boolean, userId: String, notas: String = "") {
+    fun marcarTareaCompletada(solicitudId: String, registroId: String, completada: Boolean, userId: String, notas: String = "", titulo: String = "", otherUid: String = "") {
         viewModelScope.launch {
             try {
-                val updates = mapOf(
+                val ahora = Timestamp.now()
+                val updates = mutableMapOf<String, Any?>(
                     "completada" to completada,
                     "completadaPor" to if (completada) userId else "",
-                    "fechaCompletado" to if (completada) Timestamp.now() else null,
+                    "fechaCompletado" to (if (completada) ahora else null),
                     "notas" to notas
                 )
                 db.collection("solicitudes").document(solicitudId)
                     .collection("registros_tareas").document(registroId)
                     .update(updates).await()
-            } catch (e: Exception) {}
+
+                if (completada && otherUid.isNotEmpty()) {
+                    val hora = SimpleDateFormat("HH:mm", Locale.getDefault()).format(ahora.toDate())
+                    enviarMensajeSistemaChat(userId, otherUid, "✅ Tarea finalizada ($hora): $titulo")
+                }
+            } catch (e: Exception) {
+                _error.value = "Error al marcar tarea: ${e.localizedMessage}"
+            }
         }
+    }
+
+    fun postergarTarea(solicitudId: String, registroId: String, motivo: String, userId: String, titulo: String, otherUid: String) {
+        viewModelScope.launch {
+            try {
+                val ahora = Timestamp.now()
+                val updates = mapOf(
+                    "postergada" to true,
+                    "motivoPostergacion" to motivo,
+                    "fechaPostergacion" to ahora,
+                    "completada" to false,
+                    "notas" to "Postergada: $motivo"
+                )
+                db.collection("solicitudes").document(solicitudId)
+                    .collection("registros_tareas").document(registroId)
+                    .update(updates).await()
+
+                if (otherUid.isNotEmpty()) {
+                    val hora = SimpleDateFormat("HH:mm", Locale.getDefault()).format(ahora.toDate())
+                    enviarMensajeSistemaChat(userId, otherUid, "⏳ Tarea postergada ($hora): $titulo\nMotivo: $motivo")
+                }
+            } catch (e: Exception) {
+                _error.value = "Error al postergar: ${e.localizedMessage}"
+            }
+        }
+    }
+
+    private fun enviarMensajeSistemaChat(myUid: String, otherUid: String, texto: String) {
+        val chatId = if (myUid < otherUid) "${myUid}_$otherUid" else "${otherUid}_$myUid"
+        val database = com.google.firebase.database.FirebaseDatabase.getInstance().reference
+        val msgRef = database.child("messages").child(chatId).push()
+        val msgId = msgRef.key ?: return
+        
+        val message = ChatMessage(
+            id = msgId,
+            senderId = "system",
+            text = texto,
+            timestamp = System.currentTimeMillis(),
+            readBy = mapOf(myUid to true)
+        )
+        msgRef.setValue(message)
     }
 
     fun generarInstanciasParaHoy(solicitudId: String, pacienteFichaId: String) {
@@ -108,47 +240,114 @@ class TareasViewModel : ViewModel() {
 
         viewModelScope.launch {
             try {
-                val existing = db.collection("solicitudes").document(solicitudId)
-                    .collection("registros_tareas")
-                    .whereEqualTo("fecha", today)
-                    .get().await()
-                
-                if (!existing.isEmpty) return@launch
+                // Evitar múltiples ejecuciones el mismo día para no re-crear lo borrado
+                val solRef = db.collection("solicitudes").document(solicitudId)
+                val solDoc = solRef.get().await()
+                if (solDoc.getString("ultimaGeneracion") == today) return@launch
 
-                val plantillas = db.collection("solicitudes").document(solicitudId)
-                    .collection("tareas_servicio")
+                // 1. Obtener tareas actuales del servicio
+                var plantillas = solRef.collection("tareas_servicio")
                     .get().await().toObjects(Tarea::class.java)
 
+                // 2. Solo importar de la ficha si es la PRIMERA vez (nunca se ha generado nada)
+                if (solDoc.getString("ultimaGeneracion") == null && plantillas.isEmpty() && pacienteFichaId.isNotEmpty()) {
+                    val fichaTareas = db.collection("fichas").document(pacienteFichaId)
+                        .collection("rutina_data").document("actual").get().await()
+                        .let { doc ->
+                            val list = doc.get("tareas") as? List<Map<String, Any>> ?: emptyList()
+                            list.map { map ->
+                                Tarea(
+                                    id = map["id"] as? String ?: "",
+                                    titulo = map["titulo"] as? String ?: "",
+                                    tipo = TipoTarea.valueOf(map["tipo"] as? String ?: "OTRO"),
+                                    horarioInicio = map["horarioInicio"] as? String ?: "",
+                                    frecuencia = FrecuenciaTarea.valueOf(map["frecuencia"] as? String ?: "DIARIA"),
+                                    descripcion = map["descripcion"] as? String ?: ""
+                                )
+                            }.filter { it.id.isNotEmpty() }
+                        }
+                    
+                    if (fichaTareas.isNotEmpty()) {
+                        val batchImport = db.batch()
+                        fichaTareas.forEach { t ->
+                            val ref = solRef.collection("tareas_servicio").document(t.id)
+                            batchImport.set(ref, t)
+                        }
+                        batchImport.commit().await()
+                        plantillas = fichaTareas
+                    }
+                }
+
+                // 3. Filtrar cuáles deben ejecutarse HOY
+                val monthOfYear = calendar.get(Calendar.MONTH) + 1
                 val tareasParaHoy = plantillas.filter { tarea ->
                     when (tarea.frecuencia) {
-                        FrecuenciaTarea.DIARIA, FrecuenciaTarea.INDEFINIDA -> true
+                        FrecuenciaTarea.DIARIA -> true
                         FrecuenciaTarea.SEMANAL -> {
                             val adjustDay = if (dayOfWeek == 1) 7 else dayOfWeek - 1
                             tarea.diasSeleccionados.contains(adjustDay)
                         }
-                        FrecuenciaTarea.MENSUAL -> tarea.diasSeleccionados.contains(dayOfMonth)
+                        FrecuenciaTarea.MENSUAL -> {
+                            val monthApplies = tarea.mesesSeleccionados.isEmpty() || tarea.mesesSeleccionados.contains(monthOfYear)
+                            monthApplies && tarea.diasSeleccionados.contains(dayOfMonth)
+                        }
                         FrecuenciaTarea.UNA_VEZ -> tarea.fechaEspecifica == today
                     }
                 }
 
+                // 4. Obtener registros que YA existen para hoy
+                val existingRegistros = solRef.collection("registros_tareas")
+                    .whereEqualTo("fecha", today)
+                    .get().await().toObjects(RegistroTarea::class.java)
+
                 val batch = db.batch()
+                
+                // 5. Agregar solo las que NO existen o actualizar las existentes si cambiaron
                 tareasParaHoy.forEach { tarea ->
-                    val regId = UUID.randomUUID().toString()
-                    val registro = RegistroTarea(
-                        id = regId,
-                        tareaId = tarea.id,
-                        solicitudId = solicitudId,
-                        fecha = today,
-                        horarioPrevisto = tarea.horarioInicio,
-                        titulo = tarea.titulo,
-                        tipo = tarea.tipo
-                    )
-                    val ref = db.collection("solicitudes").document(solicitudId)
-                        .collection("registros_tareas").document(regId)
-                    batch.set(ref, registro)
+                    val existing = existingRegistros.find { it.tareaId == tarea.id }
+                    
+                    if (existing == null) {
+                        val regId = UUID.randomUUID().toString()
+                        val registro = RegistroTarea(
+                            id = regId,
+                            tareaId = tarea.id,
+                            solicitudId = solicitudId,
+                            fecha = today,
+                            horarioPrevisto = tarea.horarioInicio,
+                            titulo = tarea.titulo,
+                            tipo = tarea.tipo,
+                            descripcion = tarea.descripcion,
+                            frecuencia = tarea.frecuencia
+                        )
+                        val ref = solRef.collection("registros_tareas").document(regId)
+                        batch.set(ref, registro)
+                    } else if (!existing.completada) {
+                        val ref = solRef.collection("registros_tareas").document(existing.id)
+                        batch.update(ref, mapOf(
+                            "titulo" to tarea.titulo,
+                            "horarioPrevisto" to tarea.horarioInicio,
+                            "descripcion" to tarea.descripcion,
+                            "tipo" to tarea.tipo.name
+                        ))
+                    }
                 }
+                
+                // 6. Eliminar registros de hoy que ya no están en la plantilla y NO están completados
+                val plantillasIds = plantillas.map { it.id }
+                existingRegistros.forEach { reg ->
+                    if (!plantillasIds.contains(reg.tareaId) && !reg.completada) {
+                        val ref = solRef.collection("registros_tareas").document(reg.id)
+                        batch.delete(ref)
+                    }
+                }
+
+                // Marcar generación exitosa hoy
+                batch.update(solRef, "ultimaGeneracion", today)
+
                 batch.commit().await()
-            } catch (e: Exception) {}
+            } catch (e: Exception) {
+                _error.value = "Error al generar tareas diarias: ${e.localizedMessage}"
+            }
         }
     }
 
@@ -166,40 +365,71 @@ class TareasViewModel : ViewModel() {
     fun agregarTareaAServicio(solicitudId: String, tarea: Tarea) {
         viewModelScope.launch {
             try {
+                val tareaActiva = tarea.copy(activa = true)
                 db.collection("solicitudes").document(solicitudId)
-                    .collection("tareas_servicio").document(tarea.id)
-                    .set(tarea).await()
+                    .collection("tareas_servicio").document(tareaActiva.id)
+                    .set(tareaActiva).await()
                 
-                // If it applies today, also add to today's registry
-                if (debeEjecutarseHoy(tarea)) {
-                    agregarTareaARegistroHoy(solicitudId, tarea)
+                // Actualizar lista local de plantillas
+                val currentPlantillas = _tareasPlantilla.value.toMutableList()
+                currentPlantillas.removeAll { it.id == tareaActiva.id }
+                currentPlantillas.add(tareaActiva)
+                _tareasPlantilla.value = currentPlantillas
+
+                if (debeEjecutarseHoy(tareaActiva)) {
+                    agregarTareaARegistroHoy(solicitudId, tareaActiva)
                 }
-            } catch (e: Exception) {}
+            } catch (e: Exception) {
+                _error.value = "Error al guardar en servicio: ${e.localizedMessage}"
+            }
         }
     }
 
-    fun eliminarTareaServicio(solicitudId: String, tareaId: String) {
+    fun eliminarTareasSeleccionadas(solicitudId: String, tareaIds: List<String>) {
         viewModelScope.launch {
             try {
-                // Delete from service template
-                db.collection("solicitudes").document(solicitudId)
-                    .collection("tareas_servicio").document(tareaId)
-                    .delete().await()
+                val batch = db.batch()
+                val today = getTodayDate()
                 
-                // Also delete today's instance if not completed
-                val snapshot = db.collection("solicitudes").document(solicitudId)
+                tareaIds.forEach { tId ->
+                    val serviceRef = db.collection("solicitudes").document(solicitudId)
+                        .collection("tareas_servicio").document(tId)
+                    batch.delete(serviceRef)
+                }
+                
+                val registrosSnapshot = db.collection("solicitudes").document(solicitudId)
                     .collection("registros_tareas")
-                    .whereEqualTo("tareaId", tareaId)
-                    .whereEqualTo("fecha", getTodayDate())
+                    .whereEqualTo("fecha", today)
                     .get().await()
                 
-                for (doc in snapshot.documents) {
-                    if (doc.getBoolean("completada") != true) {
-                        doc.reference.delete().await()
+                registrosSnapshot.documents.forEach { doc ->
+                    val reg = doc.toObject(RegistroTarea::class.java)
+                    if (reg != null && tareaIds.contains(reg.tareaId) && !reg.completada) {
+                        batch.delete(doc.reference)
                     }
                 }
+
+                batch.commit().await()
+                
+                // Forzar actualización inmediata del estado local para evitar que reaparezcan
+                _tareasHoy.value = _tareasHoy.value.filter { reg -> 
+                    !(tareaIds.contains(reg.tareaId) && !reg.completada)
+                }
+
             } catch (e: Exception) {
-                _error.value = "Error al eliminar tarea: ${e.localizedMessage}"
+                _error.value = "Error al eliminar múltiples tareas: ${e.localizedMessage}"
+            }
+        }
+    }
+
+    fun eliminarRegistroHoy(solicitudId: String, registroId: String) {
+        viewModelScope.launch {
+            try {
+                db.collection("solicitudes").document(solicitudId)
+                    .collection("registros_tareas").document(registroId)
+                    .delete().await()
+            } catch (e: Exception) {
+                _error.value = "Error al eliminar registro diario: ${e.localizedMessage}"
             }
         }
     }
@@ -213,15 +443,75 @@ class TareasViewModel : ViewModel() {
         val calendar = Calendar.getInstance()
         val dayOfWeek = calendar.get(Calendar.DAY_OF_WEEK)
         val dayOfMonth = calendar.get(Calendar.DAY_OF_MONTH)
+        val monthOfYear = calendar.get(Calendar.MONTH) + 1 // 1-12
         
         return when (tarea.frecuencia) {
-            FrecuenciaTarea.DIARIA, FrecuenciaTarea.INDEFINIDA -> true
+            FrecuenciaTarea.DIARIA -> true
             FrecuenciaTarea.SEMANAL -> {
                 val adjustDay = if (dayOfWeek == 1) 7 else dayOfWeek - 1
                 tarea.diasSeleccionados.contains(adjustDay)
             }
-            FrecuenciaTarea.MENSUAL -> tarea.diasSeleccionados.contains(dayOfMonth)
+            FrecuenciaTarea.MENSUAL -> {
+                val monthApplies = tarea.mesesSeleccionados.isEmpty() || tarea.mesesSeleccionados.contains(monthOfYear)
+                monthApplies && tarea.diasSeleccionados.contains(dayOfMonth)
+            }
             FrecuenciaTarea.UNA_VEZ -> tarea.fechaEspecifica == today
+        }
+    }
+
+    fun completarMultiplesTareas(solicitudId: String, registroIds: List<String>, userId: String, otherUid: String) {
+        viewModelScope.launch {
+            try {
+                val batch = db.batch()
+                val ahora = Timestamp.now()
+                val hora = SimpleDateFormat("HH:mm", Locale.getDefault()).format(ahora.toDate())
+                
+                registroIds.forEach { id ->
+                    val ref = db.collection("solicitudes").document(solicitudId)
+                        .collection("registros_tareas").document(id)
+                    batch.update(ref, mapOf(
+                        "completada" to true,
+                        "completadaPor" to userId,
+                        "fechaCompletado" to ahora
+                    ))
+                }
+                batch.commit().await()
+                
+                if (otherUid.isNotEmpty()) {
+                    enviarMensajeSistemaChat(userId, otherUid, "✅ Se han finalizado ${registroIds.size} tareas masivamente a las $hora")
+                }
+            } catch (e: Exception) {
+                _error.value = "Error al completar múltiples tareas: ${e.localizedMessage}"
+            }
+        }
+    }
+
+    fun postergarMultiplesTareas(solicitudId: String, registroIds: List<String>, motivo: String, userId: String, otherUid: String) {
+        viewModelScope.launch {
+            try {
+                val batch = db.batch()
+                val ahora = Timestamp.now()
+                val hora = SimpleDateFormat("HH:mm", Locale.getDefault()).format(ahora.toDate())
+                
+                registroIds.forEach { id ->
+                    val ref = db.collection("solicitudes").document(solicitudId)
+                        .collection("registros_tareas").document(id)
+                    batch.update(ref, mapOf(
+                        "postergada" to true,
+                        "motivoPostergacion" to motivo,
+                        "fechaPostergacion" to ahora,
+                        "completada" to false,
+                        "notas" to "Postergación masiva: $motivo"
+                    ))
+                }
+                batch.commit().await()
+                
+                if (otherUid.isNotEmpty()) {
+                    enviarMensajeSistemaChat(userId, otherUid, "⏳ Se han postergado ${registroIds.size} tareas masivamente a las $hora\nMotivo: $motivo")
+                }
+            } catch (e: Exception) {
+                _error.value = "Error al postergar múltiples tareas: ${e.localizedMessage}"
+            }
         }
     }
 

@@ -92,8 +92,7 @@ fun RegisterScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.safeDrawing)
-                .imePadding()
-                .padding(horizontal = 28.dp),
+                .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
 
@@ -120,7 +119,7 @@ fun RegisterScreen(
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             
             if (currentStep != RegisterStep.SUCCESS) {
                 CuidaleStepProgressBar(
@@ -129,11 +128,11 @@ fun RegisterScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             Crossfade(targetState = currentStep, animationSpec = tween(500), label = "registerStepTransition") { step ->
                 val error = if (uiState is RegisterUiState.Error) (uiState as RegisterUiState.Error).message else null
-                
+
                 when (step) {
                     RegisterStep.ROLE -> RegisterRoleStep(
                         selectedRole = viewModel.role.collectAsState().value,
@@ -166,8 +165,6 @@ fun RegisterScreen(
                     RegisterStep.SUCCESS -> RegisterSuccessStep(onFinish = onFinish)
                 }
             }
-            
-            Spacer(modifier = Modifier.height(56.dp))
         }
     }
 }
@@ -410,7 +407,7 @@ fun RegisterPersonalStep(
             CuidaleTextField(
                 value = telefono,
                 onValueChange = viewModel::onTelefonoChange,
-                placeholder = "Ej: 912345678",
+                placeholder = "Ej: 9 1234 5678",
                 containerColor = CuidaleThemeExtras.customColors.inputBackground,
                 keyboardType = KeyboardType.Phone,
                 imeAction = androidx.compose.ui.text.input.ImeAction.Done,
@@ -576,12 +573,14 @@ fun RegisterPasswordStep(
             backgroundColor = CuidaleThemeExtras.customColors.panelBackground,
             shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowPrimary else CuidaleThemeExtras.shadows.hardShadowPrimary,
             isError = error != null,
-            modifier = Modifier.offset { IntOffset(shakeOffset.value.roundToInt(), 0) }
+            modifier = Modifier.offset { IntOffset(shakeOffset.value.roundToInt(), 0) },
+            contentPadding = PaddingValues(16.dp)
         ) {
             Text(
                 text = stringResource(R.string.register_pass_desc),
                 style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(bottom = 12.dp)
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -596,7 +595,7 @@ fun RegisterPasswordStep(
                 isDark = isDark
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             InputFieldLabel(stringResource(R.string.register_pass_label))
             CuidaleTextField(
@@ -614,7 +613,7 @@ fun RegisterPasswordStep(
                 imeAction = androidx.compose.ui.text.input.ImeAction.Next
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             InputFieldLabel(stringResource(R.string.register_confirm_pass_label))
             CuidaleTextField(
@@ -638,6 +637,7 @@ fun RegisterPasswordStep(
                     }
                 )
             )
+        }
 
             AnimatedVisibility(visible = error != null) {
                 Text(
@@ -649,7 +649,7 @@ fun RegisterPasswordStep(
             }
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         if (isLoading) {
             CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary)
@@ -668,7 +668,7 @@ fun RegisterPasswordStep(
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         HardShadowButton(
             text = stringResource(R.string.register_button_back),
@@ -681,7 +681,7 @@ fun RegisterPasswordStep(
             onClick = onBack
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             Text(text = stringResource(R.string.forgot_password_footer_prefix), style = MaterialTheme.typography.bodyMedium, color = CuidaleThemeExtras.customColors.onGradient)
@@ -693,7 +693,7 @@ fun RegisterPasswordStep(
             )
         }
     }
-}
+
 
 @Composable
 fun RegisterSuccessStep(onFinish: () -> Unit) {

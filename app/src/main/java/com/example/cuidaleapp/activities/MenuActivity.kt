@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.*
 import androidx.compose.animation.*
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -40,13 +41,13 @@ sealed class MenuNavigation {
     object Requests : MenuNavigation()
     data class CreateRequest(val requestId: String? = null) : MenuNavigation()
     data class ManageApplications(val solicitudId: String) : MenuNavigation()
-    data class ReviewRequest(val solicitud: SolicitudCuidado) : MenuNavigation()
+    data class ReviewRequest(val solicitud: SolicitudCuidado, val returnTo: MenuNavigation = Requests) : MenuNavigation()
     data class ActiveTasks(val solicitud: SolicitudCuidado) : MenuNavigation()
     data class ServiceReport(val informe: com.example.cuidaleapp.models.InformeTurno) : MenuNavigation()
     object History : MenuNavigation()
     object SocialManagement : MenuNavigation()
     data class OtherFicha(val uid: String, val returnTo: MenuNavigation = Main) : MenuNavigation()
-    data class Chat(val chatId: String, val otherUid: String, val otherUser: UserData? = null, val returnTo: MenuNavigation = Chats) : MenuNavigation()
+    data class Chat(val chatId: String, val otherUid: String, val otherUser: UserData? = null, val returnTo: MenuNavigation = Chats, val initialMessage: String? = null) : MenuNavigation()
 }
 
 class MenuActivity : ComponentActivity() {
@@ -100,10 +101,16 @@ class MenuActivity : ComponentActivity() {
 
             val chatViewModel: ChatViewModel = viewModel()
             val notificationsViewModel: NotificationsViewModel = viewModel()
+            val scope = rememberCoroutineScope()
             
             val unreadCount by chatViewModel.totalUnreadCount.collectAsState()
             val pendingNotifs by notificationsViewModel.unreadCount.collectAsState()
             val solicitudesAceptadas by solicitudViewModel.solicitudesAceptadas.collectAsState()
+
+            val misPostulaciones by solicitudViewModel.misPostulaciones.collectAsState()
+            val postulacionesRecibidas by solicitudViewModel.postulacionesRecibidas.collectAsState()
+            val pendingRequests = if (userData.rol == "cuidador") misPostulaciones.size 
+                                  else postulacionesRecibidas.values.flatten().count { it.estado == "pendiente" }
 
             LaunchedEffect(Unit) {
                 chatViewModel.listenChats()
@@ -167,7 +174,7 @@ class MenuActivity : ComponentActivity() {
                     History -> Requests
                     is CreateRequest -> Requests
                     is ManageApplications -> Requests
-                    is ReviewRequest -> Requests
+                    is ReviewRequest -> cs.returnTo
                     is ActiveTasks -> Requests
                     is ServiceReport -> Requests
                     is Chat -> cs.returnTo
@@ -190,8 +197,28 @@ class MenuActivity : ComponentActivity() {
                 AnimatedContent(
                     targetState = currentScreen,
                     transitionSpec = {
-                        fadeIn(animationSpec = tween(300)) + scaleIn(initialScale = 0.95f) togetherWith
-                        fadeOut(animationSpec = tween(300))
+                        val duration = 350
+                        
+                        val isGoingBack = when {
+                            targetState == Main -> true
+                            initialState == Requests && targetState is ReviewRequest -> false
+                            initialState is ReviewRequest && targetState == Requests -> true
+                            initialState == Chats && targetState is Chat -> false
+                            initialState is Chat && targetState == Chats -> true
+                            initialState == Profile && (targetState == EditProfile || targetState is Ficha || targetState is Settings) -> false
+                            (initialState == EditProfile || initialState is Ficha || initialState is Settings) && targetState == Profile -> true
+                            targetState == Chats && initialState is Chat -> true
+                            targetState == Notifications && initialState is OtherFicha -> true
+                            else -> false
+                        }
+
+                        if (isGoingBack) {
+                            (slideInHorizontally(animationSpec = tween(duration)) { -it / 2 } + fadeIn(animationSpec = tween(duration)))
+                                .togetherWith(slideOutHorizontally(animationSpec = tween(duration)) { it } + fadeOut(animationSpec = tween(duration)))
+                        } else {
+                            (slideInHorizontally(animationSpec = tween(duration)) { it } + fadeIn(animationSpec = tween(duration)))
+                                .togetherWith(slideOutHorizontally(animationSpec = tween(duration)) { -it / 2 } + fadeOut(animationSpec = tween(duration)))
+                        }
                     },
                     label = "MenuNavigationAnimation"
                 ) { cs ->
@@ -217,7 +244,8 @@ class MenuActivity : ComponentActivity() {
                                         "requests" -> Requests
                                         else -> Main
                                     }
-                                }
+                                },
+                                solicitudViewModel = solicitudViewModel
                             )
                         }
                         Profile -> {
@@ -236,7 +264,10 @@ class MenuActivity : ComponentActivity() {
                                         "requests" -> Requests
                                         else -> Main
                                     }
-                                }
+                                },
+                                unreadCount = unreadCount,
+                                pendingNotifs = pendingNotifs,
+                                solicitudViewModel = solicitudViewModel
                             )
                         }
                         EditProfile -> {
@@ -250,7 +281,8 @@ class MenuActivity : ComponentActivity() {
                                 viewModel = fichaViewModel,
                                 profileViewModel = profileViewModel,
                                 startInEditMode = cs.startInEditMode,
-                                onNavigateBack = { currentScreen = cs.returnTo }
+                                onNavigateBack = { currentScreen = cs.returnTo },
+                                onNavigateToTasks = { currentScreen = Requests }
                             )
                         }
                         Search -> {
@@ -293,7 +325,8 @@ class MenuActivity : ComponentActivity() {
                                 },
                                 favoritosViewModel = favoritosViewModel,
                                 chatViewModel = chatViewModel,
-                                vinculosViewModel = vinculosViewModel
+                                vinculosViewModel = vinculosViewModel,
+                                solicitudViewModel = solicitudViewModel
                             )
                         }
                         Notifications -> {
@@ -326,8 +359,15 @@ class MenuActivity : ComponentActivity() {
                                                 currentScreen = Chat(chatId = chatId, otherUid = notification.emisor, returnTo = Notifications)
                                             }
                                         }
+                                        "nuevo_mensaje" -> {
+                                            val chatId = notification.data["chatId"] ?: ""
+                                            if (chatId.isNotEmpty()) {
+                                                currentScreen = Chat(chatId = chatId, otherUid = notification.emisor, returnTo = Notifications)
+                                            }
+                                        }
                                     }
-                                }
+                                },
+                                solicitudViewModel = solicitudViewModel
                             )
                         }
                         Requests -> {
@@ -336,6 +376,7 @@ class MenuActivity : ComponentActivity() {
                                 userData = userData,
                                 unreadCount = unreadCount,
                                 pendingNotifs = pendingNotifs,
+                                pendingRequests = pendingRequests,
                                 onTabSelected = { tab ->
                                     currentScreen = when (tab) {
                                         "chats" -> Chats
@@ -348,11 +389,17 @@ class MenuActivity : ComponentActivity() {
                                 onEditRequest = { id -> currentScreen = CreateRequest(id) },
                                 onViewPatientDetails = { uid ->
                                     // For caregiver viewing accepted service details
-                                    val sol = solicitudesAceptadas.find { it.pacienteFichaId == uid }
-                                    if (sol != null) {
-                                        currentScreen = ReviewRequest(sol)
+                                    val solAceptada = solicitudesAceptadas.find { it.pacienteFichaId == uid }
+                                    if (solAceptada != null) {
+                                        currentScreen = ReviewRequest(solAceptada, returnTo = Requests)
                                     } else {
-                                        currentScreen = OtherFicha(uid, returnTo = Requests)
+                                        // Check in pending applications
+                                        val pendingPair = solicitudViewModel.misPostulaciones.value.find { it.first.pacienteFichaId == uid }
+                                        if (pendingPair != null) {
+                                            currentScreen = ReviewRequest(pendingPair.first, returnTo = Requests)
+                                        } else {
+                                            currentScreen = OtherFicha(uid, returnTo = Requests)
+                                        }
                                     }
                                 },
                                 onViewCaregiverProfile = { uid -> currentScreen = OtherFicha(uid, returnTo = Requests) },
@@ -414,6 +461,18 @@ class MenuActivity : ComponentActivity() {
                                     },
                                     onRedirectToRequests = {
                                         currentScreen = Requests
+                                    },
+                                    onViewRequest = { solId ->
+                                        scope.launch {
+                                            try {
+                                                val doc = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                                    .collection("solicitudes").document(solId).get().await()
+                                                val sol = doc.toObject(SolicitudCuidado::class.java)
+                                                if (sol != null) {
+                                                    currentScreen = ReviewRequest(sol, returnTo = cs)
+                                                }
+                                            } catch (e: Exception) {}
+                                        }
                                     }
                                 )
                             } else {
@@ -434,7 +493,7 @@ class MenuActivity : ComponentActivity() {
                                 onChatNavigate = { chatId, otherUid, otherUser ->
                                     currentScreen = Chat(chatId, otherUid, otherUser, returnTo = cs)
                                 },
-                                onReviewRequest = { sol -> currentScreen = ReviewRequest(sol) }
+                                onReviewRequest = { sol -> currentScreen = ReviewRequest(sol, returnTo = cs) }
                             )
                         }
                         SocialManagement -> {
@@ -451,7 +510,10 @@ class MenuActivity : ComponentActivity() {
                                 solicitud = cs.solicitud,
                                 tareasViewModel = tareasViewModel,
                                 currentUserId = userData.uid,
-                                onNavigateBack = { currentScreen = Requests }
+                                onNavigateBack = { currentScreen = Requests },
+                                onNavigateToChat = { chatId, otherUid, initialMsg ->
+                                    currentScreen = Chat(chatId, otherUid, returnTo = cs, initialMessage = initialMsg)
+                                }
                             )
                         }
                         is ServiceReport -> {

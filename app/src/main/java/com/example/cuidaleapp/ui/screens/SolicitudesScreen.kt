@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -38,6 +39,7 @@ fun SolicitudesScreen(
     userData: UserData,
     unreadCount: Int,
     pendingNotifs: Int,
+    pendingRequests: Int,
     onTabSelected: (String) -> Unit,
     onCreateRequest: () -> Unit,
     onEditRequest: (String) -> Unit,
@@ -83,6 +85,7 @@ fun SolicitudesScreen(
                 selectedTab = "requests",
                 unreadCount = unreadCount,
                 pendingNotifs = pendingNotifs,
+                pendingRequests = pendingRequests,
                 onTabSelected = onTabSelected
             )
         },
@@ -202,14 +205,6 @@ fun RepresentanteRequestsContent(
                                 ActionButton(text = "EDITAR", icon = Icons.Default.Edit, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.weight(1f)) { onEdit(sol.id) }
                             }
                             Spacer(modifier = Modifier.height(8.dp))
-                            ActionButton(
-                                text = "DETALLES", 
-                                icon = Icons.Default.Info, 
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.fillMaxWidth()
-                            ) { onViewPatientDetails(sol.pacienteFichaId) }
-
-                            Spacer(modifier = Modifier.height(8.dp))
                             HardShadowButton(
                                 text = "FINALIZAR SERVICIO",
                                 containerColor = MaterialTheme.colorScheme.secondary,
@@ -263,7 +258,7 @@ fun CuidadorRequestsContent(
                     Spacer(modifier = Modifier.height(20.dp))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         ActionButton(text = "TAREAS", icon = Icons.Default.ListAlt, color = Color(0xFF4CAF50)) { onViewTasks(sol) }
-                        ActionButton(text = "PACIENTE", icon = Icons.Default.Person, color = MaterialTheme.colorScheme.primary) { onViewDetails(sol.pacienteFichaId) }
+                        ActionButton(text = "DETALLES", icon = Icons.Default.Info, color = MaterialTheme.colorScheme.primary) { onViewDetails(sol.pacienteFichaId) }
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     HardShadowButton(
@@ -286,7 +281,12 @@ fun CuidadorRequestsContent(
             }
             // Use the Postulation ID as key for stability
             items(misPostulaciones, key = { it.second.id }) { (sol, post) ->
-                PostulacionStatusCard(sol, post.estado, onCancel = { onCancelPostulacion(post.id) })
+                PostulacionStatusCard(
+                    solicitud = sol, 
+                    estado = post.estado, 
+                    onCancel = { onCancelPostulacion(post.id) },
+                    onViewDetails = { onViewDetails(sol.pacienteFichaId) }
+                )
             }
         }
 
@@ -432,7 +432,7 @@ fun ApplicantMiniCard(applicant: PostulacionCuidado, onAccept: () -> Unit, onRej
 }
 
 @Composable
-fun PostulacionStatusCard(solicitud: SolicitudCuidado, estado: String, onCancel: () -> Unit) {
+fun PostulacionStatusCard(solicitud: SolicitudCuidado, estado: String, onCancel: () -> Unit, onViewDetails: () -> Unit) {
     HardShadowPanel(backgroundColor = Color.White.copy(alpha = 0.9f), shadowColor = Color.Black.copy(alpha = 0.05f)) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -445,13 +445,16 @@ fun PostulacionStatusCard(solicitud: SolicitudCuidado, estado: String, onCancel:
                 }
             }
             
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             
             if (estado == "pendiente") {
-                OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
-                    Icon(Icons.Default.Close, null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("CANCELAR POSTULACIÓN", fontSize = 11.sp)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ActionButton(text = "VER SOLICITUD", icon = Icons.AutoMirrored.Filled.Assignment, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f), onClick = onViewDetails)
+                    OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+                        Icon(Icons.Default.Close, null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("CANCELAR", fontSize = 11.sp)
+                    }
                 }
             } else if (estado == "rechazada") {
                 OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Gray)) {

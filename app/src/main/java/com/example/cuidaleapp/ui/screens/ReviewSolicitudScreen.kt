@@ -1,5 +1,7 @@
 package com.example.cuidaleapp.ui.screens
 
+import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -17,8 +19,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.example.cuidaleapp.utils.DateUtils
 import com.example.cuidaleapp.models.SolicitudCuidado
@@ -27,7 +29,6 @@ import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.SolicitudViewModel
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
-import java.text.SimpleDateFormat
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -46,10 +47,13 @@ fun ReviewSolicitudScreen(
     var patientTareas by remember { mutableStateOf<List<com.example.cuidaleapp.models.Tarea>>(emptyList()) }
     var isLoadingFicha by remember { mutableStateOf(true) }
     var showFinishConfirm by remember { mutableStateOf(false) }
+    var showCancelPostulationConfirm by remember { mutableStateOf(false) }
 
     val customColors = CuidaleThemeExtras.customColors
+    val isDark = customColors.isDark
     val textColor = MaterialTheme.colorScheme.onSurface
     val secondaryTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val primaryColor = MaterialTheme.colorScheme.primary
 
     var hasAlreadyApplied by remember { mutableStateOf(false) }
     val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
@@ -104,15 +108,80 @@ fun ReviewSolicitudScreen(
         )
     }
 
+    if (showCancelPostulationConfirm) {
+        AlertDialog(
+            onDismissRequest = { showCancelPostulationConfirm = false },
+            title = { Text("¿Cancelar postulación?") },
+            text = { Text("¿Estás seguro de cancelar tu postulación para este servicio?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.cancelarPostulacion(solicitud.id)
+                    showCancelPostulationConfirm = false
+                    onNavigateBack() // Go back after canceling
+                }) { Text("SÍ, CANCELAR", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCancelPostulationConfirm = false }) { Text("NO") }
+            }
+        )
+    }
+
     Scaffold(
+        modifier = Modifier.navigationBarsPadding(),
+        bottomBar = {
+            Surface(
+                color = Color.Transparent,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp)
+            ) {
+                if (isAccepted) {
+                    HardShadowButton(
+                        text = "FINALIZAR SERVICIO",
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = Color.White,
+                        shadowColor = MaterialTheme.colorScheme.error.copy(alpha = 0.3f),
+                        icon = Icons.Default.CheckCircle,
+                        onClick = { showFinishConfirm = true }
+                    )
+                } else {
+                    HardShadowButton(
+                        text = if (hasAlreadyApplied) "CANCELAR POSTULACIÓN" else "POSTULAR A SERVICIO",
+                        containerColor = if (hasAlreadyApplied) MaterialTheme.colorScheme.error.copy(alpha = 0.8f) else MaterialTheme.colorScheme.primary,
+                        contentColor = Color.White,
+                        shadowColor = if (hasAlreadyApplied) MaterialTheme.colorScheme.error.copy(alpha = 0.2f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                        enabled = true,
+                        icon = if (hasAlreadyApplied) Icons.Default.Close else Icons.AutoMirrored.Filled.Send,
+                        onClick = {
+                            if (hasAlreadyApplied) {
+                                showCancelPostulationConfirm = true
+                            } else {
+                                viewModel.postularASolicitud(solicitud) { 
+                                    onRedirectToRequests() 
+                                }
+                            }
+                        }
+                    )
+                }
+            }
+        },
         topBar = {
             TopAppBar(
-                title = { Text(if (isAccepted) "DETALLES DEL SERVICIO" else "DETALLES DE SOLICITUD", fontWeight = FontWeight.Bold) },
+                title = { 
+                    Column {
+                        Text(if (isAccepted) "SERVICIO ACTIVO" else "DETALLES DE SOLICITUD", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
+                        if (!isAccepted) {
+                            Text("Revisa los requerimientos del paciente", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        }
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                )
             )
         }
     ) { innerPadding ->
@@ -120,67 +189,118 @@ fun ReviewSolicitudScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .background(MaterialTheme.colorScheme.background)
+                .background(if (isDark) Color(0xFF0D1B2A) else Color(0xFFF8F9FA))
                 .verticalScroll(scrollState),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (isLoadingFicha) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             } else if (patientFicha != null) {
-                Spacer(modifier = Modifier.height(24.dp))
                 
-                Text("PACIENTE", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Surface(
-                    modifier = Modifier.size(100.dp),
-                    shape = CircleShape,
-                    color = Color.Gray.copy(alpha = 0.1f)
-                ) {
-                    if (solicitud.fotoPaciente.isNotEmpty()) {
-                        AsyncImage(model = solicitud.fotoPaciente, contentDescription = null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
-                    } else {
-                        Icon(Icons.Default.Person, null, modifier = Modifier.padding(24.dp), tint = Color.Gray)
+                // Patient Header
+                Box(modifier = Modifier.fillMaxWidth().padding(top = 24.dp), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Surface(
+                            modifier = Modifier.size(120.dp),
+                            shape = CircleShape,
+                            color = Color.White,
+                            shadowElevation = 8.dp,
+                            border = BorderStroke(4.dp, primaryColor.copy(alpha = 0.5f))
+                        ) {
+                            if (solicitud.fotoPaciente.isNotEmpty()) {
+                                AsyncImage(model = solicitud.fotoPaciente, contentDescription = null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                            } else {
+                                Icon(Icons.Default.Person, null, modifier = Modifier.padding(24.dp), tint = Color.LightGray)
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(solicitud.nombrePaciente, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = if (isDark) Color.White else Color.Black)
+                        
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                           Surface(
+                               color = primaryColor.copy(alpha = 0.1f),
+                               shape = RoundedCornerShape(16.dp),
+                               modifier = Modifier.padding(top = 4.dp)
+                           ) {
+                               Text(
+                                   text = "PACIENTE",
+                                   modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                   style = MaterialTheme.typography.labelSmall,
+                                   fontWeight = FontWeight.Bold,
+                                   color = primaryColor
+                               )
+                           }
+                        }
                     }
                 }
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(solicitud.nombrePaciente, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+
+                Spacer(modifier = Modifier.height(24.dp))
                 
-                // 3. Button "Ver ficha completa"
-                TextButton(onClick = { onViewFullFicha(solicitud.pacienteFichaId) }) {
-                    Text("VER FICHA COMPLETA", fontWeight = FontWeight.Bold)
+                // Main Actions
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Button(
+                        onClick = { onViewFullFicha(solicitud.pacienteFichaId) },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = primaryColor.copy(alpha = 0.1f), contentColor = primaryColor)
+                    ) {
+                        Icon(Icons.Default.Visibility, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("VER FICHA", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                    
+                    if (isAccepted && onNavigateToChat != null) {
+                        Button(
+                            onClick = { 
+                                val myUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
+                                val otherUid = solicitud.representanteUid
+                                val chatId = if (myUid < otherUid) "${myUid}_$otherUid" else "${otherUid}_$myUid"
+                                onNavigateToChat(chatId, otherUid) 
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                        ) {
+                            Icon(Icons.Default.Chat, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("IR AL CHAT", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // 4. Section: Representante & Chat
+                // Section: Representante
                 HardShadowPanel(
                     backgroundColor = customColors.panelBackground,
                     shadowColor = Color.Black.copy(alpha = 0.05f),
                     modifier = Modifier.padding(horizontal = 24.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("DATOS DEL REPRESENTANTE", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
-                        Spacer(modifier = Modifier.height(12.dp))
-                        CuidaleDetailRow(Icons.Default.Person, "Nombre", solicitud.representanteNombre)
-                        CuidaleDetailRow(Icons.Default.Phone, "Teléfono", solicitud.representanteTelefono)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.SupervisorAccount, null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("REPRESENTANTE", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
                         
-                        if (isAccepted && onNavigateToChat != null) {
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Button(
-                                onClick = { 
-                                    val myUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
-                                    val otherUid = solicitud.representanteUid
-                                    val chatId = if (myUid < otherUid) "${myUid}_$otherUid" else "${otherUid}_$myUid"
-                                    onNavigateToChat(chatId, otherUid) 
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                        if (isAccepted) {
+                            CuidaleDetailRow(Icons.Default.Person, "Nombre", solicitud.representanteNombre)
+                            CuidaleDetailRow(Icons.Default.Phone, "Teléfono", solicitud.representanteTelefono)
+                        } else {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Color.Gray.copy(alpha = 0.05f)).padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(Icons.Default.Chat, null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("IR AL CHAT")
+                                Icon(Icons.Default.Lock, null, tint = Color.Gray, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text("Datos de contacto protegidos", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                                    Text("Serán visibles una vez el representante acepte tu postulación.", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                                }
                             }
                         }
                     }
@@ -188,15 +308,19 @@ fun ReviewSolicitudScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // 5. Section: Datos Médicos del Paciente
+                // Section: Datos Médicos
                 HardShadowPanel(
                     backgroundColor = customColors.panelBackground,
                     shadowColor = Color.Black.copy(alpha = 0.05f),
                     modifier = Modifier.padding(horizontal = 24.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("DATOS DEL PACIENTE", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.MedicalServices, null, tint = primaryColor, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("CONDICIÓN MÉDICA", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = primaryColor)
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
                         
                         val enfermedades = (patientFicha!!["enfermedades"] as? List<*>)?.joinToString(", ") ?: "Ninguna"
                         val movilidad = patientFicha!!["movilidad"]?.toString() ?: "No especificada"
@@ -208,14 +332,72 @@ fun ReviewSolicitudScreen(
                         CuidaleDetailRow(Icons.Default.Wc, "Género", genero)
                         
                         Spacer(modifier = Modifier.height(12.dp))
-                        Text("Observaciones:", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.Gray)
-                        Text(observaciones, style = MaterialTheme.typography.bodySmall)
+                        HorizontalDivider(color = Color.Gray.copy(alpha = 0.1f))
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        Text("OBSERVACIONES GENERALES", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.Gray)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(observaciones, style = MaterialTheme.typography.bodySmall, color = if (isDark) Color.LightGray else Color.DarkGray)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // Section: Detalles del Servicio (Dirección/Horario)
+                HardShadowPanel(
+                    backgroundColor = if (isDark) customColors.panelBackground else Color.White,
+                    shadowColor = Color.Black.copy(alpha = 0.05f),
+                    modifier = Modifier.padding(horizontal = 24.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.AutoMirrored.Filled.EventNote, null, tint = primaryColor, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("REQUERIMIENTOS DEL TURNO", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = primaryColor)
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        if (isAccepted) {
+                            val calle = patientFicha!!["calle"]?.toString() ?: ""
+                            val numero = patientFicha!!["numero"]?.toString() ?: ""
+                            val depto = patientFicha!!["depto"]?.toString() ?: ""
+                            val comuna = patientFicha!!["comuna"]?.toString() ?: ""
+                            val direccionStr = if (calle.isNotEmpty()) "$calle $numero ${if(depto.isNotEmpty()) "Depto $depto" else ""}, $comuna" else "No especificada"
+
+                            CuidaleDetailRow(Icons.Default.Place, "Dirección", direccionStr)
+                        } else {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Color.Gray.copy(alpha = 0.05f)).padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Lock, null, tint = Color.Gray, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text("Ubicación exacta protegida", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                                    val comuna = patientFicha!!["comuna"]?.toString() ?: "No especificada"
+                                    Text("Referencia: Comuna de $comuna", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                        }
+                        
+                        CuidaleDetailRow(Icons.Default.Schedule, "Horario", solicitud.horarioStr)
+                        CuidaleDetailRow(Icons.Default.DateRange, "Duración", if (solicitud.esIndefinido) "Contrato Indefinido" else "Servicio Temporal")
+                        
+                        if (!solicitud.esIndefinido) {
+                            Row(modifier = Modifier.padding(start = 24.dp, top = 4.dp)) {
+                                Column {
+                                    Text("Inicio: ${DateUtils.formatDate(solicitud.fechaInicio?.toDate()?.time)}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                                    Text("Termino: ${DateUtils.formatDate(solicitud.fechaFin?.toDate()?.time)}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
                     }
                 }
 
                 // 6. Tasks (Only if accepted)
                 if (isAccepted && patientTareas.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
                     Column(modifier = Modifier.padding(horizontal = 24.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.AutoMirrored.Filled.ListAlt, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
@@ -229,70 +411,15 @@ fun ReviewSolicitudScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                HardShadowPanel(
-                    backgroundColor = Color.White,
-                    shadowColor = Color.Black.copy(alpha = 0.05f),
-                    modifier = Modifier.padding(horizontal = 24.dp)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("DETALLES DEL SERVICIO", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        
-                        val calle = patientFicha!!["calle"]?.toString() ?: ""
-                        val numero = patientFicha!!["numero"]?.toString() ?: ""
-                        val depto = patientFicha!!["depto"]?.toString() ?: ""
-                        val comuna = patientFicha!!["comuna"]?.toString() ?: ""
-                        val direccionStr = if (calle.isNotEmpty()) "$calle $numero ${if(depto.isNotEmpty()) "Depto $depto" else ""}, $comuna" else "No especificada"
-
-                        CuidaleDetailRow(Icons.Default.Place, "Dirección", direccionStr)
-                        CuidaleDetailRow(Icons.Default.Schedule, "Horario", solicitud.horarioStr)
-                        CuidaleDetailRow(Icons.Default.DateRange, "Duración", if (solicitud.esIndefinido) "Indefinido" else "Temporal")
-                        
-                        if (!solicitud.esIndefinido) {
-                            Text("Desde: ${DateUtils.formatDate(solicitud.fechaInicio?.toDate()?.time)}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 24.dp))
-                            Text("Hasta: ${DateUtils.formatDate(solicitud.fechaFin?.toDate()?.time)}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 24.dp))
-                        }
+                Spacer(modifier = Modifier.height(64.dp))
+            } else {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.ErrorOutline, null, modifier = Modifier.size(64.dp), tint = Color.Gray)
+                        Spacer(Modifier.height(16.dp))
+                        Text("No se pudo cargar la información del paciente.", color = Color.Gray)
                     }
                 }
-
-                Spacer(modifier = Modifier.height(48.dp))
-
-                if (isAccepted) {
-                    HardShadowButton(
-                        text = "FINALIZAR SERVICIO",
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = Color.White,
-                        shadowColor = MaterialTheme.colorScheme.error.copy(alpha = 0.3f),
-                        onClick = { showFinishConfirm = true },
-                        modifier = Modifier.padding(horizontal = 24.dp)
-                    )
-                } else {
-                    HardShadowButton(
-                        text = if (hasAlreadyApplied) "POSTULACIÓN PENDIENTE" else "POSTULAR A SOLICITUD",
-                        containerColor = if (hasAlreadyApplied) Color.Gray else MaterialTheme.colorScheme.primary,
-                        contentColor = Color.White,
-                        shadowColor = if (hasAlreadyApplied) Color.Transparent else MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
-                        enabled = !hasAlreadyApplied,
-                        onClick = {
-                            viewModel.postularASolicitud(solicitud) { 
-                                onRedirectToRequests() 
-                            }
-                        },
-                        modifier = Modifier.padding(horizontal = 24.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                TextButton(onClick = onNavigateBack) {
-                    Text("REGRESAR")
-                }
-                
-                Spacer(modifier = Modifier.height(40.dp))
-            } else {
-                Text("No se pudo cargar la información del paciente.")
             }
         }
     }

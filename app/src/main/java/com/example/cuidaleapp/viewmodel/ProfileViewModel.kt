@@ -201,30 +201,38 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             _otherUserData.value = null
             _otherUserStatus.value = "estado oculto"
 
-            // 1. Cargar datos básicos del usuario (Esto debería funcionar siempre según tus reglas previas)
             try {
+                // 1. Verificar bloqueos mutuos
+                val myDoc = db.collection("usuarios").document(myUid).get().await()
                 val userDoc = db.collection("usuarios").document(targetUid).get().await()
-                if (userDoc.exists()) {
-                    val user = userDoc.toObject(UserData::class.java)?.copy(uid = targetUid)
-                    _otherUserData.value = user
-                    _otherProfileState.value = RemoteState.Success
-                } else {
+
+                if (!userDoc.exists()) {
                     _otherProfileState.value = RemoteState.Error("El usuario no existe.")
-                    _otherFichaState.value = FichaState.Error("Usuario no encontrado")
                     return@launch
                 }
-            } catch (e: Exception) {
-                _otherProfileState.value = RemoteState.Error(e.localizedMessage ?: "Error al cargar perfil")
-                return@launch
-            }
 
-            // 2. Intentar cargar la ficha (Si falla por permisos, no rompe el perfil)
-            try {
+                val targetBlockedList = (userDoc.get("bloqueados") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+                val myBlockedList = (myDoc.get("bloqueados") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+
+                if (targetBlockedList.contains(myUid)) {
+                    _otherProfileState.value = RemoteState.Error("Este perfil es privado.")
+                    _otherFichaState.value = FichaState.Error("Perfil Privado")
+                    return@launch
+                }
+
+                // Si yo lo bloqueé, puedo seguir viendo su perfil, así que no retornamos error aquí.
+                // Simplemente podemos poner un estado informativo si queremos, pero dejémoslo pasar.
+
+                // 2. Cargar datos básicos
+                val user = userDoc.toObject(UserData::class.java)?.copy(uid = targetUid)
+                _otherUserData.value = user
+                _otherProfileState.value = RemoteState.Success
+
+                // 3. Intentar cargar la ficha
                 val fichaDoc = db.collection("fichas").document(targetUid).get().await()
                 if (fichaDoc.exists()) {
                     _otherFichaState.value = FichaState.View(fichaDoc.data ?: emptyMap())
                     
-                    // 3. Intentar cargar tareas (En un try-catch separado por si no hay permisos aún)
                     try {
                         val tareasSnapshot = db.collection("fichas").document(targetUid)
                             .collection("tareas_plantilla")
@@ -237,12 +245,8 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 } else {
                     _otherFichaState.value = FichaState.NotFound
                 }
-            } catch (e: Exception) {
-                _otherFichaState.value = FichaState.Error("Privado")
-            }
 
-            // 4. Intentar escuchar el estado (Realtime Database suele tener reglas distintas)
-            try {
+                // 4. Escuchar estado
                 statusListener = object : ValueEventListener {
                     override fun onDataChange(snapshot: DataSnapshot) {
                         _otherUserStatus.value = snapshot.child("estado").getValue(String::class.java) ?: "desconectado"
@@ -250,8 +254,10 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     override fun onCancelled(error: DatabaseError) {}
                 }
                 rtdb.child("status").child(targetUid).addValueEventListener(statusListener!!)
+
             } catch (e: Exception) {
-                _otherUserStatus.value = "desconectado"
+                _otherProfileState.value = RemoteState.Error(e.localizedMessage ?: "Error al cargar perfil")
+                _otherFichaState.value = FichaState.Error("Error")
             }
         }
     }

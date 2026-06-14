@@ -50,7 +50,8 @@ fun MenuScreen(
     onViewFicha: () -> Unit,
     onViewSettings: () -> Unit,
     onUserClick: (String) -> Unit,
-    onTabSelected: (String) -> Unit
+    onTabSelected: (String) -> Unit,
+    solicitudViewModel: com.example.cuidaleapp.viewmodel.SolicitudViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
     val gradient = CuidaleThemeExtras.gradient
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -74,7 +75,6 @@ fun MenuScreen(
             val lastReminder = prefs.getLong("last_ficha_reminder", 0L)
             val now = System.currentTimeMillis()
             
-            // Cada 2 horas
             if (now - lastReminder > 2 * 60 * 60 * 1000) {
                 showFichaReminder = true
                 prefs.edit().putLong("last_ficha_reminder", now).apply()
@@ -175,10 +175,16 @@ fun MenuScreen(
                         )
                     },
                     bottomBar = {
+                        val misPostulaciones = solicitudViewModel.misPostulaciones.collectAsState().value
+                        val postulacionesRecibidas = solicitudViewModel.postulacionesRecibidas.collectAsState().value
+                        val pendingReqCount = if (userData.rol == "cuidador") misPostulaciones.size 
+                                              else postulacionesRecibidas.values.flatten().count { it.estado == "pendiente" }
+
                         CuidaleBottomBar(
                             selectedTab = "home", 
                             unreadCount = unreadCount, 
                             pendingNotifs = pendingNotifs,
+                            pendingRequests = pendingReqCount,
                             onTabSelected = onTabSelected
                         )
                     },

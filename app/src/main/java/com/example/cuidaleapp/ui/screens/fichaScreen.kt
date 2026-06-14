@@ -43,6 +43,7 @@ fun FichaScreen(
     viewModel: FichaViewModel,
     profileViewModel: ProfileViewModel,
     onNavigateBack: () -> Unit,
+    onNavigateToTasks: (() -> Unit)? = null,
     startInEditMode: Boolean = false
 ) {
     val state by viewModel.state.collectAsState()
@@ -98,7 +99,13 @@ fun FichaScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconButton(
-                            onClick = onNavigateBack,
+                            onClick = {
+                                if (state is FichaState.Editing) {
+                                    viewModel.cancelEditing()
+                                } else {
+                                    onNavigateBack()
+                                }
+                            },
                             modifier = Modifier.background(Color.Black.copy(alpha = 0.3f), CircleShape)
                         ) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = Color.White)
@@ -161,7 +168,15 @@ fun FichaScreen(
                                         role = role,
                                         data = targetState.data,
                                         tareasPlantilla = tareasPlantilla,
-                                        onEdit = { viewModel.startEditing() }
+                                        onEdit = { 
+                                            viewModel.startEditing()
+                                        },
+                                        onEditTasks = if (role == "representante") {
+                                            {
+                                                onNavigateToTasks?.invoke()
+                                            }
+                                        } else null,
+                                        isEditMode = false
                                     )
                                     SearchPreferencesCard(
                                         role = role,
@@ -702,153 +717,6 @@ fun FamilyEditFlow(
                         }
                     }
 
-                    Text(
-                        "RÉGIMEN DE CUIDADOS", 
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), 
-                        color = accentColor,
-                        modifier = Modifier.padding(start = 8.dp)
-                    )
-
-                    // Sección de Alimentación
-                    HardShadowPanel(
-                        backgroundColor = cardColor,
-                        shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
-                        cornerRadius = 24.dp,
-                        contentPadding = PaddingValues(20.dp)
-                    ) {
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Restaurant, null, tint = accentColor, modifier = Modifier.size(24.dp))
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text("PLAN DE ALIMENTACIÓN", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = textColor)
-                            }
-                            Spacer(modifier = Modifier.height(16.dp))
-                            
-                            val comidas = tareasTemporales.filter { it.tipo == TipoTarea.COMIDA }
-                            if (comidas.isEmpty()) {
-                                Text("No hay comidas programadas.", style = MaterialTheme.typography.bodySmall, color = textColor.copy(alpha = 0.6f))
-                            } else {
-                                comidas.forEach { tarea ->
-                                    TaskItemCard(
-                                        tarea = tarea, 
-                                        onDelete = { viewModel.deleteTareaPlantilla(tarea.id) },
-                                        onEdit = { editingTarea = tarea },
-                                        accentColor = accentColor
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(16.dp))
-                            HardShadowButton(
-                                text = "AÑADIR COMIDA",
-                                icon = Icons.Default.Add,
-                                onClick = { showTaskDialogByTipo = TipoTarea.COMIDA },
-                                containerColor = accentColor,
-                                contentColor = Color.White,
-                                shadowColor = shadowPalette.hardShadowPrimary,
-                                isDark = isDark
-                            )
-                        }
-                    }
-
-                    // Sección de Medicamentos
-                    HardShadowPanel(
-                        backgroundColor = cardColor,
-                        shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
-                        cornerRadius = 24.dp,
-                        contentPadding = PaddingValues(20.dp)
-                    ) {
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Medication, null, tint = accentColor, modifier = Modifier.size(24.dp))
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text("MEDICAMENTOS", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = textColor)
-                            }
-                            Spacer(modifier = Modifier.height(16.dp))
-                            
-                            val meds = tareasTemporales.filter { it.tipo == TipoTarea.MEDICACION }
-                            if (meds.isEmpty()) {
-                                Text("No hay medicamentos registrados.", style = MaterialTheme.typography.bodySmall, color = textColor.copy(alpha = 0.6f))
-                            } else {
-                                meds.forEach { tarea ->
-                                    TaskItemCard(
-                                        tarea = tarea, 
-                                        onDelete = { viewModel.deleteTareaPlantilla(tarea.id) },
-                                        onEdit = { editingTarea = tarea },
-                                        accentColor = accentColor
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(16.dp))
-                            HardShadowButton(
-                                text = "AÑADIR MEDICAMENTO",
-                                icon = Icons.Default.Add,
-                                onClick = { showTaskDialogByTipo = TipoTarea.MEDICACION },
-                                containerColor = accentColor,
-                                contentColor = Color.White,
-                                shadowColor = shadowPalette.hardShadowPrimary,
-                                isDark = isDark
-                            )
-                        }
-                    }
-
-                    // Otras Actividades
-                    HardShadowPanel(
-                        backgroundColor = cardColor,
-                        shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
-                        cornerRadius = 24.dp,
-                        contentPadding = PaddingValues(20.dp)
-                    ) {
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Assignment, null, tint = accentColor, modifier = Modifier.size(24.dp))
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text("OTRAS ACTIVIDADES", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = textColor)
-                            }
-                            Spacer(modifier = Modifier.height(16.dp))
-                            
-                            val otras = tareasTemporales.filter { it.tipo != TipoTarea.COMIDA && it.tipo != TipoTarea.MEDICACION }
-                            if (otras.isEmpty()) {
-                                Text("No hay otras actividades.", style = MaterialTheme.typography.bodySmall, color = textColor.copy(alpha = 0.6f))
-                            } else {
-                                otras.forEach { tarea ->
-                                    TaskItemCard(
-                                        tarea = tarea, 
-                                        onDelete = { viewModel.deleteTareaPlantilla(tarea.id) },
-                                        onEdit = { editingTarea = tarea },
-                                        accentColor = accentColor
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(16.dp))
-                            HardShadowButton(
-                                text = "AÑADIR ACTIVIDAD",
-                                icon = Icons.Default.Add,
-                                onClick = { showTaskDialogByTipo = TipoTarea.OTRO },
-                                containerColor = accentColor,
-                                contentColor = Color.White,
-                                shadowColor = shadowPalette.hardShadowPrimary,
-                                isDark = isDark
-                            )
-                        }
-                    }
-
-                    if (showTaskDialogByTipo != null || editingTarea != null) {
-                        TaskCreationDialog(
-                            onDismiss = { 
-                                showTaskDialogByTipo = null
-                                editingTarea = null
-                            },
-                            onConfirm = { 
-                                viewModel.saveTareaPlantilla(it)
-                                showTaskDialogByTipo = null
-                                editingTarea = null
-                            },
-                            accentColor = accentColor,
-                            defaultType = showTaskDialogByTipo ?: TipoTarea.OTRO,
-                            initialTarea = editingTarea
-                        )
-                    }
-                    
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp)

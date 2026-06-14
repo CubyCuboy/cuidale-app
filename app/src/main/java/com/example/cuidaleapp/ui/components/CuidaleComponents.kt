@@ -183,6 +183,7 @@ fun ProfileDetailView(
     showEditButton: Boolean = !isExternal,
     tareasPlantilla: List<Tarea> = emptyList(),
     onEdit: () -> Unit,
+    onEditTasks: (() -> Unit)? = null,
     onExpand: (() -> Unit)? = null
 ) {
     if (isSummary && onExpand != null) {
@@ -193,7 +194,7 @@ fun ProfileDetailView(
             onEdit = onEdit
         )
     } else {
-        FullProfileDetailView(role, data, isEditMode, isExternal, showEditButton, tareasPlantilla, onEdit, onExpand)
+        FullProfileDetailView(role, data, isEditMode, isExternal, showEditButton, tareasPlantilla, onEdit, onEditTasks, onExpand)
     }
 }
 
@@ -359,6 +360,7 @@ fun FullProfileDetailView(
     showEditButton: Boolean = !isExternal,
     tareasPlantilla: List<Tarea> = emptyList(),
     onEdit: () -> Unit,
+    onEditTasks: (() -> Unit)? = null,
     onExpand: (() -> Unit)? = null
 ) {
     val customColors = CuidaleThemeExtras.customColors
@@ -420,18 +422,51 @@ fun FullProfileDetailView(
                     listOf("especializacion", "experiencia", "comunas", "descripcion")
                 } else {
                     listOf(
-                        "nombre_completo", "nivel_dependencia", "enfermedades", "edad",
-                        "movilidad", "comunicacion", "genero"
+                        "nombre_completo", "edad", "genero",
+                        "nivel_dependencia", "movilidad", "comunicacion", 
+                        "enfermedades", "discapacidades",
+                        "region", "comuna", "calle", "numero", "depto",
+                        "condiciones"
                     )
                 }
 
                 val dataToShow = data.filterKeys { it !in excludedKeys }
-                val sortedKeys = dataToShow.keys.sortedBy { key ->
-                    val index = preferredOrder.indexOf(key)
-                    if (index == -1) Int.MAX_VALUE else index
+                
+                if (role == "cuidador") {
+                    val sortedKeys = dataToShow.keys.sortedBy { key ->
+                        val index = preferredOrder.indexOf(key)
+                        if (index == -1) Int.MAX_VALUE else index
+                    }
+                    sortedKeys.forEach { key ->
+                        ProfileDataItem(key, dataToShow[key]!!, accentColor, textColor, secondaryTextColor, customColors.isDark)
+                    }
+                } else {
+                    // SECCIONES PARA REPRESENTANTE (PACIENTE)
+                    ProfileSectionHeader("IDENTIFICACIÓN", accentColor)
+                    listOf("nombre_completo", "edad", "genero").forEach { key ->
+                        dataToShow[key]?.let { ProfileDataItem(key, it, accentColor, textColor, secondaryTextColor, customColors.isDark) }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    ProfileSectionHeader("SALUD Y DEPENDENCIA", accentColor)
+                    listOf("nivel_dependencia", "movilidad", "comunicacion", "enfermedades", "discapacidades").forEach { key ->
+                        dataToShow[key]?.let { ProfileDataItem(key, it, accentColor, textColor, secondaryTextColor, customColors.isDark) }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    ProfileSectionHeader("UBICACIÓN", accentColor)
+                    listOf("region", "comuna", "calle", "numero", "depto").forEach { key ->
+                        dataToShow[key]?.let { ProfileDataItem(key, it, accentColor, textColor, secondaryTextColor, customColors.isDark) }
+                    }
+
+                    if (dataToShow.containsKey("condiciones")) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        ProfileSectionHeader("OBSERVACIONES ADICIONALES", accentColor)
+                        ProfileDataItem("condiciones", dataToShow["condiciones"]!!, accentColor, textColor, secondaryTextColor, customColors.isDark)
+                    }
                 }
 
-                if (tareasPlantilla.isNotEmpty()) {
+                if (tareasPlantilla.isNotEmpty() || !isExternal) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -446,136 +481,28 @@ fun FullProfileDetailView(
                             Text(
                                 text = "RÉGIMEN DE TAREAS",
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                color = secondaryTextColor
+                                color = secondaryTextColor,
+                                modifier = Modifier.weight(1f)
                             )
+                            if (!isEditMode && showEditButton) {
+                                IconButton(onClick = { if (onEditTasks != null) onEditTasks() else onEdit() }, modifier = Modifier.size(24.dp)) {
+                                    Icon(Icons.Default.Edit, "Editar Tareas", tint = accentColor, modifier = Modifier.size(16.dp))
+                                }
+                            }
                         }
                         
                         Spacer(modifier = Modifier.height(12.dp))
                         
-                        tareasPlantilla.forEach { tarea ->
-                            TaskItemCardInView(tarea, accentColor, textColor, secondaryTextColor)
-                        }
-                    }
-                }
-
-                sortedKeys.forEach { key ->
-                    val value = dataToShow[key]!!
-                    val label = when(key) {
-                        "especializacion" -> "Especialidad o formación:"
-                        "experiencia" -> "Tu experiencia previa:"
-                        "comunas" -> "Comunas de preferencia:"
-                        "descripcion" -> "Descripción sobre mí:"
-                        "nombre_completo" -> "Nombre de la persona a cuidar:"
-                        "edad" -> "Edad:"
-                        "genero" -> "Género:"
-                        "vives_con_familiar" -> "Vive con el solicitante:"
-                        "region" -> "Región:"
-                        "comuna" -> "Comuna:"
-                        "calle" -> "Calle / Pasaje:"
-                        "numero" -> "Número:"
-                        "depto" -> "Depto / Block:"
-                        "comunas_preferencia" -> "Comunas de interés:"
-                        "horarios_preferencia" -> "Horarios de preferencia:"
-                        "nivel_dependencia" -> "Nivel de Dependencia:"
-                        "movilidad" -> "Movilidad:"
-                        "comunicacion" -> "Comunicación:"
-                        "discapacidades" -> "Discapacidades:"
-                        "discapacidad_otro" -> "Otra discapacidad:"
-                        "enfermedades" -> "Enfermedades crónicas:"
-                        "enfermedad_otro" -> "Otra enfermedad:"
-                        "dieta" -> "Plan de alimentación:"
-                        "medicamentos" -> "Medicamentos:"
-                        "condiciones" -> "Otras observaciones:"
-                        else -> key.replace("_", " ").replaceFirstChar { it.uppercase() }
-                    }
-                    
-                    val displayValue = when {
-                        value is List<*> -> if (value.all { it is Map<*, *> }) "" else value.joinToString(", ")
-                        value is Map<*, *> -> ""
-                        value is Boolean -> if (value) "Sí" else "No"
-                        else -> value.toString()
-                    }
-                    
-                    if ((displayValue.isNotBlank() || value is List<*> || value is Map<*, *>) && displayValue != "No") {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp)
-                                .background(textColor.copy(alpha = if (customColors.isDark) 0.08f else 0.03f), RoundedCornerShape(12.dp))
-                                .border(1.dp, textColor.copy(alpha = if (customColors.isDark) 0.15f else 0.06f), RoundedCornerShape(12.dp))
-                                .padding(12.dp)
-                        ) {
-                            val isComplex = value is List<*> || value is Map<*, *> || displayValue.length > 30
-                            
-                            if (!isComplex) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                        val sectionIcon = when(key) {
-                                            "dieta" -> Icons.Default.Restaurant
-                                            "medicamentos" -> Icons.Default.Medication
-                                            "especializacion" -> Icons.Default.School
-                                            "experiencia" -> Icons.Default.History
-                                            "comunas", "region", "comuna" -> Icons.Default.Place
-                                            "nombre_completo" -> Icons.Default.Person
-                                            "edad" -> Icons.Default.Cake
-                                            "nivel_dependencia" -> Icons.Default.Accessibility
-                                            "enfermedades" -> Icons.Default.HealthAndSafety
-                                            else -> null
-                                        }
-                                        if (sectionIcon != null) {
-                                            Icon(sectionIcon, contentDescription = null, tint = accentColor, modifier = Modifier.size(18.dp))
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                        }
-                                        Text(
-                                            text = label.removeSuffix(":"),
-                                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                            color = secondaryTextColor
-                                        )
-                                    }
-                                    Text(
-                                        text = displayValue,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = textColor,
-                                        textAlign = TextAlign.End,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                }
-                            } else {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    val sectionIcon = when(key) {
-                                        "especializacion" -> Icons.Default.School
-                                        "experiencia" -> Icons.Default.History
-                                        "comunas", "region", "comuna" -> Icons.Default.Place
-                                        "nombre_completo" -> Icons.Default.Person
-                                        "edad" -> Icons.Default.Cake
-                                        "nivel_dependencia" -> Icons.Default.Accessibility
-                                        "enfermedades" -> Icons.Default.HealthAndSafety
-                                        else -> null
-                                    }
-                                    if (sectionIcon != null) {
-                                        Icon(sectionIcon, contentDescription = null, tint = accentColor, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                    }
-                                    Text(
-                                        text = label,
-                                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                        color = secondaryTextColor
-                                    )
-                                }
-                                
-                                Spacer(modifier = Modifier.height(6.dp))
-
-                                if (displayValue.isNotBlank()) {
-                                    Text(
-                                        text = displayValue,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = textColor
-                                    )
-                                }
+                        if (tareasPlantilla.isEmpty()) {
+                            Text(
+                                "No hay tareas programadas aún.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = secondaryTextColor.copy(alpha = 0.6f),
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                        } else {
+                            tareasPlantilla.forEach { tarea ->
+                                TaskItemCardInView(tarea, accentColor, textColor, secondaryTextColor)
                             }
                         }
                     }
@@ -584,6 +511,154 @@ fun FullProfileDetailView(
         }
     }
 }
+
+@Composable
+fun ProfileSectionHeader(title: String, color: Color) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(modifier = Modifier.width(4.dp).height(16.dp).background(color, CircleShape))
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Black, letterSpacing = 1.sp),
+            color = color
+        )
+    }
+}
+
+@Composable
+fun ProfileDataItem(
+    key: String,
+    value: Any,
+    accentColor: Color,
+    textColor: Color,
+    secondaryTextColor: Color,
+    isDark: Boolean
+) {
+    val label = when(key) {
+        "especializacion" -> "Especialidad o formación"
+        "experiencia" -> "Experiencia previa"
+        "comunas" -> "Comunas de preferencia"
+        "descripcion" -> "Descripción sobre mí"
+        "nombre_completo" -> "Nombre del paciente"
+        "edad" -> "Edad"
+        "genero" -> "Género"
+        "vives_con_familiar" -> "Vive con el solicitante"
+        "region" -> "Región"
+        "comuna" -> "Comuna"
+        "calle" -> "Calle / Pasaje"
+        "numero" -> "Número"
+        "depto" -> "Depto / Block"
+        "comunas_preferencia" -> "Comunas de interés"
+        "horarios_preferencia" -> "Horarios de preferencia"
+        "nivel_dependencia" -> "Nivel de Dependencia"
+        "movilidad" -> "Movilidad"
+        "comunicacion" -> "Comunicación"
+        "discapacidades" -> "Discapacidades"
+        "discapacidad_otro" -> "Otra discapacidad"
+        "enfermedades" -> "Enfermedades crónicas"
+        "enfermedad_otro" -> "Otra enfermedad"
+        "dieta" -> "Plan de alimentación"
+        "medicamentos" -> "Medicamentos"
+        "condiciones" -> "Otras observaciones"
+        else -> key.replace("_", " ").replaceFirstChar { it.uppercase() }
+    }
+    
+    val displayValue = when {
+        value is List<*> -> if (value.all { it is Map<*, *> }) "" else value.joinToString(", ")
+        value is Map<*, *> -> ""
+        value is Boolean -> if (value) "Sí" else "No"
+        else -> value.toString()
+    }
+    
+    if ((displayValue.isNotBlank() || value is List<*> || value is Map<*, *>) && displayValue != "No") {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp)
+                .background(textColor.copy(alpha = if (isDark) 0.08f else 0.03f), RoundedCornerShape(12.dp))
+                .border(1.dp, textColor.copy(alpha = if (isDark) 0.15f else 0.06f), RoundedCornerShape(12.dp))
+                .padding(12.dp)
+        ) {
+            val isComplex = value is List<*> || value is Map<*, *> || displayValue.length > 30
+            
+            if (!isComplex) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                        val sectionIcon = when(key) {
+                            "especializacion" -> Icons.Default.School
+                            "experiencia" -> Icons.Default.History
+                            "comunas", "region", "comuna" -> Icons.Default.Place
+                            "nombre_completo" -> Icons.Default.Person
+                            "edad" -> Icons.Default.Cake
+                            "nivel_dependencia" -> Icons.Default.Accessibility
+                            "enfermedades" -> Icons.Default.HealthAndSafety
+                            else -> null
+                        }
+                        if (sectionIcon != null) {
+                            Icon(sectionIcon, contentDescription = null, tint = accentColor, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = secondaryTextColor
+                        )
+                    }
+                    Text(
+                        text = displayValue,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = textColor,
+                        textAlign = TextAlign.End,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val sectionIcon = when(key) {
+                        "especializacion" -> Icons.Default.School
+                        "experiencia" -> Icons.Default.History
+                        "comunas", "region", "comuna" -> Icons.Default.Place
+                        "nombre_completo" -> Icons.Default.Person
+                        "edad" -> Icons.Default.Cake
+                        "nivel_dependencia" -> Icons.Default.Accessibility
+                        "enfermedades" -> Icons.Default.HealthAndSafety
+                        else -> null
+                    }
+                    if (sectionIcon != null) {
+                        Icon(sectionIcon, contentDescription = null, tint = accentColor, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        color = secondaryTextColor
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(4.dp))
+
+                if (displayValue.isNotBlank()) {
+                    Text(
+                        text = displayValue,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = textColor
+                    )
+                }
+            }
+        }
+    }
+}
+
+
+
+
 
 @Composable
 fun SearchPreferencesCard(
@@ -747,6 +822,7 @@ fun HardShadowPanel(
     shadowColor: Color = CuidaleThemeExtras.shadows.hardShadowPrimary.copy(alpha = 0.2f),
     isError: Boolean = false,
     cornerRadius: Dp = 16.dp,
+    shadowOffset: Dp = 6.dp,
     contentPadding: PaddingValues = PaddingValues(20.dp),
     content: @Composable ColumnScope.() -> Unit
 ) {
@@ -774,12 +850,12 @@ fun HardShadowPanel(
         modifier = modifier
             .fillMaxWidth()
             .offset { IntOffset(shakeOffset.value.roundToInt(), 0) }
-            .padding(bottom = 8.dp)
+            .padding(bottom = shadowOffset, end = shadowOffset)
     ) {
         Box(
             modifier = Modifier
                 .matchParentSize()
-                .offset(x = 6.dp, y = 6.dp)
+                .offset(x = shadowOffset, y = shadowOffset)
                 .clip(RoundedCornerShape(cornerRadius))
                 .background(animatedShadow)
         )
@@ -1188,6 +1264,17 @@ fun CuidaleDrawerContent(nombre: String, apellido: String, fotoUrl: String, rol:
         NavigationDrawerItem(label = { Text(stringResource(R.string.menu_item_profile)) }, selected = false, onClick = onProfileClick, icon = { Icon(Icons.Default.Person, contentDescription = null) }, colors = NavigationDrawerItemDefaults.colors(unselectedContainerColor = Color.Transparent))
         NavigationDrawerItem(label = { Text(stringResource(R.string.menu_item_ficha)) }, selected = false, onClick = onFichaClick, icon = { Icon(Icons.Default.Badge, contentDescription = null) }, colors = NavigationDrawerItemDefaults.colors(unselectedContainerColor = Color.Transparent))
         NavigationDrawerItem(label = { Text("Configuración") }, selected = false, onClick = onSettingsClick, icon = { Icon(Icons.Default.Settings, contentDescription = null) }, colors = NavigationDrawerItemDefaults.colors(unselectedContainerColor = Color.Transparent))
+        
+        Spacer(modifier = Modifier.weight(1f))
+        
+        Text(
+            text = "v${stringResource(R.string.app_version)} - Cuidale",
+            modifier = Modifier.padding(vertical = 16.dp).align(Alignment.CenterHorizontally),
+            style = MaterialTheme.typography.labelSmall,
+            color = colors.onSurfaceVariant.copy(alpha = 0.5f)
+        )
+
+
         Spacer(modifier = Modifier.weight(1f)); HardShadowButton(text = stringResource(R.string.menu_logout), containerColor = colors.error, contentColor = Color.White, shadowColor = colors.errorContainer, isDark = customColors.isDark, onClick = onLogoutClick, icon = Icons.Default.Logout)
     }
 }
@@ -1263,12 +1350,12 @@ fun CuidaleDetailRow(icon: ImageVector, label: String, value: String, modifier: 
 }
 
 @Composable
-fun CuidaleBottomBar(selectedTab: String, unreadCount: Int = 0, pendingNotifs: Int = 0, onTabSelected: (String) -> Unit) {
+fun CuidaleBottomBar(selectedTab: String, unreadCount: Int = 0, pendingNotifs: Int = 0, pendingRequests: Int = 0, onTabSelected: (String) -> Unit) {
     val customColors = CuidaleThemeExtras.customColors
     Surface(color = customColors.panelBackground, tonalElevation = 8.dp, shadowElevation = 16.dp, modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars).height(72.dp).padding(horizontal = 24.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             BottomNavItem(icon = Icons.Default.Notifications, isSelected = selectedTab == "notifications", badgeCount = pendingNotifs, onClick = { onTabSelected("notifications") })
-            BottomNavItem(icon = Icons.Default.Assignment, isSelected = selectedTab == "requests", onClick = { onTabSelected("requests") })
+            BottomNavItem(icon = Icons.Default.Assignment, isSelected = selectedTab == "requests", badgeCount = pendingRequests, onClick = { onTabSelected("requests") })
             BottomNavItem(icon = Icons.Default.Home, isSelected = selectedTab == "home", onClick = { onTabSelected("home") }, isCenter = true)
             BottomNavItem(icon = Icons.AutoMirrored.Filled.Chat, isSelected = selectedTab == "chats", badgeCount = unreadCount, onClick = { onTabSelected("chats") })
         }

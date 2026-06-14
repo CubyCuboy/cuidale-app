@@ -52,7 +52,8 @@ fun NotificationsScreen(
     onViewSettings: () -> Unit,
     onTabSelected: (String) -> Unit,
     onNotificationClick: (Notification) -> Unit,
-    notificationsViewModel: NotificationsViewModel = viewModel()
+    notificationsViewModel: NotificationsViewModel = viewModel(),
+    solicitudViewModel: com.example.cuidaleapp.viewmodel.SolicitudViewModel = viewModel()
 ) {
     val gradient = CuidaleThemeExtras.gradient
     val customColors = CuidaleThemeExtras.customColors
@@ -119,10 +120,16 @@ fun NotificationsScreen(
                         }
                     },
                     bottomBar = {
+                        val misPostulaciones = solicitudViewModel.misPostulaciones.collectAsState().value
+                        val postulacionesRecibidas = solicitudViewModel.postulacionesRecibidas.collectAsState().value
+                        val pendingReqCount = if (userData.rol == "cuidador") misPostulaciones.size 
+                                              else postulacionesRecibidas.values.flatten().count { it.estado == "pendiente" }
+
                         CuidaleBottomBar(
                             selectedTab = "notifications", 
                             unreadCount = unreadCount, 
                             pendingNotifs = pendingNotifs,
+                            pendingRequests = pendingReqCount,
                             onTabSelected = onTabSelected
                         )
                     },
@@ -268,10 +275,18 @@ fun NotificationsScreen(
                                                 sender = sender,
                                                 isDark = isDark,
                                                 modifier = Modifier.animateItem(),
-                                                onClick = { 
+                                                onMainAction = {
+                                                    // Marcar como leído e inmediatamente navegar
                                                     notificationsViewModel.markAsRead(notif.id)
+                                                    if (notif.tipo == "nuevo_mensaje") {
+                                                        val cid = notif.data["chatId"] ?: ""
+                                                        if (cid.isNotEmpty()) {
+                                                            notificationsViewModel.markChatGroupAsRead(cid)
+                                                        }
+                                                    }
                                                     onNotificationClick(notif)
                                                 },
+                                                onMarkRead = { notificationsViewModel.markAsRead(notif.id) },
                                                 onDelete = { notificationsViewModel.deleteNotification(notif.id) }
                                             )
                                         }
@@ -292,7 +307,8 @@ fun NotificationItem(
     sender: UserData?,
     isDark: Boolean,
     modifier: Modifier = Modifier,
-    onClick: () -> Unit,
+    onMainAction: () -> Unit,
+    onMarkRead: () -> Unit,
     onDelete: () -> Unit
 ) {
     val customColors = CuidaleThemeExtras.customColors
@@ -305,57 +321,91 @@ fun NotificationItem(
     HardShadowPanel(
         backgroundColor = if (notification.leida) (if (isDark) Color(0xFF1B263B) else Color.White.copy(alpha = 0.9f)) else (if (isDark) Color(0xFF2B3A55) else Color.White),
         shadowColor = if (notification.leida) Color.Transparent else itemAccent.copy(alpha = 0.2f),
-        modifier = modifier.clickable { onClick() }
+        modifier = modifier
     ) {
-        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.size(48.dp).clip(CircleShape).background(itemAccent.copy(alpha = 0.1f))) {
-                if (sender?.fotoUrl?.isNotEmpty() == true) {
-                    AsyncImage(model = sender.fotoUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                } else {
-                    Icon(
-                        imageVector = when(notification.tipo) {
-                            "solicitud_vinculo" -> Icons.Default.PersonAdd
-                            "nuevo_mensaje" -> Icons.AutoMirrored.Filled.Chat
-                            else -> Icons.Default.Notifications
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.size(48.dp).clip(CircleShape).background(itemAccent.copy(alpha = 0.1f))) {
+                    if (sender?.fotoUrl?.isNotEmpty() == true) {
+                        AsyncImage(model = sender.fotoUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                    } else {
+                        Icon(
+                            imageVector = when(notification.tipo) {
+                                "solicitud_vinculo" -> Icons.Default.PersonAdd
+                                "nuevo_mensaje" -> Icons.AutoMirrored.Filled.Chat
+                                else -> Icons.Default.Notifications
+                            },
+                            contentDescription = null,
+                            modifier = Modifier.align(Alignment.Center),
+                            tint = itemAccent
+                        )
+                    }
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = when (notification.tipo) {
+                            "solicitud_vinculo" -> "Nueva solicitud de chat"
+                            "vinculo_aceptado" -> "¡Solicitud aceptada!"
+                            "nuevo_mensaje" -> "Mensaje de ${sender?.nombre ?: "Usuario"}"
+                            else -> "Notificación"
                         },
-                        contentDescription = null,
-                        modifier = Modifier.align(Alignment.Center),
-                        tint = itemAccent
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isDark) Color.White else Color.Black
+                    )
+                    Text(
+                        text = when (notification.tipo) {
+                            "solicitud_vinculo" -> "${sender?.nombre ?: "Alguien"} quiere conectar contigo."
+                            "vinculo_aceptado" -> "${sender?.nombre ?: "Un usuario"} aceptó tu solicitud. ¡Ya pueden hablar!"
+                            "nuevo_mensaje" -> notification.data["text"] ?: "Toca para ver el mensaje."
+                            else -> "Tienes un nuevo aviso."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isDark) Color.LightGray else Color.DarkGray,
+                        maxLines = 2
                     )
                 }
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Default.DeleteOutline, null, modifier = Modifier.size(18.dp), tint = Color.Gray)
+                }
             }
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = when (notification.tipo) {
-                        "solicitud_vinculo" -> "Nueva solicitud de chat"
-                        "vinculo_aceptado" -> "¡Solicitud aceptada!"
-                        "nuevo_mensaje" -> "Nuevo mensaje de ${sender?.nombre ?: "Usuario"}"
-                        else -> "Notificación"
-                    },
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isDark) Color.White else Color.Black
-                )
-                Text(
-                    text = when (notification.tipo) {
-                        "solicitud_vinculo" -> "${sender?.nombre ?: "Alguien"} quiere conectar contigo."
-                        "vinculo_aceptado" -> "${sender?.nombre ?: "Un usuario"} aceptó tu solicitud. ¡Ya pueden hablar!"
-                        "nuevo_mensaje" -> notification.data["text"] ?: "Toca para ver el mensaje."
-                        else -> "Tienes un nuevo aviso."
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (isDark) Color.LightGray else Color.DarkGray
-                )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
                     text = formatTime(notification.timestamp),
                     style = MaterialTheme.typography.labelSmall,
                     color = Color.Gray,
-                    modifier = Modifier.padding(top = 4.dp)
+                    modifier = Modifier.weight(1f)
                 )
-            }
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Close, null, modifier = Modifier.size(16.dp), tint = Color.Gray)
+                
+                if (!notification.leida) {
+                    TextButton(onClick = onMarkRead) {
+                        Text("LEÍDO", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                
+                Button(
+                    onClick = onMainAction,
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                    modifier = Modifier.height(32.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = itemAccent)
+                ) {
+                    val btnText = when(notification.tipo) {
+                        "nuevo_mensaje" -> "IR AL CHAT"
+                        "solicitud_vinculo" -> "VER PERFIL"
+                        else -> "VER"
+                    }
+                    Text(btnText, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = Color.White)
+                }
             }
         }
     }

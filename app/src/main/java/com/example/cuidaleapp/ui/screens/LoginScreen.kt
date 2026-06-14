@@ -4,7 +4,10 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -47,6 +50,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -89,7 +94,7 @@ fun LoginScreen(
         else -> "form"
     }
 
-    Crossfade(targetState = screenKey, label = "screenTransition", animationSpec = tween(600)) { key ->
+    Crossfade(targetState = screenKey, label = "screenTransition", animationSpec = tween(1000, easing = LinearOutSlowInEasing)) { key ->
         when (key) {
             "form" -> {
                 LoginForm(
@@ -211,7 +216,6 @@ fun LoginForm(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Logo Modernizado con Neo-Brutalismo
             Box(
                 modifier = Modifier.padding(bottom = 24.dp)
             ) {
@@ -241,7 +245,10 @@ fun LoginForm(
             HardShadowPanel(
                 backgroundColor = if (isError) colors.errorContainer.copy(alpha = 0.95f) else panelBg,
                 shadowColor = if (isError) colors.error else panelShadowColor,
-                modifier = Modifier.offset { IntOffset(shakeOffset.value.roundToInt(), 0) }
+                modifier = Modifier
+                    .widthIn(max = 340.dp)
+                    .offset { IntOffset(shakeOffset.value.roundToInt(), 0) },
+                contentPadding = PaddingValues(16.dp)
             ) {
                 Text(
                     text = stringResource(R.string.login_welcome),
@@ -373,7 +380,7 @@ fun LoginForm(
         }
 
         Text(
-            text = stringResource(R.string.login_version),
+            text = stringResource(R.string.app_version),
             modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 12.dp),
             style = typography.labelSmall,
             color = onGradientText.copy(alpha = 0.55f)
@@ -385,9 +392,10 @@ fun LoginForm(
 fun TransitionScreen(userData: UserData, onFinished: () -> Unit) {
     val gradient = CuidaleThemeExtras.gradient
     val onGradientText = CuidaleThemeExtras.customColors.onGradient
+    val appVersion = "0.8"
 
     LaunchedEffect(Unit) {
-        delay(2500)
+        delay(3000)
         onFinished()
     }
 
@@ -399,17 +407,29 @@ fun TransitionScreen(userData: UserData, onFinished: () -> Unit) {
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = stringResource(R.string.login_welcome_back),
+                text = "BIENVENIDO",
                 style = MaterialTheme.typography.displayMedium,
+                fontWeight = FontWeight.Black,
                 color = onGradientText
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "${userData.nombre} ${userData.apellido_pa}",
                 style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
                 color = onGradientText.copy(alpha = 0.9f)
             )
+            
+            Spacer(modifier = Modifier.height(48.dp))
+            CircularProgressIndicator(color = onGradientText, strokeWidth = 3.dp)
         }
+        
+        Text(
+            text = "Versión $appVersion",
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 48.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = onGradientText.copy(alpha = 0.5f)
+        )
     }
 }
 

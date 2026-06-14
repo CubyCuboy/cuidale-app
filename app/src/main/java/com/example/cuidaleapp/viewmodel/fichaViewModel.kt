@@ -124,39 +124,51 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun saveTareaPlantilla(tarea: Tarea) {
-        if (isEditingMode) {
-            val actuales = _tareasTemporales.value.toMutableList()
-            val index = actuales.indexOfFirst { it.id == tarea.id }
-            if (index != -1) {
-                actuales[index] = tarea
-            } else {
-                actuales.add(tarea)
-            }
-            _tareasTemporales.value = actuales
-        } else {
-            val user = auth.currentUser ?: return
-            viewModelScope.launch {
-                try {
-                    db.collection("fichas").document(user.uid)
-                        .collection("tareas_plantilla").document(tarea.id)
-                        .set(tarea).await()
-                } catch (e: Exception) {}
-            }
+        val user = auth.currentUser ?: return
+        viewModelScope.launch {
+            try {
+                // Actualizar en el arreglo independiente
+                val docRef = db.collection("fichas").document(user.uid)
+                    .collection("rutina_data").document("actual")
+                
+                val doc = docRef.get().await()
+                val actuales = if (doc.exists()) {
+                    doc.get("tareas") as? MutableList<Map<String, Any>> ?: mutableListOf()
+                } else mutableListOf()
+                
+                val index = actuales.indexOfFirst { it["id"] == tarea.id }
+                val tareaMap = mapOf(
+                    "id" to tarea.id,
+                    "titulo" to tarea.titulo,
+                    "tipo" to tarea.tipo.name,
+                    "horarioInicio" to tarea.horarioInicio,
+                    "frecuencia" to tarea.frecuencia.name,
+                    "descripcion" to tarea.descripcion
+                )
+                
+                if (index != -1) actuales[index] = tareaMap else actuales.add(tareaMap)
+                
+                docRef.set(mapOf("tareas" to actuales)).await()
+                checkProfile(isSilent = true)
+            } catch (e: Exception) {}
         }
     }
 
     fun deleteTareaPlantilla(tareaId: String) {
-        if (isEditingMode) {
-            _tareasTemporales.value = _tareasTemporales.value.filter { it.id != tareaId }
-        } else {
-            val user = auth.currentUser ?: return
-            viewModelScope.launch {
-                try {
-                    db.collection("fichas").document(user.uid)
-                        .collection("tareas_plantilla").document(tareaId)
-                        .update("activa", false).await()
-                } catch (e: Exception) {}
-            }
+        val user = auth.currentUser ?: return
+        viewModelScope.launch {
+            try {
+                val docRef = db.collection("fichas").document(user.uid)
+                    .collection("rutina_data").document("actual")
+                
+                val doc = docRef.get().await()
+                if (doc.exists()) {
+                    val actuales = doc.get("tareas") as? MutableList<Map<String, Any>> ?: mutableListOf()
+                    actuales.removeAll { it["id"] == tareaId }
+                    docRef.set(mapOf("tareas" to actuales)).await()
+                }
+                checkProfile(isSilent = true)
+            } catch (e: Exception) {}
         }
     }
 
@@ -307,12 +319,32 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
     private var tareasListener: ListenerRegistration? = null
     private fun listenToTareas(uid: String) {
         tareasListener?.remove()
+        // Nueva estructura: Documento independiente 'rutina' que contiene el arreglo de tareas
         tareasListener = db.collection("fichas").document(uid)
-            .collection("tareas_plantilla")
-            .whereEqualTo("activa", true)
+            .collection("rutina_data").document("actual")
             .addSnapshotListener { snapshot, _ ->
-                if (snapshot != null) {
-                    _tareasPlantilla.value = snapshot.toObjects(Tarea::class.java)
+                if (snapshot != null && snapshot.exists()) {
+                    val list = snapshot.get("tareas") as? List<Map<String, Any>> ?: emptyList()
+                    // Convertir de Map a Tarea (Firebase lo hace automáticamente con toObjects pero aquí es un campo array)
+                    // Para simplificar, seguimos permitiendo la subcolección pero el "lápiz" lleva a TAREAS del servicio.
+                    // Sin embargo, para cumplir con lo solicitado de "arreglo independiente":
+                    _tareasPlantilla.value = list.map { map ->
+                        // Mapeo manual básico o usar convertidor
+                        Tarea(
+                            id = map["id"] as? String ?: "",
+                            titulo = map["titulo"] as? String ?: "",
+                            tipo = TipoTarea.valueOf(map["tipo"] as? String ?: "OTRO"),
+                            horarioInicio = map["horarioInicio"] as? String ?: "",
+                            frecuencia = FrecuenciaTarea.valueOf(map["frecuencia"] as? String ?: "DIARIA")
+                        )
+                    }.filter { it.id.isNotEmpty() }
+                } else {
+                    // Fallback a subcolección si el documento nuevo no existe (migración)
+                    db.collection("fichas").document(uid).collection("tareas_plantilla")
+                        .whereEqualTo("activa", true)
+                        .get().addOnSuccessListener { subSnap ->
+                            _tareasPlantilla.value = subSnap.toObjects(Tarea::class.java)
+                        }
                 }
             }
     }

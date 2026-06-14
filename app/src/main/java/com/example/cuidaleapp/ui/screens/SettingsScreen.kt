@@ -190,6 +190,14 @@ fun SettingsScreen(
                             }
                         }
                     )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Text(
+                        text = "v${stringResource(R.string.app_version)} - Cuidale App",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    )
                 }
             }
         }

@@ -8,7 +8,7 @@ enum class TipoTarea {
 }
 
 enum class FrecuenciaTarea {
-    UNA_VEZ, DIARIA, SEMANAL, MENSUAL, INDEFINIDA
+    UNA_VEZ, DIARIA, SEMANAL, MENSUAL
 }
 
 data class Tarea(
@@ -21,6 +21,7 @@ data class Tarea(
     val horarioFin: String? = null, // Opcional, para actividades con duración
     val frecuencia: FrecuenciaTarea = FrecuenciaTarea.DIARIA,
     val diasSeleccionados: List<Int> = emptyList(), // 1-7 para SEMANAL, 1-31 para MENSUAL
+    val mesesSeleccionados: List<Int> = emptyList(), // 1-12 para MENSUAL
     val fechaEspecifica: String? = null, // "yyyy-MM-dd" para UNA_VEZ
     val activa: Boolean = true,
     val creadaPor: String = "",
@@ -35,7 +36,12 @@ data class RegistroTarea(
     val completada: Boolean = false,
     val completadaPor: String = "",
     val fechaCompletado: Timestamp? = null,
+    val postergada: Boolean = false,
+    val motivoPostergacion: String = "",
+    val fechaPostergacion: Timestamp? = null,
     val notas: String = "",
+    val descripcion: String = "", // Indicaciones permanentes de la plantilla
+    val frecuencia: FrecuenciaTarea = FrecuenciaTarea.DIARIA,
     val horarioPrevisto: String = "",
     val titulo: String = "",
     val tipo: TipoTarea = TipoTarea.OTRO

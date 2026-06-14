@@ -139,10 +139,41 @@ class FavoritosViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             _uiState.value = FavoritosUiState.Loading
             try {
-                val action = if (isBlocked) FieldValue.arrayRemove(targetUid) else FieldValue.arrayUnion(targetUid)
-                db.collection("usuarios").document(myUid).update("bloqueados", action).await()
+                if (!isBlocked) {
+                    // Si estamos bloqueando, eliminamos de favoritos y guardados
+                    db.collection("usuarios").document(myUid).update(
+                        mapOf(
+                            "bloqueados" to FieldValue.arrayUnion(targetUid),
+                            "favoritos" to FieldValue.arrayRemove(targetUid),
+                            "guardados" to FieldValue.arrayRemove(targetUid)
+                        )
+                    ).await()
+                    
+                    // Cancelar servicios activos entre ambos
+                    val sols1 = db.collection("solicitudes")
+                        .whereEqualTo("representanteUid", myUid)
+                        .whereEqualTo("cuidadorUid", targetUid)
+                        .get().await()
+                    
+                    val sols2 = db.collection("solicitudes")
+                        .whereEqualTo("representanteUid", targetUid)
+                        .whereEqualTo("cuidadorUid", myUid)
+                        .get().await()
+                    
+                    (sols1.documents + sols2.documents).forEach { doc ->
+                        doc.reference.delete()
+                    }
+                    
+                    // También eliminar vínculo si existe
+                    val vinculoId = if (myUid < targetUid) "${myUid}_$targetUid" else "${targetUid}_$myUid"
+                    db.collection("vinculos").document(vinculoId).delete()
+
+                } else {
+                    db.collection("usuarios").document(myUid).update("bloqueados", FieldValue.arrayRemove(targetUid)).await()
+                }
+                
                 loadSocialData()
-                _uiState.value = FavoritosUiState.Success(if (isBlocked) "Usuario desbloqueado" else "Usuario bloqueado")
+                _uiState.value = FavoritosUiState.Success(if (isBlocked) "Usuario desbloqueado" else "Usuario bloqueado y servicios cancelados")
             } catch (e: Exception) {
                 _uiState.value = FavoritosUiState.Error("Error al actualizar bloqueo")
             }

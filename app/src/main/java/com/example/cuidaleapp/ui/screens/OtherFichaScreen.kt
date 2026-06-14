@@ -1,5 +1,6 @@
 package com.example.cuidaleapp.ui.screens
 
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Phone
@@ -79,6 +80,8 @@ fun OtherFichaScreen(
     val isFavorito = otherUserData?.let { favoritosList.contains(it.uid) } ?: false
     val noDeseadosList by favoritosViewModel.noDeseados.collectAsState()
     val isNoDeseado = otherUserData?.let { noDeseadosList.contains(it.uid) } ?: false
+    val bloqueadosList by favoritosViewModel.bloqueados.collectAsState()
+    val iHaveBlocked = otherUserData?.let { bloqueadosList.contains(it.uid) } ?: false
     var showUnwantedDialog by remember { mutableStateOf(false) }
 
     val misVinculos by vinculosViewModel.misVinculos.collectAsState()
@@ -105,7 +108,8 @@ fun OtherFichaScreen(
 
     LaunchedEffect(otherUserData?.uid) {
         val uid = otherUserData?.uid ?: return@LaunchedEffect
-        if (displayRole == "representante") {
+        // Only load requests if not in an error state (which implies blocking)
+        if (otherProfileState is ProfileViewModel.RemoteState.Success && displayRole == "representante") {
             try {
                 val snapshot = FirebaseFirestore.getInstance().collection("solicitudes")
                     .whereEqualTo("representanteUid", uid)
@@ -407,6 +411,7 @@ fun OtherFichaScreen(
                         val isPendiente = vinculoExistente?.estado == "pendiente"
                         
                         val buttonText = when {
+                            iHaveBlocked -> "DESBLOQUEAR USUARIO"
                             vinculoExistente?.estado == "aceptado" -> "IR AL CHAT"
                             isSolicitante && isPendiente -> "CHAT YA SOLICITADO"
                             !isSolicitante && isPendiente -> null // Se muestran ACEPTAR/RECHAZAR abajo
@@ -417,15 +422,22 @@ fun OtherFichaScreen(
                             HardShadowButton(
                                 text = if (vinculosUiState is VinculosUiState.Loading) "PROCESANDO..." else buttonText,
                                 modifier = Modifier.fillMaxWidth().height(60.dp).padding(vertical = 8.dp),
-                                containerColor = if (isSolicitante && isPendiente) Color.LightGray else accentColor,
+                                containerColor = when {
+                                    iHaveBlocked -> Color.Red
+                                    isSolicitante && isPendiente -> Color.LightGray
+                                    else -> accentColor
+                                },
                                 contentColor = if (isSolicitante && isPendiente) Color.DarkGray else Color.White,
-                                shadowColor = accentColor.copy(alpha = 0.4f),
-                                icon = Icons.AutoMirrored.Filled.Chat,
+                                shadowColor = if (iHaveBlocked) Color.Red.copy(alpha = 0.4f) else accentColor.copy(alpha = 0.4f),
+                                icon = if (iHaveBlocked) Icons.Default.LockOpen else Icons.AutoMirrored.Filled.Chat,
                                 enabled = vinculosUiState !is VinculosUiState.Loading,
                                 onClick = {
                                     otherUserData?.let { user ->
                                         scope.launch {
                                             when {
+                                                iHaveBlocked -> {
+                                                    favoritosViewModel.toggleBloqueo(user.uid)
+                                                }
                                                 vinculoExistente?.estado == "aceptado" -> {
                                                     onChatNavigate(vinculoExistente.id, user.uid, user)
                                                 }

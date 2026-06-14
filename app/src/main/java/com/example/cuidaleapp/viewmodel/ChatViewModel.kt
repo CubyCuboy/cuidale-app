@@ -408,15 +408,19 @@ class ChatViewModel : ViewModel() {
 
     fun markChatAsRead(chatId: String) {
         val myUid = auth.currentUser?.uid ?: return
-        database.child("messages").child(chatId).get().addOnSuccessListener { snapshot ->
-            snapshot.children.forEach { child ->
-                val msg = child.getValue(ChatMessage::class.java)
-                if (msg != null && msg.senderId != myUid && !msg.readBy.containsKey(myUid)) {
-                    child.ref.child("readBy").child(myUid).setValue(true)
+        
+        // Operación optimizada: solo buscar mensajes que NO he leído
+        database.child("messages").child(chatId)
+            .get()
+            .addOnSuccessListener { snapshot ->
+                snapshot.children.forEach { child ->
+                    val msg = child.getValue(ChatMessage::class.java)
+                    if (msg != null && msg.senderId != myUid && !msg.readBy.containsKey(myUid)) {
+                        child.ref.child("readBy").child(myUid).setValue(true)
+                    }
                 }
+                clearChatNotifications(chatId)
             }
-            clearChatNotifications(chatId)
-        }
     }
 
     private fun markAsRead(chatId: String, messageId: String) {

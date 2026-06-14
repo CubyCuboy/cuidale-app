@@ -42,7 +42,10 @@ fun ProfileScreen(
     onNavigateBack: () -> Unit,
     onSettingsClick: () -> Unit,
     onSocialClick: () -> Unit,
-    onTabSelected: (String) -> Unit = {}
+    onTabSelected: (String) -> Unit = {},
+    unreadCount: Int = 0,
+    pendingNotifs: Int = 0,
+    solicitudViewModel: com.example.cuidaleapp.viewmodel.SolicitudViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
     val userData by viewModel.userData.collectAsState()
     val fichaState by fichaViewModel.state.collectAsState()
@@ -63,7 +66,18 @@ fun ProfileScreen(
 
     Scaffold(
         bottomBar = {
-            CuidaleBottomBar(selectedTab = "none", onTabSelected = onTabSelected)
+            val misPostulaciones = solicitudViewModel.misPostulaciones.collectAsState().value
+            val postulacionesRecibidas = solicitudViewModel.postulacionesRecibidas.collectAsState().value
+            val pendingReqCount = if (userData.rol == "cuidador") misPostulaciones.size 
+                                  else postulacionesRecibidas.values.flatten().count { it.estado == "pendiente" }
+
+            CuidaleBottomBar(
+                selectedTab = "none", 
+                unreadCount = unreadCount, 
+                pendingNotifs = pendingNotifs,
+                pendingRequests = pendingReqCount,
+                onTabSelected = onTabSelected
+            )
         }
     ) { innerPadding ->
         PullToRefreshBox(
