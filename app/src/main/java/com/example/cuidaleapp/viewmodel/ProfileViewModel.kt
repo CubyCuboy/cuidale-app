@@ -147,15 +147,17 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 // Actualización en Firestore (esto disparará el myProfileListener automáticamente)
                 db.collection("usuarios").document(uid).update("fotoUrl", downloadUrl).await()
 
-                // Sincronizar con Ficha si existe
-                try {
-                    val fichaRef = db.collection("fichas").document(uid)
-                    val fichaDoc = fichaRef.get().await()
-                    if (fichaDoc.exists()) {
-                        fichaRef.update("fotoUrl", downloadUrl).await()
+                // Sincronizar con Ficha solo si es Cuidador
+                if (_userData.value.rol == "cuidador") {
+                    try {
+                        val fichaRef = db.collection("fichas").document(uid)
+                        val fichaDoc = fichaRef.get().await()
+                        if (fichaDoc.exists()) {
+                            fichaRef.update("fotoUrl", downloadUrl).await()
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("ProfileVM", "Error syncing photo with Ficha: ${e.message}")
                     }
-                } catch (e: Exception) {
-                    android.util.Log.e("ProfileVM", "Error syncing photo with Ficha: ${e.message}")
                 }
 
                 // Borrar rastro de la anterior en Storage
@@ -193,12 +195,14 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 db.collection("usuarios").document(uid).update("fotoUrl", "").await()
 
                 // Sincronizar con Ficha
-                try {
-                    val fichaRef = db.collection("fichas").document(uid)
-                    if (fichaRef.get().await().exists()) {
-                        fichaRef.update("fotoUrl", "").await()
-                    }
-                } catch (e: Exception) {}
+                if (_userData.value.rol == "cuidador") {
+                    try {
+                        val fichaRef = db.collection("fichas").document(uid)
+                        if (fichaRef.get().await().exists()) {
+                            fichaRef.update("fotoUrl", "").await()
+                        }
+                    } catch (e: Exception) {}
+                }
 
                 if (oldPhotoUrl.isNotEmpty() && oldPhotoUrl.contains("firebasestorage.googleapis.com")) {
                     try {
@@ -279,20 +283,22 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
 
                 db.collection("usuarios").document(uid).update(userMap).await()
 
-                // Sincronizar con Ficha si existe
-                try {
-                    val fichaRef = db.collection("fichas").document(uid)
-                    val fichaDoc = fichaRef.get().await()
-                    if (fichaDoc.exists()) {
-                        val fichaUpdate = mapOf(
-                            "fotoUrl" to finalPhotoUrl,
-                            "nombre" to updatedUser.nombre,
-                            "apellido_pa" to updatedUser.apellido_pa
-                        )
-                        fichaRef.update(fichaUpdate).await()
+                // Sincronizar con Ficha solo si es Cuidador
+                if (updatedUser.rol == "cuidador") {
+                    try {
+                        val fichaRef = db.collection("fichas").document(uid)
+                        val fichaDoc = fichaRef.get().await()
+                        if (fichaDoc.exists()) {
+                            val fichaUpdate = mapOf(
+                                "fotoUrl" to finalPhotoUrl,
+                                "nombre" to updatedUser.nombre,
+                                "apellido_pa" to updatedUser.apellido_pa
+                            )
+                            fichaRef.update(fichaUpdate).await()
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("ProfileVM", "Error syncing with Ficha: ${e.message}")
                     }
-                } catch (e: Exception) {
-                    android.util.Log.e("ProfileVM", "Error syncing with Ficha: ${e.message}")
                 }
                 
                 // Forzar actualización local para que la UI no parpadee
@@ -330,19 +336,21 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 )
                 db.collection("usuarios").document(uid).update(userMap).await()
 
-                // Sincronizar con Ficha si existe
-                try {
-                    val fichaRef = db.collection("fichas").document(uid)
-                    val fichaDoc = fichaRef.get().await()
-                    if (fichaDoc.exists()) {
-                        val fichaUpdate = mapOf(
-                            "nombre" to finalUser.nombre,
-                            "apellido_pa" to finalUser.apellido_pa
-                        )
-                        fichaRef.update(fichaUpdate).await()
+                // Sincronizar con Ficha solo si es Cuidador
+                if (updatedUser.rol == "cuidador") {
+                    try {
+                        val fichaRef = db.collection("fichas").document(uid)
+                        val fichaDoc = fichaRef.get().await()
+                        if (fichaDoc.exists()) {
+                            val fichaUpdate = mapOf(
+                                "nombre" to finalUser.nombre,
+                                "apellido_pa" to finalUser.apellido_pa
+                            )
+                            fichaRef.update(fichaUpdate).await()
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("ProfileVM", "Error syncing with Ficha: ${e.message}")
                     }
-                } catch (e: Exception) {
-                    android.util.Log.e("ProfileVM", "Error syncing with Ficha: ${e.message}")
                 }
                 userSession.saveUser(finalUser)
                 _userData.value = finalUser

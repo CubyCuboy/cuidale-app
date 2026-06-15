@@ -54,6 +54,9 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
     private val _tareasTemporales = MutableStateFlow<List<Tarea>>(emptyList())
     val tareasTemporales: StateFlow<List<Tarea>> = _tareasTemporales
 
+    private val _pendingPatientPhotoUri = MutableStateFlow<android.net.Uri?>(null)
+    val pendingPatientPhotoUri: StateFlow<android.net.Uri?> = _pendingPatientPhotoUri
+
     private var isEditingMode = false
 
     init {
@@ -107,15 +110,21 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
             is FichaState.View -> {
                 isEditingMode = true
                 _tareasTemporales.value = _tareasPlantilla.value
+                _pendingPatientPhotoUri.value = null
                 _state.value = FichaState.Editing(currentState.data)
             }
             is FichaState.NotFound -> {
                 isEditingMode = true
                 _tareasTemporales.value = emptyList()
+                _pendingPatientPhotoUri.value = null
                 _state.value = FichaState.Editing(emptyMap())
             }
             else -> {}
         }
+    }
+
+    fun setPendingPatientPhoto(uri: android.net.Uri?) {
+        _pendingPatientPhotoUri.value = uri
     }
 
     fun cancelEditing() {
@@ -237,11 +246,38 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _state.value = FichaState.Loading
             try {
-                val userDoc = db.collection("usuarios").document(user.uid).get().await()
+                var finalPhotoUrl = ""
+                val existingFicha = db.collection("fichas").document(user.uid).get().await()
+                if (existingFicha.exists()) {
+                    finalPhotoUrl = existingFicha.getString("fotoUrl") ?: ""
+                }
+
+                // Subir foto si hay una pendiente
+                _pendingPatientPhotoUri.value?.let { uri ->
+                    val storageRef = com.google.firebase.storage.FirebaseStorage.getInstance().reference
+                    val filename = "patient_${System.currentTimeMillis()}.jpg"
+                    val ref = storageRef.child("families/${user.uid}/$filename")
+                    
+                    val context = getApplication<Application>()
+                    val compressedBytes = com.example.cuidaleapp.utils.ImageUtils.getCompressedImage(context, uri)
+                        ?: throw Exception("Error al procesar imagen")
+
+                    ref.putBytes(compressedBytes).await()
+                    val newUrl = ref.downloadUrl.await().toString()
+                    
+                    // Intentar borrar la anterior
+                    if (finalPhotoUrl.isNotEmpty() && finalPhotoUrl.contains("firebasestorage")) {
+                        try {
+                            com.google.firebase.storage.FirebaseStorage.getInstance().getReferenceFromUrl(finalPhotoUrl).delete().await()
+                        } catch (e: Exception) {}
+                    }
+                    finalPhotoUrl = newUrl
+                }
+
                 val data = hashMapOf(
                     "tipo" to "familiar",
                     "nombre_completo" to nombreCompleto.trim(),
-                    "fotoUrl" to (userDoc.getString("fotoUrl") ?: ""),
+                    "fotoUrl" to finalPhotoUrl,
                     "edad" to edad.trim(),
                     "genero" to genero,
                     "vives_con_familiar" to vivesConFamiliar,

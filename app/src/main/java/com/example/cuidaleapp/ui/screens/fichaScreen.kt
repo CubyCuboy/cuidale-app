@@ -4,6 +4,8 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -473,6 +475,8 @@ fun FamilyEditFlow(
     var selectedCommunesPref by remember { mutableStateOf(initialData?.get("comunas_preferencia") as? List<String> ?: emptyList()) }
     var selectedHorariosPref by remember { mutableStateOf(initialData?.get("horarios_preferencia") as? List<String> ?: emptyList()) }
     
+    val pendingPhoto by viewModel.pendingPatientPhotoUri.collectAsState()
+
     LaunchedEffect(vivesConFamiliar, currentUserData.region, currentUserData.comuna) {
         if (vivesConFamiliar) {
             region = currentUserData.region
@@ -696,6 +700,10 @@ fun FamilyEditFlow(
                 }
             }
             3 -> {
+                val galleryLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                    androidx.activity.result.contract.ActivityResultContracts.GetContent()
+                ) { uri -> viewModel.setPendingPatientPhoto(uri) }
+
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     HardShadowPanel(
                         backgroundColor = cardColor,
@@ -704,6 +712,13 @@ fun FamilyEditFlow(
                         contentPadding = PaddingValues(20.dp)
                     ) {
                         Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Info, null, tint = accentColor, modifier = Modifier.size(24.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text("OBSERVACIONES Y FOTO", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = textColor)
+                            }
+                            Spacer(modifier = Modifier.height(20.dp))
+                            
                             InputFieldLabel(text = "OBSERVACIONES ADICIONALES", color = textColor)
                             CuidaleTextField(
                                 value = condicionesExtra,
@@ -714,6 +729,53 @@ fun FamilyEditFlow(
                                 containerColor = customColors.inputBackground,
                                 textColor = textColor
                             )
+                            
+                            Spacer(modifier = Modifier.height(24.dp))
+                            HorizontalDivider(color = textColor.copy(alpha = 0.1f))
+                            Spacer(modifier = Modifier.height(24.dp))
+                            
+                            InputFieldLabel(text = "FOTO DEL PACIENTE", color = textColor)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(80.dp)
+                                        .clip(CircleShape)
+                                        .background(customColors.inputBackground)
+                                        .border(1.dp, accentColor.copy(alpha = 0.3f), CircleShape)
+                                        .clickable { galleryLauncher.launch("image/*") },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    val photoToShow = pendingPhoto ?: initialData?.get("fotoUrl")
+                                    if (photoToShow != null && photoToShow.toString().isNotEmpty()) {
+                                        AsyncImage(
+                                            model = photoToShow,
+                                            contentDescription = null,
+                                            modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    } else {
+                                        Icon(Icons.Default.AddAPhoto, null, tint = textColor.copy(alpha = 0.3f))
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column {
+                                    Text(
+                                        text = if (pendingPhoto != null) "Foto seleccionada" else "Sin foto de paciente",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = textColor
+                                    )
+                                    TextButton(
+                                        onClick = { galleryLauncher.launch("image/*") },
+                                        contentPadding = PaddingValues(0.dp)
+                                    ) {
+                                        Text("CAMBIAR FOTO", color = accentColor, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black)
+                                    }
+                                }
+                            }
                         }
                     }
 

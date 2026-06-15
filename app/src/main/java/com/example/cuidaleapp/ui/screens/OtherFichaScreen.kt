@@ -313,8 +313,9 @@ fun OtherFichaScreen(
                                         color = accentColor
                                     )
                                     Spacer(modifier = Modifier.height(12.dp))
+                                    val fullName = "${user.nombre} ${user.apellido_pa}".trim()
                                     Text(
-                                        text = "${user.nombre} ${user.apellido_pa}",
+                                        text = if (fullName.isBlank() || fullName == "n/a") "Usuario sin nombre" else fullName,
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurface
@@ -577,7 +578,8 @@ fun OtherFichaScreen(
                                     data = targetState.data,
                                     isExternal = true,
                                     tareasPlantilla = otherTareasPlantilla,
-                                    onEdit = { }
+                                    onEdit = { },
+                                    isBlurry = vinculoExistente?.estado != "aceptado"
                                 )
                             }
                             is FichaState.NotFound -> {

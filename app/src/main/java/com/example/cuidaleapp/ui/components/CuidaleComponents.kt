@@ -17,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.*
@@ -184,7 +185,8 @@ fun ProfileDetailView(
     tareasPlantilla: List<Tarea> = emptyList(),
     onEdit: () -> Unit,
     onEditTasks: (() -> Unit)? = null,
-    onExpand: (() -> Unit)? = null
+    onExpand: (() -> Unit)? = null,
+    isBlurry: Boolean = false
 ) {
     if (isSummary && onExpand != null) {
         FichaSummaryCard(
@@ -194,7 +196,7 @@ fun ProfileDetailView(
             onEdit = onEdit
         )
     } else {
-        FullProfileDetailView(role, data, isEditMode, isExternal, showEditButton, tareasPlantilla, onEdit, onEditTasks, onExpand)
+        FullProfileDetailView(role, data, isEditMode, isExternal, showEditButton, tareasPlantilla, onEdit, onEditTasks, onExpand, isBlurry)
     }
 }
 
@@ -361,7 +363,8 @@ fun FullProfileDetailView(
     tareasPlantilla: List<Tarea> = emptyList(),
     onEdit: () -> Unit,
     onEditTasks: (() -> Unit)? = null,
-    onExpand: (() -> Unit)? = null
+    onExpand: (() -> Unit)? = null,
+    isBlurry: Boolean = false
 ) {
     val customColors = CuidaleThemeExtras.customColors
     val shadowPalette = CuidaleThemeExtras.shadows
@@ -443,6 +446,39 @@ fun FullProfileDetailView(
                 } else {
                     // SECCIONES PARA REPRESENTANTE (PACIENTE)
                     ProfileSectionHeader("IDENTIFICACIÓN", accentColor)
+                    
+                    val patientFoto = data["fotoUrl"]?.toString() ?: ""
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Surface(
+                            modifier = Modifier.size(100.dp),
+                            shape = CircleShape,
+                            border = BorderStroke(2.dp, accentColor.copy(alpha = 0.5f)),
+                            color = customColors.avatarBackground
+                        ) {
+                            if (patientFoto.isNotEmpty()) {
+                                AsyncImage(
+                                    model = patientFoto,
+                                    contentDescription = "Paciente",
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(CircleShape)
+                                        .blur(if (isBlurry) 25.dp else 0.dp),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Default.Person, 
+                                    null, 
+                                    modifier = Modifier.padding(24.dp), 
+                                    tint = secondaryTextColor.copy(alpha = 0.4f)
+                                )
+                            }
+                        }
+                    }
+
                     listOf("nombre_completo", "edad", "genero").forEach { key ->
                         dataToShow[key]?.let { ProfileDataItem(key, it, accentColor, textColor, secondaryTextColor, customColors.isDark) }
                     }
