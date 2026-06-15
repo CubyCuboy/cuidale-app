@@ -185,8 +185,12 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _state.value = FichaState.Loading
             try {
+                val userDoc = db.collection("usuarios").document(user.uid).get().await()
                 val data = hashMapOf(
                     "tipo" to "cuidador",
+                    "nombre" to (userDoc.getString("nombre") ?: ""),
+                    "apellido_pa" to (userDoc.getString("apellido_pa") ?: ""),
+                    "fotoUrl" to (userDoc.getString("fotoUrl") ?: ""),
                     "especializacion" to especializacion.trim(),
                     "experiencia" to experiencia.trim(),
                     "comunas" to comunas,
@@ -233,9 +237,11 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _state.value = FichaState.Loading
             try {
+                val userDoc = db.collection("usuarios").document(user.uid).get().await()
                 val data = hashMapOf(
                     "tipo" to "familiar",
                     "nombre_completo" to nombreCompleto.trim(),
+                    "fotoUrl" to (userDoc.getString("fotoUrl") ?: ""),
                     "edad" to edad.trim(),
                     "genero" to genero,
                     "vives_con_familiar" to vivesConFamiliar,

@@ -18,7 +18,7 @@ data class SearchResult(
     val id: String = "",
     val nombre: String = "",
     val apellido_pa: String = "",
-    val foto_url: String = "",
+    val fotoUrl: String = "", // Cambiado de foto_url a fotoUrl para consistencia total
     val region: String = "",
     val comuna: String = "",
     val comunas: List<String> = emptyList(),
@@ -159,14 +159,16 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                 val result = query.limit(PAGE_SIZE).get().await()
                 
                 val newItems = result.documents.map { doc ->
-                    @Suppress("UNCHECKED_CAST")
-                    val fotos = doc.get("fotos") as? List<String> ?: emptyList()
+                    // Intentamos leer fotoUrl (nuevo estándar) o fotos[0] (estándar antiguo de fichas)
+                    val standardFoto = doc.getString("fotoUrl")
+                    val listFotos = doc.get("fotos") as? List<String>
+                    val finalFoto = standardFoto ?: listFotos?.firstOrNull() ?: ""
                     
                     SearchResult(
                         id = doc.id,
                         nombre = doc.getString("nombre") ?: doc.getString("nombre_completo")?.split(" ")?.firstOrNull() ?: "N/A",
                         apellido_pa = doc.getString("apellido_pa") ?: doc.getString("nombre_completo")?.split(" ")?.getOrNull(1) ?: "",
-                        foto_url = fotos.firstOrNull() ?: "",
+                        fotoUrl = finalFoto,
                         region = doc.getString("region") ?: "",
                         comuna = doc.getString("comuna") ?: "",
                         comunas = @Suppress("UNCHECKED_CAST") (doc.get("comunas") as? List<String> ?: emptyList()),

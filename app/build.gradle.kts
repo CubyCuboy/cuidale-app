@@ -86,6 +86,7 @@ dependencies {
     implementation(libs.jbcrypt)
     implementation(libs.accompanist.systemuicontroller)
     implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
 
     // Media3
     implementation("androidx.media3:media3-exoplayer:1.5.1")

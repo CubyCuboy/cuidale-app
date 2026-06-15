@@ -253,7 +253,7 @@ fun MenuScreen(
                                                         CuidaleUserCard(
                                                             nombre = result.nombre,
                                                             apellido = result.apellido_pa,
-                                                            fotoUrl = result.foto_url,
+                                                            fotoUrl = result.fotoUrl,
                                                             comuna = result.comuna,
                                                             comunas = result.comunas,
                                                             tipo = result.tipo,

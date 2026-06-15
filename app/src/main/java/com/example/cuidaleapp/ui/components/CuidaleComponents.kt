@@ -1250,8 +1250,18 @@ fun CuidaleDrawerContent(nombre: String, apellido: String, fotoUrl: String, rol:
         HorizontalDivider(modifier = Modifier.padding(bottom = 24.dp), color = colors.outlineVariant.copy(alpha = 0.5f))
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
             Box(modifier = Modifier.size(100.dp).clip(CircleShape).background(customColors.avatarBackground).border(2.dp, accentColor.copy(alpha = 0.3f), CircleShape), contentAlignment = Alignment.Center) {
-                if (fotoUrl.isNotEmpty() && !fotoUrl.startsWith("res:")) AsyncImage(model = fotoUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop, error = androidx.compose.ui.graphics.painter.ColorPainter(customColors.avatarBackground))
-                else Icon(imageVector = Icons.Default.Person, contentDescription = null, modifier = Modifier.size(50.dp), tint = colors.onSurfaceVariant.copy(alpha = 0.6f))
+                if (fotoUrl.isNotEmpty() && !fotoUrl.startsWith("res:")) {
+                    AsyncImage(
+                        model = fotoUrl,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        placeholder = androidx.compose.ui.graphics.painter.ColorPainter(customColors.avatarBackground),
+                        error = androidx.compose.ui.graphics.painter.ColorPainter(Color.Red.copy(alpha = 0.2f))
+                    )
+                } else {
+                    Icon(imageVector = Icons.Default.Person, contentDescription = null, modifier = Modifier.size(50.dp), tint = colors.onSurfaceVariant.copy(alpha = 0.6f))
+                }
             }
             Spacer(modifier = Modifier.height(16.dp)); Text(text = "$nombre $apellido", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold), color = colors.onSurface, textAlign = TextAlign.Center)
             if (rol.isNotEmpty()) {
@@ -1308,8 +1318,18 @@ fun CuidaleUserCard(nombre: String, apellido: String, fotoUrl: String, comuna: S
     HardShadowPanel(backgroundColor = customColors.panelBackground, shadowColor = shadows.hardShadowPrimary.copy(alpha = 0.3f), modifier = Modifier.clickable { onClick() }) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.size(64.dp).clip(CircleShape).background(customColors.avatarBackground), contentAlignment = Alignment.Center) {
-                if (fotoUrl.isNotEmpty() && !fotoUrl.startsWith("res:")) AsyncImage(model = fotoUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop, error = androidx.compose.ui.graphics.painter.ColorPainter(customColors.avatarBackground))
-                else Icon(imageVector = Icons.Default.Person, contentDescription = null, modifier = Modifier.size(32.dp), tint = colors.onSurfaceVariant.copy(alpha = 0.6f))
+                if (fotoUrl.isNotEmpty() && !fotoUrl.startsWith("res:")) {
+                    AsyncImage(
+                        model = fotoUrl,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        placeholder = androidx.compose.ui.graphics.painter.ColorPainter(customColors.avatarBackground),
+                        error = androidx.compose.ui.graphics.painter.ColorPainter(Color.Red.copy(alpha = 0.1f))
+                    )
+                } else {
+                    Icon(imageVector = Icons.Default.Person, contentDescription = null, modifier = Modifier.size(32.dp), tint = colors.onSurfaceVariant.copy(alpha = 0.6f))
+                }
             }
             Spacer(modifier = Modifier.width(16.dp)); Column(modifier = Modifier.weight(1f)) {
                 Text(text = "$nombre $apellido", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = colors.onSurface)

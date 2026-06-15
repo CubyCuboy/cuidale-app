@@ -6,6 +6,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -81,7 +82,7 @@ fun EditProfileScreen(
         }
     }
 
-    // Observar estado remoto para navegar o mostrar errores
+    // Observar estado remoto para navegar tras el éxito
     LaunchedEffect(remoteState) {
         if (remoteState is ProfileViewModel.RemoteState.Success) {
             viewModel.resetRemoteState()
@@ -93,6 +94,8 @@ fun EditProfileScreen(
     var tempPhotoUri by remember { mutableStateOf<Uri?>(null) }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var showConfirmPhotoDialog by remember { mutableStateOf(false) }
+    var pendingPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingDeletePhoto by remember { mutableStateOf(false) }
 
     val customColors = CuidaleThemeExtras.customColors
     val shadowPalette = CuidaleThemeExtras.shadows
@@ -137,7 +140,10 @@ fun EditProfileScreen(
 
     if (showConfirmPhotoDialog && selectedImageUri != null) {
         AlertDialog(
-            onDismissRequest = { showConfirmPhotoDialog = false },
+            onDismissRequest = { 
+                showConfirmPhotoDialog = false
+                selectedImageUri = null
+            },
             title = { Text("Confirmar foto", fontWeight = FontWeight.Bold) },
             text = {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -150,20 +156,25 @@ fun EditProfileScreen(
                         contentScale = ContentScale.Crop
                     )
                     Spacer(Modifier.height(12.dp))
-                    Text("¿Deseas establecer esta imagen como tu foto de perfil?", textAlign = TextAlign.Center)
+                    Text("¿Deseas usar esta imagen como vista previa?", textAlign = TextAlign.Center)
                 }
             },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.uploadProfilePicture(selectedImageUri!!)
+                    pendingPhotoUri = selectedImageUri
+                    pendingDeletePhoto = false // Si confirma nueva, ya no queremos eliminar
                     showConfirmPhotoDialog = false
                     selectedImageUri = null
                 }) {
-                    Text("Establecer")
+                    Text("Usar esta")
                 }
             },
             dismissButton = {
                 TextButton(onClick = { 
+                    // Si era de la cámara, borramos el temporal físico
+                    if (selectedImageUri.toString().contains(context.packageName)) {
+                        try { context.contentResolver.delete(selectedImageUri!!, null, null) } catch (e: Exception) {}
+                    }
                     showConfirmPhotoDialog = false
                     selectedImageUri = null
                 }) {
@@ -223,7 +234,8 @@ fun EditProfileScreen(
                         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                         Button(
                             onClick = {
-                                viewModel.deleteProfilePicture()
+                                pendingDeletePhoto = true
+                                pendingPhotoUri = null
                                 showImageSourceDialog = false
                             },
                             modifier = Modifier.fillMaxWidth(),
@@ -235,7 +247,7 @@ fun EditProfileScreen(
                         ) {
                             Icon(Icons.Default.Delete, null)
                             Spacer(Modifier.width(8.dp))
-                            Text("Eliminar foto actual")
+                            Text("Quitar foto actual (pendiente)")
                         }
                     }
                 }
@@ -300,70 +312,83 @@ fun EditProfileScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 16.dp),
+                    .padding(vertical = 24.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Box(
                     modifier = Modifier
-                        .size(130.dp)
-                        .clickable { showImageSourceDialog = true }
+                        .size(150.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.1f))
+                        .border(4.dp, Color.White, CircleShape)
+                        .clickable(enabled = !isLoading) { showImageSourceDialog = true }
                 ) {
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        shape = CircleShape,
-                        color = Color.White.copy(alpha = 0.2f),
-                        border = androidx.compose.foundation.BorderStroke(2.dp, Color.White.copy(alpha = 0.5f))
-                    ) {
-                        if (userData.fotoUrl.isNotEmpty()) {
-                            AsyncImage(
-                                model = userData.fotoUrl,
-                                contentDescription = "Profile Picture",
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(CircleShape),
-                                contentScale = ContentScale.Crop,
-                                onError = {
-                                    // Manejar error de carga si la imagen fue borrada de storage pero el link persiste
-                                }
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Person,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(80.dp),
-                                    tint = Color.White
-                                )
-                            }
-                        }
+                    // Lógica de visualización:
+                    // 1. Si hay una nueva seleccionada -> mostrarla
+                    // 2. Si marcó eliminar -> mostrar icono de persona (nada)
+                    // 3. Si no hay cambios -> mostrar la de userData
+                    val imageModel = when {
+                        pendingPhotoUri != null -> pendingPhotoUri
+                        pendingDeletePhoto -> null
+                        userData.fotoUrl.isNotEmpty() -> userData.fotoUrl
+                        else -> null
                     }
                     
-                    // Edit Overlay Button
+                    if (imageModel != null) {
+                        AsyncImage(
+                            model = imageModel,
+                            contentDescription = "Profile Picture",
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = null,
+                                modifier = Modifier.size(90.dp),
+                                tint = Color.White.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
+
+                    // Overlay de carga (Estilo Discord)
+                    if (isLoading) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.5f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                strokeWidth = 3.dp,
+                                modifier = Modifier.size(40.dp)
+                            )
+                        }
+                    }
+
+                    // Botón de edición flotante
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
-                            .offset(x = 4.dp, y = 4.dp)
+                            .offset(x = (-8).dp, y = (-8).dp)
                             .size(40.dp)
-                            .background(MaterialTheme.colorScheme.primary, CircleShape)
-                            .padding(8.dp),
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary)
+                            .border(3.dp, if (customColors.isDark) Color(0xFF1B263B) else Color.White, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = if (userData.fotoUrl.isEmpty()) Icons.Default.CameraAlt else Icons.Default.Edit,
-                            contentDescription = "Change Picture",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    if (remoteState is ProfileViewModel.RemoteState.Loading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.matchParentSize().padding(4.dp),
-                            color = Color.White,
-                            strokeWidth = 3.dp
+                            contentDescription = "Cambiar foto",
+                            modifier = Modifier.size(20.dp),
+                            tint = Color.White
                         )
                     }
                 }
@@ -523,7 +548,12 @@ fun EditProfileScreen(
                                     comuna = comuna,
                                     descripcion = descripcion
                                 )
-                                viewModel.updateProfile(updatedUser)
+                                // Enviamos los datos, la nueva foto y si queremos eliminar la actual
+                                viewModel.updateProfileWithPhoto(
+                                    updatedUser = updatedUser, 
+                                    newPhotoUri = pendingPhotoUri,
+                                    shouldDeleteOld = pendingDeletePhoto
+                                )
                             }
                         },
                         containerColor = MaterialTheme.colorScheme.primary,
