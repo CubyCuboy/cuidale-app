@@ -365,6 +365,9 @@ class MenuActivity : ComponentActivity() {
                                                 currentScreen = Chat(chatId = chatId, otherUid = notification.emisor, returnTo = Notifications)
                                             }
                                         }
+                                        "nuevo_usuario" -> {
+                                            currentScreen = OtherFicha(uid = notification.emisor, returnTo = Notifications)
+                                        }
                                     }
                                 },
                                 solicitudViewModel = solicitudViewModel

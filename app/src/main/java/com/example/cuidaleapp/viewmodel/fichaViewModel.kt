@@ -239,6 +239,7 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
         condicionesExtra: String,
         comunasPreferencia: List<String> = emptyList(),
         horariosPreferencia: List<String> = emptyList(),
+        shouldDeletePhoto: Boolean = false,
         onSuccess: () -> Unit = {}
     ) {
         val user = auth.currentUser ?: return
@@ -253,7 +254,8 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 // Subir foto si hay una pendiente
-                _pendingPatientPhotoUri.value?.let { uri ->
+                if (_pendingPatientPhotoUri.value != null) {
+                    val uri = _pendingPatientPhotoUri.value!!
                     val storageRef = com.google.firebase.storage.FirebaseStorage.getInstance().reference
                     val filename = "patient_${System.currentTimeMillis()}.jpg"
                     val ref = storageRef.child("families/${user.uid}/$filename")
@@ -265,13 +267,21 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
                     ref.putBytes(compressedBytes).await()
                     val newUrl = ref.downloadUrl.await().toString()
                     
-                    // Intentar borrar la anterior
+                    // Borrar la anterior si existe
                     if (finalPhotoUrl.isNotEmpty() && finalPhotoUrl.contains("firebasestorage")) {
                         try {
                             com.google.firebase.storage.FirebaseStorage.getInstance().getReferenceFromUrl(finalPhotoUrl).delete().await()
                         } catch (e: Exception) {}
                     }
                     finalPhotoUrl = newUrl
+                } else if (shouldDeletePhoto) {
+                    // Borrar foto actual si se solicitó
+                    if (finalPhotoUrl.isNotEmpty() && finalPhotoUrl.contains("firebasestorage")) {
+                        try {
+                            com.google.firebase.storage.FirebaseStorage.getInstance().getReferenceFromUrl(finalPhotoUrl).delete().await()
+                        } catch (e: Exception) {}
+                    }
+                    finalPhotoUrl = ""
                 }
 
                 val data = hashMapOf(

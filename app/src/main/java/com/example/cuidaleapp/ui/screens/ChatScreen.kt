@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -42,6 +43,10 @@ import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil3.compose.AsyncImage
+import coil3.request.CachePolicy
+import coil3.request.ImageRequest
+import coil3.request.crossfade
+import com.example.cuidaleapp.ui.components.fadingEdge
 import com.example.cuidaleapp.utils.AppNavigationState
 import com.example.cuidaleapp.models.ChatMessage
 import com.example.cuidaleapp.models.UserData
@@ -221,7 +226,17 @@ fun ChatScreen(
                                 Box(modifier = Modifier.size(42.dp)) {
                                     Surface(modifier = Modifier.fillMaxSize(), shape = CircleShape, color = Color.Gray.copy(alpha = 0.1f)) {
                                         if (otherUser.fotoUrl.isNotEmpty()) {
-                                            AsyncImage(model = otherUser.fotoUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                                            AsyncImage(
+                                                model = ImageRequest.Builder(LocalContext.current)
+                                                    .data(otherUser.fotoUrl)
+                                                    .crossfade(true)
+                                                    .diskCachePolicy(CachePolicy.ENABLED)
+                                                    .memoryCachePolicy(CachePolicy.ENABLED)
+                                                    .build(),
+                                                contentDescription = null, 
+                                                contentScale = ContentScale.Crop, 
+                                                modifier = Modifier.fillMaxSize()
+                                            )
                                         } else {
                                             Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center), tint = Color.Gray)
                                         }
@@ -239,7 +254,14 @@ fun ChatScreen(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(otherUser.nombre, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
+                                        Text(
+                                            text = otherUser.nombre, 
+                                            style = MaterialTheme.typography.titleMedium, 
+                                            fontWeight = FontWeight.ExtraBold,
+                                            maxLines = 1,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                            modifier = Modifier.fadingEdge(Brush.horizontalGradient(0.95f to Color.Black, 1f to Color.Transparent))
+                                        )
                                         if (isFavorite) {
                                             Spacer(Modifier.width(4.dp))
                                             Icon(Icons.Default.Star, null, tint = Color(0xFFFFD700), modifier = Modifier.size(14.dp))
@@ -358,33 +380,33 @@ fun ChatScreen(
 
                 // Messages List
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    val reversedMessages = remember(filteredMessages) { filteredMessages.reversed() }
                     LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp, 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    reverseLayout = true
-                ) {
-                    item {
-                        androidx.compose.animation.AnimatedVisibility(visible = isOtherTyping, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-                            Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text("${otherUser.nombre} está escribiendo...", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp, 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        reverseLayout = true
+                    ) {
+                        item {
+                            androidx.compose.animation.AnimatedVisibility(visible = isOtherTyping, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                                Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text("${otherUser.nombre} está escribiendo...", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
+                                }
                             }
                         }
-                    }
-                    items(filteredMessages.reversed().size) { index ->
-                        val msg = filteredMessages.reversed()[index]
-                        
-                        // Discord-style day divider
-                        if (index < filteredMessages.size - 1) {
-                            val nextMsg = filteredMessages.reversed()[index + 1]
-                            if (!isSameDay(msg.timestamp, nextMsg.timestamp)) {
+                        items(items = reversedMessages, key = { it.id }) { msg ->
+                            val index = reversedMessages.indexOf(msg)
+                            
+                            // Discord-style day divider
+                            if (index < reversedMessages.size - 1) {
+                                val nextMsg = reversedMessages[index + 1]
+                                if (!isSameDay(msg.timestamp, nextMsg.timestamp)) {
+                                    DayDivider(msg.timestamp)
+                                }
+                            } else if (index == reversedMessages.size - 1) {
                                 DayDivider(msg.timestamp)
                             }
-                        } else if (index == filteredMessages.size - 1) {
-                            // First message ever divider (optional but looks good)
-                            DayDivider(msg.timestamp)
-                        }
 
                         if (msg.senderId == "system") {
                             SystemMessage(msg.text)

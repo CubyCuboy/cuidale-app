@@ -9,6 +9,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
+import coil3.request.CachePolicy
+import coil3.request.ImageRequest
+import coil3.request.crossfade
+import com.example.cuidaleapp.ui.components.fadingEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -36,6 +45,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Assignment
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.ui.draw.scale
 import com.example.cuidaleapp.ui.components.HardShadowButton
 import com.example.cuidaleapp.viewmodel.VinculosViewModel
@@ -98,6 +108,7 @@ fun OtherFichaScreen(
     val scrollState = rememberScrollState()
     val customColors = CuidaleThemeExtras.customColors
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
     val displayRole = otherUserData?.rol ?: ""
     val accentColor = when (displayRole) {
@@ -282,10 +293,16 @@ fun OtherFichaScreen(
                             ) {
                                 if (otherUserData?.fotoUrl?.isNotEmpty() == true && !otherUserData?.fotoUrl?.startsWith("res:")!!) {
                                     AsyncImage(
-                                        model = otherUserData?.fotoUrl,
+                                        model = ImageRequest.Builder(context)
+                                            .data(otherUserData?.fotoUrl)
+                                            .crossfade(true)
+                                            .diskCachePolicy(CachePolicy.ENABLED)
+                                            .memoryCachePolicy(CachePolicy.ENABLED)
+                                            .build(),
                                         contentDescription = "Profile",
                                         modifier = Modifier.fillMaxSize().clip(CircleShape),
-                                        contentScale = ContentScale.Crop
+                                        contentScale = ContentScale.Crop,
+                                        placeholder = androidx.compose.ui.graphics.painter.ColorPainter(customColors.avatarBackground)
                                     )
                                 } else {
                                     Icon(
@@ -316,9 +333,11 @@ fun OtherFichaScreen(
                                     val fullName = "${user.nombre} ${user.apellido_pa}".trim()
                                     Text(
                                         text = if (fullName.isBlank() || fullName == "n/a") "Usuario sin nombre" else fullName,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
+                                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                        lineHeight = 28.sp
                                     )
                                     if (user.descripcion.isNotBlank()) {
                                         Spacer(modifier = Modifier.height(4.dp))
@@ -345,6 +364,15 @@ fun OtherFichaScreen(
                                         value = censorPhone(user.telefono),
                                         accentColor = accentColor
                                     )
+
+                                    if (user.comuna.isNotEmpty() || user.region.isNotEmpty()) {
+                                        ContactItem(
+                                            icon = Icons.Default.Place,
+                                            label = "Ubicación de residencia",
+                                            value = "${user.comuna}${if(user.comuna.isNotEmpty() && user.region.isNotEmpty()) ", " else ""}${user.region}",
+                                            accentColor = accentColor
+                                        )
+                                    }
 
                                     Spacer(modifier = Modifier.height(16.dp))
                                     

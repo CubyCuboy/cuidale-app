@@ -1,5 +1,9 @@
 package com.example.cuidaleapp.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -25,19 +29,26 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.cuidaleapp.data.ChileData
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.layout.ContentScale
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import com.example.cuidaleapp.models.*
 import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.FichaState
 import com.example.cuidaleapp.viewmodel.FichaViewModel
 import com.example.cuidaleapp.viewmodel.ProfileViewModel
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -120,7 +131,7 @@ fun FichaScreen(
                                 color = Color.White
                             )
                             Text(
-                                text = if (state is FichaState.Editing || state is FichaState.NotFound) "Completando información" else "Información registrada",
+                                text = if (state is FichaState.Editing || (state is FichaState.NotFound)) "Completando información" else "Información registrada",
                                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
                                 color = Color.White.copy(alpha = 0.9f)
                             )
@@ -204,7 +215,7 @@ fun FichaScreen(
                                 )
                             }
                             is FichaState.Editing -> {
-                                val editingData = (targetState as? FichaState.Editing)?.data
+                                val editingData = (targetState as FichaState.Editing).data
                                 val tareasTemporales by viewModel.tareasTemporales.collectAsState()
                                 
                                 if (role == "cuidador") {
@@ -250,35 +261,59 @@ fun ModernPersonalDataCard(
     HardShadowPanel(
         backgroundColor = cardColor,
         shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
-        cornerRadius = 16.dp
+        cornerRadius = 16.dp,
+        contentPadding = PaddingValues(16.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
-                modifier = Modifier.size(64.dp),
+                modifier = Modifier.size(72.dp),
                 shape = CircleShape,
-                color = Color.Gray.copy(alpha = 0.2f)
+                color = Color.Gray.copy(alpha = 0.1f),
+                border = BorderStroke(1.dp, primaryText.copy(alpha = 0.1f))
             ) {
                 if (fotoUrl.isNotEmpty()) {
                     AsyncImage(
-                        model = fotoUrl,
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(fotoUrl)
+                            .crossfade(true)
+                            .build(),
                         contentDescription = null,
                         modifier = Modifier.clip(CircleShape),
                         contentScale = ContentScale.Crop
                     )
                 } else {
-                    Icon(Icons.Default.Person, null, modifier = Modifier.padding(14.dp), tint = secondaryText)
+                    Icon(Icons.Default.Person, null, modifier = Modifier.padding(16.dp), tint = secondaryText)
                 }
             }
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(20.dp))
 
-            Column {
-                Text(text = nombre, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = primaryText))
-                Text(text = "RUT: $rut", style = MaterialTheme.typography.bodySmall, color = secondaryText)
-                Text(text = "TEL: $telefono", style = MaterialTheme.typography.bodySmall, color = secondaryText)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = nombre, 
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.ExtraBold, 
+                        color = primaryText,
+                        fontSize = if (nombre.length > 25) 18.sp else 22.sp
+                    ),
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = if (nombre.length > 25) 22.sp else 28.sp
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Badge, null, modifier = Modifier.size(12.dp), tint = secondaryText.copy(alpha = 0.6f))
+                    Spacer(Modifier.width(4.dp))
+                    Text(text = "RUT: $rut", style = MaterialTheme.typography.bodySmall, color = secondaryText)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Phone, null, modifier = Modifier.size(12.dp), tint = secondaryText.copy(alpha = 0.6f))
+                    Spacer(Modifier.width(4.dp))
+                    Text(text = "TEL: $telefono", style = MaterialTheme.typography.bodySmall, color = secondaryText)
+                }
             }
         }
     }
@@ -451,8 +486,6 @@ fun FamilyEditFlow(
     
     var step by remember { mutableIntStateOf(1) }
     val currentUserData by profileViewModel.userData.collectAsState()
-    var showTaskDialogByTipo by remember { mutableStateOf<TipoTarea?>(null) }
-    var editingTarea by remember { mutableStateOf<Tarea?>(null) }
     
     var nombreCompleto by remember { mutableStateOf(initialData?.get("nombre_completo") as? String ?: "") }
     var edad by remember { mutableStateOf(initialData?.get("edad") as? String ?: "") }
@@ -476,6 +509,163 @@ fun FamilyEditFlow(
     var selectedHorariosPref by remember { mutableStateOf(initialData?.get("horarios_preferencia") as? List<String> ?: emptyList()) }
     
     val pendingPhoto by viewModel.pendingPatientPhotoUri.collectAsState()
+    
+    var showImageSourceDialog by remember { mutableStateOf(false) }
+    var tempPhotoUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var pendingDeletePhoto by remember { mutableStateOf(false) }
+    var showConfirmPhotoDialog by remember { mutableStateOf(false) }
+    var photoToConfirm by remember { mutableStateOf<android.net.Uri?>(null) }
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri -> 
+        uri?.let {
+            photoToConfirm = it
+            showConfirmPhotoDialog = true
+        }
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success) {
+            tempPhotoUri?.let {
+                photoToConfirm = it
+                showConfirmPhotoDialog = true
+            }
+        }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            val file = File(context.cacheDir, "temp_patient_${System.currentTimeMillis()}.jpg")
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            tempPhotoUri = uri
+            cameraLauncher.launch(uri)
+        }
+    }
+
+    if (showConfirmPhotoDialog && photoToConfirm != null) {
+        AlertDialog(
+            onDismissRequest = { 
+                showConfirmPhotoDialog = false
+                photoToConfirm = null
+            },
+            title = { Text("Confirmar foto", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    AsyncImage(
+                        model = photoToConfirm,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(150.dp)
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text("¿Deseas usar esta imagen para el paciente?", textAlign = TextAlign.Center)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.setPendingPatientPhoto(photoToConfirm)
+                    pendingDeletePhoto = false
+                    showConfirmPhotoDialog = false
+                    photoToConfirm = null
+                }) {
+                    Text("Usar esta")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { 
+                    showConfirmPhotoDialog = false
+                    photoToConfirm = null
+                }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    if (showImageSourceDialog) {
+        AlertDialog(
+            onDismissRequest = { showImageSourceDialog = false },
+            title = { Text("Foto del paciente", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            val permissionCheckResult = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
+                            if (permissionCheckResult == PackageManager.PERMISSION_GRANTED) {
+                                val file = File(context.cacheDir, "temp_patient_${System.currentTimeMillis()}.jpg")
+                                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                                tempPhotoUri = uri
+                                cameraLauncher.launch(uri)
+                                showImageSourceDialog = false
+                            } else {
+                                permissionLauncher.launch(Manifest.permission.CAMERA)
+                                showImageSourceDialog = false
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.CameraAlt, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Cámara")
+                    }
+
+                    Button(
+                        onClick = {
+                            galleryLauncher.launch("image/*")
+                            showImageSourceDialog = false
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Collections, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Galería")
+                    }
+
+                    val currentPhoto = initialData?.get("fotoUrl")?.toString() ?: ""
+                    if (currentPhoto.isNotEmpty() || pendingPhoto != null) {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                        Button(
+                            onClick = {
+                                pendingDeletePhoto = true
+                                viewModel.setPendingPatientPhoto(null)
+                                showImageSourceDialog = false
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                contentColor = MaterialTheme.colorScheme.onErrorContainer
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.Delete, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Quitar foto")
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showImageSourceDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
 
     LaunchedEffect(vivesConFamiliar, currentUserData.region, currentUserData.comuna) {
         if (vivesConFamiliar) {
@@ -511,7 +701,7 @@ fun FamilyEditFlow(
                         CuidaleTextField(
                             value = nombreCompleto,
                             onValueChange = { input -> 
-                                nombreCompleto = input.lowercase().split(" ").joinToString(" ") { it.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() } }
+                                nombreCompleto = input.lowercase().split(" ").joinToString(" ") { it.replaceFirstChar { char -> if (char.isLowerCase()) char.titlecase() else char.toString() } }
                             },
                             placeholder = "Nombre Completo",
                             containerColor = customColors.inputBackground,
@@ -700,10 +890,6 @@ fun FamilyEditFlow(
                 }
             }
             3 -> {
-                val galleryLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-                    androidx.activity.result.contract.ActivityResultContracts.GetContent()
-                ) { uri -> viewModel.setPendingPatientPhoto(uri) }
-
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     HardShadowPanel(
                         backgroundColor = cardColor,
@@ -745,11 +931,18 @@ fun FamilyEditFlow(
                                         .clip(CircleShape)
                                         .background(customColors.inputBackground)
                                         .border(1.dp, accentColor.copy(alpha = 0.3f), CircleShape)
-                                        .clickable { galleryLauncher.launch("image/*") },
+                                        .clickable { showImageSourceDialog = true },
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    val photoToShow = pendingPhoto ?: initialData?.get("fotoUrl")
-                                    if (photoToShow != null && photoToShow.toString().isNotEmpty()) {
+                                    val currentUrl = initialData?.get("fotoUrl")?.toString() ?: ""
+                                    val photoToShow = when {
+                                        pendingDeletePhoto -> null
+                                        pendingPhoto != null -> pendingPhoto
+                                        currentUrl.isNotEmpty() -> currentUrl
+                                        else -> null
+                                    }
+
+                                    if (photoToShow != null) {
                                         AsyncImage(
                                             model = photoToShow,
                                             contentDescription = null,
@@ -763,16 +956,16 @@ fun FamilyEditFlow(
                                 Spacer(modifier = Modifier.width(16.dp))
                                 Column {
                                     Text(
-                                        text = if (pendingPhoto != null) "Foto seleccionada" else "Sin foto de paciente",
+                                        text = if (pendingDeletePhoto) "Se eliminará la foto" else if (pendingPhoto != null || (initialData?.get("fotoUrl")?.toString()?.isNotEmpty() == true)) "Foto del paciente" else "Sin foto",
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = textColor
                                     )
                                     TextButton(
-                                        onClick = { galleryLauncher.launch("image/*") },
+                                        onClick = { showImageSourceDialog = true },
                                         contentPadding = PaddingValues(0.dp)
                                     ) {
-                                        Text("CAMBIAR FOTO", color = accentColor, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black)
+                                        Text("GESTIONAR FOTO", color = accentColor, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black)
                                     }
                                 }
                             }
@@ -802,6 +995,7 @@ fun FamilyEditFlow(
                                     discapacidades, discapacidadOtro, enfermedades, enfermedadOtro, 
                                     condicionesExtra,
                                     selectedCommunesPref, selectedHorariosPref,
+                                    shouldDeletePhoto = pendingDeletePhoto,
                                     onSuccess = onFinishSuccess
                                 )
                             },

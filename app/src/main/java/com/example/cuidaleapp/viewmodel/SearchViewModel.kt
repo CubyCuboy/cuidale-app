@@ -7,10 +7,11 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.Query
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -18,7 +19,7 @@ data class SearchResult(
     val id: String = "",
     val nombre: String = "",
     val apellido_pa: String = "",
-    val fotoUrl: String = "", // Cambiado de foto_url a fotoUrl para consistencia total
+    val fotoUrl: String = "",
     val region: String = "",
     val comuna: String = "",
     val comunas: List<String> = emptyList(),
@@ -26,7 +27,8 @@ data class SearchResult(
     val edad: String = "",
     val nivel_dependencia: String = "",
     val especializacion: String = "",
-    val horarios: List<String> = emptyList()
+    val horarios: List<String> = emptyList(),
+    val isNew: Boolean = false
 )
 
 sealed class SearchState {
@@ -52,6 +54,9 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     private val _selectedCommunes = MutableStateFlow<List<String>>(emptyList())
     val selectedCommunes: StateFlow<List<String>> = _selectedCommunes.asStateFlow()
 
+    private val _useProfilePreferences = MutableStateFlow(true)
+    val useProfilePreferences: StateFlow<Boolean> = _useProfilePreferences.asStateFlow()
+
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
@@ -62,19 +67,61 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     private var targetTipo: String = ""
     private var noDeseados: List<String> = emptyList()
     
+    private var userRegion = ""
+    private var profileCommunes: List<String> = emptyList()
+    
     private val PAGE_SIZE = 15L
 
-    fun initSearch(userRole: String) {
+    fun initSearch(userRole: String, residenceRegion: String) {
         val newTargetTipo = if (userRole == "cuidador") "familiar" else "cuidador"
-        if (targetTipo == newTargetTipo && currentResults.isNotEmpty()) {
+        
+        // Si el tipo es el mismo y la región no ha cambiado, no reiniciamos
+        if (targetTipo == newTargetTipo && userRegion == residenceRegion && currentResults.isNotEmpty()) {
             return 
         }
         
         targetTipo = newTargetTipo
+        userRegion = residenceRegion
+
         viewModelScope.launch {
             loadNoDeseados()
+            loadProfilePreferences()
+            applyInitialFilters()
             resetAndFetch()
         }
+    }
+
+    private suspend fun loadProfilePreferences() {
+        val uid = auth.currentUser?.uid ?: return
+        try {
+            val doc = db.collection("fichas").document(uid).get().await()
+            if (doc.exists()) {
+                val tipo = doc.getString("tipo")
+                profileCommunes = if (tipo == "cuidador") {
+                    @Suppress("UNCHECKED_CAST") (doc.get("comunas") as? List<String> ?: emptyList())
+                } else {
+                    @Suppress("UNCHECKED_CAST") (doc.get("comunas_preferencia") as? List<String> ?: emptyList())
+                }
+            }
+        } catch (e: Exception) {
+            profileCommunes = emptyList()
+        }
+    }
+
+    private fun applyInitialFilters() {
+        if (_useProfilePreferences.value) {
+            _selectedRegion.value = userRegion
+            _selectedCommunes.value = profileCommunes.take(3)
+        } else {
+            _selectedRegion.value = userRegion
+            _selectedCommunes.value = emptyList()
+        }
+    }
+
+    fun toggleProfilePreferences(enabled: Boolean) {
+        _useProfilePreferences.value = enabled
+        applyInitialFilters()
+        resetAndFetch()
     }
 
     private suspend fun loadNoDeseados() {
@@ -95,7 +142,10 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
 
     fun refresh() {
         viewModelScope.launch {
+            _isRefreshing.value = true
             loadNoDeseados()
+            loadProfilePreferences()
+            // NO llamamos a applyInitialFilters() para mantener los parámetros actuales del usuario
             resetAndFetch()
         }
     }
@@ -133,9 +183,14 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                     return@launch
                 }
 
-                var query = db.collection(targetCollection)
-                    .whereEqualTo("tipo", targetTipo)
-                    .orderBy("ultima_actualizacion", Query.Direction.DESCENDING)
+                // CAMBIO CLAVE: Cuidadores se buscan en 'usuarios', Pacientes en 'fichas'
+                val collectionPath = if (targetTipo == "cuidador") "usuarios" else "fichas"
+                val roleField = if (targetTipo == "cuidador") "rol" else "tipo"
+                val orderField = if (targetTipo == "cuidador") "createdAt" else "ultima_actualizacion"
+
+                var query = db.collection(collectionPath)
+                    .whereEqualTo(roleField, targetTipo)
+                    .orderBy(orderField, Query.Direction.DESCENDING)
 
                 val regionFilter = _selectedRegion.value
                 val communeFilters = _selectedCommunes.value
@@ -145,11 +200,9 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                 }
 
                 if (communeFilters.isNotEmpty()) {
-                    if (targetTipo == "familiar") {
-                        query = query.whereIn("comuna", communeFilters)
-                    } else {
-                        query = query.whereArrayContainsAny("comunas", communeFilters)
-                    }
+                    // Si es usuario, buscamos por su comuna de residencia
+                    // Si es ficha de paciente, buscamos por la comuna del paciente
+                    query = query.whereIn("comuna", communeFilters)
                 }
 
                 if (isLoadMore && lastDocument != null) {
@@ -159,26 +212,68 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                 val result = query.limit(PAGE_SIZE).get().await()
                 
                 val newItems = result.documents.map { doc ->
-                    // Intentamos leer fotoUrl (nuevo estándar) o fotos[0] (estándar antiguo de fichas)
-                    val standardFoto = doc.getString("fotoUrl")
-                    val listFotos = doc.get("fotos") as? List<String>
-                    val finalFoto = standardFoto ?: listFotos?.firstOrNull() ?: ""
-                    
-                    SearchResult(
-                        id = doc.id,
-                        nombre = doc.getString("nombre") ?: doc.getString("nombre_completo")?.split(" ")?.firstOrNull() ?: "N/A",
-                        apellido_pa = doc.getString("apellido_pa") ?: doc.getString("nombre_completo")?.split(" ")?.getOrNull(1) ?: "",
-                        fotoUrl = finalFoto,
-                        region = doc.getString("region") ?: "",
-                        comuna = doc.getString("comuna") ?: "",
-                        comunas = @Suppress("UNCHECKED_CAST") (doc.get("comunas") as? List<String> ?: emptyList()),
-                        tipo = doc.getString("tipo") ?: "",
-                        edad = doc.get("edad")?.toString() ?: "",
-                        nivel_dependencia = doc.getString("nivel_dependencia") ?: "",
-                        especializacion = doc.getString("especializacion") ?: "",
-                        horarios = @Suppress("UNCHECKED_CAST") (doc.get("horarios") as? List<String> ?: emptyList())
-                    )
-                }.filter { it.id !in noDeseados }
+                    viewModelScope.async {
+                        var nombre = ""
+                        var apellido = ""
+                        var foto = ""
+                        var edad = ""
+                        var nivel_dependencia = ""
+                        var especializacion = ""
+                        var horarios: List<String> = emptyList()
+                        var comunas_trabajo: List<String> = emptyList()
+                        var region = doc.getString("region") ?: ""
+                        var comuna = doc.getString("comuna") ?: ""
+
+                        if (targetTipo == "cuidador") {
+                            // Los datos personales ya los tenemos del doc (que es un usuario)
+                            nombre = doc.getString("nombre") ?: ""
+                            apellido = doc.getString("apellido_pa") ?: ""
+                            foto = doc.getString("fotoUrl") ?: doc.getString("foto") ?: ""
+                            
+                            // Buscamos la ficha para los datos técnicos
+                            try {
+                                val fichaDoc = db.collection("fichas").document(doc.id).get().await()
+                                if (fichaDoc.exists()) {
+                                    especializacion = fichaDoc.getString("especializacion") ?: ""
+                                    horarios = @Suppress("UNCHECKED_CAST") (fichaDoc.get("horarios") as? List<String> ?: emptyList())
+                                    comunas_trabajo = @Suppress("UNCHECKED_CAST") (fichaDoc.get("comunas") as? List<String> ?: emptyList())
+                                }
+                            } catch (e: Exception) { }
+                        } else {
+                            // Es un familiar (paciente), los datos están en la ficha
+                            // UNICAMENTE sacamos el nombre de 'nombre_completo' como pediste
+                            nombre = doc.getString("nombre_completo") ?: ""
+                            apellido = ""
+
+                            foto = doc.getString("fotoUrl") ?: (doc.get("fotos") as? List<String>)?.firstOrNull() ?: ""
+                            edad = doc.get("edad")?.toString() ?: ""
+                            nivel_dependencia = doc.getString("nivel_dependencia") ?: ""
+                        }
+
+                        val timestamp = if (targetTipo == "cuidador") {
+                            doc.getTimestamp("createdAt")?.toDate()?.time ?: 0L
+                        } else {
+                            doc.getTimestamp("ultima_actualizacion")?.toDate()?.time ?: 0L
+                        }
+                        val isNew = (System.currentTimeMillis() - timestamp) < (24 * 60 * 60 * 1000)
+
+                        SearchResult(
+                            id = doc.id,
+                            nombre = nombre.ifEmpty { "Usuario" },
+                            apellido_pa = apellido,
+                            fotoUrl = foto,
+                            region = region,
+                            comuna = comuna,
+                            comunas = if (targetTipo == "cuidador") comunas_trabajo else emptyList(),
+                            tipo = targetTipo,
+                            edad = edad,
+                            nivel_dependencia = nivel_dependencia,
+                            especializacion = especializacion,
+                            horarios = horarios,
+                            isNew = isNew
+                        )
+                    }
+                }.awaitAll().filter { it.id !in noDeseados }
 
                 if (result.documents.size < PAGE_SIZE) {
                     isLastPage = true

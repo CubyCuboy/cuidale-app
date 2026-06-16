@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -62,6 +63,7 @@ fun MenuScreen(
     val isRefreshing by searchViewModel.isRefreshing.collectAsState()
     val selectedRegion by searchViewModel.selectedRegion.collectAsState()
     val selectedCommunes by searchViewModel.selectedCommunes.collectAsState()
+    val useProfilePreferences by searchViewModel.useProfilePreferences.collectAsState()
     
     val pullToRefreshState = rememberPullToRefreshState()
     val sheetState = rememberModalBottomSheetState()
@@ -98,9 +100,9 @@ fun MenuScreen(
         }
     }
 
-    LaunchedEffect(userData.rol) {
+    LaunchedEffect(userData.rol, userData.region) {
         if (userData.rol.isNotEmpty()) {
-            searchViewModel.initSearch(userData.rol)
+            searchViewModel.initSearch(userData.rol, userData.region)
         }
     }
 
@@ -203,12 +205,23 @@ fun MenuScreen(
                         ) {
                             val listTitle = if (userData.rol == "cuidador") "Pacientes" else "Cuidadores"
 
-                            Text(
-                                text = listTitle,
-                                style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
-                                color = Color.White,
-                                modifier = Modifier.padding(vertical = 16.dp)
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = listTitle,
+                                    style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
+                                    color = Color.White
+                                )
+                                IconButton(
+                                    onClick = { searchViewModel.refresh() },
+                                    modifier = Modifier.background(Color.White.copy(alpha = 0.1f), CircleShape)
+                                ) {
+                                    Icon(Icons.Default.Refresh, "Recargar", tint = Color.White)
+                                }
+                            }
 
                             if (fichaState is FichaState.NotFound) {
                                 FichaPlaceholder(
@@ -235,13 +248,14 @@ fun MenuScreen(
                                             val isLoadingMore = (searchState as SearchState.Success).isLoadingMore
                                             
                                             if (resultsList.isEmpty()) {
-                                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                                    Text(
-                                                        text = "No se encontraron resultados",
-                                                        color = Color.White.copy(alpha = 0.7f),
-                                                        textAlign = TextAlign.Center
-                                                    )
-                                                }
+                                                EmptySearchResults(
+                                                    title = if (selectedRegion.isNotEmpty() || selectedCommunes.isNotEmpty()) 
+                                                        "Sin resultados para estos filtros" 
+                                                    else "No hay $listTitle disponibles",
+                                                    subtitle = "Prueba cambiando la ubicación o los filtros de búsqueda.",
+                                                    onClearFilters = { searchViewModel.clearFilters() },
+                                                    showClearButton = selectedRegion.isNotEmpty() || selectedCommunes.isNotEmpty()
+                                                )
                                             } else {
                                                 LazyColumn(
                                                     state = listState,
@@ -261,6 +275,7 @@ fun MenuScreen(
                                                             nivelDependencia = result.nivel_dependencia,
                                                             especializacion = result.especializacion,
                                                             horarios = result.horarios,
+                                                            isNew = result.isNew,
                                                             onClick = { onUserClick(result.id) }
                                                         )
                                                     }
@@ -335,11 +350,73 @@ fun MenuScreen(
                                     selectedCommunes = selectedCommunes,
                                     onCommuneToggle = { searchViewModel.toggleCommune(it) },
                                     onClearFilters = { searchViewModel.clearFilters() },
-                                    onClose = { scope.launch { sheetState.hide() }.invokeOnCompletion { showSearchSheet = false } }
+                                    onClose = { scope.launch { sheetState.hide() }.invokeOnCompletion { showSearchSheet = false } },
+                                    useProfilePreferences = useProfilePreferences,
+                                    onTogglePreferences = { searchViewModel.toggleProfilePreferences(it) }
                                 )
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun EmptySearchResults(
+    title: String,
+    subtitle: String,
+    onClearFilters: () -> Unit,
+    showClearButton: Boolean
+) {
+    val customColors = CuidaleThemeExtras.customColors
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(vertical = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        HardShadowPanel(
+            backgroundColor = customColors.panelBackground.copy(alpha = 0.95f),
+            shadowColor = Color.Black.copy(alpha = 0.15f),
+            cornerRadius = 24.dp,
+            contentPadding = PaddingValues(32.dp)
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    imageVector = Icons.Default.SearchOff,
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp),
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                
+                if (showClearButton) {
+                    Spacer(modifier = Modifier.height(32.dp))
+                    HardShadowButton(
+                        text = "LIMPIAR FILTROS",
+                        onClick = onClearFilters,
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = Color.White,
+                        isDark = customColors.isDark,
+                        modifier = Modifier.height(50.dp)
+                    )
                 }
             }
         }

@@ -27,7 +27,14 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import coil3.compose.AsyncImage
+import coil3.request.CachePolicy
+import coil3.request.ImageRequest
+import coil3.request.crossfade
+import com.example.cuidaleapp.ui.components.fadingEdge
 import com.example.cuidaleapp.models.UserData
 import com.example.cuidaleapp.ui.components.CuidaleCircularMenuButton
 import com.example.cuidaleapp.ui.components.CuidaleDrawerContent
@@ -324,7 +331,8 @@ fun ChatListSection(
                     isBlocked = bloqueados.contains(chat.otherUser.uid),
                     isDark = isDark,
                     onClick = { onChatClick(chat.chatId, chat.otherUser) },
-                    onLongClick = { onLongClick(chat) }
+                    onLongClick = { onLongClick(chat) },
+                    context = LocalContext.current
                 )
             }
         }
@@ -340,8 +348,10 @@ fun ChatCard(
     isBlocked: Boolean,
     isDark: Boolean,
     onClick: () -> Unit,
-    onLongClick: () -> Unit
+    onLongClick: () -> Unit,
+    context: android.content.Context
 ) {
+    val customColors = CuidaleThemeExtras.customColors
     HardShadowPanel(
         modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick),
         backgroundColor = if (isDark) (if (chat.unreadCount > 0) Color(0xFF2B2D31) else Color(0xFF1B263B)) 
@@ -358,7 +368,17 @@ fun ChatCard(
             Box(modifier = Modifier.size(52.dp)) {
                 Surface(modifier = Modifier.fillMaxSize(), shape = CircleShape, color = Color.Gray.copy(alpha = 0.1f)) {
                     if (chat.otherUser.fotoUrl.isNotEmpty()) {
-                        AsyncImage(model = chat.otherUser.fotoUrl, contentDescription = null, contentScale = ContentScale.Crop)
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(chat.otherUser.fotoUrl)
+                                .crossfade(true)
+                                .diskCachePolicy(CachePolicy.ENABLED)
+                                .memoryCachePolicy(CachePolicy.ENABLED)
+                                .build(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            placeholder = androidx.compose.ui.graphics.painter.ColorPainter(customColors.avatarBackground)
+                        )
                     } else {
                         Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center), tint = Color.Gray)
                     }
@@ -376,12 +396,20 @@ fun ChatCard(
             
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    val fullName = listOf(chat.otherUser.nombre, chat.otherUser.apellido_pa).filter { it.isNotBlank() && it != "n/a" }.joinToString(" ")
+                    
                     Text(
-                        text = chat.otherUser.nombre, 
+                        text = fullName, 
                         style = MaterialTheme.typography.titleMedium, 
                         fontWeight = if (chat.unreadCount > 0) FontWeight.ExtraBold else FontWeight.Bold,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).fadingEdge(
+                            Brush.horizontalGradient(
+                                0.85f to Color.Black,
+                                1f to Color.Transparent
+                            )
+                        ),
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         color = if (isDark) Color.White else Color.Black
                     )
                     if (chat.lastMessage != null && !isBlocked) {
@@ -444,14 +472,15 @@ fun RequestListSection(
             items(requests) { vinculo ->
                 val otherUid = if (vinculo.uid1 == myUid) vinculo.uid2 else vinculo.uid1
                 val user = vinculosUsers[otherUid]
-                ChatCardLikeRequest(user, isDark = isDark, onAccept = { onAccept(vinculo.id) }, onDecline = { onDecline(vinculo.id) })
+                ChatCardLikeRequest(user, isDark = isDark, onAccept = { onAccept(vinculo.id) }, onDecline = { onDecline(vinculo.id) }, context = LocalContext.current)
             }
         }
     }
 }
 
 @Composable
-fun ChatCardLikeRequest(user: UserData?, isDark: Boolean, onAccept: () -> Unit, onDecline: () -> Unit) {
+fun ChatCardLikeRequest(user: UserData?, isDark: Boolean, onAccept: () -> Unit, onDecline: () -> Unit, context: android.content.Context) {
+    val customColors = CuidaleThemeExtras.customColors
     HardShadowPanel(
         backgroundColor = if (isDark) Color(0xFF1B263B) else Color.White,
         shadowColor = Color.Black.copy(alpha = 0.05f),
@@ -463,7 +492,17 @@ fun ChatCardLikeRequest(user: UserData?, isDark: Boolean, onAccept: () -> Unit, 
             Box(modifier = Modifier.size(48.dp)) {
                 Surface(modifier = Modifier.fillMaxSize(), shape = CircleShape, color = Color.Gray.copy(alpha = 0.1f)) {
                     if (user?.fotoUrl?.isNotEmpty() == true) {
-                        AsyncImage(model = user.fotoUrl, contentDescription = null, contentScale = ContentScale.Crop)
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(user.fotoUrl)
+                                .crossfade(true)
+                                .diskCachePolicy(CachePolicy.ENABLED)
+                                .memoryCachePolicy(CachePolicy.ENABLED)
+                                .build(),
+                            contentDescription = null, 
+                            contentScale = ContentScale.Crop,
+                            placeholder = androidx.compose.ui.graphics.painter.ColorPainter(customColors.avatarBackground)
+                        )
                     } else {
                         Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center), tint = Color.Gray)
                     }
@@ -471,7 +510,14 @@ fun ChatCardLikeRequest(user: UserData?, isDark: Boolean, onAccept: () -> Unit, 
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(user?.nombre ?: "Usuario", fontWeight = FontWeight.Bold)
+                val fullName = listOf(user?.nombre, user?.apellido_pa).filter { it?.isNotBlank() == true && it != "n/a" }.joinToString(" ")
+                Text(
+                    text = if (fullName.isBlank()) "Usuario" else fullName, 
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fadingEdge(Brush.horizontalGradient(0.85f to Color.Black, 1f to Color.Transparent))
+                )
                 Text("Quiere conectar contigo", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
             }
             IconButton(onClick = onAccept) { Icon(Icons.Default.Check, null, tint = Color(0xFF4CAF50)) }
@@ -495,9 +541,27 @@ fun BlockedListSection(bloqueados: List<String>, managedUsers: List<UserData>, i
                 ) {
                     Column(Modifier.padding(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            AsyncImage(model = user.fotoUrl, contentDescription = null, Modifier.size(40.dp).clip(CircleShape), contentScale = ContentScale.Crop)
+                            AsyncImage(
+                                model = ImageRequest.Builder(LocalContext.current)
+                                    .data(user.fotoUrl)
+                                    .crossfade(true)
+                                    .diskCachePolicy(CachePolicy.ENABLED)
+                                    .memoryCachePolicy(CachePolicy.ENABLED)
+                                    .build(),
+                                contentDescription = null, 
+                                modifier = Modifier.size(40.dp).clip(CircleShape), 
+                                contentScale = ContentScale.Crop,
+                                placeholder = androidx.compose.ui.graphics.painter.ColorPainter(CuidaleThemeExtras.customColors.avatarBackground)
+                            )
                             Spacer(Modifier.width(12.dp))
-                            Text(user.nombre, Modifier.weight(1f), fontWeight = FontWeight.Bold)
+                            val fullName = listOf(user.nombre, user.apellido_pa).filter { it.isNotBlank() && it != "n/a" }.joinToString(" ")
+                            Text(
+                                text = fullName, 
+                                Modifier.weight(1f).fadingEdge(Brush.horizontalGradient(0.85f to Color.Black, 1f to Color.Transparent)), 
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                             TextButton(onClick = { onRemove(user.uid) }) { Text("DESBLOQUEAR", color = Color.Red, fontWeight = FontWeight.Black) }
                         }
                         Spacer(Modifier.height(8.dp))

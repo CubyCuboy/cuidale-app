@@ -24,7 +24,12 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import coil3.compose.AsyncImage
+import coil3.request.CachePolicy
+import coil3.request.ImageRequest
+import coil3.request.crossfade
+import com.example.cuidaleapp.ui.components.fadingEdge
 import com.example.cuidaleapp.models.PostulacionCuidado
 import com.example.cuidaleapp.models.SolicitudCuidado
 import com.example.cuidaleapp.models.UserData
@@ -305,6 +310,7 @@ fun BaseSolicitudCard(
     statusColor: Color,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val context = LocalContext.current
     HardShadowPanel(
         backgroundColor = CuidaleThemeExtras.customColors.panelBackground,
         shadowColor = Color.Black.copy(alpha = 0.1f)
@@ -313,14 +319,31 @@ fun BaseSolicitudCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(modifier = Modifier.size(50.dp).clip(CircleShape).background(Color.Gray.copy(alpha = 0.1f))) {
                     if (imageUrl.isNotEmpty()) {
-                        AsyncImage(model = imageUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(imageUrl)
+                                .crossfade(true)
+                                .diskCachePolicy(CachePolicy.ENABLED)
+                                .memoryCachePolicy(CachePolicy.ENABLED)
+                                .build(),
+                            contentDescription = null, 
+                            modifier = Modifier.fillMaxSize(), 
+                            contentScale = ContentScale.Crop
+                        )
                     } else {
                         Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center), tint = Color.Gray)
                     }
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = title, 
+                        fontWeight = FontWeight.Bold, 
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.fadingEdge(Brush.horizontalGradient(0.95f to Color.Black, 1f to Color.Transparent))
+                    )
                     Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                 }
                 Surface(color = statusColor.copy(alpha = 0.1f), shape = CircleShape) {
@@ -433,11 +456,36 @@ fun ApplicantMiniCard(applicant: PostulacionCuidado, onAccept: () -> Unit, onRej
 
 @Composable
 fun PostulacionStatusCard(solicitud: SolicitudCuidado, estado: String, onCancel: () -> Unit, onViewDetails: () -> Unit) {
+    val context = LocalContext.current
     HardShadowPanel(backgroundColor = Color.White.copy(alpha = 0.9f), shadowColor = Color.Black.copy(alpha = 0.05f)) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.size(44.dp).clip(CircleShape).background(Color.Gray.copy(alpha = 0.1f))) {
+                    if (solicitud.fotoPaciente.isNotEmpty()) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(solicitud.fotoPaciente)
+                                .crossfade(true)
+                                .diskCachePolicy(CachePolicy.ENABLED)
+                                .memoryCachePolicy(CachePolicy.ENABLED)
+                                .build(),
+                            contentDescription = null, 
+                            modifier = Modifier.fillMaxSize(), 
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center), tint = Color.Gray)
+                    }
+                }
+                Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(solicitud.nombrePaciente, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = solicitud.nombrePaciente, 
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.fadingEdge(Brush.horizontalGradient(0.95f to Color.Black, 1f to Color.Transparent))
+                    )
                     Text(solicitud.horarioStr, style = MaterialTheme.typography.bodySmall)
                 }
                 Surface(color = when(estado) { "aceptada" -> Color(0xFF4CAF50).copy(alpha = 0.1f); "rechazada" -> MaterialTheme.colorScheme.error.copy(alpha = 0.1f); else -> Color.Blue.copy(alpha = 0.1f) }, shape = CircleShape) {

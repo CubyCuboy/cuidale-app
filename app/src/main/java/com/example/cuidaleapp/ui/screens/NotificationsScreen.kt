@@ -273,6 +273,7 @@ fun NotificationsScreen(
                                             NotificationItem(
                                                 notification = notif,
                                                 sender = sender,
+                                                userRole = userData.rol,
                                                 isDark = isDark,
                                                 modifier = Modifier.animateItem(),
                                                 onMainAction = {
@@ -305,6 +306,7 @@ fun NotificationsScreen(
 fun NotificationItem(
     notification: Notification,
     sender: UserData?,
+    userRole: String,
     isDark: Boolean,
     modifier: Modifier = Modifier,
     onMainAction: () -> Unit,
@@ -315,6 +317,7 @@ fun NotificationItem(
     val itemAccent = when (notification.tipo) {
         "solicitud_vinculo" -> customColors.aqua
         "nuevo_mensaje" -> customColors.lime
+        "nuevo_usuario" -> customColors.mint
         else -> customColors.successStrong
     }
 
@@ -333,6 +336,7 @@ fun NotificationItem(
                             imageVector = when(notification.tipo) {
                                 "solicitud_vinculo" -> Icons.Default.PersonAdd
                                 "nuevo_mensaje" -> Icons.AutoMirrored.Filled.Chat
+                                "nuevo_usuario" -> Icons.Default.NewReleases
                                 else -> Icons.Default.Notifications
                             },
                             contentDescription = null,
@@ -348,6 +352,7 @@ fun NotificationItem(
                             "solicitud_vinculo" -> "Nueva solicitud de chat"
                             "vinculo_aceptado" -> "¡Solicitud aceptada!"
                             "nuevo_mensaje" -> "Mensaje de ${sender?.nombre ?: "Usuario"}"
+                            "nuevo_usuario" -> "¡Nuevo ${if(userRole == "cuidador") "paciente" else "cuidador"} en tu zona!"
                             else -> "Notificación"
                         },
                         style = MaterialTheme.typography.titleSmall,
@@ -359,6 +364,7 @@ fun NotificationItem(
                             "solicitud_vinculo" -> "${sender?.nombre ?: "Alguien"} quiere conectar contigo."
                             "vinculo_aceptado" -> "${sender?.nombre ?: "Un usuario"} aceptó tu solicitud. ¡Ya pueden hablar!"
                             "nuevo_mensaje" -> notification.data["text"] ?: "Toca para ver el mensaje."
+                            "nuevo_usuario" -> "${sender?.nombre ?: "Alguien"} acaba de unirse a Cuidale. ¡Conócelo!"
                             else -> "Tienes un nuevo aviso."
                         },
                         style = MaterialTheme.typography.bodySmall,
@@ -402,6 +408,7 @@ fun NotificationItem(
                     val btnText = when(notification.tipo) {
                         "nuevo_mensaje" -> "IR AL CHAT"
                         "solicitud_vinculo" -> "VER PERFIL"
+                        "nuevo_usuario" -> "VER PERFIL"
                         else -> "VER"
                     }
                     Text(btnText, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = Color.White)
