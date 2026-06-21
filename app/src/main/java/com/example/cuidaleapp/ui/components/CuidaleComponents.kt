@@ -40,6 +40,145 @@ import com.example.cuidaleapp.models.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import kotlin.math.roundToInt
 
+import com.example.cuidaleapp.utils.ConnectivityObserver
+import kotlinx.coroutines.delay
+
+@Composable
+fun ConnectivityBanner() {
+    val isOnline by ConnectivityObserver.isOnline.collectAsState()
+    var showConnected by remember { mutableStateOf(false) }
+    var wasOffline by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isOnline) {
+        if (isOnline && wasOffline) {
+            showConnected = true
+            kotlinx.coroutines.delay(3000)
+            showConnected = false
+            wasOffline = false
+        } else if (!isOnline) {
+            wasOffline = true
+            showConnected = false
+        }
+    }
+
+    AnimatedVisibility(
+        visible = !isOnline || showConnected,
+        enter = slideInVertically { -it } + fadeIn(),
+        exit = slideOutVertically { -it } + fadeOut()
+    ) {
+        Surface(
+            color = if (isOnline) Color(0xFF4CAF50) else Color(0xFFD32F2F),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = if (isOnline) Icons.Default.CloudDone else Icons.Default.WifiOff,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = if (isOnline) "Conexión restablecida" else "Sin conexión a internet",
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun CuidalePlaceholder(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    iconColor: Color = MaterialTheme.colorScheme.primary,
+    actionText: String? = null,
+    onActionClick: (() -> Unit)? = null
+) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = scaleIn(initialScale = 0.9f) + fadeIn(),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(32.dp).fillMaxWidth()
+            ) {
+                Surface(
+                    color = iconColor.copy(alpha = 0.1f),
+                    shape = CircleShape,
+                    modifier = Modifier.size(100.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = iconColor
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Black,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    lineHeight = 20.sp
+                )
+                
+                if (actionText != null && onActionClick != null) {
+                    Spacer(modifier = Modifier.height(32.dp))
+                    HardShadowButton(
+                        text = actionText,
+                        onClick = onActionClick,
+                        modifier = Modifier.widthIn(min = 200.dp).height(50.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun OfflinePlaceholder(
+    title: String = "No hay conexión",
+    subtitle: String = "Esta sección requiere internet para cargar datos actualizados.",
+    icon: ImageVector = Icons.Default.CloudOff
+) {
+    CuidalePlaceholder(
+        title = title,
+        subtitle = subtitle,
+        icon = icon,
+        iconColor = Color.Gray
+    )
+}
+
 @Composable
 fun InputFieldLabel(text: String, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurface) {
     Text(
@@ -710,7 +849,8 @@ fun SearchPreferencesCard(
     panelBg: Color,
     textColor: Color,
     secondaryTextColor: Color,
-    isLoading: Boolean = false
+    isLoading: Boolean = false,
+    isOnline: Boolean = true
 ) {
     var isEditing by remember { mutableStateOf(false) }
     
@@ -742,26 +882,36 @@ fun SearchPreferencesCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Search, null, tint = accentColor, modifier = Modifier.size(24.dp))
+                    Icon(Icons.Default.Search, null, tint = if (isOnline) accentColor else Color.Gray, modifier = Modifier.size(24.dp))
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
                         "PREFERENCIAS DE BÚSQUEDA", 
                         style = MaterialTheme.typography.titleMedium, 
                         fontWeight = FontWeight.Bold, 
-                        color = textColor
+                        color = if (isOnline) textColor else textColor.copy(alpha = 0.5f)
                     )
                 }
                 if (!isEditing) {
                     IconButton(
-                        onClick = { isEditing = true },
-                        modifier = Modifier.background(accentColor.copy(alpha = 0.15f), CircleShape).size(36.dp)
+                        onClick = { if (isOnline) isEditing = true },
+                        enabled = isOnline,
+                        modifier = Modifier.background(if (isOnline) accentColor.copy(alpha = 0.15f) else Color.Gray.copy(alpha = 0.1f), CircleShape).size(36.dp)
                     ) {
-                        Icon(Icons.Default.Edit, contentDescription = "Editar Preferencias", tint = accentColor, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Edit, contentDescription = "Editar Preferencias", tint = if (isOnline) accentColor else Color.Gray, modifier = Modifier.size(18.dp))
                     }
                 }
             }
             
             Spacer(modifier = Modifier.height(16.dp))
+
+            if (!isOnline && !isEditing) {
+                Text(
+                    "Modo offline: No se pueden modificar las preferencias.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
 
             if (isEditing) {
                 SearchPreferencesFields(
@@ -786,15 +936,17 @@ fun SearchPreferencesCard(
                     HardShadowButton(
                         text = if (isLoading) "GUARDANDO..." else "GUARDAR",
                         onClick = {
-                            onUpdate(tempCommunes, tempHorarios)
-                            isEditing = false
+                            if (isOnline) {
+                                onUpdate(tempCommunes, tempHorarios)
+                                isEditing = false
+                            }
                         },
                         modifier = Modifier.weight(1f).height(48.dp),
-                        containerColor = accentColor,
+                        containerColor = if (isOnline) accentColor else Color.Gray,
                         contentColor = Color.White,
                         shadowColor = shadowPalette.hardShadowPrimary,
                         isDark = CuidaleThemeExtras.customColors.isDark,
-                        enabled = !isLoading
+                        enabled = !isLoading && isOnline
                     )
                 }
             } else {
@@ -1291,6 +1443,10 @@ fun CuidaleDrawerContent(nombre: String, apellido: String, fotoUrl: String, rol:
         }
         HorizontalDivider(modifier = Modifier.padding(bottom = 24.dp), color = colors.outlineVariant.copy(alpha = 0.5f))
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+            CuidaleAppLogo(
+                isDark = isDark,
+                modifier = Modifier.size(80.dp).padding(bottom = 16.dp)
+            )
             Box(modifier = Modifier.size(100.dp).clip(CircleShape).background(customColors.avatarBackground).border(2.dp, accentColor.copy(alpha = 0.3f), CircleShape), contentAlignment = Alignment.Center) {
                 if (fotoUrl.isNotEmpty() && !fotoUrl.startsWith("res:")) {
                     AsyncImage(
@@ -1524,6 +1680,21 @@ fun Modifier.fadingEdge(brush: Brush) = this
     }
 
 @Composable
+fun CuidaleAppLogo(
+    isDark: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val logoRes = if (isDark) R.drawable.ic_app_logo_dark else R.drawable.ic_app_logo_light
+    
+    Image(
+        painter = androidx.compose.ui.res.painterResource(id = logoRes),
+        contentDescription = "Cuidale Logo",
+        modifier = modifier,
+        contentScale = ContentScale.Fit
+    )
+}
+
+@Composable
 fun CuidaleBottomBar(selectedTab: String, unreadCount: Int = 0, pendingNotifs: Int = 0, pendingRequests: Int = 0, onTabSelected: (String) -> Unit) {
     val customColors = CuidaleThemeExtras.customColors
     Surface(color = customColors.panelBackground, tonalElevation = 8.dp, shadowElevation = 16.dp, modifier = Modifier.fillMaxWidth()) {
@@ -1541,9 +1712,58 @@ private fun BottomNavItem(icon: ImageVector, isSelected: Boolean, onClick: () ->
     val colors = MaterialTheme.colorScheme
     val backgroundColor by animateColorAsState(targetValue = if (isSelected) colors.primary else Color.Transparent, animationSpec = tween(300), label = "tabBg")
     val iconColor by animateColorAsState(targetValue = if (isSelected) Color.White else colors.onSurface.copy(alpha = 0.6f), animationSpec = tween(300), label = "tabIcon")
-    val scale by animateFloatAsState(targetValue = if (isSelected) 1.15f else 1.0f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow), label = "tabScale")
-    Box(modifier = Modifier.size(if (isCenter) 52.dp else 44.dp).graphicsLayer(scaleX = scale, scaleY = scale).clip(RoundedCornerShape(if (isCenter) 16.dp else 12.dp)).background(backgroundColor).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        BadgedBox(badge = { if (badgeCount > 0) Badge(containerColor = Color.Red, contentColor = Color.White, modifier = Modifier.offset(x = 4.dp, y = (-4).dp)) { Text(if (badgeCount > 99) "+99" else badgeCount.toString(), style = MaterialTheme.typography.labelSmall) } }) {
+    
+    val shakeRotation = remember { Animatable(0f) }
+    val isNotificationIcon = icon == Icons.Default.Notifications
+    var lastBadgeCount by remember { mutableIntStateOf(badgeCount) }
+    
+    LaunchedEffect(badgeCount) {
+        if (isNotificationIcon && badgeCount > lastBadgeCount && !isSelected) {
+            repeat(4) {
+                shakeRotation.animateTo(15f, tween(80))
+                shakeRotation.animateTo(-15f, tween(80))
+            }
+            shakeRotation.animateTo(0f, tween(80))
+        }
+        lastBadgeCount = badgeCount
+    }
+
+    val scale by animateFloatAsState(
+        targetValue = if (isSelected) 1.2f else 1.0f, 
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow), 
+        label = "tabScale"
+    )
+
+    Box(
+        modifier = Modifier
+            .size(if (isCenter) 52.dp else 44.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                rotationZ = shakeRotation.value
+            }
+            .clip(RoundedCornerShape(if (isCenter) 16.dp else 12.dp))
+            .background(backgroundColor)
+            .clickable(onClick = onClick), 
+        contentAlignment = Alignment.Center
+    ) {
+        BadgedBox(
+            badge = { 
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = badgeCount > 0,
+                    enter = scaleIn(initialScale = 0.3f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeIn(),
+                    exit = scaleOut(targetScale = 0.3f) + fadeOut()
+                ) {
+                    Badge(
+                        containerColor = Color.Red, 
+                        contentColor = Color.White, 
+                        modifier = Modifier.offset(x = 4.dp, y = (-4).dp)
+                    ) { 
+                        Text(if (badgeCount > 99) "+99" else badgeCount.toString(), style = MaterialTheme.typography.labelSmall) 
+                    }
+                }
+            }
+        ) {
             Icon(imageVector = icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(if (isCenter) 28.dp else 24.dp))
         }
     }

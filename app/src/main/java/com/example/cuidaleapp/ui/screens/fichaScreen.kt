@@ -49,6 +49,8 @@ import com.example.cuidaleapp.viewmodel.FichaViewModel
 import com.example.cuidaleapp.viewmodel.ProfileViewModel
 import java.io.File
 
+import com.example.cuidaleapp.utils.ConnectivityObserver
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FichaScreen(
@@ -58,6 +60,7 @@ fun FichaScreen(
     onNavigateToTasks: (() -> Unit)? = null,
     startInEditMode: Boolean = false
 ) {
+    val isOnline by ConnectivityObserver.isOnline.collectAsState()
     val state by viewModel.state.collectAsState()
     val role by viewModel.role.collectAsState()
     val availableCommunes by viewModel.availableCommunes.collectAsState()
@@ -74,8 +77,8 @@ fun FichaScreen(
     val secondaryTextColor = MaterialTheme.colorScheme.onSurfaceVariant
     val panelBg = customColors.panelBackground
 
-    LaunchedEffect(startInEditMode) {
-        if (startInEditMode) {
+    LaunchedEffect(startInEditMode, isOnline) {
+        if (startInEditMode && isOnline) {
             viewModel.startEditing()
         }
     }
@@ -83,7 +86,7 @@ fun FichaScreen(
     PullToRefreshBox(
         state = pullToRefreshState,
         isRefreshing = isRefreshing,
-        onRefresh = { viewModel.checkProfile() },
+        onRefresh = { if (isOnline) viewModel.checkProfile() },
         modifier = Modifier.fillMaxSize()
     ) {
         Box(
@@ -101,39 +104,56 @@ fun FichaScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(140.dp)
-                        .background(accentColor)
+                        .background(if (isOnline) accentColor else Color.Gray)
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .windowInsetsPadding(WindowInsets.safeDrawing)
-                            .padding(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(
-                            onClick = {
-                                if (state is FichaState.Editing) {
-                                    viewModel.cancelEditing()
-                                } else {
-                                    onNavigateBack()
-                                }
-                            },
-                            modifier = Modifier.background(Color.Black.copy(alpha = 0.3f), CircleShape)
+                    Column {
+                        ConnectivityBanner()
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .windowInsetsPadding(WindowInsets.safeDrawing)
+                                .padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = Color.White)
+                            IconButton(
+                                onClick = {
+                                    if (state is FichaState.Editing) {
+                                        viewModel.cancelEditing()
+                                    } else {
+                                        onNavigateBack()
+                                    }
+                                },
+                                modifier = Modifier.background(Color.Black.copy(alpha = 0.3f), CircleShape)
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = Color.White)
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = if (role == "cuidador") "FICHA DE CUIDADOR" else "FICHA DEL PACIENTE",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = if (!isOnline) "MODO OFFLINE" else if (state is FichaState.Editing || (state is FichaState.NotFound)) "Completando información" else "Información registrada",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                                    color = Color.White.copy(alpha = 0.9f)
+                                )
+                            }
                         }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = if (role == "cuidador") "FICHA DE CUIDADOR" else "FICHA DEL PACIENTE",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = Color.White
-                            )
-                            Text(
-                                text = if (state is FichaState.Editing || (state is FichaState.NotFound)) "Completando información" else "Información registrada",
-                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                                color = Color.White.copy(alpha = 0.9f)
-                            )
+                    }
+                }
+
+                if (!isOnline) {
+                    Surface(
+                        color = Color.Red.copy(alpha = 0.1f),
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.WifiOff, null, tint = Color.Red, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Sin conexión. No puedes editar ni actualizar datos.", color = Color.Red, style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
@@ -141,7 +161,7 @@ fun FichaScreen(
                 Column(
                     modifier = Modifier
                         .padding(horizontal = 16.dp)
-                        .offset(y = (-30).dp)
+                        .offset(y = if (isOnline) (-30).dp else 0.dp)
                 ) {
                     if (role == "representante" && userData.uid.isNotEmpty() && state !is FichaState.Loading) {
                         ModernPersonalDataCard(
@@ -180,13 +200,10 @@ fun FichaScreen(
                                         role = role,
                                         data = targetState.data,
                                         tareasPlantilla = tareasPlantilla,
-                                        onEdit = { 
-                                            viewModel.startEditing()
-                                        },
-                                        onEditTasks = if (role == "representante") {
-                                            {
-                                                onNavigateToTasks?.invoke()
-                                            }
+                                        showEditButton = isOnline,
+                                        onEdit = { viewModel.startEditing() },
+                                        onEditTasks = if (role == "representante" && isOnline) {
+                                            { onNavigateToTasks?.invoke() }
                                         } else null,
                                         isEditMode = false
                                     )
@@ -194,12 +211,13 @@ fun FichaScreen(
                                         role = role,
                                         data = targetState.data,
                                         availableCommunes = availableCommunes,
-                                        onUpdate = { c, h -> viewModel.updateSearchPreferences(c, h) },
+                                        onUpdate = { c, h -> if (isOnline) viewModel.updateSearchPreferences(c, h) },
                                         accentColor = accentColor,
                                         panelBg = panelBg,
                                         textColor = textColor,
                                         secondaryTextColor = secondaryTextColor,
-                                        isLoading = isPartialLoading
+                                        isLoading = isPartialLoading,
+                                        isOnline = isOnline
                                     )
                                 }
                             }

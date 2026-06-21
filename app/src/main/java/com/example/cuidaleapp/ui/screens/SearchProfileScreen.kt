@@ -27,12 +27,17 @@ import com.example.cuidaleapp.models.UserData
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material.icons.filled.SearchOff
+import com.example.cuidaleapp.utils.ConnectivityObserver
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchProfileScreen(
     onNavigateBack: () -> Unit,
     onUserClick: (String) -> Unit
 ) {
+    val isOnline by ConnectivityObserver.isOnline.collectAsState()
     val gradient = CuidaleThemeExtras.gradient
     val customColors = CuidaleThemeExtras.customColors
     
@@ -42,8 +47,8 @@ fun SearchProfileScreen(
 
     val db = FirebaseFirestore.getInstance()
 
-    LaunchedEffect(searchQuery) {
-        if (searchQuery.length >= 3) {
+    LaunchedEffect(searchQuery, isOnline) {
+        if (isOnline && searchQuery.length >= 3) {
             isLoading = true
             try {
                 val q = searchQuery.lowercase().trim()
@@ -60,7 +65,9 @@ fun SearchProfileScreen(
             } finally {
                 isLoading = false
             }
-        } else {
+        } else if (!isOnline) {
+            searchResults = emptyList()
+        } else if (searchQuery.length < 3) {
             searchResults = emptyList()
         }
     }
@@ -91,13 +98,23 @@ fun SearchProfileScreen(
             CuidaleTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = "Buscar por nombre...",
-                containerColor = customColors.inputBackground
+                placeholder = if (isOnline) "Buscar por nombre..." else "Conéctate para buscar...",
+                enabled = isOnline,
+                containerColor = if (isOnline) customColors.inputBackground else Color.Gray.copy(alpha = 0.1f)
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            if (isLoading) {
+            if (!isOnline) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.SearchOff, null, modifier = Modifier.size(64.dp), tint = Color.White.copy(alpha = 0.3f))
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("No hay conexión a internet", color = Color.White.copy(alpha = 0.6f))
+                        Text("La búsqueda no está disponible offline", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.4f))
+                    }
+                }
+            } else if (isLoading) {
                 Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = Color.White)
                 }

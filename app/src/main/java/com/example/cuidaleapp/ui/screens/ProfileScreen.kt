@@ -34,6 +34,8 @@ import com.example.cuidaleapp.viewmodel.FichaState
 import com.example.cuidaleapp.viewmodel.FichaViewModel
 import com.example.cuidaleapp.viewmodel.ProfileViewModel
 
+import com.example.cuidaleapp.utils.ConnectivityObserver
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
@@ -47,6 +49,7 @@ fun ProfileScreen(
     pendingNotifs: Int = 0,
     solicitudViewModel: com.example.cuidaleapp.viewmodel.SolicitudViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
+    val isOnline by ConnectivityObserver.isOnline.collectAsState()
     val userData by viewModel.userData.collectAsState()
     val fichaState by fichaViewModel.state.collectAsState()
     val fichaRole by fichaViewModel.role.collectAsState()
@@ -65,20 +68,7 @@ fun ProfileScreen(
     val panelBg = customColors.panelBackground
 
     Scaffold(
-        bottomBar = {
-            val misPostulaciones = solicitudViewModel.misPostulaciones.collectAsState().value
-            val postulacionesRecibidas = solicitudViewModel.postulacionesRecibidas.collectAsState().value
-            val pendingReqCount = if (userData.rol == "cuidador") misPostulaciones.size 
-                                  else postulacionesRecibidas.values.flatten().count { it.estado == "pendiente" }
-
-            CuidaleBottomBar(
-                selectedTab = "none", 
-                unreadCount = unreadCount, 
-                pendingNotifs = pendingNotifs,
-                pendingRequests = pendingReqCount,
-                onTabSelected = onTabSelected
-            )
-        }
+        topBar = { ConnectivityBanner() }
     ) { innerPadding ->
         PullToRefreshBox(
             state = pullToRefreshState,

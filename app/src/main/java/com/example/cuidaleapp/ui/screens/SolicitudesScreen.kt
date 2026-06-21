@@ -36,6 +36,7 @@ import com.example.cuidaleapp.models.UserData
 import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.SolicitudViewModel
+import com.example.cuidaleapp.utils.ConnectivityObserver
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,6 +54,7 @@ fun SolicitudesScreen(
     onViewTasks: (SolicitudCuidado) -> Unit,
     onNavigateToHistory: () -> Unit
 ) {
+    val isOnline by ConnectivityObserver.isOnline.collectAsState()
     val misSolicitudes by viewModel.misSolicitudes.collectAsState()
     val solicitudesAceptadas by viewModel.solicitudesAceptadas.collectAsState()
     val misPostulaciones by viewModel.misPostulaciones.collectAsState()
@@ -85,21 +87,13 @@ fun SolicitudesScreen(
     }
 
     Scaffold(
-        bottomBar = {
-            CuidaleBottomBar(
-                selectedTab = "requests",
-                unreadCount = unreadCount,
-                pendingNotifs = pendingNotifs,
-                pendingRequests = pendingRequests,
-                onTabSelected = onTabSelected
-            )
-        },
+        topBar = { ConnectivityBanner() },
         containerColor = Color.Transparent
     ) { innerPadding ->
         PullToRefreshBox(
             state = pullToRefreshState,
             isRefreshing = isLoading,
-            onRefresh = { viewModel.refreshData() },
+            onRefresh = { if (isOnline) viewModel.refreshData() },
             modifier = Modifier
                 .fillMaxSize()
                 .background(Brush.verticalGradient(listOf(gradient.top, gradient.bottom)))
@@ -121,28 +115,44 @@ fun SolicitudesScreen(
                     }
                 }
 
+                if (!isOnline) {
+                    Surface(
+                        color = Color.Black.copy(alpha = 0.2f),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                    ) {
+                        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.WifiOff, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(12.dp))
+                            Text("Estás offline. Funciones de edición desactivadas.", color = Color.White, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+
                 if (userData.rol == "representante") {
                     RepresentanteRequestsContent(
                         solicitudes = misSolicitudes,
                         postulacionesMap = postulacionesRecibidas,
+                        isOnline = isOnline,
                         onCreateRequest = onCreateRequest,
                         onEdit = onEditRequest,
-                        onDelete = { viewModel.eliminarSolicitud(it) },
-                        onAccept = { sol, post -> viewModel.aceptarCuidador(sol, post) {} },
-                        onReject = { viewModel.rechazarPostulacion(it) },
+                        onDelete = { if (isOnline) viewModel.eliminarSolicitud(it) },
+                        onAccept = { sol, post -> if (isOnline) viewModel.aceptarCuidador(sol, post) {} },
+                        onReject = { if (isOnline) viewModel.rechazarPostulacion(it) },
                         onViewCaregiverProfile = onViewCaregiverProfile,
                         onViewPatientDetails = onViewPatientDetails,
                         onViewTasks = onViewTasks,
-                        onFinish = { requestToFinish = it }
+                        onFinish = { if (isOnline) requestToFinish = it }
                     )
                 } else {
                     CuidadorRequestsContent(
                         solicitudesAceptadas = solicitudesAceptadas,
                         misPostulaciones = misPostulaciones,
+                        isOnline = isOnline,
                         onViewDetails = onViewPatientDetails,
                         onViewTasks = onViewTasks,
-                        onFinish = { requestToFinish = it },
-                        onCancelPostulacion = { viewModel.eliminarPostulacionPorId(it) }
+                        onFinish = { if (isOnline) requestToFinish = it },
+                        onCancelPostulacion = { if (isOnline) viewModel.eliminarPostulacionPorId(it) }
                     )
                 }
             }
@@ -154,6 +164,7 @@ fun SolicitudesScreen(
 fun RepresentanteRequestsContent(
     solicitudes: List<SolicitudCuidado>,
     postulacionesMap: Map<String, List<PostulacionCuidado>>,
+    isOnline: Boolean = true,
     onCreateRequest: () -> Unit,
     onEdit: (String) -> Unit,
     onDelete: (String) -> Unit,
@@ -167,10 +178,11 @@ fun RepresentanteRequestsContent(
     Column {
         HardShadowButton(
             text = "CREAR SOLICITUD",
-            containerColor = Color.White,
-            contentColor = MaterialTheme.colorScheme.primary,
+            containerColor = if (isOnline) Color.White else Color.Gray,
+            contentColor = if (isOnline) MaterialTheme.colorScheme.primary else Color.White,
             shadowColor = Color.Black.copy(alpha = 0.2f),
             icon = Icons.Default.Add,
+            enabled = isOnline,
             onClick = onCreateRequest
         )
         
@@ -207,22 +219,23 @@ fun RepresentanteRequestsContent(
                         if (sol.estado == "cerrada") {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 ActionButton(text = "TAREAS", icon = Icons.Default.ListAlt, color = Color(0xFF4CAF50), modifier = Modifier.weight(1f)) { onViewTasks(sol) }
-                                ActionButton(text = "EDITAR", icon = Icons.Default.Edit, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.weight(1f)) { onEdit(sol.id) }
+                                ActionButton(text = "EDITAR", icon = Icons.Default.Edit, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.weight(1f), enabled = isOnline) { onEdit(sol.id) }
                             }
                             Spacer(modifier = Modifier.height(8.dp))
                             HardShadowButton(
                                 text = "FINALIZAR SERVICIO",
-                                containerColor = MaterialTheme.colorScheme.secondary,
+                                containerColor = if (isOnline) MaterialTheme.colorScheme.secondary else Color.Gray,
                                 contentColor = Color.White,
                                 shadowColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f),
                                 icon = Icons.Default.Check,
                                 modifier = Modifier.fillMaxWidth().height(48.dp),
+                                enabled = isOnline,
                                 onClick = { onFinish(sol) }
                             )
                         } else {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                ActionButton(text = "EDITAR", icon = Icons.Default.Edit, color = MaterialTheme.colorScheme.secondary) { onEdit(sol.id) }
-                                ActionOutlinedButton(text = "ELIMINAR", icon = Icons.Default.Delete, color = MaterialTheme.colorScheme.error) { onDelete(sol.id) }
+                                ActionButton(text = "EDITAR", icon = Icons.Default.Edit, color = MaterialTheme.colorScheme.secondary, enabled = isOnline) { onEdit(sol.id) }
+                                ActionOutlinedButton(text = "ELIMINAR", icon = Icons.Default.Delete, color = MaterialTheme.colorScheme.error, enabled = isOnline) { onDelete(sol.id) }
                             }
                         }
                     }
@@ -230,7 +243,7 @@ fun RepresentanteRequestsContent(
                     if (sol.estado == "abierta" && applicants.isNotEmpty()) {
                         Text("POSTULANTES (${applicants.size})", style = MaterialTheme.typography.labelLarge, color = Color.White, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
                         applicants.forEach { applicant ->
-                            ApplicantMiniCard(applicant = applicant, onAccept = { onAccept(sol, applicant) }, onReject = { onReject(applicant) }, onViewProfile = { onViewCaregiverProfile(applicant.cuidadorUid) })
+                            ApplicantMiniCard(applicant = applicant, isOnline = isOnline, onAccept = { onAccept(sol, applicant) }, onReject = { onReject(applicant) }, onViewProfile = { onViewCaregiverProfile(applicant.cuidadorUid) })
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                     }
@@ -244,6 +257,7 @@ fun RepresentanteRequestsContent(
 fun CuidadorRequestsContent(
     solicitudesAceptadas: List<SolicitudCuidado>,
     misPostulaciones: List<Pair<SolicitudCuidado, PostulacionCuidado>>,
+    isOnline: Boolean = true,
     onViewDetails: (String) -> Unit,
     onViewTasks: (SolicitudCuidado) -> Unit,
     onFinish: (SolicitudCuidado) -> Unit,
@@ -268,11 +282,12 @@ fun CuidadorRequestsContent(
                     Spacer(modifier = Modifier.height(8.dp))
                     HardShadowButton(
                         text = "FINALIZAR TURNO",
-                        containerColor = MaterialTheme.colorScheme.secondary,
+                        containerColor = if (isOnline) MaterialTheme.colorScheme.secondary else Color.Gray,
                         contentColor = Color.White,
                         shadowColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f),
                         icon = Icons.Default.Check,
                         modifier = Modifier.fillMaxWidth().height(48.dp),
+                        enabled = isOnline,
                         onClick = { onFinish(sol) }
                     )
                 }
@@ -284,11 +299,11 @@ fun CuidadorRequestsContent(
                 Spacer(modifier = Modifier.height(16.dp))
                 Text("MIS POSTULACIONES", style = MaterialTheme.typography.titleMedium, color = Color.White)
             }
-            // Use the Postulation ID as key for stability
             items(misPostulaciones, key = { it.second.id }) { (sol, post) ->
                 PostulacionStatusCard(
                     solicitud = sol, 
                     estado = post.estado, 
+                    isOnline = isOnline,
                     onCancel = { onCancelPostulacion(post.id) },
                     onViewDetails = { onViewDetails(sol.pacienteFichaId) }
                 )
@@ -379,8 +394,8 @@ fun AssignedCaregiverRow(name: String, photo: String, onViewProfile: () -> Unit)
 }
 
 @Composable
-fun ActionButton(text: String, icon: ImageVector, color: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Button(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = color)) {
+fun ActionButton(text: String, icon: ImageVector, color: Color, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
+    Button(onClick = onClick, modifier = modifier, enabled = enabled, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = color)) {
         Icon(icon, null, modifier = Modifier.size(16.dp))
         Spacer(modifier = Modifier.width(4.dp))
         Text(text, fontSize = 11.sp, maxLines = 1)
@@ -388,8 +403,8 @@ fun ActionButton(text: String, icon: ImageVector, color: Color, modifier: Modifi
 }
 
 @Composable
-fun RowScope.ActionOutlinedButton(text: String, icon: ImageVector, color: Color, onClick: () -> Unit) {
-    OutlinedButton(onClick = onClick, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = color)) {
+fun RowScope.ActionOutlinedButton(text: String, icon: ImageVector, color: Color, enabled: Boolean = true, onClick: () -> Unit) {
+    OutlinedButton(onClick = onClick, modifier = Modifier.weight(1f), enabled = enabled, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = color)) {
         Icon(icon, null, modifier = Modifier.size(16.dp))
         Spacer(modifier = Modifier.width(4.dp))
         Text(text, fontSize = 11.sp, maxLines = 1)
@@ -397,7 +412,7 @@ fun RowScope.ActionOutlinedButton(text: String, icon: ImageVector, color: Color,
 }
 
 @Composable
-fun ApplicantMiniCard(applicant: PostulacionCuidado, onAccept: () -> Unit, onReject: () -> Unit, onViewProfile: () -> Unit) {
+fun ApplicantMiniCard(applicant: PostulacionCuidado, isOnline: Boolean = true, onAccept: () -> Unit, onReject: () -> Unit, onViewProfile: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.95f)),
@@ -430,6 +445,7 @@ fun ApplicantMiniCard(applicant: PostulacionCuidado, onAccept: () -> Unit, onRej
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = onAccept,
+                    enabled = isOnline,
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
                     shape = RoundedCornerShape(8.dp)
@@ -440,6 +456,7 @@ fun ApplicantMiniCard(applicant: PostulacionCuidado, onAccept: () -> Unit, onRej
                 }
                 OutlinedButton(
                     onClick = onReject,
+                    enabled = isOnline,
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
@@ -455,7 +472,7 @@ fun ApplicantMiniCard(applicant: PostulacionCuidado, onAccept: () -> Unit, onRej
 }
 
 @Composable
-fun PostulacionStatusCard(solicitud: SolicitudCuidado, estado: String, onCancel: () -> Unit, onViewDetails: () -> Unit) {
+fun PostulacionStatusCard(solicitud: SolicitudCuidado, estado: String, isOnline: Boolean = true, onCancel: () -> Unit, onViewDetails: () -> Unit) {
     val context = LocalContext.current
     HardShadowPanel(backgroundColor = Color.White.copy(alpha = 0.9f), shadowColor = Color.Black.copy(alpha = 0.05f)) {
         Column(modifier = Modifier.padding(12.dp)) {
@@ -498,16 +515,16 @@ fun PostulacionStatusCard(solicitud: SolicitudCuidado, estado: String, onCancel:
             if (estado == "pendiente") {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ActionButton(text = "VER SOLICITUD", icon = Icons.AutoMirrored.Filled.Assignment, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f), onClick = onViewDetails)
-                    OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+                    OutlinedButton(onClick = onCancel, enabled = isOnline, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
                         Icon(Icons.Default.Close, null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(Modifier.width(4.dp))
                         Text("CANCELAR", fontSize = 11.sp)
                     }
                 }
             } else if (estado == "rechazada") {
-                OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Gray)) {
+                OutlinedButton(onClick = onCancel, enabled = isOnline, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Gray)) {
                     Icon(Icons.Default.Delete, null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(Modifier.width(8.dp))
                     Text("QUITAR DEL LISTADO", fontSize = 11.sp)
                 }
             }

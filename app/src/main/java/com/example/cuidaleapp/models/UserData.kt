@@ -1,8 +1,10 @@
 package com.example.cuidaleapp.models
 
+import androidx.compose.runtime.Immutable
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.IgnoreExtraProperties
 
+@Immutable
 @IgnoreExtraProperties
 data class UserData(
     val uid: String = "",

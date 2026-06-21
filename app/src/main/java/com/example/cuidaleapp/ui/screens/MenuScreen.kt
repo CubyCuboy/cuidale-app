@@ -36,6 +36,8 @@ import kotlinx.coroutines.launch
 import android.content.Context
 import androidx.compose.ui.platform.LocalContext
 
+import com.example.cuidaleapp.utils.ConnectivityObserver
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MenuScreen(
@@ -54,6 +56,7 @@ fun MenuScreen(
     onTabSelected: (String) -> Unit,
     solicitudViewModel: com.example.cuidaleapp.viewmodel.SolicitudViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
+    val isOnline by ConnectivityObserver.isOnline.collectAsState()
     val gradient = CuidaleThemeExtras.gradient
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -94,14 +97,14 @@ fun MenuScreen(
         }
     }
 
-    LaunchedEffect(shouldLoadMore.value) {
-        if (shouldLoadMore.value) {
+    LaunchedEffect(shouldLoadMore.value, isOnline) {
+        if (shouldLoadMore.value && isOnline) {
             searchViewModel.loadMore()
         }
     }
 
-    LaunchedEffect(userData.rol, userData.region) {
-        if (userData.rol.isNotEmpty()) {
+    LaunchedEffect(userData.rol, userData.region, isOnline) {
+        if (userData.rol.isNotEmpty() && isOnline) {
             searchViewModel.initSearch(userData.rol, userData.region)
         }
     }
@@ -151,44 +154,35 @@ fun MenuScreen(
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                 Scaffold(
                     topBar = {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                                .windowInsetsPadding(WindowInsets.statusBars)
-                        ) {
-                            CuidaleCircularMenuButton(
-                                onClick = { scope.launch { drawerState.open() } },
-                                modifier = Modifier.align(Alignment.CenterEnd)
-                            )
+                        Column {
+                            ConnectivityBanner()
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                                    .windowInsetsPadding(WindowInsets.statusBars)
+                            ) {
+                                CuidaleCircularMenuButton(
+                                    onClick = { scope.launch { drawerState.open() } },
+                                    modifier = Modifier.align(Alignment.CenterEnd)
+                                )
+                            }
                         }
                     },
                     floatingActionButton = {
-                        CuidaleCircularMenuButton(
-                            onClick = { showSearchSheet = true },
-                            modifier = Modifier.padding(bottom = 16.dp, end = 16.dp),
-                            icon = {
-                                Icon(
-                                    imageVector = Icons.Default.Search,
-                                    contentDescription = null,
-                                    tint = Color.White
-                                )
-                            }
-                        )
-                    },
-                    bottomBar = {
-                        val misPostulaciones = solicitudViewModel.misPostulaciones.collectAsState().value
-                        val postulacionesRecibidas = solicitudViewModel.postulacionesRecibidas.collectAsState().value
-                        val pendingReqCount = if (userData.rol == "cuidador") misPostulaciones.size 
-                                              else postulacionesRecibidas.values.flatten().count { it.estado == "pendiente" }
-
-                        CuidaleBottomBar(
-                            selectedTab = "home", 
-                            unreadCount = unreadCount, 
-                            pendingNotifs = pendingNotifs,
-                            pendingRequests = pendingReqCount,
-                            onTabSelected = onTabSelected
-                        )
+                        if (isOnline) {
+                            CuidaleCircularMenuButton(
+                                onClick = { showSearchSheet = true },
+                                modifier = Modifier.padding(bottom = 16.dp, end = 16.dp),
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Search,
+                                        contentDescription = null,
+                                        tint = Color.White
+                                    )
+                                }
+                            )
+                        }
                     },
                     containerColor = Color.Transparent
                 ) { innerPadding ->
@@ -203,6 +197,11 @@ fun MenuScreen(
                                 .fillMaxSize()
                                 .padding(horizontal = 24.dp)
                         ) {
+                            CuidaleAppLogo(
+                                isDark = isDark,
+                                modifier = Modifier.size(60.dp).align(Alignment.CenterHorizontally).padding(top = 8.dp)
+                            )
+
                             val listTitle = if (userData.rol == "cuidador") "Pacientes" else "Cuidadores"
 
                             Row(
@@ -215,11 +214,15 @@ fun MenuScreen(
                                     style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
                                     color = Color.White
                                 )
-                                IconButton(
-                                    onClick = { searchViewModel.refresh() },
-                                    modifier = Modifier.background(Color.White.copy(alpha = 0.1f), CircleShape)
-                                ) {
-                                    Icon(Icons.Default.Refresh, "Recargar", tint = Color.White)
+                                if (isOnline) {
+                                    IconButton(
+                                        onClick = { searchViewModel.refresh() },
+                                        modifier = Modifier.background(Color.White.copy(alpha = 0.1f), CircleShape)
+                                    ) {
+                                        Icon(Icons.Default.Refresh, "Recargar", tint = Color.White)
+                                    }
+                                } else {
+                                    Icon(Icons.Default.WifiOff, null, tint = Color.White.copy(alpha = 0.5f))
                                 }
                             }
 
@@ -228,20 +231,26 @@ fun MenuScreen(
                                     rol = userData.rol,
                                     onClick = onViewFicha
                                 )
+                            } else if (!isOnline && searchState !is SearchState.Success) {
+                                CuidalePlaceholder(
+                                    title = if (userData.rol == "cuidador") "¡Aún no hay pacientes cerca!" else "Buscando cuidadores...",
+                                    subtitle = if (userData.rol == "cuidador") 
+                                        "Activa tu conexión para encontrar personas que necesitan tu ayuda hoy mismo." 
+                                        else "Necesitas internet para descubrir nuevos perfiles que puedan cuidar a tus seres queridos.",
+                                    icon = if (userData.rol == "cuidador") Icons.Default.AccessibilityNew else Icons.Default.Diversity3,
+                                    iconColor = if (userData.rol == "cuidador") MaterialTheme.colorScheme.primary else CuidaleThemeExtras.customColors.mint
+                                )
                             } else {
                                 PullToRefreshBox(
                                     state = pullToRefreshState,
                                     isRefreshing = isRefreshing,
-                                    onRefresh = { searchViewModel.refresh() },
+                                    onRefresh = { if (isOnline) searchViewModel.refresh() },
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     when (searchState) {
                                         is SearchState.Loading -> {
-                                            if (!isRefreshing) {
-                                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                                    CircularProgressIndicator(color = Color.White)
-                                                }
-                                            }
+                                            // No mostramos nada aquí para evitar parpadeo con la pantalla de bienvenida
+                                            Spacer(Modifier.fillMaxSize())
                                         }
                                         is SearchState.Success -> {
                                             val resultsList = (searchState as SearchState.Success).results
@@ -336,7 +345,7 @@ fun MenuScreen(
                             )
                         }
 
-                        if (showSearchSheet) {
+                        if (showSearchSheet && isOnline) {
                             ModalBottomSheet(
                                 onDismissRequest = { showSearchSheet = false },
                                 sheetState = sheetState,

@@ -135,20 +135,6 @@ fun ChatsScreen(
                             },
                             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
                         )
-                    },
-                    bottomBar = {
-                        val misPostulaciones = solicitudViewModel.misPostulaciones.collectAsState().value
-                        val postulacionesRecibidas = solicitudViewModel.postulacionesRecibidas.collectAsState().value
-                        val pendingReqCount = if (userData.rol == "cuidador") misPostulaciones.size 
-                                              else postulacionesRecibidas.values.flatten().count { it.estado == "pendiente" }
-
-                        CuidaleBottomBar(
-                            selectedTab = "chats", 
-                            unreadCount = unreadCount, 
-                            pendingNotifs = pendingNotifs,
-                            pendingRequests = pendingReqCount,
-                            onTabSelected = onTabSelected
-                        )
                     }
                 ) { innerPadding ->
                     Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {

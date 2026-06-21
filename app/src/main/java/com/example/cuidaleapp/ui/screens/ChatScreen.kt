@@ -27,6 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -51,10 +52,10 @@ import com.example.cuidaleapp.utils.AppNavigationState
 import com.example.cuidaleapp.models.ChatMessage
 import com.example.cuidaleapp.models.UserData
 import com.example.cuidaleapp.models.SolicitudCuidado
-import com.example.cuidaleapp.ui.components.HardShadowPanel
-import com.example.cuidaleapp.ui.components.getIconForTaskType
+import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.ChatViewModel
+import com.example.cuidaleapp.utils.ConnectivityObserver
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.launch
@@ -78,14 +79,21 @@ fun ChatScreen(
     favoritosViewModel: com.example.cuidaleapp.viewmodel.FavoritosViewModel? = null,
     initialMessage: String? = null
 ) {
+    val isOnline by ConnectivityObserver.isOnline.collectAsState()
     val messages by viewModel.messages.collectAsState()
     val otherStatus by viewModel.otherUserStatus.collectAsState()
     val isOtherTyping by viewModel.isOtherTyping.collectAsState()
     val isBlocked by viewModel.isBlocked.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
 
-    val filteredMessages = if (searchQuery.isBlank()) messages else messages.filter { it.text.contains(searchQuery, ignoreCase = true) }
-    val pinnedMessages = messages.filter { it.pinned && !it.deleted }
+    val filteredMessages = remember(messages, searchQuery) {
+        if (searchQuery.isBlank()) messages 
+        else messages.filter { it.text.contains(searchQuery, ignoreCase = true) }
+    }
+    
+    val pinnedMessages = remember(messages) {
+        messages.filter { it.pinned && !it.deleted }
+    }
 
     val favs by favoritosViewModel?.favoritos?.collectAsState() ?: remember { mutableStateOf(emptyList<String>()) }
     val bloqueados by favoritosViewModel?.bloqueados?.collectAsState() ?: remember { mutableStateOf(emptyList<String>()) }
@@ -115,16 +123,16 @@ fun ChatScreen(
     val iHaveBlocked = bloqueados.contains(otherUser.uid)
     val iHaveUnwanted = noDeseados.contains(otherUser.uid)
 
-    val isScrolledUp = remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
+    val isScrolledUp by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
     var hasNewMessageBelow by remember { mutableStateOf(false) }
 
     LaunchedEffect(messages.size) {
-        if (isScrolledUp.value) hasNewMessageBelow = true
+        if (isScrolledUp) hasNewMessageBelow = true
         else if (messages.isNotEmpty()) listState.animateScrollToItem(0)
     }
     
-    LaunchedEffect(isScrolledUp.value) {
-        if (!isScrolledUp.value) hasNewMessageBelow = false
+    LaunchedEffect(isScrolledUp) {
+        if (!isScrolledUp) hasNewMessageBelow = false
     }
 
     LaunchedEffect(chatId, initialMessage) {
@@ -190,169 +198,177 @@ fun ChatScreen(
     Scaffold(
         modifier = Modifier.fillMaxSize().navigationBarsPadding(),
         topBar = {
-            Surface(
-                shadowElevation = 4.dp,
-                color = if (isDark) Color(0xFF1B263B) else Color.White
-            ) {
-                TopAppBar(
-                    title = {
-                        if (selectedMessages.isNotEmpty()) {
-                            val allFromMe = selectedMessages.all { it.senderId == myUid }
-                            Column {
-                                Text("${selectedMessages.size} seleccionados", fontWeight = FontWeight.Bold)
-                                Text(
-                                    text = if (allFromMe) "Puedes eliminar o fijar estos mensajes" else "Solo puedes fijar estos mensajes",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = Color.Gray
-                                )
-                            }
-                        } else if (isSearchActive) {
-                            TextField(
-                                value = searchQuery,
-                                onValueChange = { viewModel.setSearchQuery(it) },
-                                placeholder = { Text("Buscar...", color = Color.Gray) },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true,
-                                colors = TextFieldDefaults.colors(
-                                    unfocusedContainerColor = Color.Transparent,
-                                    focusedContainerColor = Color.Transparent
-                                )
-                            )
-                        } else {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.clickable { onViewOtherProfile(otherUser.uid) }
-                            ) {
-                                Box(modifier = Modifier.size(42.dp)) {
-                                    Surface(modifier = Modifier.fillMaxSize(), shape = CircleShape, color = Color.Gray.copy(alpha = 0.1f)) {
-                                        if (otherUser.fotoUrl.isNotEmpty()) {
-                                            AsyncImage(
-                                                model = ImageRequest.Builder(LocalContext.current)
-                                                    .data(otherUser.fotoUrl)
-                                                    .crossfade(true)
-                                                    .diskCachePolicy(CachePolicy.ENABLED)
-                                                    .memoryCachePolicy(CachePolicy.ENABLED)
-                                                    .build(),
-                                                contentDescription = null, 
-                                                contentScale = ContentScale.Crop, 
-                                                modifier = Modifier.fillMaxSize()
-                                            )
-                                        } else {
-                                            Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center), tint = Color.Gray)
-                                        }
-                                    }
-                                    // Status Dot
-                                    Box(
-                                        modifier = Modifier
-                                            .size(12.dp)
-                                            .clip(CircleShape)
-                                            .background(if (otherStatus == "en línea") Color(0xFF4CAF50) else Color.Gray)
-                                            .align(Alignment.BottomEnd)
-                                            .border(2.dp, if (isDark) Color(0xFF1B263B) else Color.White, CircleShape)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
+            Column {
+                ConnectivityBanner()
+                Surface(
+                    shadowElevation = 4.dp,
+                    color = if (isDark) Color(0xFF1B263B) else Color.White
+                ) {
+                    TopAppBar(
+                        title = {
+                            if (selectedMessages.isNotEmpty()) {
+                                val allFromMe = selectedMessages.all { it.senderId == myUid }
                                 Column {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = otherUser.nombre, 
-                                            style = MaterialTheme.typography.titleMedium, 
-                                            fontWeight = FontWeight.ExtraBold,
-                                            maxLines = 1,
-                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                            modifier = Modifier.fadingEdge(Brush.horizontalGradient(0.95f to Color.Black, 1f to Color.Transparent))
-                                        )
-                                        if (isFavorite) {
-                                            Spacer(Modifier.width(4.dp))
-                                            Icon(Icons.Default.Star, null, tint = Color(0xFFFFD700), modifier = Modifier.size(14.dp))
-                                        }
-                                    }
+                                    Text("${selectedMessages.size} seleccionados", fontWeight = FontWeight.Bold)
                                     Text(
-                                        text = if (isBlocked) "Cerrado" else otherStatus,
+                                        text = if (allFromMe) "Puedes eliminar o fijar estos mensajes" else "Solo puedes fijar estos mensajes",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = if (isBlocked) Color.Red else (if (otherStatus == "en línea") Color(0xFF4CAF50) else Color.Gray),
+                                        color = Color.Gray
+                                    )
+                                }
+                            } else if (isSearchActive) {
+                                TextField(
+                                    value = searchQuery,
+                                    onValueChange = { viewModel.setSearchQuery(it) },
+                                    placeholder = { Text(if (isOnline) "Buscar..." else "Sin conexión", color = Color.Gray) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                    enabled = isOnline,
+                                    colors = TextFieldDefaults.colors(
+                                        unfocusedContainerColor = Color.Transparent,
+                                        focusedContainerColor = Color.Transparent
+                                    )
+                                )
+                            } else {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.clickable { onViewOtherProfile(otherUser.uid) }
+                                ) {
+                                    Box(modifier = Modifier.size(42.dp)) {
+                                        Surface(modifier = Modifier.fillMaxSize(), shape = CircleShape, color = Color.Gray.copy(alpha = 0.1f)) {
+                                            if (otherUser.fotoUrl.isNotEmpty()) {
+                                                AsyncImage(
+                                                    model = ImageRequest.Builder(LocalContext.current)
+                                                        .data(otherUser.fotoUrl)
+                                                        .crossfade(true)
+                                                        .diskCachePolicy(CachePolicy.ENABLED)
+                                                        .memoryCachePolicy(CachePolicy.ENABLED)
+                                                        .build(),
+                                                    contentDescription = null, 
+                                                    contentScale = ContentScale.Crop, 
+                                                    modifier = Modifier.fillMaxSize()
+                                                )
+                                            } else {
+                                                Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center), tint = Color.Gray)
+                                            }
+                                        }
+                                        // Status Dot
+                                        Box(
+                                            modifier = Modifier
+                                                .size(12.dp)
+                                                .clip(CircleShape)
+                                                .background(if (otherStatus == "en línea" && isOnline) Color(0xFF4CAF50) else Color.Gray)
+                                                .align(Alignment.BottomEnd)
+                                                .border(2.dp, if (isDark) Color(0xFF1B263B) else Color.White, CircleShape)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = otherUser.nombre, 
+                                                style = MaterialTheme.typography.titleMedium, 
+                                                fontWeight = FontWeight.ExtraBold,
+                                                maxLines = 1,
+                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                                modifier = Modifier.fadingEdge(Brush.horizontalGradient(0.95f to Color.Black, 1f to Color.Transparent))
+                                            )
+                                            if (isFavorite) {
+                                                Spacer(Modifier.width(4.dp))
+                                                Icon(Icons.Default.Star, null, tint = Color(0xFFFFD700), modifier = Modifier.size(14.dp))
+                                            }
+                                        }
+                                        Text(
+                                            text = if (!isOnline) "OFFLINE" else if (isBlocked) "Cerrado" else otherStatus,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (!isOnline) Color.Gray else if (isBlocked) Color.Red else (if (otherStatus == "en línea") Color(0xFF4CAF50) else Color.Gray),
+                                        )
+                                    }
+                                }
+                            }
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = { if (selectedMessages.isNotEmpty()) selectedMessages.clear() else onNavigateBack() }) {
+                                Icon(if (selectedMessages.isNotEmpty()) Icons.Default.Close else Icons.AutoMirrored.Filled.ArrowBack, null)
+                            }
+                        },
+                        actions = {
+                            if (selectedMessages.isNotEmpty()) {
+                                val allFromMe = selectedMessages.all { it.senderId == myUid }
+                                
+                                IconButton(onClick = {
+                                    val textToCopy = selectedMessages.joinToString("\n") { it.text }
+                                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("chat", textToCopy))
+                                    selectedMessages.clear()
+                                }) { Icon(Icons.Default.ContentCopy, null, tint = Color.Gray) }
+                                
+                                if (selectedMessages.size == 1 && selectedMessages.first().senderId == myUid && !selectedMessages.first().deleted && isOnline) {
+                                    IconButton(onClick = {
+                                        val msg = selectedMessages.first()
+                                        messageToEdit = msg
+                                        inputText = msg.text
+                                        selectedMessages.clear()
+                                    }) { Icon(Icons.Default.Edit, null, tint = primaryColor) }
+                                }
+
+                                if (allFromMe && isOnline) {
+                                    IconButton(onClick = { showDeleteConfirmDialog = true }) { Icon(Icons.Default.Delete, null, tint = Color.Red) }
+                                }
+                                
+                                if (isOnline) {
+                                    IconButton(onClick = { showPinConfirmDialog = true }) { 
+                                        Icon(Icons.Default.PushPin, null, tint = MaterialTheme.colorScheme.primary) 
+                                    }
+                                }
+                            } else {
+                                IconButton(onClick = { isSearchActive = !isSearchActive }) { Icon(Icons.Default.Search, null) }
+                                IconButton(onClick = { showPinnedMessages = true }) { 
+                                    BadgedBox(badge = { if (pinnedMessages.isNotEmpty()) Badge { Text(pinnedMessages.size.toString()) } }) {
+                                        Icon(Icons.Default.PushPin, null)
+                                    }
+                                }
+                                var showTopMenu by remember { mutableStateOf(false) }
+                                IconButton(onClick = { showTopMenu = true }) { Icon(Icons.Default.MoreVert, null) }
+                                DropdownMenu(expanded = showTopMenu, onDismissRequest = { showTopMenu = false }) {
+                                    DropdownMenuItem(
+                                        text = { Text("Ver Perfil") },
+                                        onClick = { 
+                                            showTopMenu = false
+                                            if (iHaveBlocked) {
+                                                scope.launch {
+                                                    val snackbarHostState = SnackbarHostState()
+                                                    snackbarHostState.showSnackbar("Debes desbloquear al usuario para ver su perfil")
+                                                }
+                                            } else {
+                                                onViewOtherProfile(otherUser.uid)
+                                            }
+                                        },
+                                        leadingIcon = { Icon(Icons.Default.Person, null) }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(if (isFavorite) "Quitar de Favoritos" else "Añadir a Favoritos") },
+                                        onClick = { showTopMenu = false; favoritosViewModel?.toggleFavorito(otherUser.uid) },
+                                        enabled = isOnline,
+                                        leadingIcon = { Icon(Icons.Default.Star, null, tint = if (isFavorite) Color.Yellow else Color.Gray) }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(if (iHaveBlocked) "Desbloquear" else "Bloquear", color = if (iHaveBlocked) Color.Unspecified else Color.Red) },
+                                        onClick = { showTopMenu = false; favoritosViewModel?.toggleBloqueo(otherUser.uid) },
+                                        enabled = isOnline,
+                                        leadingIcon = { Icon(if (iHaveBlocked) Icons.Default.CheckCircle else Icons.Default.Block, null, tint = if (iHaveBlocked) Color(0xFF4CAF50) else Color.Red) }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(if (iHaveUnwanted) "Mostrar en búsquedas" else "Ocultar de búsquedas") },
+                                        onClick = { showTopMenu = false; favoritosViewModel?.toggleNoDeseado(otherUser.uid) },
+                                        enabled = isOnline,
+                                        leadingIcon = { Icon(if (iHaveUnwanted) Icons.Default.Visibility else Icons.Default.VisibilityOff, null) }
                                     )
                                 }
                             }
                         }
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = { if (selectedMessages.isNotEmpty()) selectedMessages.clear() else onNavigateBack() }) {
-                            Icon(if (selectedMessages.isNotEmpty()) Icons.Default.Close else Icons.AutoMirrored.Filled.ArrowBack, null)
-                        }
-                    },
-                    actions = {
-                        if (selectedMessages.isNotEmpty()) {
-                            val allFromMe = selectedMessages.all { it.senderId == myUid }
-                            
-                            IconButton(onClick = {
-                                val textToCopy = selectedMessages.joinToString("\n") { it.text }
-                                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("chat", textToCopy))
-                                selectedMessages.clear()
-                            }) { Icon(Icons.Default.ContentCopy, null, tint = Color.Gray) }
-                            
-                            if (selectedMessages.size == 1 && selectedMessages.first().senderId == myUid && !selectedMessages.first().deleted) {
-                                IconButton(onClick = {
-                                    val msg = selectedMessages.first()
-                                    messageToEdit = msg
-                                    inputText = msg.text
-                                    selectedMessages.clear()
-                                }) { Icon(Icons.Default.Edit, null, tint = primaryColor) }
-                            }
-
-                            if (allFromMe) {
-                                IconButton(onClick = { showDeleteConfirmDialog = true }) { Icon(Icons.Default.Delete, null, tint = Color.Red) }
-                            }
-                            
-                            IconButton(onClick = { showPinConfirmDialog = true }) { 
-                                Icon(Icons.Default.PushPin, null, tint = MaterialTheme.colorScheme.primary) 
-                            }
-                        } else {
-                            IconButton(onClick = { isSearchActive = !isSearchActive }) { Icon(Icons.Default.Search, null) }
-                            IconButton(onClick = { showPinnedMessages = true }) { 
-                                BadgedBox(badge = { if (pinnedMessages.isNotEmpty()) Badge { Text(pinnedMessages.size.toString()) } }) {
-                                    Icon(Icons.Default.PushPin, null)
-                                }
-                            }
-                            var showTopMenu by remember { mutableStateOf(false) }
-                            IconButton(onClick = { showTopMenu = true }) { Icon(Icons.Default.MoreVert, null) }
-                            DropdownMenu(expanded = showTopMenu, onDismissRequest = { showTopMenu = false }) {
-                                DropdownMenuItem(
-                                    text = { Text("Ver Perfil") },
-                                    onClick = { 
-                                        showTopMenu = false
-                                        // Check if blocked before viewing profile
-                                        if (iHaveBlocked) {
-                                            scope.launch {
-                                                val snackbarHostState = SnackbarHostState()
-                                                snackbarHostState.showSnackbar("Debes desbloquear al usuario para ver su perfil")
-                                            }
-                                        } else {
-                                            onViewOtherProfile(otherUser.uid)
-                                        }
-                                    },
-                                    leadingIcon = { Icon(Icons.Default.Person, null) }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(if (isFavorite) "Quitar de Favoritos" else "Añadir a Favoritos") },
-                                    onClick = { showTopMenu = false; favoritosViewModel?.toggleFavorito(otherUser.uid) },
-                                    leadingIcon = { Icon(Icons.Default.Star, null, tint = if (isFavorite) Color.Yellow else Color.Gray) }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(if (iHaveBlocked) "Desbloquear" else "Bloquear", color = if (iHaveBlocked) Color.Unspecified else Color.Red) },
-                                    onClick = { showTopMenu = false; favoritosViewModel?.toggleBloqueo(otherUser.uid) },
-                                    leadingIcon = { Icon(if (iHaveBlocked) Icons.Default.CheckCircle else Icons.Default.Block, null, tint = if (iHaveBlocked) Color(0xFF4CAF50) else Color.Red) }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(if (iHaveUnwanted) "Mostrar en búsquedas" else "Ocultar de búsquedas") },
-                                    onClick = { showTopMenu = false; favoritosViewModel?.toggleNoDeseado(otherUser.uid) },
-                                    leadingIcon = { Icon(if (iHaveUnwanted) Icons.Default.Visibility else Icons.Default.VisibilityOff, null) }
-                                )
-                            }
-                        }
-                    }
-                )
+                    )
+                }
             }
         }
     ) { padding ->
@@ -362,7 +378,6 @@ fun ChatScreen(
                     .fillMaxSize()
                     .background(if (isDark) Color(0xFF0D1B2A) else Color(0xFFF1F4F9))
             ) {
-                // Pinned Messages Bar
                 if (pinnedMessages.isNotEmpty()) {
                     Surface(
                         modifier = Modifier.fillMaxWidth().clickable { showPinnedMessages = true },
@@ -378,75 +393,112 @@ fun ChatScreen(
                     }
                 }
 
-                // Messages List
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                    val reversedMessages = remember(filteredMessages) { filteredMessages.reversed() }
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp, 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        reverseLayout = true
-                    ) {
-                        item {
-                            androidx.compose.animation.AnimatedVisibility(visible = isOtherTyping, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-                                Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Text("${otherUser.nombre} está escribiendo...", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
-                                }
+                    if (!isOnline && filteredMessages.isEmpty()) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(Icons.Default.CloudOff, null, modifier = Modifier.size(64.dp), tint = Color.Gray.copy(alpha = 0.5f))
+                                Spacer(Modifier.height(16.dp))
+                                Text("Sin conexión a internet", fontWeight = FontWeight.Bold, color = Color.Gray)
+                                Text("No se pueden cargar los mensajes", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                             }
                         }
-                        items(items = reversedMessages, key = { it.id }) { msg ->
-                            val index = reversedMessages.indexOf(msg)
-                            
-                            // Discord-style day divider
-                            if (index < reversedMessages.size - 1) {
-                                val nextMsg = reversedMessages[index + 1]
-                                if (!isSameDay(msg.timestamp, nextMsg.timestamp)) {
+                    } else {
+                        val reversedMessages = remember(filteredMessages) { filteredMessages.reversed() }
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(16.dp, 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            reverseLayout = true
+                        ) {
+                            item {
+                                Column {
+                                    AnimatedVisibility(visible = isOtherTyping && isOnline, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                                        Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            Text("${otherUser.nombre} está escribiendo...", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
+                                        }
+                                    }
+                                }
+                            }
+                            items(items = reversedMessages, key = { it.id }) { msg ->
+                                val index = reversedMessages.indexOf(msg)
+                                
+                                if (index < reversedMessages.size - 1) {
+                                    val nextMsg = reversedMessages[index + 1]
+                                    if (!isSameDay(msg.timestamp, nextMsg.timestamp)) {
+                                        DayDivider(msg.timestamp)
+                                    }
+                                } else if (index == reversedMessages.size - 1) {
                                     DayDivider(msg.timestamp)
                                 }
-                            } else if (index == reversedMessages.size - 1) {
-                                DayDivider(msg.timestamp)
-                            }
 
-                        if (msg.senderId == "system") {
-                            SystemMessage(msg.text)
-                        } else {
-                            val isHighlighted = highlightedMessageId == msg.id
-                            ChatBubble(
-                                msg = msg,
-                                isMe = msg.senderId == myUid,
-                                isDark = isDark,
-                                isSelected = selectedMessages.any { it.id == msg.id },
-                                isHighlighted = isHighlighted,
-                                onClick = {
-                                    if (selectedMessages.isNotEmpty()) {
-                                        if (selectedMessages.any { it.id == msg.id }) selectedMessages.removeAll { it.id == msg.id }
-                                        else selectedMessages.add(msg)
-                                    }
-                                },
-                                onLongClick = { if (selectedMessages.isEmpty()) selectedMessages.add(msg) },
-                                onSwipeRight = { if (!isBlocked && !iHaveBlocked) replyingToMessage = msg },
-                                onViewPostulacion = { solId -> onViewRequest?.invoke(solId) ?: onRedirectToRequests() },
-                                onDoubleClick = {
-                                    if (msg.senderId == myUid && !msg.deleted) {
-                                        messageToEdit = msg
-                                        inputText = msg.text
-                                    }
+                                if (msg.senderId == "system") {
+                                    SystemMessage(msg.text)
+                                } else {
+                                    val isHighlighted = highlightedMessageId == msg.id
+                                    ChatBubble(
+                                        msg = msg,
+                                        isMe = msg.senderId == myUid,
+                                        isDark = isDark,
+                                        isSelected = selectedMessages.any { it.id == msg.id },
+                                        isHighlighted = isHighlighted,
+                                        onClick = {
+                                            if (selectedMessages.isNotEmpty()) {
+                                                if (selectedMessages.any { it.id == msg.id }) selectedMessages.removeAll { it.id == msg.id }
+                                                else selectedMessages.add(msg)
+                                            }
+                                        },
+                                        onLongClick = { if (selectedMessages.isEmpty()) selectedMessages.add(msg) },
+                                        onSwipeRight = { if (!isBlocked && !iHaveBlocked && isOnline) replyingToMessage = msg },
+                                        onViewPostulacion = { solId -> onViewRequest?.invoke(solId) ?: onRedirectToRequests() },
+                                        onDoubleClick = {
+                                            if (msg.senderId == myUid && !msg.deleted && isOnline) {
+                                                messageToEdit = msg
+                                                inputText = msg.text
+                                            }
+                                        }
+                                    )
                                 }
-                            )
+                            }
                         }
                     }
                 }
-                }
 
-                // Input Area
                 Surface(
                     tonalElevation = 8.dp,
                     color = if (isDark) Color(0xFF1B263B) else Color.White,
                     shape = RoundedCornerShape(24.dp, 24.dp, 0.dp, 0.dp),
                     modifier = Modifier.fillMaxWidth().imePadding()
                 ) {
-                    if (isBlocked || iHaveBlocked) {
+                    if (!isOnline) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(if (isDark) Color(0xFF2B2D31) else Color(0xFFF2F3F5))
+                                .padding(20.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.WifiOff, null, tint = Color.Gray, modifier = Modifier.size(20.dp))
+                                    Spacer(Modifier.width(12.dp))
+                                    Text(
+                                        "MODO SOLO LECTURA", 
+                                        color = Color.Gray, 
+                                        style = MaterialTheme.typography.labelLarge, 
+                                        fontWeight = FontWeight.Black
+                                    )
+                                }
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    "Conéctate a internet para enviar mensajes.", 
+                                    color = Color.Gray.copy(alpha = 0.7f), 
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    } else if (isBlocked || iHaveBlocked) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -569,23 +621,32 @@ fun ChatScreen(
                 }
             }
 
-            // Scroll to bottom button
             AnimatedVisibility(
-                visible = hasNewMessageBelow,
+                visible = isScrolledUp,
                 enter = slideInVertically { it } + fadeIn(),
                 exit = slideOutVertically { it } + fadeOut(),
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 100.dp)
             ) {
                 Surface(
-                    color = primaryColor,
+                    color = if (hasNewMessageBelow) MaterialTheme.colorScheme.secondary else primaryColor,
                     shape = CircleShape,
                     shadowElevation = 6.dp,
                     modifier = Modifier.clickable { scope.launch { listState.animateScrollToItem(0) } }
                 ) {
                     Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.ArrowDownward, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Icon(
+                            imageVector = if (hasNewMessageBelow) Icons.Default.NewReleases else Icons.Default.ArrowDownward, 
+                            contentDescription = null, 
+                            tint = Color.White, 
+                            modifier = Modifier.size(16.dp)
+                        )
                         Spacer(Modifier.width(8.dp))
-                        Text("Nuevos mensajes", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        Text(
+                            text = if (hasNewMessageBelow) "Nuevos mensajes" else "Volver al final", 
+                            color = Color.White, 
+                            style = MaterialTheme.typography.labelMedium, 
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
@@ -747,21 +808,57 @@ fun ChatScreen(
 
     if (showShareTasks) {
         ModalBottomSheet(onDismissRequest = { showShareTasks = false }) {
-            Column(Modifier.padding(16.dp).fillMaxWidth()) {
-                Text("Compartir tarea", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(16.dp))
+            Column(Modifier.padding(16.dp).fillMaxWidth().fillMaxHeight(0.7f)) {
+                Text("Compartir tarea", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
+                Text("Selecciona una tarea para compartir su estado actual.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                Spacer(Modifier.height(24.dp))
+                
                 if (activeTasks.isEmpty()) {
-                    Text("No hay tareas registradas hoy", color = Color.Gray)
+                    Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.AssignmentLate, null, modifier = Modifier.size(48.dp), tint = Color.Gray.copy(alpha = 0.3f))
+                            Spacer(Modifier.height(12.dp))
+                            Text("No hay tareas registradas hoy", color = Color.Gray)
+                        }
+                    }
                 } else {
-                    activeTasks.forEach { reg ->
-                        Card(
-                            onClick = {
-                                viewModel.sendMessage(chatId, "Sobre: ${reg.titulo} (${reg.horarioPrevisto})", type = "tarea_compartida", metadata = mapOf("tareaId" to reg.id, "solicitudId" to reg.solicitudId))
-                                showShareTasks = false
-                            },
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                        ) {
-                            Text("${reg.titulo} - ${reg.horarioPrevisto}", modifier = Modifier.padding(12.dp))
+                    val completadas = activeTasks.filter { it.completada }
+                    val pospuestas = activeTasks.filter { it.postergada && !it.completada }
+                    val pendientes = activeTasks.filter { !it.completada && !it.postergada }
+
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        item {
+                            TaskShareSection(
+                                title = "PENDIENTES",
+                                tasks = pendientes,
+                                color = MaterialTheme.colorScheme.primary,
+                                onTaskClick = { reg: com.example.cuidaleapp.models.RegistroTarea ->
+                                    viewModel.sendMessage(chatId, "Sobre: ${reg.titulo} (${reg.horarioPrevisto}) - ESTADO: PENDIENTE", type = "tarea_compartida", metadata = mapOf("tareaId" to reg.id, "solicitudId" to reg.solicitudId))
+                                    showShareTasks = false
+                                }
+                            )
+                        }
+                        item {
+                            TaskShareSection(
+                                title = "COMPLETADAS",
+                                tasks = completadas,
+                                color = Color(0xFF4CAF50),
+                                onTaskClick = { reg: com.example.cuidaleapp.models.RegistroTarea ->
+                                    viewModel.sendMessage(chatId, "Sobre: ${reg.titulo} (${reg.horarioPrevisto}) - ESTADO: COMPLETADA", type = "tarea_compartida", metadata = mapOf("tareaId" to reg.id, "solicitudId" to reg.solicitudId))
+                                    showShareTasks = false
+                                }
+                            )
+                        }
+                        item {
+                            TaskShareSection(
+                                title = "POSPUESTAS",
+                                tasks = pospuestas,
+                                color = Color.Red,
+                                onTaskClick = { reg: com.example.cuidaleapp.models.RegistroTarea ->
+                                    viewModel.sendMessage(chatId, "Sobre: ${reg.titulo} (${reg.horarioPrevisto}) - ESTADO: POSPUESTA", type = "tarea_compartida", metadata = mapOf("tareaId" to reg.id, "solicitudId" to reg.solicitudId))
+                                    showShareTasks = false
+                                }
+                            )
                         }
                     }
                 }
@@ -819,6 +916,59 @@ fun ChatScreen(
                                         Spacer(Modifier.width(4.dp))
                                         Text("DESFIJAR", fontSize = 10.sp)
                                     }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TaskShareSection(
+    title: String,
+    tasks: List<com.example.cuidaleapp.models.RegistroTarea>,
+    color: Color,
+    onTaskClick: (com.example.cuidaleapp.models.RegistroTarea) -> Unit
+) {
+    var expanded by remember { mutableStateOf(tasks.isNotEmpty()) }
+    
+    Column {
+        Surface(
+            onClick = { expanded = !expanded },
+            color = Color.Black.copy(alpha = 0.03f),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = color, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(title, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = color)
+                Spacer(Modifier.weight(1f))
+                Badge(containerColor = color) { Text(tasks.size.toString(), color = Color.White) }
+            }
+        }
+        
+        AnimatedVisibility(visible = expanded) {
+            Column(Modifier.padding(start = 8.dp, top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (tasks.isEmpty()) {
+                    Text("Sin tareas", style = MaterialTheme.typography.labelSmall, color = Color.Gray, modifier = Modifier.padding(12.dp))
+                } else {
+                    tasks.forEach { reg ->
+                        Card(
+                            onClick = { onTaskClick(reg) },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.5f)),
+                            border = BorderStroke(1.dp, color.copy(alpha = 0.1f))
+                        ) {
+                            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.RadioButtonUnchecked, null, tint = color, modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(12.dp))
+                                Column {
+                                    Text(reg.titulo, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                                    Text(reg.horarioPrevisto, style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                                 }
                             }
                         }
@@ -1004,11 +1154,40 @@ fun RequestAlertBubble(msg: ChatMessage, onViewClick: () -> Unit) {
 @Composable
 fun TaskSharedBubble(text: String, isMe: Boolean) {
     val accentColor = if (isMe) Color.White else MaterialTheme.colorScheme.primary
-    Surface(color = Color.Black.copy(alpha = 0.05f), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.AutoMirrored.Filled.ListAlt, null, tint = accentColor, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(12.dp))
-            Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+    val isDark = CuidaleThemeExtras.customColors.isDark
+    
+    Surface(
+        color = if (isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.03f),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.2f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    color = accentColor.copy(alpha = 0.1f),
+                    shape = CircleShape,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.AutoMirrored.Filled.Assignment, null, tint = accentColor, modifier = Modifier.size(16.dp))
+                    }
+                }
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    "REPORTE DE TAREA",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Black,
+                    color = accentColor
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Medium,
+                color = if (isMe) Color.White else (if (isDark) Color.LightGray else Color.DarkGray)
+            )
         }
     }
 }
@@ -1097,21 +1276,17 @@ private fun formatMessageDate(timestamp: Long): String {
     val msgDate = Calendar.getInstance().apply { timeInMillis = timestamp }
 
     return when {
-        // Hoy
         now.get(Calendar.YEAR) == msgDate.get(Calendar.YEAR) &&
         now.get(Calendar.DAY_OF_YEAR) == msgDate.get(Calendar.DAY_OF_YEAR) -> {
             SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp))
         }
-        // Ayer
         now.get(Calendar.YEAR) == msgDate.get(Calendar.YEAR) &&
         now.get(Calendar.DAY_OF_YEAR) - msgDate.get(Calendar.DAY_OF_YEAR) == 1 -> {
             "Ayer " + SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp))
         }
-        // Este año
         now.get(Calendar.YEAR) == msgDate.get(Calendar.YEAR) -> {
             SimpleDateFormat("d MMM, HH:mm", Locale.getDefault()).format(Date(timestamp))
         }
-        // Años anteriores
         else -> {
             SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(timestamp))
         }

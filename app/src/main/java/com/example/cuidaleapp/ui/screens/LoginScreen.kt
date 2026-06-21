@@ -69,6 +69,7 @@ import com.example.cuidaleapp.ui.components.CuidaleTextField
 import com.example.cuidaleapp.ui.components.HardShadowButton
 import com.example.cuidaleapp.ui.components.HardShadowPanel
 import com.example.cuidaleapp.ui.components.InputFieldLabel
+import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.LoginUiState
@@ -219,27 +220,10 @@ fun LoginForm(
             Box(
                 modifier = Modifier.padding(bottom = 24.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(100.dp)
-                        .offset(x = 6.dp, y = 6.dp)
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(if (isDark) shadows.hardShadowAccent.copy(alpha = 0.4f) else shadows.hardShadowPrimary.copy(alpha = 0.2f))
+                CuidaleAppLogo(
+                    isDark = isDark,
+                    modifier = Modifier.size(120.dp)
                 )
-                Box(
-                    modifier = Modifier
-                        .size(100.dp)
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(colors.surface.copy(alpha = 0.9f))
-                        .border(2.dp, onGradientText.copy(alpha = 0.2f), RoundedCornerShape(24.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = stringResource(R.string.login_logo_placeholder),
-                        style = typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold),
-                        color = colors.primary
-                    )
-                }
             }
 
             HardShadowPanel(
