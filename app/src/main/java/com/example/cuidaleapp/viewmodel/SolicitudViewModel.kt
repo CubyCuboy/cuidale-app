@@ -516,5 +516,7 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
         solicitudesListener?.remove()
         postulacionesListener?.remove()
         cuidadorSolicitudesListener?.remove()
+        misPostulacionesListener?.remove()
+        historialListener?.remove()
     }
 }

@@ -1,7 +1,9 @@
 package com.example.cuidaleapp.models
 
 import com.google.firebase.Timestamp
+import com.google.firebase.firestore.IgnoreExtraProperties
 
+@IgnoreExtraProperties
 data class UserData(
     val uid: String = "",
     val nombre: String = "",

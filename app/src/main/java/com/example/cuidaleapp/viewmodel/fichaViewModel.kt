@@ -1,19 +1,23 @@
 package com.example.cuidaleapp.viewmodel
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.cuidaleapp.data.ChileData
 import com.example.cuidaleapp.models.Tarea
 import com.example.cuidaleapp.models.FrecuenciaTarea
 import com.example.cuidaleapp.models.TipoTarea
-import com.google.firebase.firestore.ListenerRegistration
-import kotlinx.coroutines.flow.asStateFlow
-import java.util.UUID
+import com.example.cuidaleapp.utils.ImageUtils
+import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.Query
+import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -25,39 +29,48 @@ sealed class FichaState {
     data class Error(val message: String) : FichaState()
 }
 
+data class Resena(
+    val id: String = "",
+    val autorId: String = "",
+    val autorNombre: String = "",
+    val comentario: String = "",
+    val calificacion: Float = 0f,
+    val fecha: Timestamp = Timestamp.now()
+)
+
 class FichaViewModel(application: Application) : AndroidViewModel(application) {
     private val auth = FirebaseAuth.getInstance()
     private val db = FirebaseFirestore.getInstance()
-    private val context = application.applicationContext
 
     private val _state = MutableStateFlow<FichaState>(FichaState.Loading)
-    val state: StateFlow<FichaState> = _state
+    val state: StateFlow<FichaState> = _state.asStateFlow()
 
     private val _role = MutableStateFlow("")
-    val role: StateFlow<String> = _role
+    val role: StateFlow<String> = _role.asStateFlow()
 
     private val _userRegion = MutableStateFlow("")
-    val userRegion: StateFlow<String> = _userRegion
+    val userRegion: StateFlow<String> = _userRegion.asStateFlow()
 
     private val _availableCommunes = MutableStateFlow<List<String>>(emptyList())
-    val availableCommunes: StateFlow<List<String>> = _availableCommunes
+    val availableCommunes: StateFlow<List<String>> = _availableCommunes.asStateFlow()
 
     private val _isRefreshing = MutableStateFlow(false)
-    val isRefreshing: StateFlow<Boolean> = _isRefreshing
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
     private val _isPartialLoading = MutableStateFlow(false)
-    val isPartialLoading: StateFlow<Boolean> = _isPartialLoading
+    val isPartialLoading: StateFlow<Boolean> = _isPartialLoading.asStateFlow()
 
     private val _tareasPlantilla = MutableStateFlow<List<Tarea>>(emptyList())
-    val tareasPlantilla: StateFlow<List<Tarea>> = _tareasPlantilla
+    val tareasPlantilla: StateFlow<List<Tarea>> = _tareasPlantilla.asStateFlow()
 
     private val _tareasTemporales = MutableStateFlow<List<Tarea>>(emptyList())
-    val tareasTemporales: StateFlow<List<Tarea>> = _tareasTemporales
+    val tareasTemporales: StateFlow<List<Tarea>> = _tareasTemporales.asStateFlow()
 
-    private val _pendingPatientPhotoUri = MutableStateFlow<android.net.Uri?>(null)
-    val pendingPatientPhotoUri: StateFlow<android.net.Uri?> = _pendingPatientPhotoUri
+    private val _pendingPatientPhotoUri = MutableStateFlow<Uri?>(null)
+    val pendingPatientPhotoUri: StateFlow<Uri?> = _pendingPatientPhotoUri.asStateFlow()
 
-    private var isEditingMode = false
+    private val _resenas = MutableStateFlow<List<Resena>>(emptyList())
+    val resenas: StateFlow<List<Resena>> = _resenas.asStateFlow()
 
     init {
         checkProfile()
@@ -91,8 +104,13 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
                 val profileDoc = db.collection("fichas").document(user.uid).get().await()
 
                 if (profileDoc.exists()) {
-                    _state.value = FichaState.View(profileDoc.data ?: emptyMap())
+                    val data = profileDoc.data?.toMutableMap() ?: mutableMapOf()
+                    _state.value = FichaState.View(data)
+                    
                     listenToTareas(user.uid)
+                    if (currentRole == "cuidador") {
+                        listenToResenas(user.uid)
+                    }
                 } else {
                     _state.value = FichaState.NotFound
                 }
@@ -108,13 +126,11 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
     fun startEditing() {
         when (val currentState = _state.value) {
             is FichaState.View -> {
-                isEditingMode = true
                 _tareasTemporales.value = _tareasPlantilla.value
                 _pendingPatientPhotoUri.value = null
                 _state.value = FichaState.Editing(currentState.data)
             }
             is FichaState.NotFound -> {
-                isEditingMode = true
                 _tareasTemporales.value = emptyList()
                 _pendingPatientPhotoUri.value = null
                 _state.value = FichaState.Editing(emptyMap())
@@ -123,62 +139,12 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setPendingPatientPhoto(uri: android.net.Uri?) {
+    fun setPendingPatientPhoto(uri: Uri?) {
         _pendingPatientPhotoUri.value = uri
     }
 
     fun cancelEditing() {
-        isEditingMode = false
         checkProfile()
-    }
-
-    fun saveTareaPlantilla(tarea: Tarea) {
-        val user = auth.currentUser ?: return
-        viewModelScope.launch {
-            try {
-                // Actualizar en el arreglo independiente
-                val docRef = db.collection("fichas").document(user.uid)
-                    .collection("rutina_data").document("actual")
-                
-                val doc = docRef.get().await()
-                val actuales = if (doc.exists()) {
-                    doc.get("tareas") as? MutableList<Map<String, Any>> ?: mutableListOf()
-                } else mutableListOf()
-                
-                val index = actuales.indexOfFirst { it["id"] == tarea.id }
-                val tareaMap = mapOf(
-                    "id" to tarea.id,
-                    "titulo" to tarea.titulo,
-                    "tipo" to tarea.tipo.name,
-                    "horarioInicio" to tarea.horarioInicio,
-                    "frecuencia" to tarea.frecuencia.name,
-                    "descripcion" to tarea.descripcion
-                )
-                
-                if (index != -1) actuales[index] = tareaMap else actuales.add(tareaMap)
-                
-                docRef.set(mapOf("tareas" to actuales)).await()
-                checkProfile(isSilent = true)
-            } catch (e: Exception) {}
-        }
-    }
-
-    fun deleteTareaPlantilla(tareaId: String) {
-        val user = auth.currentUser ?: return
-        viewModelScope.launch {
-            try {
-                val docRef = db.collection("fichas").document(user.uid)
-                    .collection("rutina_data").document("actual")
-                
-                val doc = docRef.get().await()
-                if (doc.exists()) {
-                    val actuales = doc.get("tareas") as? MutableList<Map<String, Any>> ?: mutableListOf()
-                    actuales.removeAll { it["id"] == tareaId }
-                    docRef.set(mapOf("tareas" to actuales)).await()
-                }
-                checkProfile(isSilent = true)
-            } catch (e: Exception) {}
-        }
     }
 
     fun createCaregiverFicha(
@@ -194,23 +160,18 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _state.value = FichaState.Loading
             try {
-                val userDoc = db.collection("usuarios").document(user.uid).get().await()
                 val data = hashMapOf(
                     "tipo" to "cuidador",
-                    "nombre" to (userDoc.getString("nombre") ?: ""),
-                    "apellido_pa" to (userDoc.getString("apellido_pa") ?: ""),
-                    "fotoUrl" to (userDoc.getString("fotoUrl") ?: ""),
                     "especializacion" to especializacion.trim(),
                     "experiencia" to experiencia.trim(),
                     "comunas" to comunas,
                     "horarios" to horarios,
                     "descripcion" to descripcion.trim(),
                     "activa" to true,
-                    "ultima_actualizacion" to com.google.firebase.Timestamp.now()
+                    "ultima_actualizacion" to Timestamp.now()
                 )
                 db.collection("fichas").document(user.uid).set(data).await()
                 
-                isEditingMode = false
                 checkProfile()
                 onSuccess()
             } catch (e: Exception) {
@@ -253,32 +214,29 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
                     finalPhotoUrl = existingFicha.getString("fotoUrl") ?: ""
                 }
 
-                // Subir foto si hay una pendiente
                 if (_pendingPatientPhotoUri.value != null) {
                     val uri = _pendingPatientPhotoUri.value!!
-                    val storageRef = com.google.firebase.storage.FirebaseStorage.getInstance().reference
+                    val storageRef = FirebaseStorage.getInstance().reference
                     val filename = "patient_${System.currentTimeMillis()}.jpg"
                     val ref = storageRef.child("families/${user.uid}/$filename")
                     
                     val context = getApplication<Application>()
-                    val compressedBytes = com.example.cuidaleapp.utils.ImageUtils.getCompressedImage(context, uri)
+                    val compressedBytes = ImageUtils.getCompressedImage(context, uri)
                         ?: throw Exception("Error al procesar imagen")
 
                     ref.putBytes(compressedBytes).await()
                     val newUrl = ref.downloadUrl.await().toString()
                     
-                    // Borrar la anterior si existe
                     if (finalPhotoUrl.isNotEmpty() && finalPhotoUrl.contains("firebasestorage")) {
                         try {
-                            com.google.firebase.storage.FirebaseStorage.getInstance().getReferenceFromUrl(finalPhotoUrl).delete().await()
+                            FirebaseStorage.getInstance().getReferenceFromUrl(finalPhotoUrl).delete().await()
                         } catch (e: Exception) {}
                     }
                     finalPhotoUrl = newUrl
                 } else if (shouldDeletePhoto) {
-                    // Borrar foto actual si se solicitó
                     if (finalPhotoUrl.isNotEmpty() && finalPhotoUrl.contains("firebasestorage")) {
                         try {
-                            com.google.firebase.storage.FirebaseStorage.getInstance().getReferenceFromUrl(finalPhotoUrl).delete().await()
+                            FirebaseStorage.getInstance().getReferenceFromUrl(finalPhotoUrl).delete().await()
                         } catch (e: Exception) {}
                     }
                     finalPhotoUrl = ""
@@ -307,15 +265,13 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
                     "comunas_preferencia" to comunasPreferencia,
                     "horarios_preferencia" to horariosPreferencia,
                     "activa" to true,
-                    "ultima_actualizacion" to com.google.firebase.Timestamp.now()
+                    "ultima_actualizacion" to Timestamp.now()
                 )
                 db.collection("fichas").document(user.uid).set(data).await()
 
-                // Persistir tareas temporales
                 val batch = db.batch()
                 val tareasRef = db.collection("fichas").document(user.uid).collection("tareas_plantilla")
                 
-                // Marcar todas las anteriores como inactivas para "reemplazar" el set
                 val oldTareas = db.collection("fichas").document(user.uid).collection("tareas_plantilla").get().await()
                 oldTareas.documents.forEach { batch.update(it.reference, "activa", false) }
 
@@ -324,7 +280,6 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 batch.commit().await()
 
-                isEditingMode = false
                 checkProfile()
                 onSuccess()
             } catch (e: Exception) {
@@ -348,13 +303,13 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
                     mapOf(
                         "comunas" to comunas,
                         "horarios" to horarios,
-                        "ultima_actualizacion" to com.google.firebase.Timestamp.now()
+                        "ultima_actualizacion" to Timestamp.now()
                     )
                 } else {
                     mapOf(
                         "comunas_preferencia" to comunas,
                         "horarios_preferencia" to horarios,
-                        "ultima_actualizacion" to com.google.firebase.Timestamp.now()
+                        "ultima_actualizacion" to Timestamp.now()
                     )
                 }
                 
@@ -368,20 +323,53 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private var resenasListener: ListenerRegistration? = null
+    private fun listenToResenas(uid: String) {
+        resenasListener?.remove()
+        resenasListener = db.collection("fichas").document(uid)
+            .collection("resenas")
+            .orderBy("fecha", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, _ ->
+                if (snapshot != null) {
+                    val list = snapshot.documents.mapNotNull { doc ->
+                        doc.toObject(Resena::class.java)?.copy(id = doc.id)
+                    }
+                    _resenas.value = list
+                    
+                    // Calcular promedio y actualizar ficha localmente
+                    if (list.isNotEmpty()) {
+                        val promedio = list.map { it.calificacion }.average().toFloat()
+                        val total = list.size
+                        
+                        updateFichaRatings(uid, promedio, total)
+                    }
+                }
+            }
+    }
+
+    private fun updateFichaRatings(uid: String, promedio: Float, total: Int) {
+        viewModelScope.launch {
+            try {
+                db.collection("fichas").document(uid).update(
+                    mapOf(
+                        "rating_promedio" to promedio,
+                        "total_resenas" to total
+                    )
+                ).await()
+            } catch (e: Exception) {}
+        }
+    }
+
     private var tareasListener: ListenerRegistration? = null
     private fun listenToTareas(uid: String) {
         tareasListener?.remove()
-        // Nueva estructura: Documento independiente 'rutina' que contiene el arreglo de tareas
         tareasListener = db.collection("fichas").document(uid)
             .collection("rutina_data").document("actual")
             .addSnapshotListener { snapshot, _ ->
                 if (snapshot != null && snapshot.exists()) {
+                    @Suppress("UNCHECKED_CAST")
                     val list = snapshot.get("tareas") as? List<Map<String, Any>> ?: emptyList()
-                    // Convertir de Map a Tarea (Firebase lo hace automáticamente con toObjects pero aquí es un campo array)
-                    // Para simplificar, seguimos permitiendo la subcolección pero el "lápiz" lleva a TAREAS del servicio.
-                    // Sin embargo, para cumplir con lo solicitado de "arreglo independiente":
                     _tareasPlantilla.value = list.map { map ->
-                        // Mapeo manual básico o usar convertidor
                         Tarea(
                             id = map["id"] as? String ?: "",
                             titulo = map["titulo"] as? String ?: "",
@@ -391,7 +379,6 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
                         )
                     }.filter { it.id.isNotEmpty() }
                 } else {
-                    // Fallback a subcolección si el documento nuevo no existe (migración)
                     db.collection("fichas").document(uid).collection("tareas_plantilla")
                         .whereEqualTo("activa", true)
                         .get().addOnSuccessListener { subSnap ->
@@ -401,10 +388,9 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
             }
     }
 
-
-
     override fun onCleared() {
         super.onCleared()
         tareasListener?.remove()
+        resenasListener?.remove()
     }
 }

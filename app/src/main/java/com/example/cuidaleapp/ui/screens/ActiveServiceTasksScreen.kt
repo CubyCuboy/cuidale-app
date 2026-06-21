@@ -27,7 +27,7 @@ import com.example.cuidaleapp.ui.components.TaskCreationDialog
 import com.example.cuidaleapp.ui.components.getIconForTaskType
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.TareasViewModel
-import androidx.compose.ui.platform.LocalLocale
+import java.util.Locale
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -567,7 +567,7 @@ fun DailyTaskCard(
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = "POSTERGADA A LAS ${registro.fechaPostergacion?.toDate()?.let { 
-                                    java.text.SimpleDateFormat("HH:mm", LocalLocale.current.platformLocale).format(it) 
+                                    java.text.SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) 
                                 }}",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
@@ -603,7 +603,7 @@ fun DailyTaskCard(
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = "Realizada a las ${registro.fechaCompletado?.toDate()?.let { 
-                                    java.text.SimpleDateFormat("HH:mm", LocalLocale.current.platformLocale).format(it) 
+                                    java.text.SimpleDateFormat("HH:mm", Locale.getDefault()).format(it)
                                 }}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color(0xFF4CAF50),

@@ -74,8 +74,6 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
 
     fun initSearch(userRole: String, residenceRegion: String) {
         val newTargetTipo = if (userRole == "cuidador") "familiar" else "cuidador"
-        
-        // Si el tipo es el mismo y la región no ha cambiado, no reiniciamos
         if (targetTipo == newTargetTipo && userRegion == residenceRegion && currentResults.isNotEmpty()) {
             return 
         }
@@ -145,7 +143,6 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
             _isRefreshing.value = true
             loadNoDeseados()
             loadProfilePreferences()
-            // NO llamamos a applyInitialFilters() para mantener los parámetros actuales del usuario
             resetAndFetch()
         }
     }
@@ -182,8 +179,6 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                     _isRefreshing.value = false
                     return@launch
                 }
-
-                // CAMBIO CLAVE: Cuidadores se buscan en 'usuarios', Pacientes en 'fichas'
                 val collectionPath = if (targetTipo == "cuidador") "usuarios" else "fichas"
                 val roleField = if (targetTipo == "cuidador") "rol" else "tipo"
                 val orderField = if (targetTipo == "cuidador") "createdAt" else "ultima_actualizacion"
@@ -200,8 +195,6 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                 }
 
                 if (communeFilters.isNotEmpty()) {
-                    // Si es usuario, buscamos por su comuna de residencia
-                    // Si es ficha de paciente, buscamos por la comuna del paciente
                     query = query.whereIn("comuna", communeFilters)
                 }
 
@@ -225,12 +218,9 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                         var comuna = doc.getString("comuna") ?: ""
 
                         if (targetTipo == "cuidador") {
-                            // Los datos personales ya los tenemos del doc (que es un usuario)
                             nombre = doc.getString("nombre") ?: ""
                             apellido = doc.getString("apellido_pa") ?: ""
                             foto = doc.getString("fotoUrl") ?: doc.getString("foto") ?: ""
-                            
-                            // Buscamos la ficha para los datos técnicos
                             try {
                                 val fichaDoc = db.collection("fichas").document(doc.id).get().await()
                                 if (fichaDoc.exists()) {
@@ -240,8 +230,6 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                                 }
                             } catch (e: Exception) { }
                         } else {
-                            // Es un familiar (paciente), los datos están en la ficha
-                            // UNICAMENTE sacamos el nombre de 'nombre_completo' como pediste
                             nombre = doc.getString("nombre_completo") ?: ""
                             apellido = ""
 
