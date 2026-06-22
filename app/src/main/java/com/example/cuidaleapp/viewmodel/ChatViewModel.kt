@@ -9,8 +9,10 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.*
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
+import com.example.cuidaleapp.utils.ConnectivityObserver
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -20,11 +22,18 @@ class ChatViewModel : ViewModel() {
     private val storage = FirebaseStorage.getInstance().reference
     private val db = FirebaseFirestore.getInstance()
     
+    val isOnline: StateFlow<Boolean> = ConnectivityObserver.isOnline
+
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val messages: StateFlow<List<ChatMessage>> = _messages
 
     private val _chatList = MutableStateFlow<List<ChatPreview>>(emptyList())
     val chatList: StateFlow<List<ChatPreview>> = _chatList
+
+    private val _usersMap = MutableStateFlow<Map<String, UserData>>(emptyMap())
+    private val _lastMessagesMap = MutableStateFlow<Map<String, ChatMessage?>>(emptyMap())
+    private val _unreadCountsMap = MutableStateFlow<Map<String, Int>>(emptyMap())
+    private val _chatIdsMap = MutableStateFlow<Map<String, String>>(emptyMap()) // otherUid -> chatId
 
     private val _totalUnreadCount = MutableStateFlow(0)
     val totalUnreadCount: StateFlow<Int> = _totalUnreadCount
@@ -61,6 +70,7 @@ class ChatViewModel : ViewModel() {
     private var blockingListener: com.google.firebase.firestore.ListenerRegistration? = null
     private val chatMessageListeners = mutableMapOf<String, ValueEventListener>()
     private val chatTypingListeners = mutableMapOf<String, ValueEventListener>()
+    private val userListeners = mutableMapOf<String, com.google.firebase.firestore.ListenerRegistration>()
     private var currentChatId: String? = null
 
     fun setUserStatus(isOnline: Boolean) {
@@ -230,19 +240,33 @@ class ChatViewModel : ViewModel() {
     }
 
     private fun loadChatPreviews(userIds: List<String>, chatIds: List<String>, myUid: String) {
-        db.collection("usuarios").whereIn("uid", userIds).get().addOnSuccessListener { userDocs ->
-            val usersMap = userDocs.toObjects(UserData::class.java).associateBy { it.uid }
-            
-            chatIds.forEachIndexed { index, chatId ->
-                val otherUid = userIds[index]
-                val otherUser = usersMap[otherUid] ?: UserData(uid = otherUid, nombre = "Usuario")
-                
-                if (chatMessageListeners.containsKey(chatId)) return@forEachIndexed
-                
+        userIds.forEachIndexed { index, otherUid ->
+            val chatId = chatIds[index]
+            _chatIdsMap.value = _chatIdsMap.value + (otherUid to chatId)
+
+            // 1. User Listener
+            if (!userListeners.containsKey(otherUid)) {
+                val uListener = db.collection("usuarios").document(otherUid)
+                    .addSnapshotListener { snapshot, e ->
+                        if (e != null || snapshot == null || !snapshot.exists()) return@addSnapshotListener
+                        val otherUser = snapshot.toObject(UserData::class.java)?.copy(uid = otherUid) ?: return@addSnapshotListener
+                        
+                        _usersMap.value = _usersMap.value + (otherUid to otherUser)
+                        updateChatList()
+
+                        if (otherUid == currentChatId?.split("_")?.find { it != myUid }) {
+                            val bloqueados = snapshot.get("bloqueados") as? List<String> ?: emptyList()
+                            _isBlocked.value = bloqueados.contains(myUid)
+                        }
+                    }
+                userListeners[otherUid] = uListener
+            }
+
+            // 2. Message Listener for last message and unread count
+            if (!chatMessageListeners.containsKey(chatId)) {
                 val listener = object : ValueEventListener {
                     override fun onDataChange(snapshot: DataSnapshot) {
                         val lastMsg = snapshot.children.lastOrNull()?.getValue(ChatMessage::class.java)
-                        
                         var unread = 0
                         snapshot.children.forEach { m ->
                             val msg = m.getValue(ChatMessage::class.java)
@@ -251,33 +275,41 @@ class ChatViewModel : ViewModel() {
                             }
                         }
                         
-                        val newPreview = ChatPreview(otherUser, lastMsg, unread, chatId)
-                        val currentList = _chatList.value.toMutableList()
-                        currentList.removeAll { it.chatId == chatId }
-                        currentList.add(newPreview)
-                        val sorted = currentList.sortedByDescending { it.lastMessage?.timestamp ?: 0L }
-                        _chatList.value = sorted
-                        _totalUnreadCount.value = sorted.sumOf { it.unreadCount }
+                        _lastMessagesMap.value = _lastMessagesMap.value + (chatId to lastMsg)
+                        _unreadCountsMap.value = _unreadCountsMap.value + (chatId to unread)
+                        updateChatList()
                     }
                     override fun onCancelled(error: DatabaseError) {}
                 }
                 chatMessageListeners[chatId] = listener
                 database.child("messages").child(chatId).addValueEventListener(listener)
-                
-                // Añadir listener de escritura para la lista
-                if (!chatTypingListeners.containsKey(chatId)) {
-                    val tListener = object : ValueEventListener {
-                        override fun onDataChange(snapshot: DataSnapshot) {
-                            val isTyping = snapshot.exists() && snapshot.getValue(Boolean::class.java) == true
-                            _typingUsers.value = _typingUsers.value + (chatId to isTyping)
-                        }
-                        override fun onCancelled(error: DatabaseError) {}
+            }
+            
+            // 3. Typing Listener
+            if (!chatTypingListeners.containsKey(chatId)) {
+                val tListener = object : ValueEventListener {
+                    override fun onDataChange(snapshot: DataSnapshot) {
+                        val isTyping = snapshot.exists() && snapshot.getValue(Boolean::class.java) == true
+                        _typingUsers.value = _typingUsers.value + (chatId to isTyping)
                     }
-                    chatTypingListeners[chatId] = tListener
-                    database.child("typing").child(chatId).child(otherUid).addValueEventListener(tListener)
+                    override fun onCancelled(error: DatabaseError) {}
                 }
+                chatTypingListeners[chatId] = tListener
+                database.child("typing").child(chatId).child(otherUid).addValueEventListener(tListener)
             }
         }
+    }
+
+    private fun updateChatList() {
+        val newList = _chatIdsMap.value.map { (otherUid, chatId) ->
+            val user = _usersMap.value[otherUid] ?: UserData(uid = otherUid, nombre = "Cargando...")
+            val lastMsg = _lastMessagesMap.value[chatId]
+            val unread = _unreadCountsMap.value[chatId] ?: 0
+            ChatPreview(user, lastMsg, unread, chatId)
+        }.sortedByDescending { it.lastMessage?.timestamp ?: 0L }
+
+        _chatList.value = newList
+        _totalUnreadCount.value = newList.sumOf { it.unreadCount }
     }
 
     fun sendMessage(
@@ -433,6 +465,8 @@ class ChatViewModel : ViewModel() {
         removeActiveListener()
         chatsListener?.remove()
         blockingListener?.remove()
+        userListeners.forEach { it.value.remove() }
+        userListeners.clear()
         chatMessageListeners.forEach { (id, listener) ->
             database.child("messages").child(id).removeEventListener(listener)
         }

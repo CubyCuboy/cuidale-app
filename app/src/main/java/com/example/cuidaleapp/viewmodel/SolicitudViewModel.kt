@@ -200,10 +200,23 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                     viewModelScope.launch {
                         val result = mutableListOf<Pair<SolicitudCuidado, PostulacionCuidado>>()
                         postulaciones.forEach { post ->
-                            val solDoc = db.collection("solicitudes").document(post.solicitudId).get().await()
-                            val sol = solDoc.toObject(SolicitudCuidado::class.java)
-                            if (sol != null && sol.estado == "abierta") {
-                                result.add(sol to post)
+                            // Mostramos postulaciones pendientes o rechazadas. 
+                            // Las aceptadas ya aparecen en la sección de "Servicios Activos"
+                            if (post.estado == "pendiente" || post.estado == "rechazada") {
+                                val solDoc = db.collection("solicitudes").document(post.solicitudId).get().await()
+                                val sol = solDoc.toObject(SolicitudCuidado::class.java)
+                                
+                                // Si la solicitud fue eliminada, no la mostramos
+                                if (sol != null) {
+                                    // Para las pendientes, solo las mostramos si la solicitud sigue abierta
+                                    if (post.estado == "pendiente" && sol.estado == "abierta") {
+                                        result.add(sol to post)
+                                    } 
+                                    // Para las rechazadas, las mostramos siempre para que el usuario sepa
+                                    else if (post.estado == "rechazada") {
+                                        result.add(sol to post)
+                                    }
+                                }
                             }
                         }
                         _misPostulaciones.value = result
@@ -383,7 +396,18 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                 // 3. Mark application as accepted
                 db.collection("postulaciones").document(postulacion.id).update("estado", "aceptada").await()
 
-                // 4. Notify caregiver
+                // 4. Reject other candidates for this specific request
+                val otherPostulaciones = db.collection("postulaciones")
+                    .whereEqualTo("solicitudId", solicitud.id)
+                    .get().await()
+                
+                for (doc in otherPostulaciones.documents) {
+                    if (doc.id != postulacion.id) {
+                        doc.reference.update("estado", "rechazada").await()
+                    }
+                }
+
+                // 5. Notify caregiver
                 val notifRef = db.collection("usuarios").document(targetUid).collection("notificaciones").document()
                 val notif = Notification(
                     id = notifRef.id,
@@ -516,5 +540,7 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
         solicitudesListener?.remove()
         postulacionesListener?.remove()
         cuidadorSolicitudesListener?.remove()
+        misPostulacionesListener?.remove()
+        historialListener?.remove()
     }
 }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -35,6 +36,8 @@ import kotlinx.coroutines.launch
 import android.content.Context
 import androidx.compose.ui.platform.LocalContext
 
+import com.example.cuidaleapp.utils.ConnectivityObserver
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MenuScreen(
@@ -53,6 +56,7 @@ fun MenuScreen(
     onTabSelected: (String) -> Unit,
     solicitudViewModel: com.example.cuidaleapp.viewmodel.SolicitudViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
+    val isOnline by ConnectivityObserver.isOnline.collectAsState()
     val gradient = CuidaleThemeExtras.gradient
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -62,6 +66,7 @@ fun MenuScreen(
     val isRefreshing by searchViewModel.isRefreshing.collectAsState()
     val selectedRegion by searchViewModel.selectedRegion.collectAsState()
     val selectedCommunes by searchViewModel.selectedCommunes.collectAsState()
+    val useProfilePreferences by searchViewModel.useProfilePreferences.collectAsState()
     
     val pullToRefreshState = rememberPullToRefreshState()
     val sheetState = rememberModalBottomSheetState()
@@ -92,15 +97,15 @@ fun MenuScreen(
         }
     }
 
-    LaunchedEffect(shouldLoadMore.value) {
-        if (shouldLoadMore.value) {
+    LaunchedEffect(shouldLoadMore.value, isOnline) {
+        if (shouldLoadMore.value && isOnline) {
             searchViewModel.loadMore()
         }
     }
 
-    LaunchedEffect(userData.rol) {
-        if (userData.rol.isNotEmpty()) {
-            searchViewModel.initSearch(userData.rol)
+    LaunchedEffect(userData.rol, userData.region, isOnline) {
+        if (userData.rol.isNotEmpty() && isOnline) {
+            searchViewModel.initSearch(userData.rol, userData.region)
         }
     }
 
@@ -149,44 +154,35 @@ fun MenuScreen(
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                 Scaffold(
                     topBar = {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                                .windowInsetsPadding(WindowInsets.statusBars)
-                        ) {
-                            CuidaleCircularMenuButton(
-                                onClick = { scope.launch { drawerState.open() } },
-                                modifier = Modifier.align(Alignment.CenterEnd)
-                            )
+                        Column {
+                            ConnectivityBanner()
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                                    .windowInsetsPadding(WindowInsets.statusBars)
+                            ) {
+                                CuidaleCircularMenuButton(
+                                    onClick = { scope.launch { drawerState.open() } },
+                                    modifier = Modifier.align(Alignment.CenterEnd)
+                                )
+                            }
                         }
                     },
                     floatingActionButton = {
-                        CuidaleCircularMenuButton(
-                            onClick = { showSearchSheet = true },
-                            modifier = Modifier.padding(bottom = 16.dp, end = 16.dp),
-                            icon = {
-                                Icon(
-                                    imageVector = Icons.Default.Search,
-                                    contentDescription = null,
-                                    tint = Color.White
-                                )
-                            }
-                        )
-                    },
-                    bottomBar = {
-                        val misPostulaciones = solicitudViewModel.misPostulaciones.collectAsState().value
-                        val postulacionesRecibidas = solicitudViewModel.postulacionesRecibidas.collectAsState().value
-                        val pendingReqCount = if (userData.rol == "cuidador") misPostulaciones.size 
-                                              else postulacionesRecibidas.values.flatten().count { it.estado == "pendiente" }
-
-                        CuidaleBottomBar(
-                            selectedTab = "home", 
-                            unreadCount = unreadCount, 
-                            pendingNotifs = pendingNotifs,
-                            pendingRequests = pendingReqCount,
-                            onTabSelected = onTabSelected
-                        )
+                        if (isOnline) {
+                            CuidaleCircularMenuButton(
+                                onClick = { showSearchSheet = true },
+                                modifier = Modifier.padding(bottom = 16.dp, end = 16.dp),
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Search,
+                                        contentDescription = null,
+                                        tint = Color.White
+                                    )
+                                }
+                            )
+                        }
                     },
                     containerColor = Color.Transparent
                 ) { innerPadding ->
@@ -201,47 +197,74 @@ fun MenuScreen(
                                 .fillMaxSize()
                                 .padding(horizontal = 24.dp)
                         ) {
+                            CuidaleAppLogo(
+                                isDark = isDark,
+                                modifier = Modifier.size(60.dp).align(Alignment.CenterHorizontally).padding(top = 8.dp)
+                            )
+
                             val listTitle = if (userData.rol == "cuidador") "Pacientes" else "Cuidadores"
 
-                            Text(
-                                text = listTitle,
-                                style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
-                                color = Color.White,
-                                modifier = Modifier.padding(vertical = 16.dp)
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = listTitle,
+                                    style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
+                                    color = Color.White
+                                )
+                                if (isOnline) {
+                                    IconButton(
+                                        onClick = { searchViewModel.refresh() },
+                                        modifier = Modifier.background(Color.White.copy(alpha = 0.1f), CircleShape)
+                                    ) {
+                                        Icon(Icons.Default.Refresh, "Recargar", tint = Color.White)
+                                    }
+                                } else {
+                                    Icon(Icons.Default.WifiOff, null, tint = Color.White.copy(alpha = 0.5f))
+                                }
+                            }
 
                             if (fichaState is FichaState.NotFound) {
                                 FichaPlaceholder(
                                     rol = userData.rol,
                                     onClick = onViewFicha
                                 )
+                            } else if (!isOnline && searchState !is SearchState.Success) {
+                                CuidalePlaceholder(
+                                    title = if (userData.rol == "cuidador") "¡Aún no hay pacientes cerca!" else "Buscando cuidadores...",
+                                    subtitle = if (userData.rol == "cuidador") 
+                                        "Activa tu conexión para encontrar personas que necesitan tu ayuda hoy mismo." 
+                                        else "Necesitas internet para descubrir nuevos perfiles que puedan cuidar a tus seres queridos.",
+                                    icon = if (userData.rol == "cuidador") Icons.Default.AccessibilityNew else Icons.Default.Diversity3,
+                                    iconColor = if (userData.rol == "cuidador") MaterialTheme.colorScheme.primary else CuidaleThemeExtras.customColors.mint
+                                )
                             } else {
                                 PullToRefreshBox(
                                     state = pullToRefreshState,
                                     isRefreshing = isRefreshing,
-                                    onRefresh = { searchViewModel.refresh() },
+                                    onRefresh = { if (isOnline) searchViewModel.refresh() },
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     when (searchState) {
                                         is SearchState.Loading -> {
-                                            if (!isRefreshing) {
-                                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                                    CircularProgressIndicator(color = Color.White)
-                                                }
-                                            }
+                                            // No mostramos nada aquí para evitar parpadeo con la pantalla de bienvenida
+                                            Spacer(Modifier.fillMaxSize())
                                         }
                                         is SearchState.Success -> {
                                             val resultsList = (searchState as SearchState.Success).results
                                             val isLoadingMore = (searchState as SearchState.Success).isLoadingMore
                                             
                                             if (resultsList.isEmpty()) {
-                                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                                    Text(
-                                                        text = "No se encontraron resultados",
-                                                        color = Color.White.copy(alpha = 0.7f),
-                                                        textAlign = TextAlign.Center
-                                                    )
-                                                }
+                                                EmptySearchResults(
+                                                    title = if (selectedRegion.isNotEmpty() || selectedCommunes.isNotEmpty()) 
+                                                        "Sin resultados para estos filtros" 
+                                                    else "No hay $listTitle disponibles",
+                                                    subtitle = "Prueba cambiando la ubicación o los filtros de búsqueda.",
+                                                    onClearFilters = { searchViewModel.clearFilters() },
+                                                    showClearButton = selectedRegion.isNotEmpty() || selectedCommunes.isNotEmpty()
+                                                )
                                             } else {
                                                 LazyColumn(
                                                     state = listState,
@@ -253,7 +276,7 @@ fun MenuScreen(
                                                         CuidaleUserCard(
                                                             nombre = result.nombre,
                                                             apellido = result.apellido_pa,
-                                                            fotoUrl = result.foto_url,
+                                                            fotoUrl = result.fotoUrl,
                                                             comuna = result.comuna,
                                                             comunas = result.comunas,
                                                             tipo = result.tipo,
@@ -261,6 +284,7 @@ fun MenuScreen(
                                                             nivelDependencia = result.nivel_dependencia,
                                                             especializacion = result.especializacion,
                                                             horarios = result.horarios,
+                                                            isNew = result.isNew,
                                                             onClick = { onUserClick(result.id) }
                                                         )
                                                     }
@@ -321,7 +345,7 @@ fun MenuScreen(
                             )
                         }
 
-                        if (showSearchSheet) {
+                        if (showSearchSheet && isOnline) {
                             ModalBottomSheet(
                                 onDismissRequest = { showSearchSheet = false },
                                 sheetState = sheetState,
@@ -335,11 +359,73 @@ fun MenuScreen(
                                     selectedCommunes = selectedCommunes,
                                     onCommuneToggle = { searchViewModel.toggleCommune(it) },
                                     onClearFilters = { searchViewModel.clearFilters() },
-                                    onClose = { scope.launch { sheetState.hide() }.invokeOnCompletion { showSearchSheet = false } }
+                                    onClose = { scope.launch { sheetState.hide() }.invokeOnCompletion { showSearchSheet = false } },
+                                    useProfilePreferences = useProfilePreferences,
+                                    onTogglePreferences = { searchViewModel.toggleProfilePreferences(it) }
                                 )
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun EmptySearchResults(
+    title: String,
+    subtitle: String,
+    onClearFilters: () -> Unit,
+    showClearButton: Boolean
+) {
+    val customColors = CuidaleThemeExtras.customColors
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(vertical = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        HardShadowPanel(
+            backgroundColor = customColors.panelBackground.copy(alpha = 0.95f),
+            shadowColor = Color.Black.copy(alpha = 0.15f),
+            cornerRadius = 24.dp,
+            contentPadding = PaddingValues(32.dp)
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    imageVector = Icons.Default.SearchOff,
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp),
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                
+                if (showClearButton) {
+                    Spacer(modifier = Modifier.height(32.dp))
+                    HardShadowButton(
+                        text = "LIMPIAR FILTROS",
+                        onClick = onClearFilters,
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = Color.White,
+                        isDark = customColors.isDark,
+                        modifier = Modifier.height(50.dp)
+                    )
                 }
             }
         }

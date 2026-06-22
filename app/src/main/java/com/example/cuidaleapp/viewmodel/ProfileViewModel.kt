@@ -58,6 +58,8 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     val otherTareasPlantilla: StateFlow<List<com.example.cuidaleapp.models.Tarea>> = _otherTareasPlantilla.asStateFlow()
 
     private var statusListener: ValueEventListener? = null
+    private var otherProfileListener: com.google.firebase.firestore.ListenerRegistration? = null
+    private var myProfileListener: com.google.firebase.firestore.ListenerRegistration? = null
 
     private val _photoUpdateTrigger = MutableStateFlow(0L)
     val photoUpdateTrigger: StateFlow<Long> = _photoUpdateTrigger.asStateFlow()
@@ -70,7 +72,22 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     }
 
     init {
-        refreshFromFirestore()
+        startMyProfileListener()
+    }
+
+    private fun startMyProfileListener() {
+        val uid = auth.currentUser?.uid ?: return
+        myProfileListener?.remove()
+        myProfileListener = db.collection("usuarios").document(uid)
+            .addSnapshotListener { snapshot, e ->
+                if (e != null || snapshot == null || !snapshot.exists()) return@addSnapshotListener
+                val user = snapshot.toObject(UserData::class.java)?.copy(uid = uid)
+                android.util.Log.d("ProfileVM", "Snapshot received: fotoUrl=${user?.fotoUrl}")
+                if (user != null) {
+                    userSession.saveUser(user)
+                    _userData.value = user
+                }
+            }
     }
 
     fun toggleTheme() {
@@ -79,13 +96,17 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         prefs.edit().putBoolean("dark_mode", newValue).apply()
     }
 
+    fun resetRemoteState() {
+        _remoteState.value = RemoteState.Idle
+    }
+
     fun refreshFromFirestore() {
         val uid = auth.currentUser?.uid ?: return
         viewModelScope.launch {
             _isRefreshing.value = true
             try {
                 val document = db.collection("usuarios").document(uid).get().await()
-                val remoteUser = document.toObject(UserData::class.java)
+                val remoteUser = document.toObject(UserData::class.java)?.copy(uid = uid)
                 if (remoteUser != null) {
                     userSession.saveUser(remoteUser)
                     _userData.value = remoteUser
@@ -98,10 +119,6 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun resetRemoteState() {
-        _remoteState.value = RemoteState.Idle
-    }
-
     fun uploadProfilePicture(uri: Uri) {
         val uid = auth.currentUser?.uid ?: return
         val oldPhotoUrl = _userData.value.fotoUrl
@@ -109,27 +126,61 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             _remoteState.value = RemoteState.Loading
             try {
+                val context = getApplication<Application>()
+                
+                // Compresión para asegurar los < 5MB de tus reglas
+                val compressedBytes = com.example.cuidaleapp.utils.ImageUtils.getCompressedImage(context, uri) 
+                    ?: throw Exception("No se pudo procesar la imagen")
+                
+                // Nombre único para evitar caché de navegador/app
                 val filename = "profile_${System.currentTimeMillis()}.jpg"
                 val ref = storage.reference.child("profiles/$uid/$filename")
-                ref.putFile(uri).await()
-                val downloadUrl = ref.downloadUrl.await().toString().replace("\"", "")
+                
+                val metadata = com.google.firebase.storage.StorageMetadata.Builder()
+                    .setContentType("image/jpeg")
+                    .build()
 
+                // Subida física
+                ref.putBytes(compressedBytes, metadata).await()
+                val downloadUrl = ref.downloadUrl.await().toString()
+
+                // Actualización en Firestore (esto disparará el myProfileListener automáticamente)
                 db.collection("usuarios").document(uid).update("fotoUrl", downloadUrl).await()
 
+                // Sincronizar con Ficha solo si es Cuidador
+                if (_userData.value.rol == "cuidador") {
+                    try {
+                        val fichaRef = db.collection("fichas").document(uid)
+                        val fichaDoc = fichaRef.get().await()
+                        if (fichaDoc.exists()) {
+                            fichaRef.update("fotoUrl", downloadUrl).await()
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("ProfileVM", "Error syncing photo with Ficha: ${e.message}")
+                    }
+                }
+
+                // Borrar rastro de la anterior en Storage
                 if (oldPhotoUrl.isNotEmpty() && oldPhotoUrl.contains("firebasestorage.googleapis.com")) {
                     try {
                         val oldRef = storage.getReferenceFromUrl(oldPhotoUrl)
                         oldRef.delete().await()
-                    } catch (e: Exception) { }
+                    } catch (e: Exception) {
+                        android.util.Log.e("ProfileViewModel", "Error cleanup Storage: ${e.message}")
+                    }
                 }
 
+                // Forzamos actualización local por si el listener tarda unos ms
                 val updatedUser = _userData.value.copy(fotoUrl = downloadUrl)
                 userSession.saveUser(updatedUser)
                 _userData.value = updatedUser
-                _photoUpdateTrigger.value = System.currentTimeMillis()
+                
                 _remoteState.value = RemoteState.Success
+                // Reset inmediato para permitir siguientes acciones
+                kotlinx.coroutines.delay(500)
+                _remoteState.value = RemoteState.Idle
             } catch (e: Exception) {
-                _remoteState.value = RemoteState.Error(e.message ?: "Error al subir imagen")
+                _remoteState.value = RemoteState.Error(e.message ?: "Error al actualizar foto")
             }
         }
     }
@@ -142,6 +193,16 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             _remoteState.value = RemoteState.Loading
             try {
                 db.collection("usuarios").document(uid).update("fotoUrl", "").await()
+
+                // Sincronizar con Ficha
+                if (_userData.value.rol == "cuidador") {
+                    try {
+                        val fichaRef = db.collection("fichas").document(uid)
+                        if (fichaRef.get().await().exists()) {
+                            fichaRef.update("fotoUrl", "").await()
+                        }
+                    } catch (e: Exception) {}
+                }
 
                 if (oldPhotoUrl.isNotEmpty() && oldPhotoUrl.contains("firebasestorage.googleapis.com")) {
                     try {
@@ -157,6 +218,100 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 _remoteState.value = RemoteState.Success
             } catch (e: Exception) {
                 _remoteState.value = RemoteState.Error(e.message ?: "Error al eliminar imagen")
+            }
+        }
+    }
+
+    fun updateProfileWithPhoto(updatedUser: UserData, newPhotoUri: Uri?, shouldDeleteOld: Boolean) {
+        val uid = auth.currentUser?.uid ?: return
+        viewModelScope.launch {
+            _remoteState.value = RemoteState.Loading
+            try {
+                var finalPhotoUrl = updatedUser.fotoUrl
+
+                // 1. Manejo de foto (Subir nueva o Marcar para eliminar)
+                if (newPhotoUri != null) {
+                    val context = getApplication<Application>()
+                    val compressedBytes = com.example.cuidaleapp.utils.ImageUtils.getCompressedImage(context, newPhotoUri)
+                        ?: throw Exception("No se pudo procesar la imagen")
+                    
+                    val filename = "profile_${System.currentTimeMillis()}.jpg"
+                    val ref = storage.reference.child("profiles/$uid/$filename")
+                    
+                    val metadata = com.google.firebase.storage.StorageMetadata.Builder()
+                        .setContentType("image/jpeg")
+                        .build()
+
+                    // Subida física
+                    ref.putBytes(compressedBytes, metadata).await()
+                    val newDownloadUrl = ref.downloadUrl.await().toString()
+
+                    // Intentar borrar la vieja (ignoramos error si las reglas lo bloquean)
+                    if (finalPhotoUrl.isNotEmpty() && finalPhotoUrl.contains("firebasestorage.googleapis.com")) {
+                        try {
+                            storage.getReferenceFromUrl(finalPhotoUrl).delete().await()
+                        } catch (e: Exception) {
+                            android.util.Log.e("ProfileVM", "No se pudo borrar vieja: ${e.message}")
+                        }
+                    }
+                    finalPhotoUrl = newDownloadUrl
+                } else if (shouldDeleteOld) {
+                    // Borrado solicitado por el usuario
+                    if (finalPhotoUrl.isNotEmpty() && finalPhotoUrl.contains("firebasestorage.googleapis.com")) {
+                        try {
+                            storage.getReferenceFromUrl(finalPhotoUrl).delete().await()
+                        } catch (e: Exception) {
+                            android.util.Log.e("ProfileVM", "Error al borrar foto: ${e.message}")
+                        }
+                    }
+                    finalPhotoUrl = ""
+                }
+
+                // 2. Actualizar Firestore
+                val sanitizedPhone = PhoneUtils.formatChileanPhone(updatedUser.telefono)
+                val userMap = mapOf(
+                    "nombre" to updatedUser.nombre,
+                    "nombre_s" to updatedUser.nombre_s,
+                    "apellido_pa" to updatedUser.apellido_pa,
+                    "apellido_ma" to updatedUser.apellido_ma,
+                    "telefono" to sanitizedPhone,
+                    "region" to updatedUser.region,
+                    "comuna" to updatedUser.comuna,
+                    "descripcion" to updatedUser.descripcion,
+                    "fotoUrl" to finalPhotoUrl
+                )
+
+                db.collection("usuarios").document(uid).update(userMap).await()
+
+                // Sincronizar con Ficha solo si es Cuidador
+                if (updatedUser.rol == "cuidador") {
+                    try {
+                        val fichaRef = db.collection("fichas").document(uid)
+                        val fichaDoc = fichaRef.get().await()
+                        if (fichaDoc.exists()) {
+                            val fichaUpdate = mapOf(
+                                "fotoUrl" to finalPhotoUrl,
+                                "nombre" to updatedUser.nombre,
+                                "apellido_pa" to updatedUser.apellido_pa
+                            )
+                            fichaRef.update(fichaUpdate).await()
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("ProfileVM", "Error syncing with Ficha: ${e.message}")
+                    }
+                }
+                
+                // Forzar actualización local para que la UI no parpadee
+                val finalUser = updatedUser.copy(telefono = sanitizedPhone, fotoUrl = finalPhotoUrl)
+                userSession.saveUser(finalUser)
+                _userData.value = finalUser
+                
+                _remoteState.value = RemoteState.Success
+                kotlinx.coroutines.delay(300)
+                _remoteState.value = RemoteState.Idle
+            } catch (e: Exception) {
+                android.util.Log.e("ProfileVM", "Error total: ${e.message}")
+                _remoteState.value = RemoteState.Error(e.message ?: "Error al guardar cambios")
             }
         }
     }
@@ -180,6 +335,23 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     "descripcion" to finalUser.descripcion
                 )
                 db.collection("usuarios").document(uid).update(userMap).await()
+
+                // Sincronizar con Ficha solo si es Cuidador
+                if (updatedUser.rol == "cuidador") {
+                    try {
+                        val fichaRef = db.collection("fichas").document(uid)
+                        val fichaDoc = fichaRef.get().await()
+                        if (fichaDoc.exists()) {
+                            val fichaUpdate = mapOf(
+                                "nombre" to finalUser.nombre,
+                                "apellido_pa" to finalUser.apellido_pa
+                            )
+                            fichaRef.update(fichaUpdate).await()
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("ProfileVM", "Error syncing with Ficha: ${e.message}")
+                    }
+                }
                 userSession.saveUser(finalUser)
                 _userData.value = finalUser
                 _remoteState.value = RemoteState.Success
@@ -193,60 +365,53 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         if (targetUid.isEmpty()) return
         val myUid = auth.currentUser?.uid ?: ""
 
+        otherProfileListener?.remove()
         statusListener?.let { rtdb.child("status").child(targetUid).removeEventListener(it) }
 
         viewModelScope.launch {
             _otherProfileState.value = RemoteState.Loading
             _otherFichaState.value = FichaState.Loading
-            _otherUserData.value = null
-            _otherUserStatus.value = "estado oculto"
+            
+            // Listener en tiempo real para que los cambios de otros se reflejen al instante
+            otherProfileListener = db.collection("usuarios").document(targetUid)
+                .addSnapshotListener { snapshot, e ->
+                    if (e != null) {
+                        _otherProfileState.value = RemoteState.Error(e.localizedMessage ?: "Error al cargar perfil")
+                        return@addSnapshotListener
+                    }
 
+                    if (snapshot == null || !snapshot.exists()) {
+                        _otherProfileState.value = RemoteState.Error("El usuario no existe.")
+                        return@addSnapshotListener
+                    }
+
+                    val user = snapshot.toObject(UserData::class.java)?.copy(uid = targetUid)
+                    
+                    val targetBlockedList = (snapshot.get("bloqueados") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+                    if (targetBlockedList.contains(myUid)) {
+                        _otherProfileState.value = RemoteState.Error("Este perfil es privado.")
+                        _otherFichaState.value = FichaState.Error("Perfil Privado")
+                        return@addSnapshotListener
+                    }
+
+                    _otherUserData.value = user
+                    _otherProfileState.value = RemoteState.Success
+                }
+
+            // Carga de ficha y tareas (mantenemos lógica de carga inicial)
             try {
-                // 1. Verificar bloqueos mutuos
-                val myDoc = db.collection("usuarios").document(myUid).get().await()
-                val userDoc = db.collection("usuarios").document(targetUid).get().await()
-
-                if (!userDoc.exists()) {
-                    _otherProfileState.value = RemoteState.Error("El usuario no existe.")
-                    return@launch
-                }
-
-                val targetBlockedList = (userDoc.get("bloqueados") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
-                val myBlockedList = (myDoc.get("bloqueados") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
-
-                if (targetBlockedList.contains(myUid)) {
-                    _otherProfileState.value = RemoteState.Error("Este perfil es privado.")
-                    _otherFichaState.value = FichaState.Error("Perfil Privado")
-                    return@launch
-                }
-
-                // Si yo lo bloqueé, puedo seguir viendo su perfil, así que no retornamos error aquí.
-                // Simplemente podemos poner un estado informativo si queremos, pero dejémoslo pasar.
-
-                // 2. Cargar datos básicos
-                val user = userDoc.toObject(UserData::class.java)?.copy(uid = targetUid)
-                _otherUserData.value = user
-                _otherProfileState.value = RemoteState.Success
-
-                // 3. Intentar cargar la ficha
                 val fichaDoc = db.collection("fichas").document(targetUid).get().await()
                 if (fichaDoc.exists()) {
                     _otherFichaState.value = FichaState.View(fichaDoc.data ?: emptyMap())
-                    
-                    try {
-                        val tareasSnapshot = db.collection("fichas").document(targetUid)
-                            .collection("tareas_plantilla")
-                            .whereEqualTo("activa", true)
-                            .get().await()
-                        _otherTareasPlantilla.value = tareasSnapshot.toObjects(com.example.cuidaleapp.models.Tarea::class.java)
-                    } catch (e: Exception) {
-                        _otherTareasPlantilla.value = emptyList()
-                    }
+                    val tareasSnapshot = db.collection("fichas").document(targetUid)
+                        .collection("tareas_plantilla")
+                        .whereEqualTo("activa", true)
+                        .get().await()
+                    _otherTareasPlantilla.value = tareasSnapshot.toObjects(com.example.cuidaleapp.models.Tarea::class.java)
                 } else {
                     _otherFichaState.value = FichaState.NotFound
                 }
 
-                // 4. Escuchar estado
                 statusListener = object : ValueEventListener {
                     override fun onDataChange(snapshot: DataSnapshot) {
                         _otherUserStatus.value = snapshot.child("estado").getValue(String::class.java) ?: "desconectado"
@@ -254,9 +419,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     override fun onCancelled(error: DatabaseError) {}
                 }
                 rtdb.child("status").child(targetUid).addValueEventListener(statusListener!!)
-
             } catch (e: Exception) {
-                _otherProfileState.value = RemoteState.Error(e.localizedMessage ?: "Error al cargar perfil")
                 _otherFichaState.value = FichaState.Error("Error")
             }
         }
@@ -274,6 +437,8 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
 
     override fun onCleared() {
         super.onCleared()
+        myProfileListener?.remove()
+        otherProfileListener?.remove()
         statusListener?.let { listener ->
             _otherUserData.value?.uid?.let { uid ->
                 rtdb.child("status").child(uid).removeEventListener(listener)

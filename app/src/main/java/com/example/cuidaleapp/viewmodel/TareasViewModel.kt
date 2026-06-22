@@ -66,24 +66,49 @@ class TareasViewModel : ViewModel() {
             
             // Recordatorio 15 minutos antes
             if (diffMinutes in 14..15) {
-                NotificationHelper.showNotification(
-                    context, 
-                    "Tarea Próxima: ${tarea.titulo}",
-                    "Inicia en 15 minutos (${tarea.horarioPrevisto})"
-                )
+                val title = "Tarea Próxima: ${tarea.titulo}"
+                val body = "Inicia en 15 minutos (${tarea.horarioPrevisto})"
+                NotificationHelper.showNotification(context, title, body)
+                
+                // Persistir notificación en Firestore para ambos usuarios si aplica
+                val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
+                enviarNotificacionApp(uid, "recordatorio_tarea", title, body, mapOf("tareaId" to tarea.id, "solicitudId" to tarea.solicitudId))
             }
             
             // Recordatorio de tarea pendiente (cada 30 min de retraso)
             if (diffMinutes < 0) {
                 val delayMinutes = -diffMinutes
                 if (delayMinutes > 0 && delayMinutes % 30 == 0L) {
-                    NotificationHelper.showNotification(
-                        context,
-                        "Tarea Pendiente: ${tarea.titulo}",
-                        "Debía realizarse a las ${tarea.horarioPrevisto}. Sigue pendiente."
-                    )
+                    val title = "Tarea Pendiente: ${tarea.titulo}"
+                    val body = "Debía realizarse a las ${tarea.horarioPrevisto}. Sigue pendiente."
+                    NotificationHelper.showNotification(context, title, body)
+                    
+                    val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
+                    enviarNotificacionApp(uid, "tarea_atrasada", title, body, mapOf("tareaId" to tarea.id, "solicitudId" to tarea.solicitudId))
                 }
             }
+        }
+    }
+
+    private fun enviarNotificacionApp(emisor: String, tipo: String, titulo: String, body: String, extraData: Map<String, String> = emptyMap()) {
+        viewModelScope.launch {
+            try {
+                val data = extraData.toMutableMap()
+                data["titulo"] = titulo
+                data["body"] = body
+                
+                val notif = Notification(
+                    id = UUID.randomUUID().toString(),
+                    tipo = tipo,
+                    emisor = emisor,
+                    timestamp = System.currentTimeMillis(),
+                    data = data
+                )
+                
+                // Se envía al usuario actual (el que tiene el monitoreo activo)
+                db.collection("usuarios").document(emisor)
+                    .collection("notificaciones").document(notif.id).set(notif)
+            } catch (e: Exception) {}
         }
     }
 
@@ -183,7 +208,11 @@ class TareasViewModel : ViewModel() {
 
                 if (completada && otherUid.isNotEmpty()) {
                     val hora = SimpleDateFormat("HH:mm", Locale.getDefault()).format(ahora.toDate())
-                    enviarMensajeSistemaChat(userId, otherUid, "✅ Tarea finalizada ($hora): $titulo")
+                    val texto = "✅ Tarea finalizada ($hora): $titulo"
+                    enviarMensajeSistemaChat(userId, otherUid, texto)
+                    
+                    // Notificación en la pantalla de notificaciones para el otro usuario
+                    enviarNotificacionAUsuario(otherUid, userId, "tarea_finalizada", "Tarea Finalizada", texto, mapOf("solicitudId" to solicitudId, "registroId" to registroId))
                 }
             } catch (e: Exception) {
                 _error.value = "Error al marcar tarea: ${e.localizedMessage}"
@@ -208,11 +237,36 @@ class TareasViewModel : ViewModel() {
 
                 if (otherUid.isNotEmpty()) {
                     val hora = SimpleDateFormat("HH:mm", Locale.getDefault()).format(ahora.toDate())
-                    enviarMensajeSistemaChat(userId, otherUid, "⏳ Tarea postergada ($hora): $titulo\nMotivo: $motivo")
+                    val texto = "⏳ Tarea postergada ($hora): $titulo\nMotivo: $motivo"
+                    enviarMensajeSistemaChat(userId, otherUid, texto)
+                    
+                    // Notificación en la pantalla de notificaciones para el otro usuario
+                    enviarNotificacionAUsuario(otherUid, userId, "tarea_postergada", "Tarea Postergada", texto, mapOf("solicitudId" to solicitudId, "registroId" to registroId))
                 }
             } catch (e: Exception) {
                 _error.value = "Error al postergar: ${e.localizedMessage}"
             }
+        }
+    }
+
+    private fun enviarNotificacionAUsuario(receptor: String, emisor: String, tipo: String, titulo: String, body: String, extraData: Map<String, String> = emptyMap()) {
+        viewModelScope.launch {
+            try {
+                val data = extraData.toMutableMap()
+                data["titulo"] = titulo
+                data["body"] = body
+                
+                val notif = Notification(
+                    id = UUID.randomUUID().toString(),
+                    tipo = tipo,
+                    emisor = emisor,
+                    receptor = receptor,
+                    timestamp = System.currentTimeMillis(),
+                    data = data
+                )
+                db.collection("usuarios").document(receptor)
+                    .collection("notificaciones").document(notif.id).set(notif)
+            } catch (e: Exception) {}
         }
     }
 
@@ -515,7 +569,7 @@ class TareasViewModel : ViewModel() {
         }
     }
 
-    fun generarInformeFinal(solicitudId: String, cuidadorUid: String, observaciones: String, onComplete: (InformeTurno) -> Unit) {
+    fun generarInformeFinal(solicitudId: String, cuidadorUid: String, observaciones: String, otherUid: String = "", onComplete: (InformeTurno) -> Unit) {
         viewModelScope.launch {
             try {
                 val snapshot = db.collection("solicitudes").document(solicitudId)
@@ -532,6 +586,13 @@ class TareasViewModel : ViewModel() {
                 )
                 
                 db.collection("informes_servicios").document(informe.id).set(informe).await()
+                
+                if (otherUid.isNotEmpty()) {
+                    val texto = "🏁 El cuidador ha finalizado su turno.\nObservaciones: ${if(observaciones.isNotBlank()) observaciones else "Sin observaciones."}"
+                    enviarMensajeSistemaChat(cuidadorUid, otherUid, texto)
+                    enviarNotificacionAUsuario(otherUid, cuidadorUid, "turno_finalizado", "Turno Finalizado", "El cuidador ha completado el turno de hoy.", mapOf("solicitudId" to solicitudId, "informeId" to informe.id))
+                }
+
                 onComplete(informe)
             } catch (e: Exception) {}
         }

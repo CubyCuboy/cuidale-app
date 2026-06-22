@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -208,13 +209,22 @@ fun ReviewSolicitudScreen(
                             border = BorderStroke(4.dp, primaryColor.copy(alpha = 0.5f))
                         ) {
                             if (solicitud.fotoPaciente.isNotEmpty()) {
-                                AsyncImage(model = solicitud.fotoPaciente, contentDescription = null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                                AsyncImage(
+                                    model = solicitud.fotoPaciente, 
+                                    contentDescription = null, 
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(CircleShape)
+                                        .blur(if (isAccepted) 0.dp else 25.dp),
+                                    contentScale = ContentScale.Crop
+                                )
                             } else {
                                 Icon(Icons.Default.Person, null, modifier = Modifier.padding(24.dp), tint = Color.LightGray)
                             }
                         }
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text(solicitud.nombrePaciente, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = if (isDark) Color.White else Color.Black)
+                        val displayName = if (solicitud.nombrePaciente.isBlank() || solicitud.nombrePaciente == "n/a") "Paciente" else solicitud.nombrePaciente
+                        Text(displayName, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = if (isDark) Color.White else Color.Black)
                         
                         Row(verticalAlignment = Alignment.CenterVertically) {
                            Surface(

@@ -22,12 +22,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.cuidaleapp.models.*
-import com.example.cuidaleapp.ui.components.HardShadowPanel
-import com.example.cuidaleapp.ui.components.TaskCreationDialog
-import com.example.cuidaleapp.ui.components.getIconForTaskType
+import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.TareasViewModel
-import androidx.compose.ui.platform.LocalLocale
+import com.example.cuidaleapp.utils.ConnectivityObserver
+import java.util.Locale
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -39,6 +38,7 @@ fun ActiveServiceTasksScreen(
     onNavigateBack: () -> Unit,
     onNavigateToChat: (String, String, String?) -> Unit // chatId, otherUid, initialMsg
 ) {
+    val isOnline by ConnectivityObserver.isOnline.collectAsState()
     val tareasHoy by tareasViewModel.tareasHoy.collectAsState()
     val error by tareasViewModel.error.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -78,59 +78,61 @@ fun ActiveServiceTasksScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            CenterAlignedTopAppBar(
-                title = { 
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(if (isSelectionMode) "${selectedIds.size} seleccionadas" else "SEGUIMIENTO DIARIO", fontWeight = FontWeight.Bold, color = Color.White)
-                        if (!isSelectionMode) Text(solicitud.nombrePaciente, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.7f))
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        if (isSelectionMode) {
-                            isSelectionMode = false
-                            selectedIds.clear()
-                        } else {
-                            onNavigateBack()
+            Column {
+                ConnectivityBanner()
+                CenterAlignedTopAppBar(
+                    title = { 
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(if (isSelectionMode) "${selectedIds.size} seleccionadas" else "SEGUIMIENTO DIARIO", fontWeight = FontWeight.Bold, color = Color.White)
+                            if (!isSelectionMode) Text(solicitud.nombrePaciente, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.7f))
                         }
-                    }) {
-                        Icon(if (isSelectionMode) Icons.Default.Close else Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
-                    }
-                },
-                actions = {
-                    if (isRepresentative && !isSelectionMode && tareasHoy.isNotEmpty()) {
-                        IconButton(onClick = { isSelectionMode = true }) {
-                            Icon(Icons.Default.Checklist, "Seleccionar", tint = Color.White)
-                        }
-                    }
-                    if (isSelectionMode && selectedIds.isNotEmpty()) {
-                        IconButton(onClick = { showMassConfirmDialog = true }) {
-                            Icon(Icons.Default.CheckCircle, "Finalizar", tint = Color.White)
-                        }
-                        IconButton(onClick = { showMassPostponeDialog = true }) {
-                            Icon(Icons.Default.Schedule, "Postergar", tint = Color.White)
-                        }
+                    },
+                    navigationIcon = {
                         IconButton(onClick = {
-                            val selectedRegistros = tareasHoy.filter { selectedIds.contains(it.id) }
-                            val tareaIds = selectedRegistros.map { it.tareaId }.distinct()
-                            
-                            tareasViewModel.eliminarTareasSeleccionadas(solicitud.id, tareaIds)
-                            // La función eliminarTareasSeleccionadas ya debería limpiar los registros no completados
-
-                            isSelectionMode = false
-                            selectedIds.clear()
+                            if (isSelectionMode) {
+                                isSelectionMode = false
+                                selectedIds.clear()
+                            } else {
+                                onNavigateBack()
+                            }
                         }) {
-                            Icon(Icons.Default.Delete, "Eliminar", tint = Color.White)
+                            Icon(if (isSelectionMode) Icons.Default.Close else Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
                         }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-            )
+                    },
+                    actions = {
+                        if (isRepresentative && !isSelectionMode && tareasHoy.isNotEmpty() && isOnline) {
+                            IconButton(onClick = { isSelectionMode = true }) {
+                                Icon(Icons.Default.Checklist, "Seleccionar", tint = Color.White)
+                            }
+                        }
+                        if (isSelectionMode && selectedIds.isNotEmpty() && isOnline) {
+                            IconButton(onClick = { showMassConfirmDialog = true }) {
+                                Icon(Icons.Default.CheckCircle, "Finalizar", tint = Color.White)
+                            }
+                            IconButton(onClick = { showMassPostponeDialog = true }) {
+                                Icon(Icons.Default.Schedule, "Postergar", tint = Color.White)
+                            }
+                            IconButton(onClick = {
+                                val selectedRegistros = tareasHoy.filter { selectedIds.contains(it.id) }
+                                val tareaIds = selectedRegistros.map { it.tareaId }.distinct()
+                                
+                                tareasViewModel.eliminarTareasSeleccionadas(solicitud.id, tareaIds)
+
+                                isSelectionMode = false
+                                selectedIds.clear()
+                            }) {
+                                Icon(Icons.Default.Delete, "Eliminar", tint = Color.White)
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+                )
+            }
         },
         floatingActionButton = {
             val allProcessed = tareasHoy.all { it.completada || it.postergada }
             Column(horizontalAlignment = Alignment.End) {
-                if (!isRepresentative && !isSelectionMode) {
+                if (!isRepresentative && !isSelectionMode && isOnline) {
                     ExtendedFloatingActionButton(
                         onClick = { 
                             if (allProcessed) showSummary = true 
@@ -147,7 +149,7 @@ fun ActiveServiceTasksScreen(
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                 }
-                if (isRepresentative && !isSelectionMode) {
+                if (isRepresentative && !isSelectionMode && isOnline) {
                     FloatingActionButton(
                         onClick = { showCreateDialog = TipoTarea.OTRO },
                         containerColor = MaterialTheme.colorScheme.primary,
@@ -166,56 +168,120 @@ fun ActiveServiceTasksScreen(
                 .background(Brush.verticalGradient(listOf(gradient.top, gradient.bottom)))
                 .padding(innerPadding)
         ) {
-            if (tareasHoy.isEmpty()) {
+            if (!isOnline && tareasHoy.isEmpty()) {
+                OfflinePlaceholder(subtitle = "No se pueden cargar las tareas sin conexión.")
+            } else if (tareasHoy.isEmpty()) {
                 EmptyPlaceholder("No hay tareas para hoy.")
             } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 80.dp)
-                ) {
-                    items(tareasHoy, key = { it.id }) { registro ->
-                        DailyTaskCard(
-                            registro = registro,
-                            isSelected = selectedIds.contains(registro.id),
-                            isSelectionMode = isSelectionMode,
-                            onToggleSelection = {
-                                if (selectedIds.contains(registro.id)) selectedIds.remove(registro.id)
-                                else selectedIds.add(registro.id)
-                            },
-                            onToggleStatus = { completed ->
-                                if (completed) {
-                                    taskToConfirm = registro
-                                } else {
-                                    tareasViewModel.marcarTareaCompletada(
-                                        solicitud.id,
-                                        registro.id,
-                                        false,
-                                        currentUserId
-                                    )
+                Column {
+                    if (!isOnline) {
+                        Surface(
+                            color = Color.Black.copy(alpha = 0.2f),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.WifiOff, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("Modo offline: Edición de tareas desactivada.", color = Color.White, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 80.dp)
+                    ) {
+                        val completadas = tareasHoy.filter { it.completada }
+                        val pospuestas = tareasHoy.filter { it.postergada && !it.completada }
+                        val pendientes = tareasHoy.filter { !it.completada && !it.postergada }
+
+                        item {
+                            TaskExpandableSection(
+                                title = "PENDIENTES",
+                                count = pendientes.size,
+                                tasks = pendientes,
+                                solicitud = solicitud,
+                                currentUserId = currentUserId,
+                                otherUid = otherUid,
+                                isRepresentative = isRepresentative,
+                                isSelectionMode = isSelectionMode,
+                                selectedIds = selectedIds,
+                                isOnline = isOnline,
+                                tareasViewModel = tareasViewModel,
+                                onNavigateToChat = onNavigateToChat,
+                                onConfirmTask = { taskToConfirm = it },
+                                onPostponeTask = { taskToPostpone = it },
+                                onEditTask = { editingRegistro = it },
+                                onToggleSelection = { id ->
+                                    if (selectedIds.contains(id)) selectedIds.remove(id)
+                                    else selectedIds.add(id)
+                                },
+                                onShareInChat = { reg ->
+                                    val msg = "Revisa esta tarea:\n*${reg.titulo}* (${reg.horarioPrevisto})\nEstado: ${if(reg.completada) "COMPLETADA" else if(reg.postergada) "POSPUESTA" else "PENDIENTE"}"
+                                    val chatId = if (currentUserId < otherUid) "${currentUserId}_$otherUid" else "${otherUid}_$currentUserId"
+                                    onNavigateToChat(chatId, otherUid, msg)
                                 }
-                            },
-                            onPostpone = if (!isRepresentative) { { taskToPostpone = registro } } else null,
-                            onEdit = if (isRepresentative) { 
-                                if (registro.completada) null else { { editingRegistro = registro } }
-                            } else null,
-                            onAsk = if (!isRepresentative) { {
-                                val frecuenciaFriendly = when(registro.frecuencia) {
-                                    FrecuenciaTarea.DIARIA -> "Diaria"
-                                    FrecuenciaTarea.SEMANAL -> "Semanal"
-                                    FrecuenciaTarea.MENSUAL -> "Mensual"
-                                    FrecuenciaTarea.UNA_VEZ -> "Una vez"
+                            )
+                        }
+
+                        item {
+                            TaskExpandableSection(
+                                title = "COMPLETADAS",
+                                count = completadas.size,
+                                tasks = completadas,
+                                solicitud = solicitud,
+                                currentUserId = currentUserId,
+                                otherUid = otherUid,
+                                isRepresentative = isRepresentative,
+                                isSelectionMode = isSelectionMode,
+                                selectedIds = selectedIds,
+                                isOnline = isOnline,
+                                tareasViewModel = tareasViewModel,
+                                onNavigateToChat = onNavigateToChat,
+                                onConfirmTask = { taskToConfirm = it },
+                                onPostponeTask = { taskToPostpone = it },
+                                onEditTask = { editingRegistro = it },
+                                onToggleSelection = { id ->
+                                    if (selectedIds.contains(id)) selectedIds.remove(id)
+                                    else selectedIds.add(id)
+                                },
+                                onShareInChat = { reg ->
+                                    val msg = "Revisa esta tarea:\n*${reg.titulo}* (${reg.horarioPrevisto})\nEstado: ${if(reg.completada) "COMPLETADA" else if(reg.postergada) "POSPUESTA" else "PENDIENTE"}"
+                                    val chatId = if (currentUserId < otherUid) "${currentUserId}_$otherUid" else "${otherUid}_$currentUserId"
+                                    onNavigateToChat(chatId, otherUid, msg)
                                 }
-                                val msg = "Hola, tengo una duda sobre esta tarea:\n\n" +
-                                         "*${registro.titulo}*\n" +
-                                         "⏰ Horario: ${registro.horarioPrevisto}\n" +
-                                         "📋 Frecuencia: $frecuenciaFriendly\n" +
-                                         "📝 Indicaciones: ${if (registro.descripcion.isNotBlank()) registro.descripcion else "Sin indicaciones específicas"}"
-                                
-                                val chatId = if (currentUserId < otherUid) "${currentUserId}_$otherUid" else "${otherUid}_$currentUserId"
-                                onNavigateToChat(chatId, otherUid, msg)
-                            } } else null
-                        )
+                            )
+                        }
+
+                        item {
+                            TaskExpandableSection(
+                                title = "POSPUESTAS",
+                                count = pospuestas.size,
+                                tasks = pospuestas,
+                                solicitud = solicitud,
+                                currentUserId = currentUserId,
+                                otherUid = otherUid,
+                                isRepresentative = isRepresentative,
+                                isSelectionMode = isSelectionMode,
+                                selectedIds = selectedIds,
+                                isOnline = isOnline,
+                                tareasViewModel = tareasViewModel,
+                                onNavigateToChat = onNavigateToChat,
+                                onConfirmTask = { taskToConfirm = it },
+                                onPostponeTask = { taskToPostpone = it },
+                                onEditTask = { editingRegistro = it },
+                                onToggleSelection = { id ->
+                                    if (selectedIds.contains(id)) selectedIds.remove(id)
+                                    else selectedIds.add(id)
+                                },
+                                onShareInChat = { reg ->
+                                    val msg = "Revisa esta tarea:\n*${reg.titulo}* (${reg.horarioPrevisto})\nEstado: ${if(reg.completada) "COMPLETADA" else if(reg.postergada) "POSPUESTA" else "PENDIENTE"}"
+                                    val chatId = if (currentUserId < otherUid) "${currentUserId}_$otherUid" else "${otherUid}_$currentUserId"
+                                    onNavigateToChat(chatId, otherUid, msg)
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -370,7 +436,7 @@ fun ActiveServiceTasksScreen(
                 },
                 confirmButton = {
                     Button(onClick = {
-                        tareasViewModel.generarInformeFinal(solicitud.id, currentUserId, observaciones) {
+                        tareasViewModel.generarInformeFinal(solicitud.id, currentUserId, observaciones, otherUid) {
                             showSummary = false
                             onNavigateBack()
                         }
@@ -434,15 +500,138 @@ fun ActiveServiceTasksScreen(
 }
 
 @Composable
+fun TaskExpandableSection(
+    title: String,
+    count: Int,
+    tasks: List<RegistroTarea>,
+    solicitud: SolicitudCuidado,
+    currentUserId: String,
+    otherUid: String,
+    isRepresentative: Boolean,
+    isSelectionMode: Boolean,
+    selectedIds: List<String>,
+    isOnline: Boolean,
+    tareasViewModel: TareasViewModel,
+    onNavigateToChat: (String, String, String?) -> Unit,
+    onConfirmTask: (RegistroTarea) -> Unit,
+    onPostponeTask: (RegistroTarea) -> Unit,
+    onEditTask: (RegistroTarea) -> Unit,
+    onToggleSelection: (String) -> Unit = {},
+    onShareInChat: (RegistroTarea) -> Unit = {}
+) {
+    var expanded by remember { mutableStateOf(title == "PENDIENTES") }
+    val sectionColor = when(title) {
+        "COMPLETADAS" -> Color(0xFF4CAF50)
+        "POSPUESTAS" -> Color.Red
+        else -> MaterialTheme.colorScheme.primary
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Surface(
+            onClick = { expanded = !expanded },
+            color = Color.White.copy(alpha = 0.05f),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp, 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    null,
+                    tint = Color.White
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    title,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Black,
+                    color = Color.White,
+                    modifier = Modifier.weight(1f)
+                )
+                Surface(
+                    color = sectionColor,
+                    shape = CircleShape
+                ) {
+                    Text(
+                        count.toString(),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+            }
+        }
+
+        AnimatedVisibility(visible = expanded) {
+            Column(
+                modifier = Modifier.padding(top = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (tasks.isEmpty()) {
+                    Text(
+                        "No hay tareas en esta sección.",
+                        modifier = Modifier.padding(16.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.5f)
+                    )
+                } else {
+                    tasks.forEach { registro ->
+                        DailyTaskCard(
+                            registro = registro,
+                            isSelected = selectedIds.contains(registro.id),
+                            isSelectionMode = isSelectionMode,
+                            isOnline = isOnline,
+                            onToggleSelection = { onToggleSelection(registro.id) },
+                            onToggleStatus = { completed ->
+                                if (isOnline) {
+                                    if (completed) onConfirmTask(registro)
+                                    else tareasViewModel.marcarTareaCompletada(solicitud.id, registro.id, false, currentUserId)
+                                }
+                            },
+                            onPostpone = if (!isRepresentative && isOnline) { { onPostponeTask(registro) } } else null,
+                            onEdit = if (isRepresentative && isOnline) { 
+                                if (registro.completada) null else { { onEditTask(registro) } }
+                            } else null,
+                            onAsk = {
+                                val frecuenciaFriendly = when(registro.frecuencia) {
+                                    FrecuenciaTarea.DIARIA -> "Diaria"
+                                    FrecuenciaTarea.SEMANAL -> "Semanal"
+                                    FrecuenciaTarea.MENSUAL -> "Mensual"
+                                    FrecuenciaTarea.UNA_VEZ -> "Una vez"
+                                }
+                                val msg = "Hola, tengo una duda sobre esta tarea:\n\n" +
+                                         "*${registro.titulo}*\n" +
+                                         "⏰ Horario: ${registro.horarioPrevisto}\n" +
+                                         "📋 Frecuencia: $frecuenciaFriendly\n" +
+                                         "📝 Indicaciones: ${if (registro.descripcion.isNotBlank()) registro.descripcion else "Sin indicaciones específicas"}"
+                                
+                                val chatId = if (currentUserId < otherUid) "${currentUserId}_$otherUid" else "${otherUid}_$currentUserId"
+                                onNavigateToChat(chatId, otherUid, msg)
+                            },
+                            onShareInChat = { onShareInChat(registro) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun DailyTaskCard(
     registro: RegistroTarea,
     isSelected: Boolean = false,
     isSelectionMode: Boolean = false,
+    isOnline: Boolean = true,
     onToggleSelection: () -> Unit,
     onToggleStatus: (Boolean) -> Unit,
     onPostpone: (() -> Unit)? = null,
     onEdit: (() -> Unit)? = null,
-    onAsk: (() -> Unit)? = null
+    onAsk: (() -> Unit)? = null,
+    onShareInChat: (() -> Unit)? = null
 ) {
     var expanded by remember { mutableStateOf(false) }
     val statusColor = when {
@@ -535,8 +724,9 @@ fun DailyTaskCard(
                     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
                         Checkbox(
                             checked = registro.completada,
-                            onCheckedChange = onToggleStatus,
+                            onCheckedChange = if (isOnline) onToggleStatus else null,
                             colors = CheckboxDefaults.colors(checkedColor = Color(0xFF4CAF50)),
+                            enabled = isOnline,
                             modifier = Modifier.size(24.dp)
                         )
                     }
@@ -564,10 +754,10 @@ fun DailyTaskCard(
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Schedule, null, tint = Color.Red, modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
+                            Spacer(Modifier.width(4.dp))
                             Text(
                                 text = "POSTERGADA A LAS ${registro.fechaPostergacion?.toDate()?.let { 
-                                    java.text.SimpleDateFormat("HH:mm", LocalLocale.current.platformLocale).format(it) 
+                                    java.text.SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) 
                                 }}",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
@@ -600,10 +790,10 @@ fun DailyTaskCard(
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.History, null, tint = Color(0xFF4CAF50), modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
+                            Spacer(Modifier.width(4.dp))
                             Text(
                                 text = "Realizada a las ${registro.fechaCompletado?.toDate()?.let { 
-                                    java.text.SimpleDateFormat("HH:mm", LocalLocale.current.platformLocale).format(it) 
+                                    java.text.SimpleDateFormat("HH:mm", Locale.getDefault()).format(it)
                                 }}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color(0xFF4CAF50),
@@ -644,11 +834,18 @@ fun DailyTaskCard(
                                 Text("PREGUNTAR", fontWeight = FontWeight.Bold)
                             }
                         }
+                        if (onShareInChat != null) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            IconButton(
+                                onClick = onShareInChat,
+                                modifier = Modifier.background(statusColor.copy(alpha = 0.1f), CircleShape).size(36.dp)
+                            ) {
+                                Icon(Icons.Default.Share, null, tint = statusColor, modifier = Modifier.size(18.dp))
+                            }
+                        }
                     }
                 }
             }
         }
     }
 }
-
-

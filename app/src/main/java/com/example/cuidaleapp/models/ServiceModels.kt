@@ -1,7 +1,11 @@
 package com.example.cuidaleapp.models
 
+import androidx.compose.runtime.Immutable
 import com.google.firebase.Timestamp
+import com.google.firebase.firestore.IgnoreExtraProperties
 
+@Immutable
+@IgnoreExtraProperties
 data class SolicitudCuidado(
     val id: String = "",
     val representanteUid: String = "",
@@ -24,6 +28,7 @@ data class SolicitudCuidado(
     val createdAt: Timestamp? = null
 )
 
+@Immutable
 data class PostulacionCuidado(
     val id: String = "",
     val solicitudId: String = "",
@@ -34,6 +39,7 @@ data class PostulacionCuidado(
     val timestamp: Timestamp? = null
 )
 
+@Immutable
 data class HistorialServicio(
     val id: String = "",
     val solicitudId: String = "",

@@ -11,11 +11,10 @@ android {
 
     defaultConfig {
         applicationId = "com.example.cuidaleapp"
-        minSdk = 27
+        minSdk = 26
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -30,12 +29,14 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "11"
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
     }
 
     buildFeatures {
@@ -86,6 +87,7 @@ dependencies {
     implementation(libs.jbcrypt)
     implementation(libs.accompanist.systemuicontroller)
     implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
 
     // Media3
     implementation("androidx.media3:media3-exoplayer:1.5.1")

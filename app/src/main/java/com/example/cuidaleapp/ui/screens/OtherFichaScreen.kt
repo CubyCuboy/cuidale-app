@@ -9,6 +9,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
+import coil3.request.CachePolicy
+import coil3.request.ImageRequest
+import coil3.request.crossfade
+import com.example.cuidaleapp.ui.components.fadingEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -36,14 +45,15 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Assignment
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.scale
-import com.example.cuidaleapp.ui.components.HardShadowButton
+import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.viewmodel.VinculosViewModel
 import com.example.cuidaleapp.viewmodel.VinculosUiState
 import com.example.cuidaleapp.viewmodel.FavoritosViewModel
 import com.example.cuidaleapp.viewmodel.FavoritosUiState
-import com.example.cuidaleapp.ui.components.HardShadowPanel
-import com.example.cuidaleapp.ui.components.ProfileDetailView
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.FichaState
 import com.example.cuidaleapp.viewmodel.ProfileViewModel
@@ -51,9 +61,11 @@ import com.example.cuidaleapp.models.UserData
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.IntOffset
 import com.example.cuidaleapp.models.SolicitudCuidado
 import com.example.cuidaleapp.utils.DateUtils.formatDate
 import androidx.compose.material.icons.automirrored.filled.Chat
+import com.example.cuidaleapp.utils.ConnectivityObserver
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -68,6 +80,7 @@ fun OtherFichaScreen(
     onChatNavigate: (String, String, UserData) -> Unit,
     onReviewRequest: (SolicitudCuidado) -> Unit
 ) {
+    val isOnline by ConnectivityObserver.isOnline.collectAsState()
     val otherUserData by profileViewModel.otherUserData.collectAsState()
     val otherUserStatus by profileViewModel.otherUserStatus.collectAsState()
     val otherFichaState by profileViewModel.otherFichaState.collectAsState()
@@ -98,6 +111,7 @@ fun OtherFichaScreen(
     val scrollState = rememberScrollState()
     val customColors = CuidaleThemeExtras.customColors
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
     val displayRole = otherUserData?.rol ?: ""
     val accentColor = when (displayRole) {
@@ -106,10 +120,9 @@ fun OtherFichaScreen(
         else -> customColors.lime
     }
 
-    LaunchedEffect(otherUserData?.uid) {
+    LaunchedEffect(otherUserData?.uid, isOnline) {
         val uid = otherUserData?.uid ?: return@LaunchedEffect
-        // Only load requests if not in an error state (which implies blocking)
-        if (otherProfileState is ProfileViewModel.RemoteState.Success && displayRole == "representante") {
+        if (isOnline && otherProfileState is ProfileViewModel.RemoteState.Success && displayRole == "representante") {
             try {
                 val snapshot = FirebaseFirestore.getInstance().collection("solicitudes")
                     .whereEqualTo("representanteUid", uid)
@@ -156,11 +169,14 @@ fun OtherFichaScreen(
                 TextButton(
                     onClick = {
                         showUnwantedDialog = false
-                        otherUserData?.let { 
-                            favoritosViewModel.toggleNoDeseado(it.uid)
-                            if (!isNoDeseado) onNavigateBack()
+                        if (isOnline) {
+                            otherUserData?.let { 
+                                favoritosViewModel.toggleNoDeseado(it.uid)
+                                if (!isNoDeseado) onNavigateBack()
+                            }
                         }
                     },
+                    enabled = isOnline,
                     colors = ButtonDefaults.textButtonColors(contentColor = if (isNoDeseado) accentColor else customColors.warning)
                 ) {
                     Text(if (isNoDeseado) "MOSTRAR DE NUEVO" else "MARCAR COMO NO DESEADO")
@@ -188,13 +204,19 @@ fun OtherFichaScreen(
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = accentColor)
                 }
-            } else if (otherProfileState is ProfileViewModel.RemoteState.Error) {
+            } else if (otherProfileState is ProfileViewModel.RemoteState.Error || (!isOnline && otherUserData == null)) {
                 Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.ErrorOutline, null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.error)
+                        Icon(
+                            if (!isOnline) Icons.Default.WifiOff else Icons.Default.ErrorOutline, 
+                            null, 
+                            modifier = Modifier.size(48.dp), 
+                            tint = if (!isOnline) Color.Gray else MaterialTheme.colorScheme.error
+                        )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            (otherProfileState as ProfileViewModel.RemoteState.Error).message,
+                            if (!isOnline) "No se puede cargar el perfil sin conexión." 
+                            else (otherProfileState as ProfileViewModel.RemoteState.Error).message,
                             textAlign = TextAlign.Center,
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -212,12 +234,13 @@ fun OtherFichaScreen(
                         .fillMaxSize()
                         .verticalScroll(scrollState)
                 ) {
-                    // Header / Banner
+                    ConnectivityBanner()
+                    
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(140.dp)
-                            .background(accentColor)
+                            .background(if (isOnline) accentColor else Color.Gray)
                     ) {
                         Row(
                             modifier = Modifier
@@ -244,11 +267,11 @@ fun OtherFichaScreen(
                                         modifier = Modifier
                                             .size(8.dp)
                                             .clip(CircleShape)
-                                            .background(if (otherUserStatus == "en línea") Color(0xFF4CAF50) else Color.Gray)
+                                            .background(if (otherUserStatus == "en línea" && isOnline) Color(0xFF4CAF50) else Color.Gray)
                                     )
                                     Spacer(Modifier.width(6.dp))
                                     Text(
-                                        text = otherUserStatus.uppercase(),
+                                        text = (if (isOnline) otherUserStatus else "OFFLINE").uppercase(),
                                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
                                         color = Color.White.copy(alpha = 0.9f)
                                     )
@@ -263,7 +286,6 @@ fun OtherFichaScreen(
                             .offset(y = (-40).dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Standard Avatar Header
                         Surface(
                             modifier = Modifier
                                 .size(110.dp)
@@ -282,10 +304,16 @@ fun OtherFichaScreen(
                             ) {
                                 if (otherUserData?.fotoUrl?.isNotEmpty() == true && !otherUserData?.fotoUrl?.startsWith("res:")!!) {
                                     AsyncImage(
-                                        model = otherUserData?.fotoUrl,
+                                        model = ImageRequest.Builder(context)
+                                            .data(otherUserData?.fotoUrl)
+                                            .crossfade(true)
+                                            .diskCachePolicy(CachePolicy.ENABLED)
+                                            .memoryCachePolicy(CachePolicy.ENABLED)
+                                            .build(),
                                         contentDescription = "Profile",
                                         modifier = Modifier.fillMaxSize().clip(CircleShape),
-                                        contentScale = ContentScale.Crop
+                                        contentScale = ContentScale.Crop,
+                                        placeholder = androidx.compose.ui.graphics.painter.ColorPainter(customColors.avatarBackground)
                                     )
                                 } else {
                                     Icon(
@@ -300,7 +328,6 @@ fun OtherFichaScreen(
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // Perfil Data Section (Outside Ficha)
                         otherUserData?.let { user ->
                             HardShadowPanel(
                                 backgroundColor = customColors.panelBackground,
@@ -310,14 +337,17 @@ fun OtherFichaScreen(
                                     Text(
                                         text = "DATOS DEL PERFIL",
                                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                        color = accentColor
+                                        color = if (isOnline) accentColor else Color.Gray
                                     )
                                     Spacer(modifier = Modifier.height(12.dp))
+                                    val fullName = "${user.nombre} ${user.apellido_pa}".trim()
                                     Text(
-                                        text = "${user.nombre} ${user.apellido_pa}",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
+                                        text = if (fullName.isBlank() || fullName == "n/a") "Usuario sin nombre" else fullName,
+                                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                        lineHeight = 28.sp
                                     )
                                     if (user.descripcion.isNotBlank()) {
                                         Spacer(modifier = Modifier.height(4.dp))
@@ -336,19 +366,28 @@ fun OtherFichaScreen(
                                         icon = Icons.Default.Email,
                                         label = "Correo electrónico",
                                         value = censorEmail(user.correo),
-                                        accentColor = accentColor
+                                        accentColor = if (isOnline) accentColor else Color.Gray
                                     )
                                     ContactItem(
                                         icon = Icons.Default.Phone,
                                         label = "Teléfono de contacto",
                                         value = censorPhone(user.telefono),
-                                        accentColor = accentColor
+                                        accentColor = if (isOnline) accentColor else Color.Gray
                                     )
+
+                                    if (user.comuna.isNotEmpty() || user.region.isNotEmpty()) {
+                                        ContactItem(
+                                            icon = Icons.Default.Place,
+                                            label = "Ubicación de residencia",
+                                            value = "${user.comuna}${if(user.comuna.isNotEmpty() && user.region.isNotEmpty()) ", " else ""}${user.region}",
+                                            accentColor = if (isOnline) accentColor else Color.Gray
+                                        )
+                                    }
 
                                     Spacer(modifier = Modifier.height(16.dp))
                                     
                                     Surface(
-                                        color = accentColor.copy(alpha = 0.05f),
+                                        color = (if (isOnline) accentColor else Color.Gray).copy(alpha = 0.05f),
                                         shape = MaterialTheme.shapes.medium
                                     ) {
                                         Row(
@@ -358,12 +397,13 @@ fun OtherFichaScreen(
                                             Icon(
                                                 Icons.Default.Info,
                                                 contentDescription = null,
-                                                tint = accentColor,
+                                                tint = if (isOnline) accentColor else Color.Gray,
                                                 modifier = Modifier.size(20.dp)
                                             )
                                             Spacer(modifier = Modifier.width(12.dp))
                                             Text(
-                                                text = "Por seguridad, algunos datos están protegidos. Contacta al usuario para coordinar y conocer más detalles.",
+                                                text = if (isOnline) "Por seguridad, algunos datos están protegidos. Contacta al usuario para coordinar y conocer más detalles."
+                                                       else "Estás en modo offline. Algunas funciones de interacción están desactivadas.",
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -375,7 +415,6 @@ fun OtherFichaScreen(
 
                         Spacer(modifier = Modifier.height(24.dp))
 
-                        // Interaction Buttons Row
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -385,11 +424,11 @@ fun OtherFichaScreen(
                             HardShadowButton(
                                 text = if (isFavorito) "GUARDADO" else "GUARDAR",
                                 modifier = Modifier.weight(1f).height(56.dp),
-                                containerColor = if (isFavorito) accentColor else Color.White,
+                                containerColor = if (!isOnline) Color.Gray else if (isFavorito) accentColor else Color.White,
                                 contentColor = if (isFavorito) Color.White else MaterialTheme.colorScheme.onSurface,
-                                shadowColor = accentColor.copy(alpha = 0.3f),
+                                shadowColor = (if (isOnline) accentColor else Color.Gray).copy(alpha = 0.3f),
                                 icon = if (isFavorito) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                                enabled = favoritosUiState !is FavoritosUiState.Loading,
+                                enabled = favoritosUiState !is FavoritosUiState.Loading && isOnline,
                                 onClick = {
                                     otherUserData?.let { favoritosViewModel.toggleFavorito(it.uid) }
                                 }
@@ -398,10 +437,11 @@ fun OtherFichaScreen(
                             HardShadowButton(
                                 text = if (isNoDeseado) "MOSTRAR" else "NO DESEADO",
                                 modifier = Modifier.weight(1f).height(56.dp),
-                                containerColor = if (isNoDeseado) customColors.warning else Color.White,
+                                containerColor = if (!isOnline) Color.Gray else if (isNoDeseado) customColors.warning else Color.White,
                                 contentColor = if (isNoDeseado) Color.White else customColors.warning,
-                                shadowColor = if (isNoDeseado) customColors.warning.copy(alpha = 0.3f) else customColors.warning.copy(alpha = 0.1f),
+                                shadowColor = (if (isNoDeseado) customColors.warning else Color.Gray).copy(alpha = 0.3f),
                                 icon = if (isNoDeseado) Icons.Default.Visibility else Icons.Default.Block,
+                                enabled = isOnline,
                                 onClick = { showUnwantedDialog = true }
                             )
                         }
@@ -414,7 +454,7 @@ fun OtherFichaScreen(
                             iHaveBlocked -> "DESBLOQUEAR USUARIO"
                             vinculoExistente?.estado == "aceptado" -> "IR AL CHAT"
                             isSolicitante && isPendiente -> "CHAT YA SOLICITADO"
-                            !isSolicitante && isPendiente -> null // Se muestran ACEPTAR/RECHAZAR abajo
+                            !isSolicitante && isPendiente -> null 
                             else -> "SOLICITAR CHAT"
                         }
 
@@ -423,14 +463,15 @@ fun OtherFichaScreen(
                                 text = if (vinculosUiState is VinculosUiState.Loading) "PROCESANDO..." else buttonText,
                                 modifier = Modifier.fillMaxWidth().height(60.dp).padding(vertical = 8.dp),
                                 containerColor = when {
+                                    !isOnline && vinculoExistente?.estado != "aceptado" -> Color.Gray
                                     iHaveBlocked -> Color.Red
                                     isSolicitante && isPendiente -> Color.LightGray
                                     else -> accentColor
                                 },
                                 contentColor = if (isSolicitante && isPendiente) Color.DarkGray else Color.White,
-                                shadowColor = if (iHaveBlocked) Color.Red.copy(alpha = 0.4f) else accentColor.copy(alpha = 0.4f),
+                                shadowColor = (if (iHaveBlocked) Color.Red else (if (isOnline) accentColor else Color.Gray)).copy(alpha = 0.4f),
                                 icon = if (iHaveBlocked) Icons.Default.LockOpen else Icons.AutoMirrored.Filled.Chat,
-                                enabled = vinculosUiState !is VinculosUiState.Loading,
+                                enabled = vinculosUiState !is VinculosUiState.Loading && (isOnline || vinculoExistente?.estado == "aceptado"),
                                 onClick = {
                                     otherUserData?.let { user ->
                                         scope.launch {
@@ -462,20 +503,21 @@ fun OtherFichaScreen(
                                     containerColor = Color.White,
                                     contentColor = Color.Red,
                                     shadowColor = Color.Red.copy(alpha = 0.1f),
+                                    enabled = isOnline,
                                     onClick = { vinculosViewModel.rechazarSolicitud(vinculoExistente!!.id) }
                                 )
                                 HardShadowButton(
                                     text = "ACEPTAR SOLICITUD",
                                     modifier = Modifier.weight(1.5f).height(50.dp),
-                                    containerColor = customColors.successStrong,
+                                    containerColor = if (isOnline) customColors.successStrong else Color.Gray,
                                     contentColor = Color.White,
-                                    shadowColor = customColors.successStrong.copy(alpha = 0.3f),
+                                    shadowColor = (if (isOnline) customColors.successStrong else Color.Gray).copy(alpha = 0.3f),
+                                    enabled = isOnline,
                                     onClick = { vinculosViewModel.aceptarSolicitud(vinculoExistente!!.id) }
                                 )
                             }
                         }
 
-                        // Service Request availability (FOR CAREGIVERS)
                         if (availableSolicitudes.isNotEmpty() && com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid != otherUserData?.uid) {
                             Spacer(modifier = Modifier.height(16.dp))
                             Column(
@@ -485,15 +527,16 @@ fun OtherFichaScreen(
                                 Text(
                                     if (availableSolicitudes.size > 1) "Solicitudes de cuidado Disponibles" else "Solicitud de cuidado Disponible",
                                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = accentColor
+                                    color = if (isOnline) accentColor else Color.Gray
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 HardShadowButton(
                                     text = if (availableSolicitudes.size > 1) "REVISAR SOLICITUDES" else "REVISAR SOLICITUD",
-                                    containerColor = MaterialTheme.colorScheme.secondary,
+                                    containerColor = if (isOnline) MaterialTheme.colorScheme.secondary else Color.Gray,
                                     contentColor = Color.White,
-                                    shadowColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f),
+                                    shadowColor = (if (isOnline) MaterialTheme.colorScheme.secondary else Color.Gray).copy(alpha = 0.3f),
                                     icon = Icons.Default.Assignment,
+                                    enabled = isOnline,
                                     onClick = { 
                                         if (availableSolicitudes.size > 1) {
                                             showRequestsListDialog = true
@@ -552,8 +595,11 @@ fun OtherFichaScreen(
                                     TextButton(
                                         onClick = {
                                             showCancelRequestDialog = false
-                                            otherUserData?.let { vinculosViewModel.cancelarSolicitud(it.uid) }
+                                            if (isOnline) {
+                                                otherUserData?.let { vinculosViewModel.cancelarSolicitud(it.uid) }
+                                            }
                                         },
+                                        enabled = isOnline,
                                         colors = ButtonDefaults.textButtonColors(contentColor = customColors.warning)
                                     ) { Text("ELIMINAR SOLICITUD") }
                                 },
@@ -577,7 +623,8 @@ fun OtherFichaScreen(
                                     data = targetState.data,
                                     isExternal = true,
                                     tareasPlantilla = otherTareasPlantilla,
-                                    onEdit = { }
+                                    onEdit = { },
+                                    isBlurry = vinculoExistente?.estado != "aceptado"
                                 )
                             }
                             is FichaState.NotFound -> {
@@ -587,23 +634,12 @@ fun OtherFichaScreen(
                                         .padding(top = 40.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    HardShadowPanel(
-                                        backgroundColor = customColors.panelBackground,
-                                        shadowColor = CuidaleThemeExtras.shadows.hardShadowPrimary.copy(alpha = 0.1f)
-                                    ) {
-                                        Column(
-                                            modifier = Modifier.padding(24.dp),
-                                            horizontalAlignment = Alignment.CenterHorizontally
-                                        ) {
-                                            Icon(Icons.Default.Info, null, modifier = Modifier.size(48.dp), tint = accentColor.copy(alpha = 0.5f))
-                                            Spacer(modifier = Modifier.height(16.dp))
-                                            Text(
-                                                "Este usuario aún no ha completado su ficha técnica.",
-                                                textAlign = TextAlign.Center,
-                                                style = MaterialTheme.typography.bodyLarge
-                                            )
-                                        }
-                                    }
+                                    CuidalePlaceholder(
+                                        title = "Ficha no disponible",
+                                        subtitle = "Este usuario aún no ha completado su ficha técnica. Contacta con él para conocer más detalles.",
+                                        icon = Icons.Default.Info,
+                                        iconColor = Color.Gray.copy(alpha = 0.5f)
+                                    )
                                 }
                             }
                             is FichaState.Error -> {

@@ -27,6 +27,9 @@ import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.FavoritosViewModel
 import com.example.cuidaleapp.viewmodel.VinculosViewModel
 
+import com.example.cuidaleapp.ui.components.*
+import com.example.cuidaleapp.utils.ConnectivityObserver
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SocialManagementScreen(
@@ -35,6 +38,7 @@ fun SocialManagementScreen(
     favoritosViewModel: FavoritosViewModel = viewModel(),
     vinculosViewModel: VinculosViewModel = viewModel()
 ) {
+    val isOnline by ConnectivityObserver.isOnline.collectAsState()
     val managedUsers by favoritosViewModel.managedUsers.collectAsState()
     val favoritos by favoritosViewModel.favoritos.collectAsState()
     val guardados by favoritosViewModel.guardados.collectAsState()
@@ -53,6 +57,7 @@ fun SocialManagementScreen(
     Scaffold(
         topBar = {
             Column {
+                ConnectivityBanner()
                 TopAppBar(
                     title = { Text("Gestión de Contactos", fontWeight = FontWeight.ExtraBold) },
                     navigationIcon = {
