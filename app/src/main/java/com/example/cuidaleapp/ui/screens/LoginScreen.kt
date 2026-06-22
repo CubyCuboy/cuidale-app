@@ -7,6 +7,7 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -86,12 +87,11 @@ fun LoginScreen(
     val uiState by viewModel.uiState.collectAsState()
 
     val screenKey = when (uiState) {
-        is LoginUiState.Transition -> "transition"
         is LoginUiState.Success -> "success"
         else -> "form"
     }
 
-    Crossfade(targetState = screenKey, label = "screenTransition", animationSpec = tween(1000, easing = LinearOutSlowInEasing)) { key ->
+    Crossfade(targetState = screenKey, label = "screenTransition", animationSpec = tween(600, easing = LinearOutSlowInEasing)) { key ->
         when (key) {
             "form" -> {
                 LoginForm(
@@ -105,20 +105,8 @@ fun LoginScreen(
                     onVerify = onVerify
                 )
             }
-            "transition" -> {
-                val userData = (uiState as? LoginUiState.Transition)?.userData ?: UserData()
-                TransitionScreen(userData = userData) {
-                    viewModel.onTransitionFinished()
-                }
-            }
             "success" -> {
-
-                Box(
-                    modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(stringResource(R.string.common_loading), color = MaterialTheme.colorScheme.onBackground)
-                }
+                CuidaleWelcomeLoading()
             }
         }
     }
@@ -242,7 +230,7 @@ fun LoginForm(
 
                 CuidaleTextField(
                     value = correoOrRut,
-                    onValueChange = { 
+                    onValueChange = {
                         correoOrRut = it.lowercase()
                         onClearError()
                     },
@@ -261,7 +249,7 @@ fun LoginForm(
 
                     CuidaleTextField(
                         value = password,
-                        onValueChange = { 
+                        onValueChange = {
                             password = it
                             onClearError()
                         },
@@ -313,19 +301,19 @@ fun LoginForm(
             Spacer(modifier = Modifier.height(32.dp))
 
             val needsVerification = (state as? LoginUiState.Error)?.message?.contains("verificar") == true
-            
+
             HardShadowButton(
-                text = if (isLoading) stringResource(R.string.login_button_loading) 
-                       else if (needsVerification) "Verificar Cuenta"
-                       else if (isError) stringResource(R.string.login_button_retry) 
-                       else stringResource(R.string.login_button_enter),
+                text = if (isLoading) stringResource(R.string.login_button_loading)
+                else if (needsVerification) "Verificar Cuenta"
+                else if (isError) stringResource(R.string.login_button_retry)
+                else stringResource(R.string.login_button_enter),
                 containerColor = loginButtonColor,
                 contentColor = if (isError && !needsVerification) Color.White else colors.onPrimary,
                 shadowColor = loginButtonShadow,
                 icon = if (needsVerification) Icons.Default.Email else if (isError) Icons.Filled.Block else Icons.AutoMirrored.Outlined.Login,
                 isErrorMode = isError && !needsVerification,
                 isDark = isDark,
-                onClick = { 
+                onClick = {
                     if (!isLoading) {
                         if (needsVerification) {
                             onVerify(correoOrRut)
@@ -348,7 +336,12 @@ fun LoginForm(
             Spacer(modifier = Modifier.height(32.dp))
 
             Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                Text(text = stringResource(R.string.login_no_account), style = typography.bodyMedium, color = onGradientText)
+                Text(
+                    text = stringResource(R.string.login_no_account),
+                    style = typography.bodyMedium,
+                    color = onGradientText
+                )
+                Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = stringResource(R.string.login_register_here),
                     style = typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
@@ -368,51 +361,6 @@ fun LoginForm(
     }
 }
 
-@Composable
-fun TransitionScreen(userData: UserData, onFinished: () -> Unit) {
-    val gradient = CuidaleThemeExtras.gradient
-    val onGradientText = CuidaleThemeExtras.customColors.onGradient
-    val appVersion = "0.8"
-
-    LaunchedEffect(Unit) {
-        delay(3000)
-        onFinished()
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(gradient.top, gradient.bottom))),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = "BIENVENIDO",
-                style = MaterialTheme.typography.displayMedium,
-                fontWeight = FontWeight.Black,
-                color = onGradientText
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "${userData.nombre} ${userData.apellido_pa}",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = onGradientText.copy(alpha = 0.9f)
-            )
-            
-            Spacer(modifier = Modifier.height(48.dp))
-            CircularProgressIndicator(color = onGradientText, strokeWidth = 3.dp)
-        }
-        
-        Text(
-            text = "Versión $appVersion",
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 48.dp),
-            style = MaterialTheme.typography.labelMedium,
-            color = onGradientText.copy(alpha = 0.5f)
-        )
-    }
-}
-
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 fun LoginPreviewLight() {
@@ -428,4 +376,3 @@ fun LoginPreviewDark() {
         LoginScreen(isDark = true, onToggleTheme = {})
     }
 }
-

@@ -16,6 +16,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -54,7 +55,7 @@ fun RegisterScreen(
 ) {
     val isDark = isSystemInDarkTheme()
     val uiState by viewModel.uiState.collectAsState()
-    
+
     var currentStep by rememberSaveable { mutableStateOf(RegisterStep.ROLE) }
 
     LaunchedEffect(uiState) {
@@ -62,7 +63,7 @@ fun RegisterScreen(
             currentStep = RegisterStep.SUCCESS
         }
     }
-    
+
     val gradient = CuidaleThemeExtras.gradient
     val onGradientText = CuidaleThemeExtras.customColors.onGradient
     val typography = MaterialTheme.typography
@@ -73,7 +74,7 @@ fun RegisterScreen(
         stringResource(R.string.register_step_location),
         stringResource(R.string.register_step_pass)
     )
-    
+
     val currentStepIndex = when(currentStep) {
         RegisterStep.ROLE -> 0
         RegisterStep.PERSONAL -> 1
@@ -119,7 +120,7 @@ fun RegisterScreen(
             )
 
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             if (currentStep != RegisterStep.SUCCESS) {
                 CuidaleStepProgressBar(
                     steps = stepsLabels,
@@ -233,12 +234,12 @@ fun RoleCard(
 ) {
     val colors = MaterialTheme.colorScheme
     val shadows = CuidaleThemeExtras.shadows
-    
+
     val borderColor by animateColorAsState(
         targetValue = if (isSelected) colors.primary else Color.Transparent,
         label = "roleBorder"
     )
-    
+
     val shadowColor = if (isSelected) {
         if (isDark) shadows.hardShadowAccent else shadows.hardShadowPrimary
     } else {
@@ -273,14 +274,22 @@ fun RoleCard(
             ) {
                 Icon(imageVector = icon, contentDescription = null, tint = colors.primary)
             }
-            
+
             Spacer(modifier = Modifier.width(16.dp))
-            
+
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                Text(text = description, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = if (isDark) Color.White else colors.onSurface
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isDark) Color.White.copy(alpha = 0.85f) else colors.onSurfaceVariant
+                )
             }
-            
+
             RadioButton(selected = isSelected, onClick = null)
         }
     }
@@ -301,7 +310,7 @@ fun RegisterPersonalStep(
     val email by viewModel.email.collectAsState()
     val rut by viewModel.rut.collectAsState()
     val telefono by viewModel.telefono.collectAsState()
-    
+
     val isEmailValid by viewModel.isEmailValid.collectAsState()
     val isRutValid by viewModel.isRutValid.collectAsState()
     val isFormValid by viewModel.isFormValid.collectAsState()
@@ -318,6 +327,7 @@ fun RegisterPersonalStep(
             Text(
                 text = stringResource(R.string.register_personal_desc),
                 style = MaterialTheme.typography.bodyMedium,
+                color = if (isDark) Color.White else MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center
             )
 
@@ -402,7 +412,7 @@ fun RegisterPersonalStep(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            InputFieldLabel("Teléfono")
+            InputFieldLabel("Teléfono (Opcional)")
             CuidaleTextField(
                 value = telefono,
                 onValueChange = viewModel::onTelefonoChange,
@@ -433,16 +443,35 @@ fun RegisterPersonalStep(
             onClick = onNext
         )
 
+
         Spacer(modifier = Modifier.height(24.dp))
 
-        Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-            Text(text = stringResource(R.string.forgot_password_footer_prefix), style = MaterialTheme.typography.bodyMedium, color = CuidaleThemeExtras.customColors.onGradient)
-            Text(
-                text = "Ingresa aquí",
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                color = CuidaleThemeExtras.customColors.onGradient,
-                modifier = Modifier.clickable { onLoginRedirect() }
-            )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(bottom = 16.dp)
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.forgot_password_footer_prefix),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = CuidaleThemeExtras.customColors.onGradient
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "Ingresa aquí",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                    color = CuidaleThemeExtras.customColors.onGradient,
+                    modifier = Modifier
+                        .clickable { onLoginRedirect() }
+                        .padding(vertical = 8.dp)
+                )
+            }
         }
     }
 }
@@ -521,21 +550,38 @@ fun RegisterLocationStep(
             onClick = onBack
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
 
-        Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-            Text(text = stringResource(R.string.forgot_password_footer_prefix), style = MaterialTheme.typography.bodyMedium, color = CuidaleThemeExtras.customColors.onGradient)
-            Text(
-                text = "Ingresa aquí",
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                color = CuidaleThemeExtras.customColors.onGradient,
-                modifier = Modifier.clickable { onBack() }
-            )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(bottom = 16.dp)
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.forgot_password_footer_prefix),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = CuidaleThemeExtras.customColors.onGradient
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "Ingresa aquí",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                    color = CuidaleThemeExtras.customColors.onGradient,
+                    modifier = Modifier
+                        .clickable { onBack() }
+                        .padding(vertical = 8.dp)
+                )
+            }
         }
     }
 }
-
-
 
 @Composable
 fun RegisterPasswordStep(
@@ -552,13 +598,9 @@ fun RegisterPasswordStep(
     var isConfirmVisible by rememberSaveable { mutableStateOf(false) }
 
     val passMatches = password.isNotEmpty() && password == confirmPassword
-    val isPassValid =
-        password.length >= 8 &&
-                password.any { it.isUpperCase() } &&
-                password.any { !it.isLetterOrDigit() }
+    val isPassValid = password.length >= 8 && password.any { it.isUpperCase() } && password.any { !it.isLetterOrDigit() }
 
     val shakeOffset = remember { Animatable(0f) }
-
     LaunchedEffect(error) {
         if (error != null) {
             repeat(6) {
@@ -571,106 +613,87 @@ fun RegisterPasswordStep(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .navigationBarsPadding()
-            .imePadding(),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Column(
-            modifier = Modifier
-                .weight(1f, fill = true)
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        HardShadowPanel(
+            backgroundColor = CuidaleThemeExtras.customColors.panelBackground,
+            shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowPrimary else CuidaleThemeExtras.shadows.hardShadowPrimary,
+            isError = error != null,
+            modifier = Modifier.offset { IntOffset(shakeOffset.value.roundToInt(), 0) },
+            contentPadding = PaddingValues(16.dp)
         ) {
-            HardShadowPanel(
-                backgroundColor = CuidaleThemeExtras.customColors.panelBackground,
-                shadowColor = if (isDark) {
-                    CuidaleThemeExtras.shadows.hardShadowPrimary
-                } else {
-                    CuidaleThemeExtras.shadows.hardShadowPrimary
+            Text(
+                text = stringResource(R.string.register_pass_desc),
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            CuidaleValidationPanel(
+                validations = listOf(
+                    stringResource(R.string.password_req_length) to (password.length >= 8),
+                    stringResource(R.string.password_req_upper) to password.any { it.isUpperCase() },
+                    stringResource(R.string.password_req_special) to password.any { !it.isLetterOrDigit() },
+                    stringResource(R.string.password_req_match) to passMatches
+                ),
+                isDark = isDark
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            InputFieldLabel(stringResource(R.string.register_pass_label))
+            CuidaleTextField(
+                value = password,
+                onValueChange = {
+                    viewModel.onPasswordChange(it)
+                    viewModel.clearError()
                 },
-                isError = error != null,
-                modifier = Modifier.offset {
-                    IntOffset(shakeOffset.value.roundToInt(), 0)
+                placeholder = stringResource(R.string.register_pass_placeholder),
+                containerColor = CuidaleThemeExtras.customColors.inputBackground,
+                isPassword = true,
+                isPasswordVisible = isPassVisible,
+                onPasswordVisibilityChange = { isPassVisible = !isPassVisible },
+                enabled = !isLoading,
+                imeAction = androidx.compose.ui.text.input.ImeAction.Next
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            InputFieldLabel(stringResource(R.string.register_confirm_pass_label))
+            CuidaleTextField(
+                value = confirmPassword,
+                onValueChange = {
+                    confirmPassword = it
+                    viewModel.clearError()
                 },
-                contentPadding = PaddingValues(16.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.register_pass_desc),
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(bottom = 12.dp)
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                CuidaleValidationPanel(
-                    validations = listOf(
-                        stringResource(R.string.password_req_length) to (password.length >= 8),
-                        stringResource(R.string.password_req_upper) to password.any { it.isUpperCase() },
-                        stringResource(R.string.password_req_special) to password.any { !it.isLetterOrDigit() },
-                        stringResource(R.string.password_req_match) to passMatches
-                    ),
-                    isDark = isDark
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                InputFieldLabel(stringResource(R.string.register_pass_label))
-                CuidaleTextField(
-                    value = password,
-                    onValueChange = {
-                        viewModel.onPasswordChange(it)
-                        viewModel.clearError()
-                    },
-                    placeholder = stringResource(R.string.register_pass_placeholder),
-                    containerColor = CuidaleThemeExtras.customColors.inputBackground,
-                    isPassword = true,
-                    isPasswordVisible = isPassVisible,
-                    onPasswordVisibilityChange = { isPassVisible = !isPassVisible },
-                    enabled = !isLoading,
-                    imeAction = androidx.compose.ui.text.input.ImeAction.Next
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                InputFieldLabel(stringResource(R.string.register_confirm_pass_label))
-                CuidaleTextField(
-                    value = confirmPassword,
-                    onValueChange = {
-                        confirmPassword = it
-                        viewModel.clearError()
-                    },
-                    placeholder = stringResource(R.string.register_confirm_pass_placeholder),
-                    containerColor = CuidaleThemeExtras.customColors.inputBackground,
-                    isPassword = true,
-                    isPasswordVisible = isConfirmVisible,
-                    onPasswordVisibilityChange = { isConfirmVisible = !isConfirmVisible },
-                    enabled = !isLoading,
-                    imeAction = androidx.compose.ui.text.input.ImeAction.Done,
-                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                        onDone = {
-                            if (isPassValid && passMatches) {
-                                onRegister()
-                            }
+                placeholder = stringResource(R.string.register_confirm_pass_placeholder),
+                containerColor = CuidaleThemeExtras.customColors.inputBackground,
+                isPassword = true,
+                isPasswordVisible = isConfirmVisible,
+                onPasswordVisibilityChange = { isConfirmVisible = !isConfirmVisible },
+                enabled = !isLoading,
+                imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                    onDone = {
+                        if (isPassValid && passMatches) {
+                            onRegister()
                         }
-                    )
+                    }
                 )
-            }
+            )
 
             AnimatedVisibility(visible = error != null) {
                 Text(
-                    text = error.orEmpty(),
+                    text = error ?: "",
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.labelMedium,
                     modifier = Modifier.padding(top = 12.dp)
                 )
             }
-
-            Spacer(modifier = Modifier.height(24.dp))
         }
+
+        Spacer(modifier = Modifier.height(24.dp))
 
         if (isLoading) {
             CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary)
@@ -679,11 +702,7 @@ fun RegisterPasswordStep(
                 text = stringResource(R.string.register_button_finish),
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
-                shadowColor = if (isDark) {
-                    CuidaleThemeExtras.shadows.hardShadowPrimary
-                } else {
-                    CuidaleThemeExtras.shadows.hardShadowPrimary
-                },
+                shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowPrimary else CuidaleThemeExtras.shadows.hardShadowPrimary,
                 icon = Icons.Default.CheckCircle,
                 enabled = isPassValid && passMatches,
                 isDark = isDark,
@@ -699,38 +718,45 @@ fun RegisterPasswordStep(
             text = stringResource(R.string.register_button_back),
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
-            shadowColor = if (isDark) {
-                CuidaleThemeExtras.shadows.hardShadowAccent
-            } else {
-                CuidaleThemeExtras.shadows.hardShadowPrimary
-            },
+            shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowAccent else CuidaleThemeExtras.shadows.hardShadowPrimary,
             icon = Icons.AutoMirrored.Filled.ArrowBack,
             enabled = !isLoading,
             isDark = isDark,
             onClick = onBack
         )
 
+
         Spacer(modifier = Modifier.height(16.dp))
 
-        Row(
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(bottom = 16.dp)
         ) {
-            Text(
-                text = stringResource(R.string.forgot_password_footer_prefix),
-                style = MaterialTheme.typography.bodyMedium,
-                color = CuidaleThemeExtras.customColors.onGradient
-            )
-            Text(
-                text = "Ingresa aquí",
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                color = CuidaleThemeExtras.customColors.onGradient,
-                modifier = Modifier.clickable { onBack() }
-            )
+            Row(
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.forgot_password_footer_prefix),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = CuidaleThemeExtras.customColors.onGradient
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "Ingresa aquí",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                    color = CuidaleThemeExtras.customColors.onGradient,
+                    modifier = Modifier
+                        .clickable { onBack() }
+                        .padding(vertical = 8.dp)
+                )
+            }
         }
     }
 }
-
 
 @Composable
 fun RegisterSuccessStep(onFinish: () -> Unit) {
@@ -741,7 +767,7 @@ fun RegisterSuccessStep(onFinish: () -> Unit) {
             modifier = Modifier.size(100.dp),
             tint = CuidaleThemeExtras.customColors.onGradient
         )
-        
+
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
@@ -780,4 +806,3 @@ fun RegisterPreviewLight() {
         RegisterScreen(onNavigateBack = {}, onFinish = {})
     }
 }
-

@@ -6,17 +6,13 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.example.cuidaleapp.ui.components.CuidaleWelcomeLoading
 import com.example.cuidaleapp.ui.screens.LoginScreen
 import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
 import com.example.cuidaleapp.viewmodel.LoginUiState
@@ -52,12 +48,7 @@ class LoginActivity : ComponentActivity() {
             
             CuidaleAppTheme(darkTheme = isDark) {
                 if (uiState is LoginUiState.CheckingAuth) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator()
-                    }
+                    CuidaleWelcomeLoading()
                 } else {
                     LoginScreen(
                         isDark = isDark,
