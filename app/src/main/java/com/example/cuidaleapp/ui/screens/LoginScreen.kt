@@ -65,10 +65,6 @@ import com.example.cuidaleapp.R
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.cuidaleapp.ui.components.CuidaleTextField
-import com.example.cuidaleapp.ui.components.HardShadowButton
-import com.example.cuidaleapp.ui.components.HardShadowPanel
-import com.example.cuidaleapp.ui.components.InputFieldLabel
 import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
