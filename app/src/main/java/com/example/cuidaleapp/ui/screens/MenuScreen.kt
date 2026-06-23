@@ -44,34 +44,23 @@ fun MenuScreen(
     userData: UserData,
     searchViewModel: SearchViewModel,
     fichaState: FichaState,
-    isDark: Boolean,
-    unreadCount: Int = 0,
-    pendingNotifs: Int = 0,
-    onToggleTheme: () -> Unit,
-    onLogout: () -> Unit,
-    onViewProfile: () -> Unit,
     onViewFicha: () -> Unit,
-    onViewSettings: () -> Unit,
-    onUserClick: (String) -> Unit,
-    onTabSelected: (String) -> Unit,
-    solicitudViewModel: com.example.cuidaleapp.viewmodel.SolicitudViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    onUserClick: (String) -> Unit
 ) {
     val isOnline by ConnectivityObserver.isOnline.collectAsState()
-    val gradient = CuidaleThemeExtras.gradient
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    
+
     val searchState by searchViewModel.state.collectAsState()
     val isRefreshing by searchViewModel.isRefreshing.collectAsState()
     val selectedRegion by searchViewModel.selectedRegion.collectAsState()
     val selectedCommunes by searchViewModel.selectedCommunes.collectAsState()
     val useProfilePreferences by searchViewModel.useProfilePreferences.collectAsState()
-    
+
     val pullToRefreshState = rememberPullToRefreshState()
     val sheetState = rememberModalBottomSheetState()
     var showSearchSheet by remember { mutableStateOf(false) }
-    
+    val scope = rememberCoroutineScope()
+
     var showFichaReminder by remember { mutableStateOf(false) }
 
     LaunchedEffect(fichaState) {
@@ -79,14 +68,14 @@ fun MenuScreen(
             val prefs = context.getSharedPreferences("cuidale_reminders", Context.MODE_PRIVATE)
             val lastReminder = prefs.getLong("last_ficha_reminder", 0L)
             val now = System.currentTimeMillis()
-            
+
             if (now - lastReminder > 2 * 60 * 60 * 1000) {
                 showFichaReminder = true
                 prefs.edit().putLong("last_ficha_reminder", now).apply()
             }
         }
     }
-    
+
     val listState = rememberLazyListState()
     val shouldLoadMore = remember {
         derivedStateOf {
@@ -109,264 +98,191 @@ fun MenuScreen(
         }
     }
 
-    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-        ModalNavigationDrawer(
-            drawerState = drawerState,
-            drawerContent = {
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    ModalDrawerSheet(
-                        modifier = Modifier.fillMaxHeight().width(320.dp),
-                        drawerContainerColor = Color.Transparent,
-                        drawerTonalElevation = 0.dp
-                    ) {
-                        CuidaleDrawerContent(
-                            nombre = userData.nombre,
-                            apellido = userData.apellido_pa,
-                            fotoUrl = userData.fotoUrl,
-                            rol = userData.rol,
-                            isDark = isDark,
-                            onToggleTheme = onToggleTheme,
-                            onProfileClick = {
-                                scope.launch { drawerState.close() }
-                                onViewProfile()
-                            },
-                            onFichaClick = {
-                                scope.launch { drawerState.close() }
-                                onViewFicha()
-                            },
-                            onSettingsClick = {
-                                scope.launch { drawerState.close() }
-                                onViewSettings()
-                            },
-                            onLogoutClick = {
-                                scope.launch { drawerState.close() }
-                                onLogout()
-                            },
-                            onCloseClick = {
-                                scope.launch { drawerState.close() }
-                            }
-                        )
-                    }
-                }
-            },
-            gesturesEnabled = true
+    Box(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp)
         ) {
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                Scaffold(
-                    topBar = {
-                        Column {
-                            ConnectivityBanner()
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                                    .windowInsetsPadding(WindowInsets.statusBars)
-                            ) {
-                                CuidaleCircularMenuButton(
-                                    onClick = { scope.launch { drawerState.open() } },
-                                    modifier = Modifier.align(Alignment.CenterEnd)
-                                )
-                            }
-                        }
-                    },
-                    floatingActionButton = {
-                        if (isOnline) {
-                            CuidaleCircularMenuButton(
-                                onClick = { showSearchSheet = true },
-                                modifier = Modifier.padding(bottom = 16.dp, end = 16.dp),
-                                icon = {
-                                    Icon(
-                                        imageVector = Icons.Default.Search,
-                                        contentDescription = null,
-                                        tint = Color.White
-                                    )
-                                }
-                            )
-                        }
-                    },
-                    containerColor = Color.Transparent
-                ) { innerPadding ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Brush.verticalGradient(listOf(gradient.top, gradient.bottom)))
-                            .padding(innerPadding)
+            val listTitle = if (userData.rol == "cuidador") "Pacientes" else "Cuidadores"
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = listTitle,
+                    style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
+                    color = Color.White
+                )
+                if (isOnline) {
+                    IconButton(
+                        onClick = { searchViewModel.refresh() },
+                        modifier = Modifier.background(Color.White.copy(alpha = 0.1f), CircleShape)
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 24.dp)
-                        ) {
-                            CuidaleAppLogo(
-                                isDark = isDark,
-                                modifier = Modifier.size(60.dp).align(Alignment.CenterHorizontally).padding(top = 8.dp)
-                            )
+                        Icon(Icons.Default.Refresh, "Recargar", tint = Color.White)
+                    }
+                } else {
+                    Icon(Icons.Default.WifiOff, null, tint = Color.White.copy(alpha = 0.5f))
+                }
+            }
 
-                            val listTitle = if (userData.rol == "cuidador") "Pacientes" else "Cuidadores"
+            if (fichaState is FichaState.NotFound) {
+                FichaPlaceholder(
+                    rol = userData.rol,
+                    onClick = onViewFicha
+                )
+            } else if (!isOnline && searchState !is SearchState.Success) {
+                CuidalePlaceholder(
+                    title = if (userData.rol == "cuidador") "¡Aún no hay pacientes cerca!" else "Buscando cuidadores...",
+                    subtitle = if (userData.rol == "cuidador")
+                        "Activa tu conexión para encontrar personas que necesitan tu ayuda hoy mismo."
+                        else "Necesitas internet para descubrir nuevos perfiles que puedan cuidar a tus seres queridos.",
+                    icon = if (userData.rol == "cuidador") Icons.Default.AccessibilityNew else Icons.Default.Diversity3,
+                    iconColor = if (userData.rol == "cuidador") MaterialTheme.colorScheme.primary else CuidaleThemeExtras.customColors.mint
+                )
+            } else {
+                PullToRefreshBox(
+                    state = pullToRefreshState,
+                    isRefreshing = isRefreshing,
+                    onRefresh = { if (isOnline) searchViewModel.refresh() },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    when (searchState) {
+                        is SearchState.Loading -> {
+                            // No mostramos nada aquí para evitar parpadeo con la pantalla de bienvenida
+                            Spacer(Modifier.fillMaxSize())
+                        }
+                        is SearchState.Success -> {
+                            val resultsList = (searchState as SearchState.Success).results
+                            val isLoadingMore = (searchState as SearchState.Success).isLoadingMore
 
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = listTitle,
-                                    style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
-                                    color = Color.White
-                                )
-                                if (isOnline) {
-                                    IconButton(
-                                        onClick = { searchViewModel.refresh() },
-                                        modifier = Modifier.background(Color.White.copy(alpha = 0.1f), CircleShape)
-                                    ) {
-                                        Icon(Icons.Default.Refresh, "Recargar", tint = Color.White)
-                                    }
-                                } else {
-                                    Icon(Icons.Default.WifiOff, null, tint = Color.White.copy(alpha = 0.5f))
-                                }
-                            }
-
-                            if (fichaState is FichaState.NotFound) {
-                                FichaPlaceholder(
-                                    rol = userData.rol,
-                                    onClick = onViewFicha
-                                )
-                            } else if (!isOnline && searchState !is SearchState.Success) {
-                                CuidalePlaceholder(
-                                    title = if (userData.rol == "cuidador") "¡Aún no hay pacientes cerca!" else "Buscando cuidadores...",
-                                    subtitle = if (userData.rol == "cuidador") 
-                                        "Activa tu conexión para encontrar personas que necesitan tu ayuda hoy mismo." 
-                                        else "Necesitas internet para descubrir nuevos perfiles que puedan cuidar a tus seres queridos.",
-                                    icon = if (userData.rol == "cuidador") Icons.Default.AccessibilityNew else Icons.Default.Diversity3,
-                                    iconColor = if (userData.rol == "cuidador") MaterialTheme.colorScheme.primary else CuidaleThemeExtras.customColors.mint
+                            if (resultsList.isEmpty()) {
+                                EmptySearchResults(
+                                    title = if (selectedRegion.isNotEmpty() || selectedCommunes.isNotEmpty())
+                                        "Sin resultados para estos filtros"
+                                    else "No hay $listTitle disponibles",
+                                    subtitle = "Prueba cambiando la ubicación o los filtros de búsqueda.",
+                                    onClearFilters = { searchViewModel.clearFilters() },
+                                    showClearButton = selectedRegion.isNotEmpty() || selectedCommunes.isNotEmpty()
                                 )
                             } else {
-                                PullToRefreshBox(
-                                    state = pullToRefreshState,
-                                    isRefreshing = isRefreshing,
-                                    onRefresh = { if (isOnline) searchViewModel.refresh() },
-                                    modifier = Modifier.weight(1f)
+                                LazyColumn(
+                                    state = listState,
+                                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                                    contentPadding = PaddingValues(bottom = 80.dp),
+                                    modifier = Modifier.fillMaxSize()
                                 ) {
-                                    when (searchState) {
-                                        is SearchState.Loading -> {
-                                            // No mostramos nada aquí para evitar parpadeo con la pantalla de bienvenida
-                                            Spacer(Modifier.fillMaxSize())
-                                        }
-                                        is SearchState.Success -> {
-                                            val resultsList = (searchState as SearchState.Success).results
-                                            val isLoadingMore = (searchState as SearchState.Success).isLoadingMore
-                                            
-                                            if (resultsList.isEmpty()) {
-                                                EmptySearchResults(
-                                                    title = if (selectedRegion.isNotEmpty() || selectedCommunes.isNotEmpty()) 
-                                                        "Sin resultados para estos filtros" 
-                                                    else "No hay $listTitle disponibles",
-                                                    subtitle = "Prueba cambiando la ubicación o los filtros de búsqueda.",
-                                                    onClearFilters = { searchViewModel.clearFilters() },
-                                                    showClearButton = selectedRegion.isNotEmpty() || selectedCommunes.isNotEmpty()
-                                                )
-                                            } else {
-                                                LazyColumn(
-                                                    state = listState,
-                                                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                                                    contentPadding = PaddingValues(bottom = 80.dp),
-                                                    modifier = Modifier.fillMaxSize()
-                                                ) {
-                                                    items(resultsList) { result ->
-                                                        CuidaleUserCard(
-                                                            nombre = result.nombre,
-                                                            apellido = result.apellido_pa,
-                                                            fotoUrl = result.fotoUrl,
-                                                            comuna = result.comuna,
-                                                            comunas = result.comunas,
-                                                            tipo = result.tipo,
-                                                            edad = result.edad,
-                                                            nivelDependencia = result.nivel_dependencia,
-                                                            especializacion = result.especializacion,
-                                                            horarios = result.horarios,
-                                                            isNew = result.isNew,
-                                                            onClick = { onUserClick(result.id) }
-                                                        )
-                                                    }
-                                                    
-                                                    if (isLoadingMore) {
-                                                        item {
-                                                            Box(
-                                                                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                                                contentAlignment = Alignment.Center
-                                                            ) {
-                                                                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        is SearchState.Error -> {
-                                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                                Text(
-                                                    text = (searchState as SearchState.Error).message,
-                                                    color = MaterialTheme.colorScheme.error,
-                                                    textAlign = TextAlign.Center
-                                                )
+                                    items(resultsList) { result ->
+                                        CuidaleUserCard(
+                                            nombre = result.nombre,
+                                            apellido = result.apellido_pa,
+                                            fotoUrl = result.fotoUrl,
+                                            comuna = result.comuna,
+                                            comunas = result.comunas,
+                                            tipo = result.tipo,
+                                            edad = result.edad,
+                                            nivelDependencia = result.nivel_dependencia,
+                                            especializacion = result.especializacion,
+                                            horarios = result.horarios,
+                                            isNew = result.isNew,
+                                            onClick = { onUserClick(result.id) }
+                                        )
+                                    }
+
+                                    if (isLoadingMore) {
+                                        item {
+                                            Box(
+                                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
                                             }
                                         }
                                     }
                                 }
                             }
                         }
-
-                        if (showFichaReminder) {
-                            AlertDialog(
-                                onDismissRequest = { showFichaReminder = false },
-                                icon = { Icon(Icons.Default.Warning, null, tint = Color.Yellow) },
-                                title = { Text("Ficha incompleta") },
-                                text = { 
-                                    Text(
-                                        if (userData.rol == "cuidador") 
-                                            "Aún no tienes una ficha creada. Recuerda que no puedes ofrecer tus servicios ni aparecer en búsquedas sin ella."
-                                        else 
-                                            "Aún no conocemos nada de el familiar que debe ser cuidado. Debes hacer una ficha para poder buscar cuidadores."
-                                    ) 
-                                },
-                                confirmButton = {
-                                    Button(onClick = { 
-                                        showFichaReminder = false
-                                        onViewFicha()
-                                    }) {
-                                        Text("CREAR FICHA AHORA")
-                                    }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = { showFichaReminder = false }) {
-                                        Text("MÁS TARDE")
-                                    }
-                                }
-                            )
-                        }
-
-                        if (showSearchSheet && isOnline) {
-                            ModalBottomSheet(
-                                onDismissRequest = { showSearchSheet = false },
-                                sheetState = sheetState,
-                                containerColor = CuidaleThemeExtras.customColors.panelBackground
-                            ) {
-                                CuidaleSearchContent(
-                                    allRegions = ChileData.regions.map { it.name },
-                                    selectedRegion = selectedRegion,
-                                    onRegionSelected = { searchViewModel.selectRegion(it) },
-                                    allCommunes = ChileData.regions.find { it.name == selectedRegion }?.comunas?.sorted() ?: emptyList(),
-                                    selectedCommunes = selectedCommunes,
-                                    onCommuneToggle = { searchViewModel.toggleCommune(it) },
-                                    onClearFilters = { searchViewModel.clearFilters() },
-                                    onClose = { scope.launch { sheetState.hide() }.invokeOnCompletion { showSearchSheet = false } },
-                                    useProfilePreferences = useProfilePreferences,
-                                    onTogglePreferences = { searchViewModel.toggleProfilePreferences(it) }
+                        is SearchState.Error -> {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = (searchState as SearchState.Error).message,
+                                    color = MaterialTheme.colorScheme.error,
+                                    textAlign = TextAlign.Center
                                 )
                             }
                         }
                     }
                 }
+            }
+        }
+
+        if (isOnline) {
+            CuidaleCircularMenuButton(
+                onClick = { showSearchSheet = true },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(bottom = 16.dp, end = 24.dp),
+                icon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                        tint = Color.White
+                    )
+                }
+            )
+        }
+
+        if (showFichaReminder) {
+            AlertDialog(
+                onDismissRequest = { showFichaReminder = false },
+                icon = { Icon(Icons.Default.Warning, null, tint = Color.Yellow) },
+                title = { Text("Ficha incompleta") },
+                text = {
+                    Text(
+                        if (userData.rol == "cuidador")
+                            "Aún no tienes una ficha creada. Recuerda que no puedes ofrecer tus servicios ni aparecer en búsquedas sin ella."
+                        else
+                            "Aún no conocemos nada de el familiar que debe ser cuidado. Debes hacer una ficha para poder buscar cuidadores."
+                    )
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        showFichaReminder = false
+                        onViewFicha()
+                    }) {
+                        Text("CREAR FICHA AHORA")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showFichaReminder = false }) {
+                        Text("MÁS TARDE")
+                    }
+                }
+            )
+        }
+
+        if (showSearchSheet && isOnline) {
+            ModalBottomSheet(
+                onDismissRequest = { showSearchSheet = false },
+                sheetState = sheetState,
+                containerColor = CuidaleThemeExtras.customColors.panelBackground
+            ) {
+                CuidaleSearchContent(
+                    allRegions = ChileData.regions.map { it.name },
+                    selectedRegion = selectedRegion,
+                    onRegionSelected = { searchViewModel.selectRegion(it) },
+                    allCommunes = ChileData.regions.find { it.name == selectedRegion }?.comunas?.sorted() ?: emptyList(),
+                    selectedCommunes = selectedCommunes,
+                    onCommuneToggle = { searchViewModel.toggleCommune(it) },
+                    onClearFilters = { searchViewModel.clearFilters() },
+                    onClose = { scope.launch { sheetState.hide() }.invokeOnCompletion { showSearchSheet = false } },
+                    useProfilePreferences = useProfilePreferences,
+                    onTogglePreferences = { searchViewModel.toggleProfilePreferences(it) }
+                )
             }
         }
     }
@@ -415,7 +331,7 @@ fun EmptySearchResults(
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                
+
                 if (showClearButton) {
                     Spacer(modifier = Modifier.height(32.dp))
                     HardShadowButton(
@@ -459,9 +375,9 @@ fun FichaPlaceholder(rol: String, onClick: () -> Unit) {
                 )
                 Spacer(modifier = Modifier.height(24.dp))
                 Text(
-                    text = if (rol == "cuidador") 
+                    text = if (rol == "cuidador")
                         "Aun no puedes buscar a quien cuidar sin una ficha"
-                    else 
+                    else
                         "Aun no conocemos nada de el familiar que debe ser cuidado debes hacer una ficha",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,

@@ -50,20 +50,11 @@ import kotlinx.coroutines.launch
 fun ChatsScreen(
     userData: UserData,
     isDark: Boolean,
-    unreadCount: Int = 0,
-    pendingNotifs: Int = 0,
-    onToggleTheme: () -> Unit,
-    onLogout: () -> Unit,
-    onViewProfile: () -> Unit,
-    onViewFicha: () -> Unit,
-    onViewSettings: () -> Unit,
-    onTabSelected: (String) -> Unit,
     onUserClick: (String) -> Unit,
     onChatClick: (String, UserData) -> Unit,
     favoritosViewModel: FavoritosViewModel = androidx.lifecycle.viewmodel.compose.viewModel(),
     chatViewModel: ChatViewModel = androidx.lifecycle.viewmodel.compose.viewModel(),
     vinculosViewModel: VinculosViewModel = androidx.lifecycle.viewmodel.compose.viewModel(),
-    solicitudViewModel: com.example.cuidaleapp.viewmodel.SolicitudViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
     val chatList by chatViewModel.chatList.collectAsState()
     val typingUsers by chatViewModel.typingUsers.collectAsState()
@@ -77,9 +68,6 @@ fun ChatsScreen(
     var selectedTab by remember { mutableIntStateOf(0) }
     var chatSearchQuery by remember { mutableStateOf("") }
     
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val scope = rememberCoroutineScope()
-
     var showChatMenu by remember { mutableStateOf(false) }
     var chatToMenu by remember { mutableStateOf<ChatViewModel.ChatPreview?>(null) }
 
@@ -98,146 +86,102 @@ fun ChatsScreen(
         vinculosViewModel.loadVinculos()
     }
 
-    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-        ModalNavigationDrawer(
-            drawerState = drawerState,
-            drawerContent = {
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    ModalDrawerSheet(
-                        modifier = Modifier.fillMaxHeight().width(300.dp),
-                        drawerContainerColor = MaterialTheme.colorScheme.surface
-                    ) {
-                        CuidaleDrawerContent(
-                            nombre = userData.nombre,
-                            apellido = userData.apellido_pa,
-                            fotoUrl = userData.fotoUrl,
-                            rol = userData.rol,
-                            isDark = isDark,
-                            onToggleTheme = onToggleTheme,
-                            onProfileClick = { scope.launch { drawerState.close() }; onViewProfile() },
-                            onFichaClick = { scope.launch { drawerState.close() }; onViewFicha() },
-                            onSettingsClick = { scope.launch { drawerState.close() }; onViewSettings() },
-                            onLogoutClick = { scope.launch { drawerState.close() }; onLogout() },
-                            onCloseClick = { scope.launch { drawerState.close() } }
-                        )
-                    }
-                }
+    Column(modifier = Modifier.fillMaxSize()) {
+        CenterAlignedTopAppBar(
+            title = { Text("MENSAJES", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = Color.White) },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+        )
+
+        ScrollableTabRow(
+            selectedTabIndex = selectedTab,
+            containerColor = Color.Transparent,
+            edgePadding = 16.dp,
+            divider = {},
+            indicator = { tabPositions ->
+                Box(
+                    Modifier
+                        .tabIndicatorOffset(tabPositions[selectedTab])
+                        .height(3.dp)
+                        .padding(horizontal = 24.dp)
+                        .background(Color.White, CircleShape)
+                )
             }
         ) {
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                Scaffold(
-                    containerColor = if (isDark) Color(0xFF0D1B2A) else Color(0xFFF8F9FA),
-                    modifier = Modifier.fillMaxSize(),
-                    topBar = {
-                        CenterAlignedTopAppBar(
-                            title = { Text("MENSAJES", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black) },
-                            actions = {
-                                CuidaleCircularMenuButton(onClick = { scope.launch { drawerState.open() } })
-                            },
-                            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-                        )
-                    }
-                ) { innerPadding ->
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(innerPadding)
-                            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
-                    ) {
-                        ScrollableTabRow(
-                            selectedTabIndex = selectedTab,
-                            containerColor = Color.Transparent,
-                            edgePadding = 16.dp,
-                            divider = {},
-                            indicator = { tabPositions ->
-                                Box(
-                                    Modifier
-                                        .tabIndicatorOffset(tabPositions[selectedTab])
-                                        .height(3.dp)
-                                        .padding(horizontal = 24.dp)
-                                        .background(primaryColor, CircleShape)
-                                )
-                            }
-                        ) {
-                            val tabs = listOf("CHATS", "SOLICITUDES", "BLOQUEADOS")
-                            tabs.forEachIndexed { index, title ->
-                                val badgeCount = if (index == 1) {
-                                    misVinculos.count { it.estado == "pendiente" && it.solicitante != userData.uid }
-                                } else 0
-                                
-                                Tab(
-                                    selected = selectedTab == index,
-                                    onClick = { selectedTab = index },
-                                    text = { 
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(
-                                                text = title, 
-                                                style = MaterialTheme.typography.labelLarge,
-                                                fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
-                                                color = if (selectedTab == index) primaryColor else Color.Gray
-                                            )
-                                            if (badgeCount > 0) {
-                                                Spacer(Modifier.width(6.dp))
-                                                Badge { Text(badgeCount.toString()) }
-                                            }
-                                        }
-                                    }
-                                )
-                            }
-                        }
-
-                        if (selectedTab == 0) {
-                            OutlinedTextField(
-                                value = chatSearchQuery,
-                                onValueChange = { chatSearchQuery = it },
-                                placeholder = { Text("Buscar conversación...") },
-                                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                shape = RoundedCornerShape(16.dp),
-                                leadingIcon = { Icon(Icons.Default.Search, null) },
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    unfocusedContainerColor = if (isDark) Color.White.copy(alpha = 0.05f) else Color.White,
-                                    focusedContainerColor = if (isDark) Color.White.copy(alpha = 0.05f) else Color.White,
-                                    unfocusedBorderColor = Color.Transparent,
-                                    focusedBorderColor = primaryColor.copy(alpha = 0.5f)
-                                ),
-                                singleLine = true
+            val tabs = listOf("CHATS", "SOLICITUDES", "BLOQUEADOS")
+            tabs.forEachIndexed { index, title ->
+                val badgeCount = if (index == 1) {
+                    misVinculos.count { it.estado == "pendiente" && it.solicitante != userData.uid }
+                } else 0
+                
+                Tab(
+                    selected = selectedTab == index,
+                    onClick = { selectedTab = index },
+                    text = { 
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = title, 
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
+                                color = if (selectedTab == index) Color.White else Color.White.copy(alpha = 0.7f)
                             )
-                        }
-
-                        Box(Modifier.weight(1f)) {
-                            when (selectedTab) {
-                                0 -> ChatListSection(
-                                    chatList = filteredChatList,
-                                    typingUsers = typingUsers,
-                                    favoritos = favoritos,
-                                    bloqueados = bloqueados,
-                                    isDark = isDark,
-                                    onChatClick = onChatClick,
-                                    onLongClick = {
-                                        chatToMenu = it
-                                        showChatMenu = true
-                                    }
-                                )
-                                1 -> RequestListSection(
-                                    vinculos = misVinculos,
-                                    vinculosUsers = vinculosUsers,
-                                    myUid = userData.uid,
-                                    isDark = isDark,
-                                    onAccept = { vinculosViewModel.aceptarSolicitud(it) },
-                                    onDecline = { vinculosViewModel.rechazarSolicitud(it) }
-                                )
-                                2 -> BlockedListSection(
-                                    bloqueados = bloqueados,
-                                    managedUsers = managedUsers,
-                                    isDark = isDark,
-                                    onRemove = { favoritosViewModel.toggleBloqueo(it) },
-                                    onChatClick = onChatClick,
-                                    onUserClick = onUserClick
-                                )
+                            if (badgeCount > 0) {
+                                Spacer(Modifier.width(6.dp))
+                                Badge { Text(badgeCount.toString()) }
                             }
                         }
                     }
-                }
+                )
+            }
+        }
+
+        if (selectedTab == 0) {
+            OutlinedTextField(
+                value = chatSearchQuery,
+                onValueChange = { chatSearchQuery = it },
+                placeholder = { Text("Buscar conversación...") },
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                shape = RoundedCornerShape(16.dp),
+                leadingIcon = { Icon(Icons.Default.Search, null) },
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedContainerColor = if (isDark) Color.White.copy(alpha = 0.05f) else Color.White,
+                    focusedContainerColor = if (isDark) Color.White.copy(alpha = 0.05f) else Color.White,
+                    unfocusedBorderColor = Color.Transparent,
+                    focusedBorderColor = primaryColor.copy(alpha = 0.5f)
+                ),
+                singleLine = true
+            )
+        }
+
+        Box(Modifier.weight(1f)) {
+            when (selectedTab) {
+                0 -> ChatListSection(
+                    chatList = filteredChatList,
+                    typingUsers = typingUsers,
+                    favoritos = favoritos,
+                    bloqueados = bloqueados,
+                    isDark = isDark,
+                    onChatClick = onChatClick,
+                    onLongClick = {
+                        chatToMenu = it
+                        showChatMenu = true
+                    }
+                )
+                1 -> RequestListSection(
+                    vinculos = misVinculos,
+                    vinculosUsers = vinculosUsers,
+                    myUid = userData.uid,
+                    isDark = isDark,
+                    onAccept = { vinculosViewModel.aceptarSolicitud(it) },
+                    onDecline = { vinculosViewModel.rechazarSolicitud(it) }
+                )
+                2 -> BlockedListSection(
+                    bloqueados = bloqueados,
+                    managedUsers = managedUsers,
+                    isDark = isDark,
+                    onRemove = { favoritosViewModel.toggleBloqueo(it) },
+                    onChatClick = onChatClick,
+                    onUserClick = onUserClick
+                )
             }
         }
     }
@@ -358,7 +302,7 @@ fun ChatCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(modifier = Modifier.size(52.dp)) {
-                Surface(modifier = Modifier.fillMaxSize(), shape = CircleShape, color = Color.Gray.copy(alpha = 0.1f)) {
+                Surface(modifier = Modifier.fillMaxSize(), shape = CircleShape, color = Color.White.copy(alpha = 0.2f)) {
                     if (chat.otherUser.fotoUrl.isNotEmpty()) {
                         AsyncImage(
                             model = ImageRequest.Builder(context)
@@ -372,7 +316,7 @@ fun ChatCard(
                             placeholder = androidx.compose.ui.graphics.painter.ColorPainter(customColors.avatarBackground)
                         )
                     } else {
-                        Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center), tint = Color.Gray)
+                        Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center), tint = Color.White)
                     }
                 }
                 
@@ -482,7 +426,7 @@ fun ChatCardLikeRequest(user: UserData?, isDark: Boolean, onAccept: () -> Unit, 
     ) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.size(48.dp)) {
-                Surface(modifier = Modifier.fillMaxSize(), shape = CircleShape, color = Color.Gray.copy(alpha = 0.1f)) {
+                Surface(modifier = Modifier.fillMaxSize(), shape = CircleShape, color = Color.White.copy(alpha = 0.2f)) {
                     if (user?.fotoUrl?.isNotEmpty() == true) {
                         AsyncImage(
                             model = ImageRequest.Builder(context)
@@ -496,7 +440,7 @@ fun ChatCardLikeRequest(user: UserData?, isDark: Boolean, onAccept: () -> Unit, 
                             placeholder = androidx.compose.ui.graphics.painter.ColorPainter(customColors.avatarBackground)
                         )
                     } else {
-                        Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center), tint = Color.Gray)
+                        Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center), tint = Color.White)
                     }
                 }
             }
@@ -593,9 +537,9 @@ fun BlockedListSection(bloqueados: List<String>, managedUsers: List<UserData>, i
 fun EmptyState(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(icon, null, modifier = Modifier.size(64.dp), tint = Color.Gray.copy(alpha = 0.3f))
+            Icon(icon, null, modifier = Modifier.size(64.dp), tint = Color.White)
             Spacer(Modifier.height(16.dp))
-            Text(text, color = Color.Gray)
+            Text(text, color = Color.White)
         }
     }
 }

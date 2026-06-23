@@ -55,7 +55,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                         if (userData != null) {
                             if (userData.verificado) {
                                 userSession.saveUser(userData)
-                                _uiState.value = LoginUiState.Transition(userData)
+                                _uiState.value = LoginUiState.Success
                             } else {
                                 auth.signOut()
                                 userSession.clear()
@@ -75,7 +75,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                             val userData = query.documents[0].toObject(UserData::class.java)
                             if (userData != null && userData.verificado) {
                                 userSession.saveUser(userData)
-                                _uiState.value = LoginUiState.Transition(userData)
+                                _uiState.value = LoginUiState.Success
                             } else {
                                 auth.signOut()
                                 userSession.clear()
@@ -164,7 +164,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                         return@launch
                     }
                     userSession.saveUser(userData)
-                    _uiState.value = LoginUiState.Transition(userData)
+                    _uiState.value = LoginUiState.Success
                 } else {
                     _uiState.value = LoginUiState.Error("Error al recuperar datos")
                 }

@@ -43,10 +43,6 @@ import com.example.cuidaleapp.utils.ConnectivityObserver
 fun SolicitudesScreen(
     viewModel: SolicitudViewModel,
     userData: UserData,
-    unreadCount: Int,
-    pendingNotifs: Int,
-    pendingRequests: Int,
-    onTabSelected: (String) -> Unit,
     onCreateRequest: () -> Unit,
     onEditRequest: (String) -> Unit,
     onViewPatientDetails: (String) -> Unit,
@@ -62,7 +58,6 @@ fun SolicitudesScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     
     val pullToRefreshState = rememberPullToRefreshState()
-    val gradient = CuidaleThemeExtras.gradient
 
     var requestToFinish by remember { mutableStateOf<SolicitudCuidado?>(null) }
 
@@ -86,18 +81,14 @@ fun SolicitudesScreen(
         )
     }
 
-    Scaffold(
-        topBar = { ConnectivityBanner() },
-        containerColor = Color.Transparent
-    ) { innerPadding ->
+    Column(modifier = Modifier.fillMaxSize()) {
+        ConnectivityBanner()
+        
         PullToRefreshBox(
             state = pullToRefreshState,
             isRefreshing = isLoading,
             onRefresh = { if (isOnline) viewModel.refreshData() },
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Brush.verticalGradient(listOf(gradient.top, gradient.bottom)))
-                .padding(innerPadding)
+            modifier = Modifier.weight(1f)
         ) {
             Column(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
                 Text(
@@ -332,7 +323,7 @@ fun BaseSolicitudCard(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(50.dp).clip(CircleShape).background(Color.Gray.copy(alpha = 0.1f))) {
+                Box(modifier = Modifier.size(50.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.2f))) {
                     if (imageUrl.isNotEmpty()) {
                         AsyncImage(
                             model = ImageRequest.Builder(context)
@@ -346,7 +337,7 @@ fun BaseSolicitudCard(
                             contentScale = ContentScale.Crop
                         )
                     } else {
-                        Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center), tint = Color.Gray)
+                        Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center), tint = Color.White)
                     }
                 }
                 Spacer(modifier = Modifier.width(12.dp))
@@ -477,7 +468,7 @@ fun PostulacionStatusCard(solicitud: SolicitudCuidado, estado: String, isOnline:
     HardShadowPanel(backgroundColor = Color.White.copy(alpha = 0.9f), shadowColor = Color.Black.copy(alpha = 0.05f)) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(44.dp).clip(CircleShape).background(Color.Gray.copy(alpha = 0.1f))) {
+                Box(modifier = Modifier.size(44.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.2f))) {
                     if (solicitud.fotoPaciente.isNotEmpty()) {
                         AsyncImage(
                             model = ImageRequest.Builder(context)
@@ -491,7 +482,7 @@ fun PostulacionStatusCard(solicitud: SolicitudCuidado, estado: String, isOnline:
                             contentScale = ContentScale.Crop
                         )
                     } else {
-                        Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center), tint = Color.Gray)
+                        Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center), tint = Color.White)
                     }
                 }
                 Spacer(modifier = Modifier.width(12.dp))
@@ -536,9 +527,9 @@ fun PostulacionStatusCard(solicitud: SolicitudCuidado, estado: String, isOnline:
 fun EmptyPlaceholder(message: String) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.Default.AssignmentLate, null, modifier = Modifier.size(64.dp), tint = Color.White.copy(alpha = 0.3f))
+            Icon(Icons.Default.AssignmentLate, null, modifier = Modifier.size(64.dp), tint = Color.White)
             Spacer(modifier = Modifier.height(16.dp))
-            Text(message, color = Color.White.copy(alpha = 0.6f))
+            Text(message, color = Color.White)
         }
     }
 }

@@ -130,9 +130,9 @@ fun HistorialScreen(
             if (sortedHistorial.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.History, null, modifier = Modifier.size(64.dp), tint = Color.Gray.copy(alpha = 0.3f))
+                        Icon(Icons.Default.History, null, modifier = Modifier.size(64.dp), tint = Color.White)
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text("No hay servicios finalizados en el historial.", color = Color.Gray)
+                        Text("No hay servicios finalizados en el historial.", color = Color.White)
                     }
                 }
             } else {

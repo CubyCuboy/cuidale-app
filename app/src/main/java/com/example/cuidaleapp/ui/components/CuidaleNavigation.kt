@@ -53,10 +53,6 @@ fun CuidaleDrawerContent(nombre: String, apellido: String, fotoUrl: String, rol:
         }
         HorizontalDivider(modifier = Modifier.padding(bottom = 24.dp), color = colors.outlineVariant.copy(alpha = 0.5f))
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-            CuidaleAppLogo(
-                isDark = isDark,
-                modifier = Modifier.size(80.dp).padding(bottom = 16.dp)
-            )
             Box(modifier = Modifier.size(100.dp).clip(CircleShape).background(customColors.avatarBackground).border(2.dp, accentColor.copy(alpha = 0.3f), CircleShape), contentAlignment = Alignment.Center) {
                 if (fotoUrl.isNotEmpty() && !fotoUrl.startsWith("res:")) {
                     AsyncImage(
