@@ -55,6 +55,7 @@ fun SocialManagementScreen(
     }
 
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             Column {
                 ConnectivityBanner()
@@ -66,12 +67,12 @@ fun SocialManagementScreen(
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.background
+                        containerColor = Color.Transparent
                     )
                 )
                 ScrollableTabRow(
                     selectedTabIndex = selectedTab,
-                    containerColor = MaterialTheme.colorScheme.background,
+                    containerColor = Color.Transparent,
                     contentColor = MaterialTheme.colorScheme.primary,
                     edgePadding = 16.dp,
                     indicator = { tabPositions ->
@@ -109,7 +110,6 @@ fun SocialManagementScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .background(MaterialTheme.colorScheme.background)
         ) {
             when (selectedTab) {
                 0 -> {

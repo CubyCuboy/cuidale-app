@@ -86,7 +86,7 @@ fun ChatsScreen(
         vinculosViewModel.loadVinculos()
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
         CenterAlignedTopAppBar(
             title = { Text("MENSAJES", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = Color.White) },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)

@@ -100,7 +100,7 @@ fun LoginScreen(
                     isDark = isDark,
                     onToggleTheme = onToggleTheme,
                     state = uiState,
-                    onLogin = { id, pass -> viewModel.login(id, pass) },
+                    onLogin = { id, pass, keep -> viewModel.login(id, pass, keep) },
                     onClearError = { viewModel.clearError() },
                     onForgotPassword = onForgotPassword,
                     onRegister = onRegister,
@@ -119,7 +119,7 @@ fun LoginForm(
     isDark: Boolean,
     onToggleTheme: () -> Unit,
     state: LoginUiState,
-    onLogin: (String, String) -> Unit,
+    onLogin: (String, String, Boolean) -> Unit,
     onClearError: () -> Unit,
     onForgotPassword: () -> Unit,
     onRegister: () -> Unit,
@@ -265,7 +265,7 @@ fun LoginForm(
                         keyboardActions = androidx.compose.foundation.text.KeyboardActions(
                             onDone = {
                                 if (correoOrRut.isNotBlank() && password.isNotBlank()) {
-                                    onLogin(correoOrRut, password)
+                                    onLogin(correoOrRut, password, keepSession)
                                 }
                             }
                         )
@@ -320,7 +320,7 @@ fun LoginForm(
                         if (needsVerification) {
                             onVerify(correoOrRut)
                         } else {
-                            onLogin(correoOrRut, password)
+                            onLogin(correoOrRut, password, keepSession)
                         }
                     }
                 }
@@ -332,7 +332,10 @@ fun LoginForm(
                 text = stringResource(R.string.login_forgot_password),
                 style = typography.labelLarge,
                 color = onGradientText,
-                modifier = Modifier.clickable { onForgotPassword() }
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { onForgotPassword() }
+                    .padding(8.dp)
             )
 
             Spacer(modifier = Modifier.height(32.dp))

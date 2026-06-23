@@ -38,7 +38,6 @@ fun SearchProfileScreen(
     onUserClick: (String) -> Unit
 ) {
     val isOnline by ConnectivityObserver.isOnline.collectAsState()
-    val gradient = CuidaleThemeExtras.gradient
     val customColors = CuidaleThemeExtras.customColors
     
     var searchQuery by remember { mutableStateOf("") }
@@ -73,9 +72,7 @@ fun SearchProfileScreen(
     }
 
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(gradient.top, gradient.bottom)))
+        modifier = Modifier.fillMaxSize()
     ) {
         Column(
             modifier = Modifier

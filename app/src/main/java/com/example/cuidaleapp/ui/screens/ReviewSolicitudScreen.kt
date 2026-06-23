@@ -128,11 +128,14 @@ fun ReviewSolicitudScreen(
     }
 
     Scaffold(
-        modifier = Modifier.navigationBarsPadding(),
+        modifier = Modifier.fillMaxSize(),
+        containerColor = Color.Transparent,
         bottomBar = {
             Surface(
                 color = Color.Transparent,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp)
+                modifier = Modifier.fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(horizontal = 24.dp, vertical = 16.dp)
             ) {
                 if (isAccepted) {
                     HardShadowButton(
@@ -180,7 +183,7 @@ fun ReviewSolicitudScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
+                    containerColor = Color.Transparent,
                     titleContentColor = MaterialTheme.colorScheme.onSurface
                 )
             )
@@ -190,7 +193,6 @@ fun ReviewSolicitudScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .background(if (isDark) Color(0xFF0D1B2A) else Color(0xFFF8F9FA))
                 .verticalScroll(scrollState),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {

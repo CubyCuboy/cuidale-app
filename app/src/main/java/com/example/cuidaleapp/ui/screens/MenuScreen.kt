@@ -3,6 +3,7 @@ package com.example.cuidaleapp.ui.screens
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -99,7 +100,7 @@ fun MenuScreen(
     }
 
     Box(
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.fillMaxSize().statusBarsPadding()
     ) {
         Column(
             modifier = Modifier
@@ -109,24 +110,25 @@ fun MenuScreen(
             val listTitle = if (userData.rol == "cuidador") "Pacientes" else "Cuidadores"
 
             Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = listTitle,
-                    style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
-                    color = Color.White
-                )
-                if (isOnline) {
-                    IconButton(
-                        onClick = { searchViewModel.refresh() },
-                        modifier = Modifier.background(Color.White.copy(alpha = 0.1f), CircleShape)
-                    ) {
-                        Icon(Icons.Default.Refresh, "Recargar", tint = Color.White)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (isOnline) {
+                        IconButton(
+                            onClick = { searchViewModel.refresh() },
+                            modifier = Modifier.size(32.dp).background(Color.White.copy(alpha = 0.1f), CircleShape)
+                        ) {
+                            Icon(Icons.Default.Refresh, "Recargar", tint = Color.White, modifier = Modifier.size(18.dp))
+                        }
+                        Spacer(Modifier.width(12.dp))
                     }
-                } else {
-                    Icon(Icons.Default.WifiOff, null, tint = Color.White.copy(alpha = 0.5f))
+                    Text(
+                        text = listTitle,
+                        style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White
+                    )
                 }
             }
 
@@ -151,68 +153,81 @@ fun MenuScreen(
                     onRefresh = { if (isOnline) searchViewModel.refresh() },
                     modifier = Modifier.weight(1f)
                 ) {
-                    when (searchState) {
-                        is SearchState.Loading -> {
-                            // No mostramos nada aquí para evitar parpadeo con la pantalla de bienvenida
-                            Spacer(Modifier.fillMaxSize())
-                        }
-                        is SearchState.Success -> {
-                            val resultsList = (searchState as SearchState.Success).results
-                            val isLoadingMore = (searchState as SearchState.Success).isLoadingMore
-
-                            if (resultsList.isEmpty()) {
-                                EmptySearchResults(
-                                    title = if (selectedRegion.isNotEmpty() || selectedCommunes.isNotEmpty())
-                                        "Sin resultados para estos filtros"
-                                    else "No hay $listTitle disponibles",
-                                    subtitle = "Prueba cambiando la ubicación o los filtros de búsqueda.",
-                                    onClearFilters = { searchViewModel.clearFilters() },
-                                    showClearButton = selectedRegion.isNotEmpty() || selectedCommunes.isNotEmpty()
-                                )
-                            } else {
+                    AnimatedContent(
+                        targetState = searchState,
+                        transitionSpec = {
+                            fadeIn(tween(400)) togetherWith fadeOut(tween(400))
+                        },
+                        label = "searchContentTransition"
+                    ) { state ->
+                        when (state) {
+                            is SearchState.Loading -> {
                                 LazyColumn(
-                                    state = listState,
                                     verticalArrangement = Arrangement.spacedBy(16.dp),
-                                    contentPadding = PaddingValues(bottom = 80.dp),
+                                    contentPadding = PaddingValues(bottom = 16.dp),
                                     modifier = Modifier.fillMaxSize()
                                 ) {
-                                    items(resultsList) { result ->
-                                        CuidaleUserCard(
-                                            nombre = result.nombre,
-                                            apellido = result.apellido_pa,
-                                            fotoUrl = result.fotoUrl,
-                                            comuna = result.comuna,
-                                            comunas = result.comunas,
-                                            tipo = result.tipo,
-                                            edad = result.edad,
-                                            nivelDependencia = result.nivel_dependencia,
-                                            especializacion = result.especializacion,
-                                            horarios = result.horarios,
-                                            isNew = result.isNew,
-                                            onClick = { onUserClick(result.id) }
-                                        )
-                                    }
+                                    items(5) { SkeletonUserCard() }
+                                }
+                            }
+                            is SearchState.Success -> {
+                                val resultsList = state.results
+                                val isLoadingMore = state.isLoadingMore
 
-                                    if (isLoadingMore) {
-                                        item {
-                                            Box(
-                                                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                                if (resultsList.isEmpty()) {
+                                    EmptySearchResults(
+                                        title = if (selectedRegion.isNotEmpty() || selectedCommunes.isNotEmpty())
+                                            "Sin resultados para estos filtros"
+                                        else "No hay $listTitle disponibles",
+                                        subtitle = "Prueba cambiando la ubicación o los filtros de búsqueda.",
+                                        onClearFilters = { searchViewModel.clearFilters() },
+                                        showClearButton = selectedRegion.isNotEmpty() || selectedCommunes.isNotEmpty()
+                                    )
+                                } else {
+                                    LazyColumn(
+                                        state = listState,
+                                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                                        contentPadding = PaddingValues(bottom = 16.dp),
+                                        modifier = Modifier.fillMaxSize()
+                                    ) {
+                                        items(resultsList) { result ->
+                                            CuidaleUserCard(
+                                                nombre = result.nombre,
+                                                apellido = result.apellido_pa,
+                                                fotoUrl = result.fotoUrl,
+                                                comuna = result.comuna,
+                                                comunas = result.comunas,
+                                                tipo = result.tipo,
+                                                edad = result.edad,
+                                                nivelDependencia = result.nivel_dependencia,
+                                                especializacion = result.especializacion,
+                                                horarios = result.horarios,
+                                                isNew = result.isNew,
+                                                onClick = { onUserClick(result.id) }
+                                            )
+                                        }
+
+                                        if (isLoadingMore) {
+                                            item {
+                                                Box(
+                                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
-                        }
-                        is SearchState.Error -> {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = (searchState as SearchState.Error).message,
-                                    color = MaterialTheme.colorScheme.error,
-                                    textAlign = TextAlign.Center
-                                )
+                            is SearchState.Error -> {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = state.message,
+                                        color = MaterialTheme.colorScheme.error,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
                             }
                         }
                     }

@@ -44,7 +44,13 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         val currentUser = auth.currentUser
-        if (currentUser != null) {
+        val keepSession = prefs.getBoolean("keep_session", true)
+        
+        if (currentUser != null && !keepSession) {
+            auth.signOut()
+            userSession.clear()
+            _uiState.value = LoginUiState.Idle
+        } else if (currentUser != null) {
             viewModelScope.launch {
                 try {
                     // Acceso directo por UID es más eficiente y seguro con las reglas de Firestore
@@ -101,11 +107,13 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun login(identifier: String, contrasena: String) {
+    fun login(identifier: String, contrasena: String, keepSession: Boolean) {
         if (identifier.isBlank() || contrasena.isBlank()) {
             _uiState.value = LoginUiState.Error("Campos vacíos obligatorios")
             return
         }
+
+        prefs.edit().putBoolean("keep_session", keepSession).apply()
 
         viewModelScope.launch {
             _uiState.value = LoginUiState.Loading

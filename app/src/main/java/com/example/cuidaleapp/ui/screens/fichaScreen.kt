@@ -90,9 +90,7 @@ fun FichaScreen(
         modifier = Modifier.fillMaxSize()
     ) {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+            modifier = Modifier.fillMaxSize()
         ) {
             Column(
                 modifier = Modifier
@@ -103,16 +101,15 @@ fun FichaScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(140.dp)
                         .background(if (isOnline) accentColor else Color.Gray)
+                        .statusBarsPadding()
                 ) {
                     Column {
                         ConnectivityBanner()
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .windowInsetsPadding(WindowInsets.safeDrawing)
-                                .padding(8.dp),
+                                .padding(horizontal = 8.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             IconButton(

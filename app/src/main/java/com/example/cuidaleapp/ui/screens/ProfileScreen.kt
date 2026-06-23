@@ -69,6 +69,7 @@ fun ProfileScreen(
 
     Scaffold(
         topBar = { ConnectivityBanner() },
+        containerColor = Color.Transparent,
         modifier = Modifier.fillMaxSize()
     ) { innerPadding ->
         PullToRefreshBox(
@@ -87,7 +88,6 @@ fun ProfileScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background)
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
             ) {
                 Column(
@@ -99,14 +99,13 @@ fun ProfileScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(140.dp)
                             .background(accentColor)
+                            .statusBarsPadding()
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .windowInsetsPadding(WindowInsets.safeDrawing)
-                                .padding(8.dp),
+                                .padding(horizontal = 8.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             IconButton(
@@ -150,11 +149,16 @@ fun ProfileScreen(
                             tonalElevation = 8.dp
                         ) {
                             if (userData.fotoUrl.isNotEmpty()) {
-                                AsyncImage(
+                                coil3.compose.SubcomposeAsyncImage(
                                     model = userData.fotoUrl,
                                     contentDescription = "Profile",
                                     modifier = Modifier.fillMaxSize().clip(CircleShape),
-                                    contentScale = ContentScale.Crop
+                                    contentScale = ContentScale.Crop,
+                                    loading = {
+                                        Box(Modifier.fillMaxSize().background(shimmerBrush()), contentAlignment = Alignment.Center) {
+                                            CircularProgressIndicator(modifier = Modifier.size(32.dp), strokeWidth = 3.dp, color = accentColor)
+                                        }
+                                    }
                                 )
                             } else {
                                 Box(

@@ -81,7 +81,7 @@ fun SolicitudesScreen(
         )
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
         ConnectivityBanner()
         
         PullToRefreshBox(
@@ -95,7 +95,7 @@ fun SolicitudesScreen(
                     text = "SOLICITUDES",
                     style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
                     color = Color.White,
-                    modifier = Modifier.padding(vertical = 16.dp)
+                    modifier = Modifier.padding(top = 8.dp, bottom = 16.dp)
                 )
 
                 Row(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.End) {

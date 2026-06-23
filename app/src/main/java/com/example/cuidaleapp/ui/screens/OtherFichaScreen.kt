@@ -8,6 +8,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
+import coil3.compose.SubcomposeAsyncImage
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.CompositingStrategy
@@ -199,7 +200,6 @@ fun OtherFichaScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .background(MaterialTheme.colorScheme.background)
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
         ) {
             if (otherProfileState is ProfileViewModel.RemoteState.Loading) {
@@ -241,14 +241,13 @@ fun OtherFichaScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(140.dp)
                             .background(if (isOnline) accentColor else Color.Gray)
+                            .statusBarsPadding()
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .windowInsetsPadding(WindowInsets.safeDrawing)
-                                .padding(8.dp),
+                                .padding(horizontal = 8.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             IconButton(
@@ -305,7 +304,7 @@ fun OtherFichaScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 if (otherUserData?.fotoUrl?.isNotEmpty() == true && !otherUserData?.fotoUrl?.startsWith("res:")!!) {
-                                    AsyncImage(
+                                    coil3.compose.SubcomposeAsyncImage(
                                         model = ImageRequest.Builder(context)
                                             .data(otherUserData?.fotoUrl)
                                             .crossfade(true)
@@ -315,7 +314,11 @@ fun OtherFichaScreen(
                                         contentDescription = "Profile",
                                         modifier = Modifier.fillMaxSize().clip(CircleShape),
                                         contentScale = ContentScale.Crop,
-                                        placeholder = androidx.compose.ui.graphics.painter.ColorPainter(customColors.avatarBackground)
+                                        loading = {
+                                            Box(Modifier.fillMaxSize().background(shimmerBrush()), contentAlignment = Alignment.Center) {
+                                                CircularProgressIndicator(modifier = Modifier.size(32.dp), strokeWidth = 3.dp, color = accentColor)
+                                            }
+                                        }
                                     )
                                 } else {
                                     Icon(

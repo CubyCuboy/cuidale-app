@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.animation.*
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -35,6 +36,7 @@ import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.utils.AppNavigationState
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 sealed class MenuNavigation {
     object Main : MenuNavigation()
@@ -204,384 +206,393 @@ class MenuActivity : ComponentActivity() {
                 }
 
                 val isAppReady = userData.uid.isNotEmpty() && userData.rol.isNotEmpty() && (searchState !is SearchState.Loading || isSearchRefreshing)
+                var showSplash by remember { mutableStateOf(true) }
 
-                if (!isAppReady) {
-                    CuidaleWelcomeLoading()
-                } else {
-                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                        ModalNavigationDrawer(
-                            drawerState = drawerState,
-                            drawerContent = {
-                                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                                    ModalDrawerSheet(
-                                        modifier = Modifier.fillMaxHeight().width(320.dp),
-                                        drawerContainerColor = Color.Transparent,
-                                        drawerTonalElevation = 0.dp
-                                    ) {
-                                        CuidaleDrawerContent(
-                                            nombre = userData.nombre,
-                                            apellido = userData.apellido_pa,
-                                            fotoUrl = userData.fotoUrl,
-                                            rol = userData.rol,
-                                            isDark = isDark,
-                                            onToggleTheme = { menuViewModel.toggleTheme() },
-                                            onProfileClick = {
-                                                scope.launch { drawerState.close() }
-                                                currentScreen = Profile
-                                            },
-                                            onFichaClick = {
-                                                scope.launch { drawerState.close() }
-                                                currentScreen = Ficha(startInEditMode = false, returnTo = currentScreen)
-                                            },
-                                            onSettingsClick = {
-                                                scope.launch { drawerState.close() }
-                                                currentScreen = Settings(returnTo = currentScreen)
-                                            },
-                                            onLogoutClick = {
-                                                scope.launch { drawerState.close() }
-                                                menuViewModel.logout()
-                                            },
-                                            onCloseClick = {
-                                                scope.launch { drawerState.close() }
-                                            }
-                                        )
-                                    }
-                                }
-                            },
-                            gesturesEnabled = currentScreen == Main || currentScreen == Profile || 
-                                             currentScreen == Chats || currentScreen == Notifications || 
-                                             currentScreen == Requests
-                        ) {
-                            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                                Scaffold(
-                                    topBar = {
-                                        val showMenuButton = currentScreen == Main || currentScreen == Chats || 
-                                                           currentScreen == Notifications || currentScreen == Requests
-                                        
-                                        if (showMenuButton) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                                                    .windowInsetsPadding(WindowInsets.statusBars)
-                                            ) {
-                                                CuidaleCircularMenuButton(
-                                                    onClick = { scope.launch { drawerState.open() } },
-                                                    modifier = Modifier.align(Alignment.CenterEnd)
-                                                )
-                                            }
-                                        }
-                                    },
-                                    bottomBar = {
-                                        val showBottomBar = currentScreen == Main || currentScreen == Profile || 
-                                                          currentScreen == Chats || currentScreen == Notifications || 
-                                                          currentScreen == Requests
-                                        
-                                        if (showBottomBar) {
-                                            CuidaleBottomBar(
-                                                selectedTab = when(currentScreen) {
-                                                    Main -> "home"
-                                                    Chats -> "chats"
-                                                    Notifications -> "notifications"
-                                                    Requests -> "requests"
-                                                    else -> "none"
+                LaunchedEffect(isAppReady) {
+                    if (isAppReady) {
+                        delay(1200)
+                        showSplash = false
+                    }
+                }
+
+                Box(Modifier.fillMaxSize()) {
+                    if (!showSplash) {
+                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                            ModalNavigationDrawer(
+                                drawerState = drawerState,
+                                drawerContent = {
+                                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                                        ModalDrawerSheet(
+                                            modifier = Modifier.fillMaxHeight().width(320.dp),
+                                            drawerContainerColor = Color.Transparent,
+                                            drawerTonalElevation = 0.dp
+                                        ) {
+                                            CuidaleDrawerContent(
+                                                nombre = userData.nombre,
+                                                apellido = userData.apellido_pa,
+                                                fotoUrl = userData.fotoUrl,
+                                                rol = userData.rol,
+                                                isDark = isDark,
+                                                onToggleTheme = { menuViewModel.toggleTheme() },
+                                                onProfileClick = {
+                                                    scope.launch { drawerState.close() }
+                                                    currentScreen = Profile
                                                 },
-                                                unreadCount = unreadCount,
-                                                pendingNotifs = pendingNotifs,
-                                                pendingRequests = pendingRequests,
-                                                onTabSelected = { tab ->
-                                                    currentScreen = when (tab) {
-                                                        "chats" -> Chats
-                                                        "notifications" -> Notifications
-                                                        "requests" -> Requests
-                                                        "home" -> Main
-                                                        else -> currentScreen
-                                                    }
+                                                onFichaClick = {
+                                                    scope.launch { drawerState.close() }
+                                                    currentScreen = Ficha(startInEditMode = false, returnTo = currentScreen)
+                                                },
+                                                onSettingsClick = {
+                                                    scope.launch { drawerState.close() }
+                                                    currentScreen = Settings(returnTo = currentScreen)
+                                                },
+                                                onLogoutClick = {
+                                                    scope.launch { drawerState.close() }
+                                                    menuViewModel.logout()
+                                                },
+                                                onCloseClick = {
+                                                    scope.launch { drawerState.close() }
                                                 }
                                             )
                                         }
-                                    },
-                                    containerColor = Color.Transparent
-                                ) { innerPadding ->
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .background(Brush.verticalGradient(listOf(CuidaleThemeExtras.gradient.top, CuidaleThemeExtras.gradient.bottom)))
-                                            .padding(innerPadding)
-                                    ) {
-                                        AnimatedContent(
-                                            targetState = currentScreen,
-                                            modifier = Modifier.fillMaxSize(),
-                                            transitionSpec = {
-                                                val duration = 500
-                                                val initialWeight = getScreenWeight(initialState)
-                                                val targetWeight = getScreenWeight(targetState)
-                                                
-                                                val isGoingBack = when {
-                                                    initialState is Chat && targetState == Chats -> true
-                                                    initialState is ReviewRequest && targetState == Requests -> true
-                                                    initialState is OtherFicha && (targetState == Main || targetState == Search) -> true
-                                                    initialState == EditProfile && targetState == Profile -> true
-                                                    initialState is Ficha && targetState == Profile -> true
-                                                    initialState is Settings && targetState == Profile -> true
-                                                    initialWeight != 10 && targetWeight != 10 -> targetWeight < initialWeight
-                                                    initialWeight == 10 && targetWeight != 10 -> true
-                                                    else -> false
-                                                }
-
-                                                val enterTransition = if (isGoingBack) {
-                                                    slideInHorizontally(tween(duration, easing = FastOutSlowInEasing)) { -it } + 
-                                                    fadeIn(tween(duration)) +
-                                                    scaleIn(initialScale = 0.92f, animationSpec = tween(duration, easing = FastOutSlowInEasing))
-                                                } else {
-                                                    slideInHorizontally(tween(duration, easing = FastOutSlowInEasing)) { it } + 
-                                                    fadeIn(tween(duration)) +
-                                                    scaleIn(initialScale = 1.08f, animationSpec = tween(duration, easing = FastOutSlowInEasing))
-                                                }
-
-                                                val exitTransition = if (isGoingBack) {
-                                                    slideOutHorizontally(tween(duration, easing = FastOutSlowInEasing)) { it } + 
-                                                    fadeOut(tween(duration)) +
-                                                    scaleOut(targetScale = 1.08f, animationSpec = tween(duration, easing = FastOutSlowInEasing))
-                                                } else {
-                                                    slideOutHorizontally(tween(duration, easing = FastOutSlowInEasing)) { -it } + 
-                                                    fadeOut(tween(duration)) +
-                                                    scaleOut(targetScale = 0.92f, animationSpec = tween(duration, easing = FastOutSlowInEasing))
-                                                }
-
-                                                enterTransition togetherWith exitTransition
-                                            },
-                                            label = "MenuNavigationAnimation"
-                                        ) { cs ->
-                                            when (cs) {
-                                                Main -> {
-                                                    MenuScreen(
-                                                        userData = userData,
-                                                        searchViewModel = searchViewModel,
-                                                        fichaState = fichaState,
-                                                        onViewFicha = { currentScreen = Ficha(startInEditMode = false, returnTo = Main) },
-                                                        onUserClick = { uid -> currentScreen = OtherFicha(uid, returnTo = Main) }
-                                                    )
-                                                }
-                                                Profile -> {
-                                                    ProfileScreen(
-                                                        viewModel = profileViewModel,
-                                                        fichaViewModel = fichaViewModel,
-                                                        onNavigateBack = { currentScreen = Main },
-                                                        onSettingsClick = { currentScreen = Settings() },
-                                                        onSocialClick = { currentScreen = SocialManagement },
-                                                        onTabSelected = { tab ->
-                                                            currentScreen = when (tab) {
-                                                                "chats" -> Chats
-                                                                "notifications" -> Notifications
-                                                                "requests" -> Requests
-                                                                "home" -> Main
-                                                                else -> Profile
-                                                            }
-                                                        },
-                                                        unreadCount = unreadCount,
-                                                        pendingNotifs = pendingNotifs,
-                                                        solicitudViewModel = solicitudViewModel
-                                                    )
-                                                }
-                                                EditProfile -> {
-                                                    EditProfileScreen(
-                                                        viewModel = profileViewModel,
-                                                        onNavigateBack = { currentScreen = Profile }
-                                                    )
-                                                }
-                                                is Ficha -> {
-                                                    FichaScreen(
-                                                        viewModel = fichaViewModel,
-                                                        profileViewModel = profileViewModel,
-                                                        startInEditMode = cs.startInEditMode,
-                                                        onNavigateBack = { currentScreen = cs.returnTo },
-                                                        onNavigateToTasks = { currentScreen = Requests }
-                                                    )
-                                                }
-                                                Search -> {
-                                                    SearchProfileScreen(
-                                                        onNavigateBack = { currentScreen = Main },
-                                                        onUserClick = { uid -> currentScreen = OtherFicha(uid, returnTo = Search) }
-                                                    )
-                                                }
-                                                is Settings -> {
-                                                    SettingsScreen(
-                                                        viewModel = profileViewModel,
-                                                        isDark = isDark,
-                                                        onBack = { currentScreen = cs.returnTo },
-                                                        onLogoutClick = { menuViewModel.logout() },
-                                                        onResetPass = { }
-                                                    )
-                                                }
-                                                Chats -> {
-                                                    ChatsScreen(
-                                                        userData = userData,
-                                                        isDark = isDark,
-                                                        onUserClick = { uid -> currentScreen = OtherFicha(uid, returnTo = Chats) },
-                                                        onChatClick = { chatId, otherUser ->
-                                                            currentScreen = Chat(chatId, otherUser.uid, otherUser, returnTo = Chats)
-                                                        },
-                                                        favoritosViewModel = favoritosViewModel,
-                                                        chatViewModel = chatViewModel,
-                                                        vinculosViewModel = vinculosViewModel
-                                                    )
-                                                }
-                                                Notifications -> {
-                                                    NotificationsScreen(
-                                                        userData = userData,
-                                                        isDark = isDark,
-                                                        onNotificationClick = { notification ->
-                                                            when (notification.tipo) {
-                                                                "solicitud_vinculo" -> currentScreen = OtherFicha(uid = notification.emisor, returnTo = Notifications)
-                                                                "vinculo_aceptado", "nuevo_mensaje" -> {
-                                                                    val chatId = notification.data["chatId"] ?: ""
-                                                                    if (chatId.isNotEmpty()) currentScreen = Chat(chatId = chatId, otherUid = notification.emisor, returnTo = Notifications)
-                                                                }
-                                                                "nuevo_usuario" -> currentScreen = OtherFicha(uid = notification.emisor, returnTo = Notifications)
-                                                                "recordatorio_tarea", "tarea_atrasada", "tarea_finalizada", "tarea_postergada" -> {
-                                                                    currentScreen = Requests
-                                                                }
-                                                                "turno_finalizado" -> {
-                                                                    currentScreen = Requests
-                                                                }
-                                                            }
-                                                        }
-                                                    )
-                                                }
-                                                Requests -> {
-                                                    SolicitudesScreen(
-                                                        viewModel = solicitudViewModel,
-                                                        userData = userData,
-                                                        onCreateRequest = { currentScreen = CreateRequest(null) },
-                                                        onEditRequest = { id -> currentScreen = CreateRequest(id) },
-                                                        onViewPatientDetails = { uid ->
-                                                            val solAceptada = solicitudesAceptadas.find { it.pacienteFichaId == uid }
-                                                            if (solAceptada != null) currentScreen = ReviewRequest(solAceptada, returnTo = Requests)
-                                                            else {
-                                                                val pendingPair = solicitudViewModel.misPostulaciones.value.find { it.first.pacienteFichaId == uid }
-                                                                if (pendingPair != null) currentScreen = ReviewRequest(pendingPair.first, returnTo = Requests)
-                                                                else currentScreen = OtherFicha(uid, returnTo = Requests)
-                                                            }
-                                                        },
-                                                        onViewCaregiverProfile = { uid -> currentScreen = OtherFicha(uid, returnTo = Requests) },
-                                                        onViewTasks = { sol -> currentScreen = ActiveTasks(sol) },
-                                                        onNavigateToHistory = { currentScreen = History }
-                                                    )
-                                                }
-                                                is CreateRequest -> {
-                                                    CreateSolicitudScreen(
-                                                        requestId = cs.requestId,
-                                                        viewModel = solicitudViewModel,
-                                                        fichaViewModel = fichaViewModel,
-                                                        onNavigateBack = { currentScreen = Requests }
-                                                    )
-                                                }
-                                                is ManageApplications -> {
-                                                    PostulacionesScreen(
-                                                        solicitudId = cs.solicitudId,
-                                                        viewModel = solicitudViewModel,
-                                                        onNavigateBack = { currentScreen = Requests },
-                                                        onViewCaregiver = { uid -> currentScreen = OtherFicha(uid, returnTo = cs) }
-                                                    )
-                                                }
-                                                is ReviewRequest -> {
-                                                    ReviewSolicitudScreen(
-                                                        solicitud = cs.solicitud,
-                                                        viewModel = solicitudViewModel,
-                                                        isAccepted = (userData.rol == "cuidador" && cs.solicitud.cuidadorUid == userData.uid) || (userData.rol == "representante" && cs.solicitud.estado == "cerrada"),
-                                                        onNavigateBack = { currentScreen = Requests },
-                                                        onViewFullFicha = { uid -> currentScreen = OtherFicha(uid, returnTo = ReviewRequest(cs.solicitud)) },
-                                                        onRedirectToRequests = { currentScreen = Requests },
-                                                        onNavigateToChat = { chatId, otherUid -> 
-                                                            currentScreen = Chat(chatId, otherUid, returnTo = ReviewRequest(cs.solicitud))
-                                                        }
-                                                    )
-                                                }
-                                                is Chat -> {
-                                                    var otherUserData by remember { mutableStateOf(cs.otherUser) }
-                                                    LaunchedEffect(cs.otherUid) {
-                                                        if (otherUserData == null) {
-                                                            val doc = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                                                                .collection("usuarios").document(cs.otherUid).get().await()
-                                                            otherUserData = doc.toObject(UserData::class.java)
+                                    }
+                                },
+                                gesturesEnabled = currentScreen == Main || currentScreen == Profile || 
+                                                 currentScreen == Chats || currentScreen == Notifications || 
+                                                 currentScreen == Requests
+                            ) {
+                                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                                    Scaffold(
+                                        bottomBar = {
+                                            val showBottomBar = currentScreen == Main || currentScreen == Profile || 
+                                                              currentScreen == Chats || currentScreen == Notifications || 
+                                                              currentScreen == Requests
+                                            
+                                            if (showBottomBar) {
+                                                CuidaleBottomBar(
+                                                    selectedTab = when(currentScreen) {
+                                                        Main -> "home"
+                                                        Chats -> "chats"
+                                                        Notifications -> "notifications"
+                                                        Requests -> "requests"
+                                                        else -> "none"
+                                                    },
+                                                    unreadCount = unreadCount,
+                                                    pendingNotifs = pendingNotifs,
+                                                    pendingRequests = pendingRequests,
+                                                    onTabSelected = { tab ->
+                                                        currentScreen = when (tab) {
+                                                            "chats" -> Chats
+                                                            "notifications" -> Notifications
+                                                            "requests" -> Requests
+                                                            "home" -> Main
+                                                            else -> currentScreen
                                                         }
                                                     }
-                                                    if (otherUserData != null) {
-                                                        ChatScreen(
-                                                            chatId = cs.chatId,
-                                                            otherUser = otherUserData!!,
-                                                            myUid = userData.uid,
-                                                            myName = userData.nombre,
-                                                            myRole = userData.rol,
-                                                            isDark = isDark,
-                                                            viewModel = chatViewModel,
-                                                            favoritosViewModel = favoritosViewModel,
-                                                            onNavigateBack = { currentScreen = cs.returnTo },
-                                                            onViewOtherProfile = { uid -> currentScreen = OtherFicha(uid, returnTo = cs) },
-                                                            onRedirectToRequests = { currentScreen = Requests },
-                                                            onViewRequest = { solId ->
-                                                                scope.launch {
-                                                                    try {
-                                                                        val doc = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                                                                            .collection("solicitudes").document(solId).get().await()
-                                                                        val sol = doc.toObject(SolicitudCuidado::class.java)
-                                                                        if (sol != null) currentScreen = ReviewRequest(sol, returnTo = cs)
-                                                                    } catch (e: Exception) {}
+                                                )
+                                            }
+                                        },
+                                        containerColor = Color.Transparent
+                                    ) { innerPadding ->
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(Brush.verticalGradient(listOf(CuidaleThemeExtras.gradient.top, CuidaleThemeExtras.gradient.bottom)))
+                                        ) {
+                                            Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+                                                AnimatedContent(
+                                                    targetState = currentScreen,
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    transitionSpec = {
+                                                        val duration = 500
+                                                        val initialWeight = getScreenWeight(initialState)
+                                                        val targetWeight = getScreenWeight(targetState)
+                                                        
+                                                        val isGoingBack = when {
+                                                            initialState is Chat && targetState == Chats -> true
+                                                            initialState is ReviewRequest && targetState == Requests -> true
+                                                            initialState is OtherFicha && (targetState == Main || targetState == Search) -> true
+                                                            initialState == EditProfile && targetState == Profile -> true
+                                                            initialState is Ficha && targetState == Profile -> true
+                                                            initialState is Settings && targetState == Profile -> true
+                                                            initialWeight != 10 && targetWeight != 10 -> targetWeight < initialWeight
+                                                            initialWeight == 10 && targetWeight != 10 -> true
+                                                            else -> false
+                                                        }
+
+                                                        val enterTransition = if (isGoingBack) {
+                                                            slideInHorizontally(tween(duration, easing = FastOutSlowInEasing)) { -it } + 
+                                                            fadeIn(tween(duration)) +
+                                                            scaleIn(initialScale = 0.92f, animationSpec = tween(duration, easing = FastOutSlowInEasing))
+                                                        } else {
+                                                            slideInHorizontally(tween(duration, easing = FastOutSlowInEasing)) { it } + 
+                                                            fadeIn(tween(duration)) +
+                                                            scaleIn(initialScale = 1.08f, animationSpec = tween(duration, easing = FastOutSlowInEasing))
+                                                        }
+
+                                                        val exitTransition = if (isGoingBack) {
+                                                            slideOutHorizontally(tween(duration, easing = FastOutSlowInEasing)) { it } + 
+                                                            fadeOut(tween(duration)) +
+                                                            scaleOut(targetScale = 1.08f, animationSpec = tween(duration, easing = FastOutSlowInEasing))
+                                                        } else {
+                                                            slideOutHorizontally(tween(duration, easing = FastOutSlowInEasing)) { -it } + 
+                                                            fadeOut(tween(duration)) +
+                                                            scaleOut(targetScale = 0.92f, animationSpec = tween(duration, easing = FastOutSlowInEasing))
+                                                        }
+
+                                                        enterTransition togetherWith exitTransition
+                                                    },
+                                                    label = "MenuNavigationAnimation"
+                                                ) { cs ->
+                                                    when (cs) {
+                                                        Main -> {
+                                                            MenuScreen(
+                                                                userData = userData,
+                                                                searchViewModel = searchViewModel,
+                                                                fichaState = fichaState,
+                                                                onViewFicha = { currentScreen = Ficha(startInEditMode = false, returnTo = Main) },
+                                                                onUserClick = { uid -> currentScreen = OtherFicha(uid, returnTo = Main) }
+                                                            )
+                                                        }
+                                                        Profile -> {
+                                                            ProfileScreen(
+                                                                viewModel = profileViewModel,
+                                                                fichaViewModel = fichaViewModel,
+                                                                onNavigateBack = { currentScreen = Main },
+                                                                onSettingsClick = { currentScreen = Settings() },
+                                                                onSocialClick = { currentScreen = SocialManagement },
+                                                                onTabSelected = { tab ->
+                                                                    currentScreen = when (tab) {
+                                                                        "chats" -> Chats
+                                                                        "notifications" -> Notifications
+                                                                        "requests" -> Requests
+                                                                        "home" -> Main
+                                                                        else -> Profile
+                                                                    }
+                                                                },
+                                                                unreadCount = unreadCount,
+                                                                pendingNotifs = pendingNotifs,
+                                                                solicitudViewModel = solicitudViewModel
+                                                            )
+                                                        }
+                                                        EditProfile -> {
+                                                            EditProfileScreen(
+                                                                viewModel = profileViewModel,
+                                                                onNavigateBack = { currentScreen = Profile }
+                                                            )
+                                                        }
+                                                        is Ficha -> {
+                                                            FichaScreen(
+                                                                viewModel = fichaViewModel,
+                                                                profileViewModel = profileViewModel,
+                                                                startInEditMode = cs.startInEditMode,
+                                                                onNavigateBack = { currentScreen = cs.returnTo },
+                                                                onNavigateToTasks = { currentScreen = Requests }
+                                                            )
+                                                        }
+                                                        Search -> {
+                                                            SearchProfileScreen(
+                                                                onNavigateBack = { currentScreen = Main },
+                                                                onUserClick = { uid -> currentScreen = OtherFicha(uid, returnTo = Search) }
+                                                            )
+                                                        }
+                                                        is Settings -> {
+                                                            SettingsScreen(
+                                                                viewModel = profileViewModel,
+                                                                isDark = isDark,
+                                                                onBack = { currentScreen = cs.returnTo },
+                                                                onLogoutClick = { menuViewModel.logout() },
+                                                                onResetPass = { }
+                                                            )
+                                                        }
+                                                        Chats -> {
+                                                            ChatsScreen(
+                                                                userData = userData,
+                                                                isDark = isDark,
+                                                                onUserClick = { uid -> currentScreen = OtherFicha(uid, returnTo = Chats) },
+                                                                onChatClick = { chatId, otherUser ->
+                                                                    currentScreen = Chat(chatId, otherUser.uid, otherUser, returnTo = Chats)
+                                                                },
+                                                                favoritosViewModel = favoritosViewModel,
+                                                                chatViewModel = chatViewModel,
+                                                                vinculosViewModel = vinculosViewModel
+                                                            )
+                                                        }
+                                                        Notifications -> {
+                                                            NotificationsScreen(
+                                                                userData = userData,
+                                                                isDark = isDark,
+                                                                onNotificationClick = { notification ->
+                                                                    when (notification.tipo) {
+                                                                        "solicitud_vinculo" -> currentScreen = OtherFicha(uid = notification.emisor, returnTo = Notifications)
+                                                                        "vinculo_aceptado", "nuevo_mensaje" -> {
+                                                                            val chatId = notification.data["chatId"] ?: ""
+                                                                            if (chatId.isNotEmpty()) currentScreen = Chat(chatId = chatId, otherUid = notification.emisor, returnTo = Notifications)
+                                                                        }
+                                                                        "nuevo_usuario" -> currentScreen = OtherFicha(uid = notification.emisor, returnTo = Notifications)
+                                                                        "recordatorio_tarea", "tarea_atrasada", "tarea_finalizada", "tarea_postergada" -> {
+                                                                            currentScreen = Requests
+                                                                        }
+                                                                        "turno_finalizado" -> {
+                                                                            currentScreen = Requests
+                                                                        }
+                                                                    }
+                                                                }
+                                                            )
+                                                        }
+                                                        Requests -> {
+                                                            SolicitudesScreen(
+                                                                viewModel = solicitudViewModel,
+                                                                userData = userData,
+                                                                onCreateRequest = { currentScreen = CreateRequest(null) },
+                                                                onEditRequest = { id -> currentScreen = CreateRequest(id) },
+                                                                onViewPatientDetails = { uid ->
+                                                                    val solAceptada = solicitudesAceptadas.find { it.pacienteFichaId == uid }
+                                                                    if (solAceptada != null) currentScreen = ReviewRequest(solAceptada, returnTo = Requests)
+                                                                    else {
+                                                                        val pendingPair = solicitudViewModel.misPostulaciones.value.find { it.first.pacienteFichaId == uid }
+                                                                        if (pendingPair != null) currentScreen = ReviewRequest(pendingPair.first, returnTo = Requests)
+                                                                        else currentScreen = OtherFicha(uid, returnTo = Requests)
+                                                                    }
+                                                                },
+                                                                onViewCaregiverProfile = { uid -> currentScreen = OtherFicha(uid, returnTo = Requests) },
+                                                                onViewTasks = { sol -> currentScreen = ActiveTasks(sol) },
+                                                                onNavigateToHistory = { currentScreen = History }
+                                                            )
+                                                        }
+                                                        is CreateRequest -> {
+                                                            CreateSolicitudScreen(
+                                                                requestId = cs.requestId,
+                                                                viewModel = solicitudViewModel,
+                                                                fichaViewModel = fichaViewModel,
+                                                                onNavigateBack = { currentScreen = Requests }
+                                                            )
+                                                        }
+                                                        is ManageApplications -> {
+                                                            PostulacionesScreen(
+                                                                solicitudId = cs.solicitudId,
+                                                                viewModel = solicitudViewModel,
+                                                                onNavigateBack = { currentScreen = Requests },
+                                                                onViewCaregiver = { uid -> currentScreen = OtherFicha(uid, returnTo = cs) }
+                                                            )
+                                                        }
+                                                        is ReviewRequest -> {
+                                                            ReviewSolicitudScreen(
+                                                                solicitud = cs.solicitud,
+                                                                viewModel = solicitudViewModel,
+                                                                isAccepted = (userData.rol == "cuidador" && cs.solicitud.cuidadorUid == userData.uid) || (userData.rol == "representante" && cs.solicitud.estado == "cerrada"),
+                                                                onNavigateBack = { currentScreen = Requests },
+                                                                onViewFullFicha = { uid -> currentScreen = OtherFicha(uid, returnTo = ReviewRequest(cs.solicitud)) },
+                                                                onRedirectToRequests = { currentScreen = Requests },
+                                                                onNavigateToChat = { chatId, otherUid -> 
+                                                                    currentScreen = Chat(chatId, otherUid, returnTo = ReviewRequest(cs.solicitud))
+                                                                }
+                                                            )
+                                                        }
+                                                        is Chat -> {
+                                                            var otherUserData by remember { mutableStateOf(cs.otherUser) }
+                                                            LaunchedEffect(cs.otherUid) {
+                                                                if (otherUserData == null) {
+                                                                    val doc = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                                                        .collection("usuarios").document(cs.otherUid).get().await()
+                                                                    otherUserData = doc.toObject(UserData::class.java)
                                                                 }
                                                             }
-                                                        )
-                                                    } else {
-                                                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                                            CircularProgressIndicator()
+                                                            if (otherUserData != null) {
+                                                                ChatScreen(
+                                                                    chatId = cs.chatId,
+                                                                    otherUser = otherUserData!!,
+                                                                    myUid = userData.uid,
+                                                                    myName = userData.nombre,
+                                                                    myRole = userData.rol,
+                                                                    isDark = isDark,
+                                                                    viewModel = chatViewModel,
+                                                                    favoritosViewModel = favoritosViewModel,
+                                                                    onNavigateBack = { currentScreen = cs.returnTo },
+                                                                    onViewOtherProfile = { uid -> currentScreen = OtherFicha(uid, returnTo = cs) },
+                                                                    onRedirectToRequests = { currentScreen = Requests },
+                                                                    onViewRequest = { solId ->
+                                                                        scope.launch {
+                                                                            try {
+                                                                                val doc = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                                                                    .collection("solicitudes").document(solId).get().await()
+                                                                                val sol = doc.toObject(SolicitudCuidado::class.java)
+                                                                                if (sol != null) currentScreen = ReviewRequest(sol, returnTo = cs)
+                                                                            } catch (e: Exception) {}
+                                                                        }
+                                                                    }
+                                                                )
+                                                            } else {
+                                                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                                                    CircularProgressIndicator()
+                                                                }
+                                                            }
+                                                        }
+                                                        is OtherFicha -> {
+                                                            LaunchedEffect(cs.uid) { profileViewModel.loadOtherUserProfile(cs.uid) }
+                                                            OtherFichaScreen(
+                                                                profileViewModel = profileViewModel,
+                                                                vinculosViewModel = vinculosViewModel,
+                                                                favoritosViewModel = favoritosViewModel,
+                                                                onNavigateBack = { currentScreen = cs.returnTo },
+                                                                onChatNavigate = { chatId, otherUid, otherUser ->
+                                                                    currentScreen = Chat(chatId, otherUid, otherUser, returnTo = cs)
+                                                                },
+                                                                onReviewRequest = { sol -> currentScreen = ReviewRequest(sol, returnTo = cs) }
+                                                            )
+                                                        }
+                                                        SocialManagement -> {
+                                                            SocialManagementScreen(
+                                                                onNavigateBack = { currentScreen = Profile },
+                                                                onUserClick = { uid -> currentScreen = OtherFicha(uid, returnTo = SocialManagement) },
+                                                                favoritosViewModel = favoritosViewModel,
+                                                                vinculosViewModel = vinculosViewModel
+                                                            )
+                                                        }
+                                                        is ActiveTasks -> {
+                                                            val tareasViewModel: TareasViewModel = viewModel()
+                                                            ActiveServiceTasksScreen(
+                                                                solicitud = cs.solicitud,
+                                                                tareasViewModel = tareasViewModel,
+                                                                currentUserId = userData.uid,
+                                                                onNavigateBack = { currentScreen = Requests },
+                                                                onNavigateToChat = { chatId, otherUid, initialMsg ->
+                                                                    currentScreen = Chat(chatId, otherUid, returnTo = cs, initialMessage = initialMsg)
+                                                                }
+                                                            )
+                                                        }
+                                                        is ServiceReport -> {
+                                                            InformeServicioScreen(
+                                                                informe = cs.informe,
+                                                                onNavigateBack = { currentScreen = Requests }
+                                                            )
+                                                        }
+                                                        History -> {
+                                                            HistorialScreen(
+                                                                viewModel = solicitudViewModel,
+                                                                userData = userData,
+                                                                onNavigateBack = { currentScreen = Requests },
+                                                                onViewProfile = { uid -> currentScreen = OtherFicha(uid, returnTo = History) }
+                                                            )
                                                         }
                                                     }
                                                 }
-                                                is OtherFicha -> {
-                                                    LaunchedEffect(cs.uid) { profileViewModel.loadOtherUserProfile(cs.uid) }
-                                                    OtherFichaScreen(
-                                                        profileViewModel = profileViewModel,
-                                                        vinculosViewModel = vinculosViewModel,
-                                                        favoritosViewModel = favoritosViewModel,
-                                                        onNavigateBack = { currentScreen = cs.returnTo },
-                                                        onChatNavigate = { chatId, otherUid, otherUser ->
-                                                            currentScreen = Chat(chatId, otherUid, otherUser, returnTo = cs)
-                                                        },
-                                                        onReviewRequest = { sol -> currentScreen = ReviewRequest(sol, returnTo = cs) }
-                                                    )
-                                                }
-                                                SocialManagement -> {
-                                                    SocialManagementScreen(
-                                                        onNavigateBack = { currentScreen = Profile },
-                                                        onUserClick = { uid -> currentScreen = OtherFicha(uid, returnTo = SocialManagement) },
-                                                        favoritosViewModel = favoritosViewModel,
-                                                        vinculosViewModel = vinculosViewModel
-                                                    )
-                                                }
-                                                is ActiveTasks -> {
-                                                    val tareasViewModel: TareasViewModel = viewModel()
-                                                    ActiveServiceTasksScreen(
-                                                        solicitud = cs.solicitud,
-                                                        tareasViewModel = tareasViewModel,
-                                                        currentUserId = userData.uid,
-                                                        onNavigateBack = { currentScreen = Requests },
-                                                        onNavigateToChat = { chatId, otherUid, initialMsg ->
-                                                            currentScreen = Chat(chatId, otherUid, returnTo = cs, initialMessage = initialMsg)
-                                                        }
-                                                    )
-                                                }
-                                                is ServiceReport -> {
-                                                    InformeServicioScreen(
-                                                        informe = cs.informe,
-                                                        onNavigateBack = { currentScreen = Requests }
-                                                    )
-                                                }
-                                                History -> {
-                                                    HistorialScreen(
-                                                        viewModel = solicitudViewModel,
-                                                        userData = userData,
-                                                        onNavigateBack = { currentScreen = Requests },
-                                                        onViewProfile = { uid -> currentScreen = OtherFicha(uid, returnTo = History) }
+                                            }
+
+                                            // Botón de menú circular como overlay
+                                            val showMenuButton = currentScreen == Main || currentScreen == Chats || 
+                                                               currentScreen == Notifications || currentScreen == Requests
+                                            
+                                            if (showMenuButton) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .windowInsetsPadding(WindowInsets.statusBars)
+                                                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                                                ) {
+                                                    CuidaleCircularMenuButton(
+                                                        onClick = { scope.launch { drawerState.open() } },
+                                                        modifier = Modifier.align(Alignment.CenterEnd)
                                                     )
                                                 }
                                             }
@@ -590,6 +601,14 @@ class MenuActivity : ComponentActivity() {
                                 }
                             }
                         }
+                    }
+
+                    AnimatedVisibility(
+                        visible = showSplash,
+                        enter = fadeIn(),
+                        exit = fadeOut(tween(1000, easing = LinearOutSlowInEasing))
+                    ) {
+                        CuidaleWelcomeLoading()
                     }
                 }
             }
