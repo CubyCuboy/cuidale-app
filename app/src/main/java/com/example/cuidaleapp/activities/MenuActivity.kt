@@ -12,6 +12,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -111,7 +112,6 @@ class MenuActivity : ComponentActivity() {
             var currentScreen by remember { mutableStateOf<MenuNavigation>(Main) }
             val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
-            // INICIALIZACIÓN GLOBAL DE DATOS (Evita carga infinita)
             LaunchedEffect(userData.rol, userData.region) {
                 if (userData.rol.isNotEmpty()) {
                     searchViewModel.initSearch(userData.rol, userData.region)
@@ -201,7 +201,7 @@ class MenuActivity : ComponentActivity() {
                         Requests -> 1
                         Main -> 2
                         Chats -> 3
-                        else -> 10 
+                        else -> 10
                     }
                 }
 
@@ -215,7 +215,11 @@ class MenuActivity : ComponentActivity() {
                     }
                 }
 
-                Box(Modifier.fillMaxSize()) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Brush.verticalGradient(listOf(CuidaleThemeExtras.gradient.top, CuidaleThemeExtras.gradient.bottom)))
+                ) {
                     if (!showSplash) {
                         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                             ModalNavigationDrawer(
@@ -224,7 +228,7 @@ class MenuActivity : ComponentActivity() {
                                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                                         ModalDrawerSheet(
                                             modifier = Modifier.fillMaxHeight().width(320.dp),
-                                            drawerContainerColor = Color.Transparent,
+                                            drawerContainerColor = CuidaleThemeExtras.customColors.panelBackground,
                                             drawerTonalElevation = 0.dp
                                         ) {
                                             CuidaleDrawerContent(
@@ -241,6 +245,10 @@ class MenuActivity : ComponentActivity() {
                                                 onFichaClick = {
                                                     scope.launch { drawerState.close() }
                                                     currentScreen = Ficha(startInEditMode = false, returnTo = currentScreen)
+                                                },
+                                                onSocialClick = {
+                                                    scope.launch { drawerState.close() }
+                                                    currentScreen = SocialManagement
                                                 },
                                                 onSettingsClick = {
                                                     scope.launch { drawerState.close() }
@@ -275,6 +283,7 @@ class MenuActivity : ComponentActivity() {
                                                         Chats -> "chats"
                                                         Notifications -> "notifications"
                                                         Requests -> "requests"
+                                                        Profile -> "profile"
                                                         else -> "none"
                                                     },
                                                     unreadCount = unreadCount,
@@ -286,35 +295,38 @@ class MenuActivity : ComponentActivity() {
                                                             "notifications" -> Notifications
                                                             "requests" -> Requests
                                                             "home" -> Main
+                                                            "profile" -> Profile
                                                             else -> currentScreen
                                                         }
                                                     }
                                                 )
                                             }
                                         },
-                                        containerColor = Color.Transparent
+                                        containerColor = Color.Transparent,
+                                        contentWindowInsets = WindowInsets(0, 0, 0, 0)
                                     ) { innerPadding ->
                                         Box(
                                             modifier = Modifier
+                                                .padding(top = innerPadding.calculateTopPadding())
                                                 .fillMaxSize()
-                                                .background(Brush.verticalGradient(listOf(CuidaleThemeExtras.gradient.top, CuidaleThemeExtras.gradient.bottom)))
                                         ) {
-                                            Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
-                                                AnimatedContent(
-                                                    targetState = currentScreen,
-                                                    modifier = Modifier.fillMaxSize(),
-                                                    transitionSpec = {
+                                            AnimatedContent(
+                                                targetState = currentScreen,
+                                                modifier = Modifier.fillMaxSize(),
+                                                transitionSpec = {
                                                         val duration = 500
-                                                        val initialWeight = getScreenWeight(initialState)
-                                                        val targetWeight = getScreenWeight(targetState)
+                                                        val initialS = initialState
+                                                        val targetS = targetState
+                                                        val initialWeight = getScreenWeight(initialS)
+                                                        val targetWeight = getScreenWeight(targetS)
                                                         
                                                         val isGoingBack = when {
-                                                            initialState is Chat && targetState == Chats -> true
-                                                            initialState is ReviewRequest && targetState == Requests -> true
-                                                            initialState is OtherFicha && (targetState == Main || targetState == Search) -> true
-                                                            initialState == EditProfile && targetState == Profile -> true
-                                                            initialState is Ficha && targetState == Profile -> true
-                                                            initialState is Settings && targetState == Profile -> true
+                                                            initialS is Chat && targetS == Chats -> true
+                                                            initialS is ReviewRequest && targetS == Requests -> true
+                                                            initialS is OtherFicha && (targetS == Main || targetS == Search) -> true
+                                                            initialS == EditProfile && targetS == Profile -> true
+                                                            initialS is Ficha && targetS == Profile -> true
+                                                            initialS is Settings && targetS == Profile -> true
                                                             initialWeight != 10 && targetWeight != 10 -> targetWeight < initialWeight
                                                             initialWeight == 10 && targetWeight != 10 -> true
                                                             else -> false
@@ -402,7 +414,9 @@ class MenuActivity : ComponentActivity() {
                                                                 isDark = isDark,
                                                                 onBack = { currentScreen = cs.returnTo },
                                                                 onLogoutClick = { menuViewModel.logout() },
-                                                                onResetPass = { }
+                                                                onResetPass = { 
+                                                                    startActivity(Intent(this@MenuActivity, RecoveryPasswordActivity::class.java))
+                                                                }
                                                             )
                                                         }
                                                         Chats -> {
@@ -579,7 +593,6 @@ class MenuActivity : ComponentActivity() {
                                                 }
                                             }
 
-                                            // Botón de menú circular como overlay
                                             val showMenuButton = currentScreen == Main || currentScreen == Chats || 
                                                                currentScreen == Notifications || currentScreen == Requests
                                             
@@ -590,10 +603,31 @@ class MenuActivity : ComponentActivity() {
                                                         .windowInsetsPadding(WindowInsets.statusBars)
                                                         .padding(horizontal = 16.dp, vertical = 8.dp)
                                                 ) {
-                                                    CuidaleCircularMenuButton(
-                                                        onClick = { scope.launch { drawerState.open() } },
-                                                        modifier = Modifier.align(Alignment.CenterEnd)
-                                                    )
+                                                    Row(
+                                                        modifier = Modifier.align(Alignment.CenterEnd),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        if (currentScreen == Main) {
+                                                            IconButton(
+                                                                onClick = { searchViewModel.refresh() },
+                                                                modifier = Modifier
+                                                                    .size(44.dp)
+                                                                    .background(Color.White.copy(alpha = 0.2f), CircleShape)
+                                                            ) {
+                                                                Icon(
+                                                                    Icons.Default.Refresh,
+                                                                    "Recargar",
+                                                                    tint = Color.White,
+                                                                    modifier = Modifier.size(20.dp)
+                                                                )
+                                                            }
+                                                            Spacer(modifier = Modifier.width(12.dp))
+                                                        }
+
+                                                        CuidaleCircularMenuButton(
+                                                            onClick = { scope.launch { drawerState.open() } }
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
@@ -614,10 +648,3 @@ class MenuActivity : ComponentActivity() {
             }
         }
     }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)
-        intentTrigger++
-    }
-}

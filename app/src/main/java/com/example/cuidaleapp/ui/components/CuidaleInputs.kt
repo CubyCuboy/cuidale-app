@@ -24,6 +24,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 
 @Composable
@@ -59,7 +61,14 @@ fun CuidaleTextField(
     trailingIcon: @Composable (() -> Unit)? = null
 ) {
     val customColors = CuidaleThemeExtras.customColors
+    val haptic = LocalHapticFeedback.current
     val borderColor = if (isError) customColors.warning else MaterialTheme.colorScheme.primary
+
+    LaunchedEffect(isError) {
+        if (isError) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        }
+    }
 
     OutlinedTextField(
         value = value,
@@ -87,7 +96,10 @@ fun CuidaleTextField(
         visualTransformation = if (isPassword && !isPasswordVisible) PasswordVisualTransformation() else VisualTransformation.None,
         trailingIcon = {
             if (isPassword && onPasswordVisibilityChange != null) {
-                IconButton(onClick = onPasswordVisibilityChange) {
+                IconButton(onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onPasswordVisibilityChange()
+                }) {
                     Icon(imageVector = if (isPasswordVisible) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff, contentDescription = null)
                 }
             } else {

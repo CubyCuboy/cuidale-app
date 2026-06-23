@@ -86,7 +86,7 @@ fun ChatsScreen(
         vinculosViewModel.loadVinculos()
     }
 
-    Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+    Column(modifier = Modifier.fillMaxSize()) {
         CenterAlignedTopAppBar(
             title = { Text("MENSAJES", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = Color.White) },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
@@ -256,7 +256,7 @@ fun ChatListSection(
         EmptyState("No tienes mensajes aún", Icons.Default.ChatBubbleOutline)
     } else {
         LazyColumn(
-            contentPadding = PaddingValues(16.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 100.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(chatList, key = { it.chatId }) { chat ->

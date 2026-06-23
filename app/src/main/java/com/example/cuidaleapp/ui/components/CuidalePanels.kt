@@ -6,6 +6,7 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.material3.Surface
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -55,18 +56,19 @@ fun HardShadowPanel(
 
     Box(
         modifier = modifier
-            .fillMaxWidth()
             .offset { IntOffset(shakeOffset.value.roundToInt(), 0) }
             .padding(bottom = shadowOffset, end = shadowOffset)
     ) {
-        Box(
+        // Shadow layer - Now correctly sized relative to the content
+        Surface(
             modifier = Modifier
                 .matchParentSize()
-                .offset(x = shadowOffset, y = shadowOffset)
-                .clip(RoundedCornerShape(cornerRadius))
-                .background(animatedShadow)
-        )
+                .offset(x = shadowOffset, y = shadowOffset),
+            shape = RoundedCornerShape(cornerRadius),
+            color = animatedShadow
+        ) {}
 
+        // Main panel
         Column(
             modifier = Modifier
                 .fillMaxWidth()

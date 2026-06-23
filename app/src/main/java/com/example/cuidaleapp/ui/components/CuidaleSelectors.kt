@@ -45,7 +45,7 @@ fun CuidaleExposedDropdown(
                     disabledContainerColor = customColors.inputBackground.copy(alpha = 0.1f),
                     errorContainerColor = customColors.inputBackground,
                     focusedBorderColor = borderColor,
-                    unfocusedBorderColor = if (isError) borderColor.copy(alpha = 0.8f) else { if (customColors.isDark) Color.White.copy(alpha = 0.12f) else Color.Transparent },
+                    unfocusedBorderColor = if (isError) borderColor.copy(alpha = 0.8f) else { if (customColors.isDark) Color.White.copy(alpha = 0.12f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f) },
                     errorBorderColor = borderColor,
                     disabledBorderColor = Color.Transparent.copy(alpha = 0.05f)
                 ),

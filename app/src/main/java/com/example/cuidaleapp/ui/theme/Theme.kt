@@ -147,11 +147,11 @@ fun CuidaleAppTheme(
         )
     }
 
-    val panelBackground = if (darkTheme) colorScheme.surfaceVariant.copy(alpha = 0.85f) else Color(0xFFE3F2FD).copy(alpha = 0.9f)
+    val panelBackground = if (darkTheme) colorScheme.surfaceVariant else Color(0xFFE3F2FD)
     val panelGradient = if (darkTheme) {
-        Brush.verticalGradient(listOf(colorScheme.surfaceVariant.copy(alpha = 0.8f), colorScheme.surfaceVariant.copy(alpha = 0.9f)))
+        Brush.verticalGradient(listOf(colorScheme.surfaceVariant, colorScheme.surface.copy(alpha = 0.95f)))
     } else {
-        Brush.verticalGradient(listOf(Color(0xFFBBDEFB).copy(alpha = 0.85f), Color(0xFF90CAF9).copy(alpha = 0.95f)))
+        Brush.verticalGradient(listOf(Color(0xFFBBDEFB), Color(0xFF90CAF9)))
     }
 
     val customColors = if (darkTheme) {

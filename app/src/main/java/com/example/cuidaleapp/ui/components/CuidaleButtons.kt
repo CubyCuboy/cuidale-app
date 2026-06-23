@@ -4,6 +4,8 @@ import androidx.compose.animation.core.*
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +27,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import kotlin.math.roundToInt
 
 @Composable
@@ -43,10 +47,12 @@ fun HardShadowButton(
     onClick: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
+    val haptic = LocalHapticFeedback.current
     val shakeOffset = remember { Animatable(0f) }
 
     LaunchedEffect(isErrorMode) {
         if (isErrorMode) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
             repeat(6) {
                 shakeOffset.animateTo(
                     targetValue = if (it % 2 == 0) 10f else -10f,
@@ -80,8 +86,15 @@ fun HardShadowButton(
         Brush.linearGradient(listOf(animatedContainerColor, animatedContainerColor.copy(alpha = 0.92f)))
     }
 
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
     val scale by animateFloatAsState(
-        targetValue = if (!enabled) 0.97f else 1f,
+        targetValue = when {
+            !enabled -> 0.97f
+            isPressed -> 0.95f
+            else -> 1f
+        },
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
         label = "buttonScale"
     )
@@ -105,8 +118,12 @@ fun HardShadowButton(
         }
 
         Button(
-            onClick = onClick,
+            onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onClick()
+            },
             enabled = enabled && !isErrorMode,
+            interactionSource = interactionSource,
             modifier = Modifier.fillMaxSize(),
             shape = RoundedCornerShape(cornerRadius),
             colors = ButtonDefaults.buttonColors(
@@ -154,5 +171,21 @@ fun HardShadowButton(
 @Composable
 fun CuidaleCircularMenuButton(onClick: () -> Unit, modifier: Modifier = Modifier, icon: @Composable (() -> Unit) = { Icon(imageVector = Icons.Default.Menu, contentDescription = null, tint = Color.White) }) {
     val shadows = CuidaleThemeExtras.shadows
-    Box(modifier = modifier.size(56.dp).offset(x = 4.dp, y = 4.dp).background(shadows.hardShadowPrimary.copy(alpha = 0.3f), CircleShape)) { IconButton(onClick = onClick, modifier = Modifier.matchParentSize().offset(x = (-4).dp, y = (-4).dp).background(MaterialTheme.colorScheme.primary, CircleShape)) { icon() } }
+    val haptic = LocalHapticFeedback.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(targetValue = if (isPressed) 0.9f else 1f, label = "circleScale")
+
+    Box(modifier = modifier.size(56.dp).graphicsLayer { scaleX = scale; scaleY = scale }.offset(x = 4.dp, y = 4.dp).background(shadows.hardShadowPrimary.copy(alpha = 0.3f), CircleShape)) { 
+        IconButton(
+            onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onClick()
+            },
+            interactionSource = interactionSource,
+            modifier = Modifier.matchParentSize().offset(x = (-4).dp, y = (-4).dp).background(MaterialTheme.colorScheme.primary, CircleShape)
+        ) { 
+            icon()
+        } 
+    }
 }

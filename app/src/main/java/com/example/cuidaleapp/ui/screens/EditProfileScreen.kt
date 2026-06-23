@@ -5,6 +5,8 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,11 +25,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import coil3.compose.AsyncImage
@@ -36,6 +41,7 @@ import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.ProfileViewModel
 import com.example.cuidaleapp.utils.ConnectivityObserver
+import com.example.cuidaleapp.utils.PhoneUtils
 import java.io.File
 
 @Composable
@@ -54,7 +60,6 @@ fun EditProfileScreen(
     var apellidoPa by remember { mutableStateOf("") }
     var apellidoMa by remember { mutableStateOf("") }
     var telefono by remember { mutableStateOf("") }
-    var rut by remember { mutableStateOf("") }
     var region by remember { mutableStateOf("") }
     var comuna by remember { mutableStateOf("") }
     var descripcion by remember { mutableStateOf("") }
@@ -66,7 +71,6 @@ fun EditProfileScreen(
             apellidoPa = userData.apellido_pa
             apellidoMa = userData.apellido_ma
             telefono = userData.telefono
-            rut = userData.rut
             region = userData.region
             comuna = userData.comuna
             descripcion = userData.descripcion
@@ -80,6 +84,11 @@ fun EditProfileScreen(
         }
     }
 
+    val isNombreValid = nombre.length >= 2
+    val isApellidoPaValid = apellidoPa.length >= 2
+    val isPhoneValid = PhoneUtils.isValidChileanPhone(telefono) && telefono.length == 9
+    val isFormValid = isNombreValid && isApellidoPaValid && isPhoneValid && region.isNotEmpty() && comuna.isNotEmpty()
+
     var showImageSourceDialog by remember { mutableStateOf(false) }
     var tempPhotoUri by remember { mutableStateOf<Uri?>(null) }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
@@ -90,7 +99,7 @@ fun EditProfileScreen(
     val customColors = CuidaleThemeExtras.customColors
     val shadowPalette = CuidaleThemeExtras.shadows
     val textColor = MaterialTheme.colorScheme.onSurface
-    val secondaryTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val accentColor = if (userData.rol == "cuidador") MaterialTheme.colorScheme.primary else customColors.successStrong
 
     val regionsList = ChileData.regions.map { it.name }
     val communesForSelectedRegion = remember(region) {
@@ -98,7 +107,6 @@ fun EditProfileScreen(
     }
 
     val isLoading = remoteState is ProfileViewModel.RemoteState.Loading
-    val canSave = nombre.isNotBlank() && apellidoPa.isNotBlank() && !isLoading && isOnline
 
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { 
@@ -239,8 +247,16 @@ fun EditProfileScreen(
                 }
             }
 
+            // Profile Picture Section
             Box(modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
-                Box(modifier = Modifier.size(150.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.1f)).border(4.dp, Color.White, CircleShape).clickable(enabled = !isLoading && isOnline) { showImageSourceDialog = true }) {
+                Box(
+                    modifier = Modifier
+                        .size(150.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.1f))
+                        .border(4.dp, Color.White, CircleShape)
+                        .clickable(enabled = !isLoading && isOnline) { showImageSourceDialog = true }
+                ) {
                     val imageModel = when {
                         pendingPhotoUri != null -> pendingPhotoUri
                         pendingDeletePhoto -> null
@@ -252,44 +268,223 @@ fun EditProfileScreen(
                     } else {
                         Icon(Icons.Default.Person, null, modifier = Modifier.size(90.dp).align(Alignment.Center), tint = Color.White.copy(alpha = 0.7f))
                     }
+                    
                     if (isLoading) {
                         Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator(color = Color.White, strokeWidth = 3.dp, modifier = Modifier.size(40.dp))
                         }
                     }
+
+                    // Floating Action Button for Photo Edit - Fixed positioning
                     if (isOnline) {
-                        Box(modifier = Modifier.align(Alignment.BottomEnd).offset(x = (-8).dp, y = (-8).dp).size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary).border(3.dp, if (customColors.isDark) Color(0xFF1B263B) else Color.White, CircleShape), contentAlignment = Alignment.Center) {
-                            Icon(if (userData.fotoUrl.isEmpty()) Icons.Default.CameraAlt else Icons.Default.Edit, null, modifier = Modifier.size(20.dp), tint = Color.White)
+                        Surface(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .offset(x = (-4).dp, y = (-4).dp)
+                                .size(44.dp),
+                            shape = CircleShape,
+                            color = accentColor,
+                            shadowElevation = 4.dp,
+                            border = BorderStroke(3.dp, if (customColors.isDark) Color(0xFF1B263B) else Color.White)
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                Icon(
+                                    imageVector = if (userData.fotoUrl.isEmpty() && pendingPhotoUri == null) Icons.Default.CameraAlt else Icons.Default.Edit,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = Color.White
+                                )
+                            }
                         }
                     }
                 }
             }
 
-            HardShadowPanel(backgroundColor = customColors.panelBackground, shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f), cornerRadius = 24.dp) {
-                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    InputFieldLabel("Primer Nombre", color = textColor)
-                    CuidaleTextField(value = nombre, onValueChange = { nombre = it }, placeholder = "Nombre", enabled = !isLoading && isOnline)
-                    InputFieldLabel("Apellido Paterno", color = textColor)
-                    CuidaleTextField(value = apellidoPa, onValueChange = { apellidoPa = it }, placeholder = "Apellido", enabled = !isLoading && isOnline)
-                    InputFieldLabel("Teléfono", color = textColor)
-                    CuidaleTextField(value = telefono, onValueChange = { if(it.length <= 9) telefono = it }, placeholder = "Teléfono", enabled = !isLoading && isOnline)
-                    InputFieldLabel("Sobre mí", color = textColor)
-                    CuidaleTextField(value = descripcion, onValueChange = { if(it.length <= 300) descripcion = it }, placeholder = "Sobre mí", modifier = Modifier.height(100.dp), singleLine = false, enabled = !isLoading && isOnline)
+            // --- ALL DATA IN ONE CONTAINER ---
+            HardShadowPanel(
+                backgroundColor = customColors.panelBackground,
+                shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
+                cornerRadius = 28.dp
+            ) {
+                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
                     
+                    // SECTION 1: PERSONAL INFO
+                    EditSectionHeader(icon = Icons.Default.Person, title = "Información Personal", accentColor = accentColor)
+                    
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        EditFieldWrapper(label = "Primer Nombre", error = if (!isNombreValid && nombre.isNotEmpty()) "Mínimo 2 caracteres" else null) {
+                            CuidaleTextField(
+                                value = nombre, 
+                                onValueChange = { nombre = it }, 
+                                placeholder = "Tu nombre", 
+                                leadingIcon = { Icon(Icons.Default.Badge, null, tint = accentColor.copy(alpha = 0.6f)) },
+                                isError = !isNombreValid && nombre.isNotEmpty(), 
+                                enabled = !isLoading && isOnline
+                            )
+                        }
+
+                        EditFieldWrapper(label = "Segundo Nombre (Opcional)") {
+                            CuidaleTextField(
+                                value = nombreS, 
+                                onValueChange = { nombreS = it }, 
+                                placeholder = "Segundo nombre", 
+                                leadingIcon = { Icon(Icons.Default.Badge, null, tint = accentColor.copy(alpha = 0.3f)) },
+                                enabled = !isLoading && isOnline
+                            )
+                        }
+
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                EditFieldWrapper(label = "Apellido Paterno", error = if (!isApellidoPaValid && apellidoPa.isNotEmpty()) "Mínimo 2" else null) {
+                                    CuidaleTextField(
+                                        value = apellidoPa, 
+                                        onValueChange = { apellidoPa = it }, 
+                                        placeholder = "Paterno", 
+                                        isError = !isApellidoPaValid && apellidoPa.isNotEmpty(), 
+                                        enabled = !isLoading && isOnline
+                                    )
+                                }
+                            }
+                            Box(modifier = Modifier.weight(1f)) {
+                                EditFieldWrapper(label = "Apellido Materno") {
+                                    CuidaleTextField(
+                                        value = apellidoMa, 
+                                        onValueChange = { apellidoMa = it }, 
+                                        placeholder = "Materno", 
+                                        enabled = !isLoading && isOnline
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(color = textColor.copy(alpha = 0.08f))
+
+                    // SECTION 2: CONTACT & LOCATION
+                    EditSectionHeader(icon = Icons.Default.LocationOn, title = "Contacto y Ubicación", accentColor = accentColor)
+
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        EditFieldWrapper(label = "Teléfono", error = if (!isPhoneValid && telefono.isNotEmpty()) "Formato inválido (9 dígitos)" else null) {
+                            CuidaleTextField(
+                                value = telefono, 
+                                onValueChange = { if(it.length <= 9) telefono = it }, 
+                                placeholder = "Ej: 9 8765 4321", 
+                                keyboardType = KeyboardType.Phone, 
+                                leadingIcon = { Icon(Icons.Default.Phone, null, tint = accentColor.copy(alpha = 0.6f)) },
+                                isError = !isPhoneValid && telefono.isNotEmpty(), 
+                                enabled = !isLoading && isOnline
+                            )
+                        }
+
+                        CuidaleExposedDropdown(
+                            label = "Región",
+                            options = regionsList,
+                            selectedOption = region,
+                            onOptionSelected = { region = it; comuna = "" },
+                            enabled = !isLoading && isOnline
+                        )
+
+                        AnimatedVisibility(visible = region.isNotEmpty()) {
+                            CuidaleExposedDropdown(
+                                label = "Comuna",
+                                options = communesForSelectedRegion,
+                                selectedOption = comuna,
+                                onOptionSelected = { comuna = it },
+                                enabled = !isLoading && isOnline
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(color = textColor.copy(alpha = 0.08f))
+
+                    // SECTION 3: PRESENTATION
+                    EditSectionHeader(icon = Icons.Default.FormatQuote, title = "Sobre mí", accentColor = accentColor)
+
+                    Column {
+                        CuidaleTextField(
+                            value = descripcion, 
+                            onValueChange = { if(it.length <= 300) descripcion = it }, 
+                            placeholder = "Cuéntanos un poco sobre ti y tu experiencia...", 
+                            modifier = Modifier.height(140.dp), 
+                            singleLine = false, 
+                            enabled = !isLoading && isOnline
+                        )
+                        Text(
+                            "${descripcion.length}/300", 
+                            style = MaterialTheme.typography.labelSmall, 
+                            color = textColor.copy(alpha = 0.4f), 
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp), 
+                            textAlign = TextAlign.End
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
                     HardShadowButton(
-                        text = if (isLoading) "Guardando..." else if (!isOnline) "Sin conexión" else "Guardar Cambios",
+                        text = if (isLoading) "GUARDANDO..." else "GUARDAR CAMBIOS",
                         onClick = {
-                            if (canSave) {
-                                viewModel.updateProfileWithPhoto(userData.copy(nombre = nombre, apellido_pa = apellidoPa, telefono = telefono, descripcion = descripcion), pendingPhotoUri, pendingDeletePhoto)
+                            if (isFormValid) {
+                                viewModel.updateProfileWithPhoto(
+                                    userData.copy(
+                                        nombre = nombre,
+                                        nombre_s = nombreS,
+                                        apellido_pa = apellidoPa,
+                                        apellido_ma = apellidoMa,
+                                        telefono = telefono,
+                                        region = region,
+                                        comuna = comuna,
+                                        descripcion = descripcion
+                                    ), 
+                                    pendingPhotoUri, 
+                                    pendingDeletePhoto
+                                )
                             }
                         },
-                        containerColor = if (isOnline) MaterialTheme.colorScheme.primary else Color.Gray,
-                        enabled = canSave && isOnline,
-                        icon = if (isLoading) null else Icons.Default.Save
+                        containerColor = if (isFormValid && isOnline) accentColor else Color.Gray.copy(alpha = 0.5f),
+                        enabled = isFormValid && isOnline && !isLoading,
+                        icon = if (isLoading) null else Icons.Default.Save,
+                        cornerRadius = 16.dp
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(40.dp))
+            
+            Spacer(modifier = Modifier.height(48.dp))
+        }
+    }
+}
+
+@Composable
+fun EditSectionHeader(icon: ImageVector, title: String, accentColor: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Icon(icon, null, tint = accentColor, modifier = Modifier.size(20.dp))
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = title.uppercase(),
+            style = MaterialTheme.typography.labelLarge.copy(
+                fontWeight = FontWeight.Black,
+                letterSpacing = 1.sp
+            ),
+            color = accentColor
+        )
+    }
+}
+
+@Composable
+fun EditFieldWrapper(
+    label: String,
+    error: String? = null,
+    content: @Composable () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        InputFieldLabel(label)
+        content()
+        AnimatedVisibility(visible = error != null) {
+            Text(
+                text = error ?: "",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(start = 8.dp, top = 4.dp)
+            )
         }
     }
 }

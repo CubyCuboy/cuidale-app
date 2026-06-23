@@ -111,25 +111,14 @@ fun MenuScreen(
 
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.Start,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (isOnline) {
-                        IconButton(
-                            onClick = { searchViewModel.refresh() },
-                            modifier = Modifier.size(32.dp).background(Color.White.copy(alpha = 0.1f), CircleShape)
-                        ) {
-                            Icon(Icons.Default.Refresh, "Recargar", tint = Color.White, modifier = Modifier.size(18.dp))
-                        }
-                        Spacer(Modifier.width(12.dp))
-                    }
-                    Text(
-                        text = listTitle,
-                        style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
-                        color = Color.White
-                    )
-                }
+                Text(
+                    text = listTitle,
+                    style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold),
+                    color = Color.White
+                )
             }
 
             if (fichaState is FichaState.NotFound) {
@@ -156,7 +145,8 @@ fun MenuScreen(
                     AnimatedContent(
                         targetState = searchState,
                         transitionSpec = {
-                            fadeIn(tween(400)) togetherWith fadeOut(tween(400))
+                            (fadeIn(tween(500)) + scaleIn(initialScale = 0.96f, animationSpec = tween(500)))
+                                .togetherWith(fadeOut(tween(400)))
                         },
                         label = "searchContentTransition"
                     ) { state ->
@@ -187,7 +177,7 @@ fun MenuScreen(
                                     LazyColumn(
                                         state = listState,
                                         verticalArrangement = Arrangement.spacedBy(16.dp),
-                                        contentPadding = PaddingValues(bottom = 16.dp),
+                                        contentPadding = PaddingValues(bottom = 100.dp),
                                         modifier = Modifier.fillMaxSize()
                                     ) {
                                         items(resultsList) { result ->

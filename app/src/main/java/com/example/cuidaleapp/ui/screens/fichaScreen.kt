@@ -158,7 +158,7 @@ fun FichaScreen(
                 Column(
                     modifier = Modifier
                         .padding(horizontal = 16.dp)
-                        .offset(y = if (isOnline) (-30).dp else 0.dp)
+                        .padding(top = 16.dp)
                 ) {
                     if (role == "representante" && userData.uid.isNotEmpty() && state !is FichaState.Loading) {
                         ModernPersonalDataCard(
@@ -168,7 +168,8 @@ fun FichaScreen(
                             fotoUrl = userData.fotoUrl,
                             cardColor = panelBg,
                             primaryText = textColor,
-                            secondaryText = secondaryTextColor
+                            secondaryText = secondaryTextColor,
+                            accentColor = accentColor
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                     }
@@ -269,7 +270,8 @@ fun FichaScreen(
 @Composable
 fun ModernPersonalDataCard(
     nombre: String, rut: String, telefono: String, fotoUrl: String,
-    cardColor: Color, primaryText: Color, secondaryText: Color
+    cardColor: Color, primaryText: Color, secondaryText: Color,
+    accentColor: Color
 ) {
     val shadowPalette = CuidaleThemeExtras.shadows
     HardShadowPanel(
@@ -289,14 +291,26 @@ fun ModernPersonalDataCard(
                 border = BorderStroke(1.dp, primaryText.copy(alpha = 0.1f))
             ) {
                 if (fotoUrl.isNotEmpty()) {
-                    AsyncImage(
+                    coil3.compose.SubcomposeAsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
                             .data(fotoUrl)
                             .crossfade(true)
                             .build(),
                         contentDescription = null,
                         modifier = Modifier.clip(CircleShape),
-                        contentScale = ContentScale.Crop
+                        contentScale = ContentScale.Crop,
+                        loading = {
+                            Box(
+                                modifier = Modifier.fillMaxSize().background(shimmerBrush()),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 2.dp,
+                                    color = accentColor
+                                )
+                            }
+                        }
                     )
                 } else {
                     Icon(Icons.Default.Person, null, modifier = Modifier.padding(16.dp), tint = secondaryText)

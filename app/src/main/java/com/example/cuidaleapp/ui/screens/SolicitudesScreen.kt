@@ -182,7 +182,7 @@ fun RepresentanteRequestsContent(
         if (solicitudes.isEmpty()) {
             EmptyPlaceholder("Aún no has creado solicitudes.")
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxSize()) {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 100.dp)) {
                 items(solicitudes, key = { it.id }) { sol ->
                     val applicants = postulacionesMap[sol.id]?.filter { it.estado == "pendiente" } ?: emptyList()
                     
@@ -254,7 +254,7 @@ fun CuidadorRequestsContent(
     onFinish: (SolicitudCuidado) -> Unit,
     onCancelPostulacion: (String) -> Unit
 ) {
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxSize()) {
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 100.dp)) {
         if (solicitudesAceptadas.isNotEmpty()) {
             item { Text("SERVICIOS ACTIVOS", style = MaterialTheme.typography.titleMedium, color = Color.White) }
             items(solicitudesAceptadas, key = { it.id }) { sol ->

@@ -195,184 +195,149 @@ fun ChatScreen(
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var showPinConfirmDialog by remember { mutableStateOf(false) }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        topBar = {
-            Column {
-                ConnectivityBanner()
-                Surface(
-                    shadowElevation = 4.dp,
-                    color = if (isDark) Color(0xFF1B263B) else Color.White
-                ) {
-                    TopAppBar(
-                        title = {
-                            if (selectedMessages.isNotEmpty()) {
-                                val allFromMe = selectedMessages.all { it.senderId == myUid }
-                                Column {
-                                    Text("${selectedMessages.size} seleccionados", fontWeight = FontWeight.Bold)
-                                    Text(
-                                        text = if (allFromMe) "Puedes eliminar o fijar estos mensajes" else "Solo puedes fijar estos mensajes",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = Color.Gray
-                                    )
-                                }
-                            } else if (isSearchActive) {
-                                TextField(
-                                    value = searchQuery,
-                                    onValueChange = { viewModel.setSearchQuery(it) },
-                                    placeholder = { Text(if (isOnline) "Buscar..." else "Sin conexión", color = Color.Gray) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true,
-                                    enabled = isOnline,
-                                    colors = TextFieldDefaults.colors(
-                                        unfocusedContainerColor = Color.Transparent,
-                                        focusedContainerColor = Color.Transparent
-                                    )
+    Column(modifier = Modifier.fillMaxSize()) {
+        ConnectivityBanner()
+        
+        // Custom Top Bar
+        Surface(
+            shadowElevation = 4.dp,
+            color = if (isDark) Color(0xFF1B263B) else Color.White
+        ) {
+            Box(modifier = Modifier.statusBarsPadding()) {
+                TopAppBar(
+                    title = {
+                        if (selectedMessages.isNotEmpty()) {
+                            val allFromMe = selectedMessages.all { it.senderId == myUid }
+                            Column {
+                                Text("${selectedMessages.size} seleccionados", fontWeight = FontWeight.Bold)
+                                Text(
+                                    text = if (allFromMe) "Puedes eliminar o fijar estos mensajes" else "Solo puedes fijar estos mensajes",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.Gray
                                 )
-                            } else {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.clickable { onViewOtherProfile(otherUser.uid) }
-                                ) {
-                                    Box(modifier = Modifier.size(42.dp)) {
-                                        Surface(modifier = Modifier.fillMaxSize(), shape = CircleShape, color = Color.Gray.copy(alpha = 0.1f)) {
-                                            if (otherUser.fotoUrl.isNotEmpty()) {
-                                                AsyncImage(
-                                                    model = ImageRequest.Builder(LocalContext.current)
-                                                        .data(otherUser.fotoUrl)
-                                                        .crossfade(true)
-                                                        .diskCachePolicy(CachePolicy.ENABLED)
-                                                        .memoryCachePolicy(CachePolicy.ENABLED)
-                                                        .build(),
-                                                    contentDescription = null, 
-                                                    contentScale = ContentScale.Crop, 
-                                                    modifier = Modifier.fillMaxSize()
-                                                )
-                                            } else {
-                                                Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center), tint = Color.Gray)
-                                            }
-                                        }
-                                        // Status Dot
-                                        Box(
-                                            modifier = Modifier
-                                                .size(12.dp)
-                                                .clip(CircleShape)
-                                                .background(if (otherStatus == "en línea" && isOnline) Color(0xFF4CAF50) else Color.Gray)
-                                                .align(Alignment.BottomEnd)
-                                                .border(2.dp, if (isDark) Color(0xFF1B263B) else Color.White, CircleShape)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(
-                                                text = otherUser.nombre, 
-                                                style = MaterialTheme.typography.titleMedium, 
-                                                fontWeight = FontWeight.ExtraBold,
-                                                maxLines = 1,
-                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                                modifier = Modifier.fadingEdge(Brush.horizontalGradient(0.95f to Color.Black, 1f to Color.Transparent))
+                            }
+                        } else if (isSearchActive) {
+                            TextField(
+                                value = searchQuery,
+                                onValueChange = { viewModel.setSearchQuery(it) },
+                                placeholder = { Text(if (isOnline) "Buscar..." else "Sin conexión", color = Color.Gray) },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                enabled = isOnline,
+                                colors = TextFieldDefaults.colors(
+                                    unfocusedContainerColor = Color.Transparent,
+                                    focusedContainerColor = Color.Transparent
+                                )
+                            )
+                        } else {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.clickable { onViewOtherProfile(otherUser.uid) }
+                            ) {
+                                Box(modifier = Modifier.size(42.dp)) {
+                                    Surface(modifier = Modifier.fillMaxSize(), shape = CircleShape, color = Color.Gray.copy(alpha = 0.1f)) {
+                                        if (otherUser.fotoUrl.isNotEmpty()) {
+                                            AsyncImage(
+                                                model = ImageRequest.Builder(LocalContext.current)
+                                                    .data(otherUser.fotoUrl)
+                                                    .crossfade(true)
+                                                    .diskCachePolicy(CachePolicy.ENABLED)
+                                                    .memoryCachePolicy(CachePolicy.ENABLED)
+                                                    .build(),
+                                                contentDescription = null, 
+                                                contentScale = ContentScale.Crop, 
+                                                modifier = Modifier.fillMaxSize()
                                             )
-                                            if (isFavorite) {
-                                                Spacer(Modifier.width(4.dp))
-                                                Icon(Icons.Default.Star, null, tint = Color(0xFFFFD700), modifier = Modifier.size(14.dp))
-                                            }
+                                        } else {
+                                            Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center), tint = Color.Gray)
                                         }
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .size(12.dp)
+                                            .clip(CircleShape)
+                                            .background(if (otherStatus == "en línea" && isOnline) Color(0xFF4CAF50) else Color.Gray)
+                                            .align(Alignment.BottomEnd)
+                                            .border(2.dp, if (isDark) Color(0xFF1B263B) else Color.White, CircleShape)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
-                                            text = if (!isOnline) "OFFLINE" else if (isBlocked) "Cerrado" else otherStatus,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = if (!isOnline) Color.Gray else if (isBlocked) Color.Red else (if (otherStatus == "en línea") Color(0xFF4CAF50) else Color.Gray),
+                                            text = otherUser.nombre, 
+                                            style = MaterialTheme.typography.titleMedium, 
+                                            fontWeight = FontWeight.ExtraBold,
+                                            maxLines = 1,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                            modifier = Modifier.fadingEdge(Brush.horizontalGradient(0.95f to Color.Black, 1f to Color.Transparent))
                                         )
+                                        if (isFavorite) {
+                                            Spacer(Modifier.width(4.dp))
+                                            Icon(Icons.Default.Star, null, tint = Color(0xFFFFD700), modifier = Modifier.size(14.dp))
+                                        }
                                     }
-                                }
-                            }
-                        },
-                        navigationIcon = {
-                            IconButton(onClick = { if (selectedMessages.isNotEmpty()) selectedMessages.clear() else onNavigateBack() }) {
-                                Icon(if (selectedMessages.isNotEmpty()) Icons.Default.Close else Icons.AutoMirrored.Filled.ArrowBack, null)
-                            }
-                        },
-                        actions = {
-                            if (selectedMessages.isNotEmpty()) {
-                                val allFromMe = selectedMessages.all { it.senderId == myUid }
-                                
-                                IconButton(onClick = {
-                                    val textToCopy = selectedMessages.joinToString("\n") { it.text }
-                                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("chat", textToCopy))
-                                    selectedMessages.clear()
-                                }) { Icon(Icons.Default.ContentCopy, null, tint = Color.Gray) }
-                                
-                                if (selectedMessages.size == 1 && selectedMessages.first().senderId == myUid && !selectedMessages.first().deleted && isOnline) {
-                                    IconButton(onClick = {
-                                        val msg = selectedMessages.first()
-                                        messageToEdit = msg
-                                        inputText = msg.text
-                                        selectedMessages.clear()
-                                    }) { Icon(Icons.Default.Edit, null, tint = primaryColor) }
-                                }
-
-                                if (allFromMe && isOnline) {
-                                    IconButton(onClick = { showDeleteConfirmDialog = true }) { Icon(Icons.Default.Delete, null, tint = Color.Red) }
-                                }
-                                
-                                if (isOnline) {
-                                    IconButton(onClick = { showPinConfirmDialog = true }) { 
-                                        Icon(Icons.Default.PushPin, null, tint = MaterialTheme.colorScheme.primary) 
-                                    }
-                                }
-                            } else {
-                                IconButton(onClick = { isSearchActive = !isSearchActive }) { Icon(Icons.Default.Search, null) }
-                                IconButton(onClick = { showPinnedMessages = true }) { 
-                                    BadgedBox(badge = { if (pinnedMessages.isNotEmpty()) Badge { Text(pinnedMessages.size.toString()) } }) {
-                                        Icon(Icons.Default.PushPin, null)
-                                    }
-                                }
-                                var showTopMenu by remember { mutableStateOf(false) }
-                                IconButton(onClick = { showTopMenu = true }) { Icon(Icons.Default.MoreVert, null) }
-                                DropdownMenu(expanded = showTopMenu, onDismissRequest = { showTopMenu = false }) {
-                                    DropdownMenuItem(
-                                        text = { Text("Ver Perfil") },
-                                        onClick = { 
-                                            showTopMenu = false
-                                            if (iHaveBlocked) {
-                                                scope.launch {
-                                                    val snackbarHostState = SnackbarHostState()
-                                                    snackbarHostState.showSnackbar("Debes desbloquear al usuario para ver su perfil")
-                                                }
-                                            } else {
-                                                onViewOtherProfile(otherUser.uid)
-                                            }
-                                        },
-                                        leadingIcon = { Icon(Icons.Default.Person, null) }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text(if (isFavorite) "Quitar de Favoritos" else "Añadir a Favoritos") },
-                                        onClick = { showTopMenu = false; favoritosViewModel?.toggleFavorito(otherUser.uid) },
-                                        enabled = isOnline,
-                                        leadingIcon = { Icon(Icons.Default.Star, null, tint = if (isFavorite) Color.Yellow else Color.Gray) }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text(if (iHaveBlocked) "Desbloquear" else "Bloquear", color = if (iHaveBlocked) Color.Unspecified else Color.Red) },
-                                        onClick = { showTopMenu = false; favoritosViewModel?.toggleBloqueo(otherUser.uid) },
-                                        enabled = isOnline,
-                                        leadingIcon = { Icon(if (iHaveBlocked) Icons.Default.CheckCircle else Icons.Default.Block, null, tint = if (iHaveBlocked) Color(0xFF4CAF50) else Color.Red) }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text(if (iHaveUnwanted) "Mostrar en búsquedas" else "Ocultar de búsquedas") },
-                                        onClick = { showTopMenu = false; favoritosViewModel?.toggleNoDeseado(otherUser.uid) },
-                                        enabled = isOnline,
-                                        leadingIcon = { Icon(if (iHaveUnwanted) Icons.Default.Visibility else Icons.Default.VisibilityOff, null) }
+                                    Text(
+                                        text = if (!isOnline) "OFFLINE" else if (isBlocked) "Cerrado" else otherStatus,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (!isOnline) Color.Gray else if (isBlocked) Color.Red else (if (otherStatus == "en línea") Color(0xFF4CAF50) else Color.Gray),
                                     )
                                 }
                             }
                         }
-                    )
-                }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { if (selectedMessages.isNotEmpty()) selectedMessages.clear() else onNavigateBack() }) {
+                            Icon(if (selectedMessages.isNotEmpty()) Icons.Default.Close else Icons.AutoMirrored.Filled.ArrowBack, null)
+                        }
+                    },
+                    actions = {
+                        if (selectedMessages.isNotEmpty()) {
+                            val allFromMe = selectedMessages.all { it.senderId == myUid }
+                            IconButton(onClick = {
+                                val textToCopy = selectedMessages.joinToString("\n") { it.text }
+                                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("chat", textToCopy))
+                                selectedMessages.clear()
+                            }) { Icon(Icons.Default.ContentCopy, null, tint = Color.Gray) }
+                            if (selectedMessages.size == 1 && selectedMessages.first().senderId == myUid && !selectedMessages.first().deleted && isOnline) {
+                                IconButton(onClick = {
+                                    val msg = selectedMessages.first()
+                                    messageToEdit = msg
+                                    inputText = msg.text
+                                    selectedMessages.clear()
+                                }) { Icon(Icons.Default.Edit, null, tint = primaryColor) }
+                            }
+                            if (allFromMe && isOnline) {
+                                IconButton(onClick = { showDeleteConfirmDialog = true }) { Icon(Icons.Default.Delete, null, tint = Color.Red) }
+                            }
+                            if (isOnline) {
+                                IconButton(onClick = { showPinConfirmDialog = true }) { 
+                                    Icon(Icons.Default.PushPin, null, tint = MaterialTheme.colorScheme.primary) 
+                                }
+                            }
+                        } else {
+                            IconButton(onClick = { isSearchActive = !isSearchActive }) { Icon(Icons.Default.Search, null) }
+                            IconButton(onClick = { showPinnedMessages = true }) { 
+                                BadgedBox(badge = { if (pinnedMessages.isNotEmpty()) Badge { Text(pinnedMessages.size.toString()) } }) {
+                                    Icon(Icons.Default.PushPin, null)
+                                }
+                            }
+                            var showTopMenu by remember { mutableStateOf(false) }
+                            IconButton(onClick = { showTopMenu = true }) { Icon(Icons.Default.MoreVert, null) }
+                            DropdownMenu(expanded = showTopMenu, onDismissRequest = { showTopMenu = false }) {
+                                DropdownMenuItem(text = { Text("Ver Perfil") }, onClick = { showTopMenu = false; onViewOtherProfile(otherUser.uid) }, leadingIcon = { Icon(Icons.Default.Person, null) })
+                                DropdownMenuItem(text = { Text(if (isFavorite) "Quitar de Favoritos" else "Añadir a Favoritos") }, onClick = { showTopMenu = false; favoritosViewModel?.toggleFavorito(otherUser.uid) }, enabled = isOnline, leadingIcon = { Icon(Icons.Default.Star, null, tint = if (isFavorite) Color.Yellow else Color.Gray) })
+                                DropdownMenuItem(text = { Text(if (iHaveBlocked) "Desbloquear" else "Bloquear", color = if (iHaveBlocked) Color.Unspecified else Color.Red) }, onClick = { showTopMenu = false; favoritosViewModel?.toggleBloqueo(otherUser.uid) }, enabled = isOnline, leadingIcon = { Icon(if (iHaveBlocked) Icons.Default.CheckCircle else Icons.Default.Block, null, tint = if (iHaveBlocked) Color(0xFF4CAF50) else Color.Red) })
+                                DropdownMenuItem(text = { Text(if (iHaveUnwanted) "Mostrar en búsquedas" else "Ocultar de búsquedas") }, onClick = { showTopMenu = false; favoritosViewModel?.toggleNoDeseado(otherUser.uid) }, enabled = isOnline, leadingIcon = { Icon(if (iHaveUnwanted) Icons.Default.Visibility else Icons.Default.VisibilityOff, null) })
+                            }
+                        }
+                    }
+                )
             }
         }
-    ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+
+        Box(modifier = Modifier.weight(1f)) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -414,7 +379,7 @@ fun ChatScreen(
                         ) {
                             item {
                                 Column {
-                                    AnimatedVisibility(visible = isOtherTyping && isOnline, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                                    androidx.compose.animation.AnimatedVisibility(visible = isOtherTyping && isOnline, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                                         Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                             Text("${otherUser.nombre} está escribiendo...", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
                                         }
@@ -469,14 +434,17 @@ fun ChatScreen(
                     tonalElevation = 8.dp,
                     color = if (isDark) Color(0xFF1B263B) else Color.White,
                     shape = RoundedCornerShape(24.dp, 24.dp, 0.dp, 0.dp),
-                    modifier = Modifier.fillMaxWidth().imePadding()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .imePadding()
+                        .navigationBarsPadding()
                 ) {
                     if (!isOnline) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .background(if (isDark) Color(0xFF2B2D31) else Color(0xFFF2F3F5))
-                                .padding(20.dp),
+                                .padding(top = 20.dp, bottom = 40.dp, start = 20.dp, end = 20.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -544,7 +512,7 @@ fun ChatScreen(
                             }
                         }
                     } else {
-                        Column(modifier = Modifier.padding(16.dp)) {
+                        Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp)) {
                             if (replyingToMessage != null) {
                                 Surface(
                                     modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
@@ -621,7 +589,7 @@ fun ChatScreen(
                 }
             }
 
-            AnimatedVisibility(
+            androidx.compose.animation.AnimatedVisibility(
                 visible = isScrolledUp,
                 enter = slideInVertically { it } + fadeIn(),
                 exit = slideOutVertically { it } + fadeOut(),
@@ -951,7 +919,7 @@ fun TaskShareSection(
             }
         }
         
-        AnimatedVisibility(visible = expanded) {
+        androidx.compose.animation.AnimatedVisibility(visible = expanded) {
             Column(Modifier.padding(start = 8.dp, top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (tasks.isEmpty()) {
                     Text("Sin tareas", style = MaterialTheme.typography.labelSmall, color = Color.Gray, modifier = Modifier.padding(12.dp))
@@ -1003,7 +971,7 @@ fun ChatBubble(
         else -> if (isDark) Color(0xFF1B263B) else Color.White
     }
     
-    val finalBubbleColor by animateColorAsState(
+    val finalBubbleColor by androidx.compose.animation.animateColorAsState(
         targetValue = if (isHighlighted) highlightColor else bubbleColor,
         animationSpec = if (isHighlighted) infiniteRepeatable(
             animation = tween(1000),

@@ -67,11 +67,11 @@ fun ProfileScreen(
     val secondaryTextColor = MaterialTheme.colorScheme.onSurfaceVariant
     val panelBg = customColors.panelBackground
 
-    Scaffold(
-        topBar = { ConnectivityBanner() },
-        containerColor = Color.Transparent,
+    Column(
         modifier = Modifier.fillMaxSize()
-    ) { innerPadding ->
+    ) {
+        ConnectivityBanner()
+        
         PullToRefreshBox(
             state = pullToRefreshState,
             isRefreshing = isRefreshing,
@@ -81,9 +81,7 @@ fun ProfileScreen(
                     fichaViewModel.checkProfile()
                 }
             },
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
+            modifier = Modifier.fillMaxSize()
         ) {
             Box(
                 modifier = Modifier
@@ -295,42 +293,49 @@ fun ProfileScreen(
 
                         Spacer(modifier = Modifier.height(24.dp))
 
-                        Text(
-                            text = if (userData.rol == "cuidador") "MI FICHA TÉCNICA" else "FICHA DEL FAMILIAR",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = accentColor,
-                            modifier = Modifier.fillMaxWidth().padding(start = 8.dp, bottom = 12.dp)
-                        )
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.Start
+                        ) {
+                            Text(
+                                text = if (userData.rol == "cuidador") "MI FICHA TÉCNICA" else "FICHA DEL FAMILIAR",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = accentColor,
+                                modifier = Modifier.padding(start = 8.dp, bottom = 12.dp)
+                            )
 
-                        when (fichaState) {
-                            is FichaState.Loading -> {
-                                CircularProgressIndicator(color = accentColor, modifier = Modifier.padding(24.dp))
-                            }
-                            is FichaState.View -> {
-                                ProfileDetailView(
-                                    role = fichaRole,
-                                    data = (fichaState as FichaState.View).data,
-                                    isSummary = !isFichaExpanded,
-                                    onExpand = { isFichaExpanded = !isFichaExpanded },
-                                    onEdit = { 
-                                        val intent = Intent(context, FichaActivity::class.java)
-                                        context.startActivity(intent)
+                            when (fichaState) {
+                                is FichaState.Loading -> {
+                                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                        CircularProgressIndicator(color = accentColor, modifier = Modifier.padding(24.dp))
                                     }
-                                )
+                                }
+                                is FichaState.View -> {
+                                    ProfileDetailView(
+                                        role = fichaRole,
+                                        data = (fichaState as FichaState.View).data,
+                                        isSummary = !isFichaExpanded,
+                                        onExpand = { isFichaExpanded = !isFichaExpanded },
+                                        onEdit = { 
+                                            val intent = Intent(context, FichaActivity::class.java)
+                                            context.startActivity(intent)
+                                        }
+                                    )
+                                }
+                                is FichaState.NotFound -> {
+                                    FichaPlaceholder(
+                                        role = userData.rol,
+                                        accentColor = accentColor,
+                                        panelBg = panelBg,
+                                        textColor = textColor,
+                                        secondaryTextColor = secondaryTextColor,
+                                        onCreateClick = {
+                                            context.startActivity(Intent(context, FichaActivity::class.java))
+                                        }
+                                    )
+                                }
+                                else -> { }
                             }
-                            is FichaState.NotFound -> {
-                                FichaPlaceholder(
-                                    role = userData.rol,
-                                    accentColor = accentColor,
-                                    panelBg = panelBg,
-                                    textColor = textColor,
-                                    secondaryTextColor = secondaryTextColor,
-                                    onCreateClick = {
-                                        context.startActivity(Intent(context, FichaActivity::class.java))
-                                    }
-                                )
-                            }
-                            else -> { }
                         }
                         
                         Spacer(modifier = Modifier.height(100.dp))

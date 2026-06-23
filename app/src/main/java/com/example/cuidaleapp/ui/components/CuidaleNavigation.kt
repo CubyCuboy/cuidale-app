@@ -5,6 +5,8 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
@@ -37,23 +40,69 @@ import com.example.cuidaleapp.R
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 
 @Composable
-fun CuidaleDrawerContent(nombre: String, apellido: String, fotoUrl: String, rol: String = "", isDark: Boolean, onToggleTheme: () -> Unit, onProfileClick: () -> Unit, onFichaClick: () -> Unit, onSettingsClick: () -> Unit, onLogoutClick: () -> Unit, onCloseClick: () -> Unit) {
+fun CuidaleDrawerContent(
+    nombre: String, 
+    apellido: String, 
+    fotoUrl: String, 
+    rol: String = "", 
+    isDark: Boolean, 
+    onToggleTheme: () -> Unit, 
+    onProfileClick: () -> Unit, 
+    onFichaClick: () -> Unit, 
+    onSettingsClick: () -> Unit,
+    onSocialClick: () -> Unit,
+    onLogoutClick: () -> Unit, 
+    onCloseClick: () -> Unit
+) {
     val colors = MaterialTheme.colorScheme; val customColors = CuidaleThemeExtras.customColors
     val accentColor = if (rol == "cuidador") colors.primary else customColors.successStrong
     val context = LocalContext.current
     
-    Column(modifier = Modifier.fillMaxSize().background(customColors.panelBackground).padding(24.dp).windowInsetsPadding(WindowInsets.statusBars)) {
-        Row(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onCloseClick) { Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = colors.onSurface) }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(customColors.panelBackground)
+            .padding(24.dp)
+            .windowInsetsPadding(WindowInsets.statusBars)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), 
+            horizontalArrangement = Arrangement.SpaceBetween, 
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onCloseClick) { 
+                Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = colors.onSurface) 
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = if (isDark) Icons.Default.DarkMode else Icons.Default.LightMode, contentDescription = null, tint = colors.primary)
-                Spacer(modifier = Modifier.width(8.dp)); Text(text = "Modo Oscuro", style = MaterialTheme.typography.bodyMedium, color = colors.onSurface)
-                Spacer(modifier = Modifier.width(8.dp)); Switch(checked = isDark, onCheckedChange = { onToggleTheme() })
+                Icon(
+                    imageVector = if (isDark) Icons.Default.DarkMode else Icons.Default.LightMode, 
+                    contentDescription = null, 
+                    tint = colors.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Switch(
+                    checked = isDark, 
+                    onCheckedChange = { onToggleTheme() },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = colors.primary,
+                        checkedTrackColor = colors.primaryContainer
+                    )
+                )
             }
         }
-        HorizontalDivider(modifier = Modifier.padding(bottom = 24.dp), color = colors.outlineVariant.copy(alpha = 0.5f))
+        
+        HorizontalDivider(modifier = Modifier.padding(bottom = 24.dp), color = colors.outlineVariant.copy(alpha = 0.3f))
+        
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-            Box(modifier = Modifier.size(100.dp).clip(CircleShape).background(customColors.avatarBackground).border(2.dp, accentColor.copy(alpha = 0.3f), CircleShape), contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .size(110.dp)
+                    .clip(CircleShape)
+                    .background(customColors.avatarBackground)
+                    .border(3.dp, accentColor.copy(alpha = 0.4f), CircleShape), 
+                contentAlignment = Alignment.Center
+            ) {
                 if (fotoUrl.isNotEmpty() && !fotoUrl.startsWith("res:")) {
                     AsyncImage(
                         model = ImageRequest.Builder(context)
@@ -64,54 +113,130 @@ fun CuidaleDrawerContent(nombre: String, apellido: String, fotoUrl: String, rol:
                             .build(),
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
-                        placeholder = androidx.compose.ui.graphics.painter.ColorPainter(customColors.avatarBackground)
+                        contentScale = ContentScale.Crop
                     )
                 } else {
-                    Icon(imageVector = Icons.Default.Person, contentDescription = null, modifier = Modifier.size(50.dp), tint = colors.onSurfaceVariant.copy(alpha = 0.6f))
+                    Icon(
+                        imageVector = Icons.Default.Person, 
+                        contentDescription = null, 
+                        modifier = Modifier.size(56.dp), 
+                        tint = colors.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
                 }
+                
+                // Active status dot
+                Box(
+                    modifier = Modifier
+                        .size(16.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF4CAF50))
+                        .border(2.dp, customColors.panelBackground, CircleShape)
+                        .align(Alignment.BottomEnd)
+                        .offset(x = (-4).dp, y = (-4).dp)
+                )
             }
+            
             Spacer(modifier = Modifier.height(16.dp))
             
             val fullName = listOf(nombre, apellido).filter { it.isNotBlank() }.joinToString(" ").ifEmpty { "Usuario Cuidale" }
             
             Text(
                 text = fullName,
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
                 color = colors.onSurface,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fadingEdge(
-                    Brush.horizontalGradient(
-                        0.98f to Color.Black,
-                        1f to Color.Transparent
-                    )
-                )
+                overflow = TextOverflow.Ellipsis
             )
             
             if (rol.isNotEmpty()) {
-                Surface(color = accentColor.copy(alpha = 0.1f), shape = CircleShape, modifier = Modifier.padding(top = 8.dp)) {
-                    Text(text = rol.uppercase(), modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = accentColor)
+                Surface(
+                    color = accentColor.copy(alpha = 0.15f), 
+                    shape = RoundedCornerShape(8.dp), 
+                    modifier = Modifier.padding(top = 8.dp)
+                ) {
+                    Text(
+                        text = rol.uppercase(), 
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp), 
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.sp
+                        ), 
+                        color = accentColor
+                    )
                 }
             }
         }
-        Spacer(modifier = Modifier.height(48.dp))
-        NavigationDrawerItem(label = { Text(stringResource(R.string.menu_item_profile)) }, selected = false, onClick = onProfileClick, icon = { Icon(Icons.Default.Person, contentDescription = null) }, colors = NavigationDrawerItemDefaults.colors(unselectedContainerColor = Color.Transparent))
-        NavigationDrawerItem(label = { Text(stringResource(R.string.menu_item_ficha)) }, selected = false, onClick = onFichaClick, icon = { Icon(Icons.Default.Badge, contentDescription = null) }, colors = NavigationDrawerItemDefaults.colors(unselectedContainerColor = Color.Transparent))
-        NavigationDrawerItem(label = { Text("Configuración") }, selected = false, onClick = onSettingsClick, icon = { Icon(Icons.Default.Settings, contentDescription = null) }, colors = NavigationDrawerItemDefaults.colors(unselectedContainerColor = Color.Transparent))
+        
+        Spacer(modifier = Modifier.height(40.dp))
+        
+        Text(
+            text = "Mi Cuenta",
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+            color = colors.primary,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+        )
+        
+        NavigationDrawerItem(
+            label = { Text("Mi Perfil", fontWeight = FontWeight.Bold) }, 
+            selected = false, 
+            onClick = onProfileClick, 
+            icon = { Icon(Icons.Default.Person, contentDescription = null) }, 
+            colors = NavigationDrawerItemDefaults.colors(unselectedContainerColor = Color.Transparent)
+        )
+        NavigationDrawerItem(
+            label = { Text("Ficha Técnica", fontWeight = FontWeight.Bold) }, 
+            selected = false, 
+            onClick = onFichaClick, 
+            icon = { Icon(Icons.Default.Badge, contentDescription = null) }, 
+            colors = NavigationDrawerItemDefaults.colors(unselectedContainerColor = Color.Transparent)
+        )
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Text(
+            text = "Gestión",
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+            color = colors.primary,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+        )
+
+        NavigationDrawerItem(
+            label = { Text("Red de Contactos", fontWeight = FontWeight.Bold) }, 
+            selected = false, 
+            onClick = onSocialClick, 
+            icon = { Icon(Icons.Default.Group, contentDescription = null) }, 
+            colors = NavigationDrawerItemDefaults.colors(unselectedContainerColor = Color.Transparent)
+        )
+        NavigationDrawerItem(
+            label = { Text("Configuración", fontWeight = FontWeight.Bold) }, 
+            selected = false, 
+            onClick = onSettingsClick, 
+            icon = { Icon(Icons.Default.Settings, contentDescription = null) }, 
+            colors = NavigationDrawerItemDefaults.colors(unselectedContainerColor = Color.Transparent)
+        )
         
         Spacer(modifier = Modifier.weight(1f))
         
-        Text(
-            text = "v${stringResource(R.string.app_version)} - Cuidale",
-            modifier = Modifier.padding(vertical = 16.dp).align(Alignment.CenterHorizontally),
-            style = MaterialTheme.typography.labelSmall,
-            color = colors.onSurfaceVariant.copy(alpha = 0.5f)
+        HardShadowButton(
+            text = "CERRAR SESIÓN", 
+            containerColor = colors.error, 
+            contentColor = Color.White, 
+            shadowColor = colors.error.copy(alpha = 0.2f), 
+            isDark = customColors.isDark, 
+            onClick = onLogoutClick, 
+            icon = Icons.AutoMirrored.Filled.Logout
         )
-
-
-        Spacer(modifier = Modifier.weight(1f)); HardShadowButton(text = stringResource(R.string.menu_logout), containerColor = colors.error, contentColor = Color.White, shadowColor = colors.errorContainer, isDark = customColors.isDark, onClick = onLogoutClick, icon = Icons.AutoMirrored.Filled.Logout)
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Text(
+            text = "v${stringResource(R.string.app_version)} • Cuidale App",
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.labelSmall,
+            color = colors.onSurfaceVariant.copy(alpha = 0.4f)
+        )
     }
 }
 
@@ -165,76 +290,127 @@ fun CuidaleSearchContent(
 }
 
 @Composable
-fun CuidaleBottomBar(selectedTab: String, unreadCount: Int = 0, pendingNotifs: Int = 0, pendingRequests: Int = 0, onTabSelected: (String) -> Unit) {
+fun CuidaleBottomBar(
+    selectedTab: String, 
+    unreadCount: Int = 0, 
+    pendingNotifs: Int = 0, 
+    pendingRequests: Int = 0, 
+    fotoUrl: String = "",
+    onTabSelected: (String) -> Unit
+) {
     val customColors = CuidaleThemeExtras.customColors
-    Surface(color = customColors.panelBackground, tonalElevation = 8.dp, shadowElevation = 16.dp, modifier = Modifier.fillMaxWidth()) {
-        Row(modifier = Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars).height(72.dp).padding(horizontal = 24.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+    Surface(
+        color = customColors.panelBackground, 
+        tonalElevation = 0.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                shadowElevation = 15f
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+                clip = true
+            }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .height(80.dp)
+                .padding(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.SpaceAround, 
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             BottomNavItem(icon = Icons.Default.Notifications, isSelected = selectedTab == "notifications", badgeCount = pendingNotifs, onClick = { onTabSelected("notifications") })
             BottomNavItem(icon = Icons.AutoMirrored.Filled.Assignment, isSelected = selectedTab == "requests", badgeCount = pendingRequests, onClick = { onTabSelected("requests") })
-            BottomNavItem(icon = Icons.Default.Home, isSelected = selectedTab == "home", onClick = { onTabSelected("home") }, isCenter = true)
+            BottomNavItem(icon = Icons.Default.Home, isSelected = selectedTab == "home", onClick = { onTabSelected("home") })
             BottomNavItem(icon = Icons.AutoMirrored.Filled.Chat, isSelected = selectedTab == "chats", badgeCount = unreadCount, onClick = { onTabSelected("chats") })
+            BottomNavItem(icon = Icons.Default.Person, isSelected = selectedTab == "profile", onClick = { onTabSelected("profile") })
         }
     }
 }
 
 @Composable
-private fun BottomNavItem(icon: ImageVector, isSelected: Boolean, onClick: () -> Unit, isCenter: Boolean = false, badgeCount: Int = 0) {
+private fun BottomNavItem(
+    icon: ImageVector, 
+    isSelected: Boolean, 
+    onClick: () -> Unit, 
+    modifier: Modifier = Modifier,
+    isCenter: Boolean = false,
+    badgeCount: Int = 0
+) {
     val colors = MaterialTheme.colorScheme
-    val backgroundColor by animateColorAsState(targetValue = if (isSelected) colors.primary else Color.Transparent, animationSpec = tween(300), label = "tabBg")
-    val iconColor by animateColorAsState(targetValue = if (isSelected) Color.White else colors.onSurface.copy(alpha = 0.6f), animationSpec = tween(300), label = "tabIcon")
+    val backgroundColor by animateColorAsState(
+        targetValue = when {
+            isCenter && isSelected -> colors.primary
+            isCenter -> colors.primary.copy(alpha = 0.9f)
+            isSelected -> colors.primary.copy(alpha = 0.25f)
+            else -> Color.Transparent
+        },
+        animationSpec = tween(400),
+        label = "tabBg"
+    )
+    val iconColor by animateColorAsState(
+        targetValue = when {
+            isCenter -> Color.White
+            isSelected -> colors.primary
+            else -> colors.onSurface.copy(alpha = 0.4f)
+        },
+        animationSpec = tween(400),
+        label = "tabIcon"
+    )
     
-    val shakeRotation = remember { Animatable(0f) }
-    val isNotificationIcon = icon == Icons.Default.Notifications
-    var lastBadgeCount by remember { mutableIntStateOf(badgeCount) }
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
     
-    LaunchedEffect(badgeCount) {
-        if (isNotificationIcon && badgeCount > lastBadgeCount && !isSelected) {
-            repeat(4) {
-                shakeRotation.animateTo(15f, tween(80))
-                shakeRotation.animateTo(-15f, tween(80))
-            }
-            shakeRotation.animateTo(0f, tween(80))
-        }
-        lastBadgeCount = badgeCount
-    }
-
     val scale by animateFloatAsState(
-        targetValue = if (isSelected) 1.2f else 1.0f, 
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow), 
+        targetValue = when {
+            isPressed -> 0.9f
+            isSelected -> 1.25f
+            else -> 1.0f
+        },
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy), 
         label = "tabScale"
     )
 
     Box(
-        modifier = Modifier
-            .size(if (isCenter) 52.dp else 44.dp)
+        modifier = modifier
+            .size(if (isCenter) 60.dp else 52.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
-                rotationZ = shakeRotation.value
             }
-            .clip(RoundedCornerShape(if (isCenter) 16.dp else 12.dp))
+            .clip(RoundedCornerShape(if (isCenter) 22.dp else 18.dp))
             .background(backgroundColor)
-            .clickable(onClick = onClick), 
+            .then(
+                if (isSelected && !isCenter) {
+                    Modifier.border(2.dp, colors.primary, RoundedCornerShape(18.dp))
+                } else Modifier
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ), 
         contentAlignment = Alignment.Center
     ) {
         BadgedBox(
             badge = { 
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = badgeCount > 0,
-                    enter = scaleIn(initialScale = 0.3f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeIn(),
-                    exit = scaleOut(targetScale = 0.3f) + fadeOut()
-                ) {
+                if (badgeCount > 0) {
                     Badge(
                         containerColor = Color.Red, 
-                        contentColor = Color.White, 
+                        contentColor = Color.White,
                         modifier = Modifier.offset(x = 4.dp, y = (-4).dp)
                     ) { 
-                        Text(if (badgeCount > 99) "+99" else badgeCount.toString(), style = MaterialTheme.typography.labelSmall) 
+                        Text(if (badgeCount > 9) "+" else badgeCount.toString(), style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }
         ) {
-            Icon(imageVector = icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(if (isCenter) 28.dp else 24.dp))
+            Icon(
+                imageVector = icon, 
+                contentDescription = null, 
+                tint = iconColor, 
+                modifier = Modifier.size(if (isCenter) 30.dp else 24.dp)
+            )
         }
     }
 }

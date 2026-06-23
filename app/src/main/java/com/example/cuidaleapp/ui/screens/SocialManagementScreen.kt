@@ -1,14 +1,19 @@
 package com.example.cuidaleapp.ui.screens
 
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,16 +23,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import com.example.cuidaleapp.models.UserData
-import com.example.cuidaleapp.ui.components.HardShadowPanel
+import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.FavoritosViewModel
 import com.example.cuidaleapp.viewmodel.VinculosViewModel
-
-import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.utils.ConnectivityObserver
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -38,7 +44,6 @@ fun SocialManagementScreen(
     favoritosViewModel: FavoritosViewModel = viewModel(),
     vinculosViewModel: VinculosViewModel = viewModel()
 ) {
-    val isOnline by ConnectivityObserver.isOnline.collectAsState()
     val managedUsers by favoritosViewModel.managedUsers.collectAsState()
     val favoritos by favoritosViewModel.favoritos.collectAsState()
     val guardados by favoritosViewModel.guardados.collectAsState()
@@ -48,6 +53,7 @@ fun SocialManagementScreen(
     val vinculosUsers by vinculosViewModel.vinculosUsers.collectAsState()
 
     var selectedTab by remember { mutableIntStateOf(0) }
+    val customColors = CuidaleThemeExtras.customColors
 
     LaunchedEffect(Unit) {
         vinculosViewModel.loadVinculos()
@@ -57,90 +63,76 @@ fun SocialManagementScreen(
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
-            Column {
+            Column(modifier = Modifier.background(customColors.panelBackground)) {
                 ConnectivityBanner()
                 TopAppBar(
-                    title = { Text("Gestión de Contactos", fontWeight = FontWeight.ExtraBold) },
+                    title = { Text("Red de Contactos", fontWeight = FontWeight.Black) },
                     navigationIcon = {
                         IconButton(onClick = onNavigateBack) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent
-                    )
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
                 )
                 ScrollableTabRow(
                     selectedTabIndex = selectedTab,
                     containerColor = Color.Transparent,
-                    contentColor = MaterialTheme.colorScheme.primary,
                     edgePadding = 16.dp,
+                    divider = {},
                     indicator = { tabPositions ->
-                        if (selectedTab < tabPositions.size) {
-                            TabRowDefaults.SecondaryIndicator(
-                                Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
+                        TabRowDefaults.SecondaryIndicator(
+                            Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                            height = 3.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
                 ) {
-                    Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("FAVORITOS") })
-                    Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("GUARDADOS") })
-                    Tab(
-                        selected = selectedTab == 2, 
-                        onClick = { selectedTab = 2 }, 
-                        text = { 
-                            val pending = misVinculos.count { it.estado == "pendiente" && it.solicitante != vinculosViewModel.myUid }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("SOLICITUDES")
-                                if (pending > 0) {
-                                    Spacer(Modifier.width(4.dp))
-                                    Badge { Text(pending.toString()) }
-                                }
-                            }
-                        }
-                    )
-                    Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text("NO DESEADOS") })
-                    Tab(selected = selectedTab == 4, onClick = { selectedTab = 4 }, text = { Text("BLOQUEADOS") })
+                    SocialTab(0, "CONTACTOS", selectedTab == 0) { selectedTab = 0 }
+                    SocialTab(1, "FAVORITOS", selectedTab == 1) { selectedTab = 1 }
+                    SocialTab(2, "GUARDADOS", selectedTab == 2) { selectedTab = 2 }
+                    SocialTab(3, "NO DESEADOS", selectedTab == 3) { selectedTab = 3 }
+                    SocialTab(4, "BLOQUEADOS", selectedTab == 4) { selectedTab = 4 }
                 }
             }
         }
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            when (selectedTab) {
-                0 -> {
-                    val users = managedUsers.filter { favoritos.contains(it.uid) }
-                    SocialList(users, "No tienes usuarios favoritos.", onUserClick, favoritosViewModel)
-                }
-                1 -> {
-                    val users = managedUsers.filter { guardados.contains(it.uid) }
-                    SocialList(users, "No tienes usuarios guardados.", onUserClick, favoritosViewModel)
-                }
-                2 -> {
-                    val requests = misVinculos.filter { it.estado == "pendiente" && it.solicitante != vinculosViewModel.myUid }
-                    if (requests.isEmpty()) {
-                        EmptyState("No tienes solicitudes pendientes.")
-                    } else {
-                        LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            items(requests) { vinculo ->
-                                val otherUid = if (vinculo.uid1 == vinculosViewModel.myUid) vinculo.uid2 else vinculo.uid1
-                                val user = vinculosUsers[otherUid]
-                                RequestItem(user, onAccept = { vinculosViewModel.aceptarSolicitud(vinculo.id) }, onDecline = { vinculosViewModel.rechazarSolicitud(vinculo.id) }, onUserClick = { user?.let { onUserClick(it.uid) } })
+        Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+            AnimatedContent(
+                targetState = selectedTab,
+                transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(300)) },
+                label = "socialTabContent"
+            ) { targetTab ->
+                when (targetTab) {
+                    0 -> { // Contactos (Vínculos Aceptados)
+                        val acceptedVinculos = misVinculos.filter { it.estado == "aceptado" }
+                        if (acceptedVinculos.isEmpty()) {
+                            SocialEmptyState(Icons.Default.People, "Aún no tienes contactos", "Conecta con cuidadores o familias para que aparezcan aquí.")
+                        } else {
+                            LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                items(acceptedVinculos) { vinculo ->
+                                    val otherUid = if (vinculo.uid1 == vinculosViewModel.myUid) vinculo.uid2 else vinculo.uid1
+                                    val user = vinculosUsers[otherUid]
+                                    ContactCard(user, onUserClick = { user?.let { onUserClick(it.uid) } })
+                                }
                             }
                         }
                     }
-                }
-                3 -> {
-                    val users = managedUsers.filter { noDeseados.contains(it.uid) }
-                    SocialList(users, "No tienes usuarios en no deseados.", onUserClick, favoritosViewModel)
-                }
-                4 -> {
-                    val users = managedUsers.filter { bloqueados.contains(it.uid) }
-                    SocialList(users, "No tienes usuarios bloqueados.", onUserClick, favoritosViewModel)
+                    1 -> { // Favoritos
+                        val users = managedUsers.filter { favoritos.contains(it.uid) }
+                        SocialUserList(users, Icons.Default.Star, "Sin favoritos", "Marca perfiles con una estrella para tenerlos siempre a mano.", onUserClick, favoritosViewModel)
+                    }
+                    2 -> { // Guardados
+                        val users = managedUsers.filter { guardados.contains(it.uid) }
+                        SocialUserList(users, Icons.Default.Bookmark, "Nada guardado", "Guarda perfiles que te interesen para revisarlos después.", onUserClick, favoritosViewModel)
+                    }
+                    3 -> { // No deseados
+                        val users = managedUsers.filter { noDeseados.contains(it.uid) }
+                        SocialUserList(users, Icons.Default.VisibilityOff, "Lista limpia", "Aquí aparecerán los perfiles que decidiste no volver a ver.", onUserClick, favoritosViewModel)
+                    }
+                    4 -> { // Bloqueados
+                        val users = managedUsers.filter { bloqueados.contains(it.uid) }
+                        SocialUserList(users, Icons.Default.Block, "Sin bloqueos", "Usuarios bloqueados no podrán contactarte ni ver tu perfil.", onUserClick, favoritosViewModel)
+                    }
                 }
             }
         }
@@ -148,168 +140,234 @@ fun SocialManagementScreen(
 }
 
 @Composable
-fun SocialList(users: List<UserData>, emptyMsg: String, onUserClick: (String) -> Unit, viewModel: FavoritosViewModel) {
+fun SocialTab(index: Int, label: String, isSelected: Boolean, onClick: () -> Unit) {
+    Tab(
+        selected = isSelected,
+        onClick = onClick,
+        text = {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontWeight = if (isSelected) FontWeight.Black else FontWeight.Medium,
+                    letterSpacing = 0.5.sp
+                )
+            )
+        }
+    )
+}
+
+@Composable
+fun SocialUserList(
+    users: List<UserData>,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    emptyTitle: String,
+    emptySubtitle: String,
+    onUserClick: (String) -> Unit,
+    viewModel: FavoritosViewModel
+) {
     if (users.isEmpty()) {
-        EmptyState(emptyMsg)
+        SocialEmptyState(icon, emptyTitle, emptySubtitle)
     } else {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(users) { user ->
-                val favs by viewModel.favoritos.collectAsState()
-                val saved by viewModel.guardados.collectAsState()
-                val unwanted by viewModel.noDeseados.collectAsState()
-                val blocked by viewModel.bloqueados.collectAsState()
+            items(users, key = { it.uid }) { user ->
+                Box(modifier = Modifier.animateItem(
+                    fadeInSpec = tween(500),
+                    placementSpec = tween(500),
+                    fadeOutSpec = tween(500)
+                )) {
+                    SocialManagementCard(
+                        user = user,
+                        onUserClick = { onUserClick(user.uid) },
+                        actions = {
+                            val favs by viewModel.favoritos.collectAsState()
+                            val saved by viewModel.guardados.collectAsState()
+                            val unwanted by viewModel.noDeseados.collectAsState()
+                            val blocked by viewModel.bloqueados.collectAsState()
 
-                SocialUserItem(
-                    user = user,
-                    isFavorito = favs.contains(user.uid),
-                    isGuardado = saved.contains(user.uid),
-                    isNoDeseado = unwanted.contains(user.uid),
-                    isBloqueado = blocked.contains(user.uid),
-                    onUserClick = { onUserClick(user.uid) },
-                    onToggleFav = { viewModel.toggleFavorito(user.uid) },
-                    onToggleSaved = { viewModel.toggleGuardado(user.uid) },
-                    onToggleHidden = { viewModel.toggleNoDeseado(user.uid) },
-                    onToggleBlocked = { viewModel.toggleBloqueo(user.uid) }
-                )
+                            SocialActionButtons(
+                                isFavorito = favs.contains(user.uid),
+                                isGuardado = saved.contains(user.uid),
+                                isNoDeseado = unwanted.contains(user.uid),
+                                isBloqueado = blocked.contains(user.uid),
+                                onToggleFav = { viewModel.toggleFavorito(user.uid) },
+                                onToggleSaved = { viewModel.toggleGuardado(user.uid) },
+                                onToggleHidden = { viewModel.toggleNoDeseado(user.uid) },
+                                onToggleBlocked = { viewModel.toggleBloqueo(user.uid) }
+                            )
+                        }
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-fun EmptyState(message: String) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-@Composable
-fun RequestItem(user: UserData?, onAccept: () -> Unit, onDecline: () -> Unit, onUserClick: () -> Unit) {
+fun ContactCard(user: UserData?, onUserClick: () -> Unit) {
     val customColors = CuidaleThemeExtras.customColors
     HardShadowPanel(
         backgroundColor = customColors.panelBackground,
-        modifier = Modifier.clickable { onUserClick() }
+        modifier = Modifier.clickable { onUserClick() },
+        cornerRadius = 20.dp
     ) {
-        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.size(44.dp).clip(CircleShape).background(Color.Gray.copy(alpha = 0.1f))) {
-                if (user?.fotoUrl?.isNotEmpty() == true) {
-                    AsyncImage(model = user.fotoUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                } else {
-                    Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center))
-                }
-            }
-            Spacer(Modifier.width(12.dp))
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            UserAvatar(user?.fotoUrl, size = 56.dp)
+            Spacer(Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(user?.let { "${it.nombre} ${it.apellido_pa}" } ?: "Cargando...", fontWeight = FontWeight.Bold)
-                Text("Quiere conectar contigo", style = MaterialTheme.typography.bodySmall)
+                Text(
+                    user?.let { "${it.nombre} ${it.apellido_pa}" } ?: "Cargando...",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    user?.rol?.uppercase() ?: "",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Black
+                )
             }
-            IconButton(onClick = onAccept) {
-                Icon(Icons.Default.Check, "Aceptar", tint = Color(0xFF4CAF50))
+            Icon(Icons.AutoMirrored.Filled.Chat, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+        }
+    }
+}
+
+@Composable
+fun SocialManagementCard(
+    user: UserData,
+    onUserClick: () -> Unit,
+    actions: @Composable () -> Unit
+) {
+    val customColors = CuidaleThemeExtras.customColors
+    HardShadowPanel(
+        backgroundColor = customColors.panelBackground,
+        cornerRadius = 20.dp,
+        contentPadding = PaddingValues(0.dp)
+    ) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .clickable { onUserClick() }
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                UserAvatar(user.fotoUrl, size = 50.dp)
+                Spacer(Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "${user.nombre} ${user.apellido_pa}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = user.rol.uppercase(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Icon(Icons.Default.ChevronRight, null, tint = Color.Gray.copy(alpha = 0.5f))
             }
-            IconButton(onClick = onDecline) {
-                Icon(Icons.Default.Close, "Rechazar", tint = Color.Red)
+            
+            HorizontalDivider(color = Color.Gray.copy(alpha = 0.05f))
+            
+            Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+                actions()
             }
         }
     }
 }
 
 @Composable
-fun SocialUserItem(
-    user: UserData,
+fun SocialActionButtons(
     isFavorito: Boolean,
     isGuardado: Boolean,
     isNoDeseado: Boolean,
     isBloqueado: Boolean,
-    onUserClick: () -> Unit,
     onToggleFav: () -> Unit,
     onToggleSaved: () -> Unit,
     onToggleHidden: () -> Unit,
     onToggleBlocked: () -> Unit
 ) {
-    val customColors = CuidaleThemeExtras.customColors
-    
-    HardShadowPanel(
-        modifier = Modifier.clickable(onClick = onUserClick),
-        backgroundColor = if (isBloqueado) customColors.panelBackground.copy(alpha = 0.5f) else customColors.panelBackground
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceAround,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier.size(50.dp).clip(CircleShape).background(customColors.avatarBackground)
-            ) {
-                if (user.fotoUrl.isNotEmpty()) {
-                    AsyncImage(model = user.fotoUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                } else {
-                    Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center), tint = Color.Gray)
-                }
-                if (isBloqueado) {
-                    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.Block, null, tint = Color.White, modifier = Modifier.size(24.dp))
-                    }
-                }
-            }
+        ActionButton(
+            icon = if (isFavorito) Icons.Default.Star else Icons.Default.StarBorder,
+            label = if (isFavorito) "Favorito" else "Marcar",
+            color = if (isFavorito) Color(0xFFFFD700) else Color.Gray,
+            onClick = onToggleFav
+        )
+        ActionButton(
+            icon = if (isGuardado) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+            label = if (isGuardado) "Guardado" else "Guardar",
+            color = if (isGuardado) MaterialTheme.colorScheme.primary else Color.Gray,
+            onClick = onToggleSaved
+        )
+        ActionButton(
+            icon = if (isNoDeseado) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+            label = if (isNoDeseado) "Mostrar" else "Ocultar",
+            color = if (isNoDeseado) Color(0xFF2196F3) else Color.Gray,
+            onClick = onToggleHidden
+        )
+        ActionButton(
+            icon = if (isBloqueado) Icons.Default.LockOpen else Icons.Default.Block,
+            label = if (isBloqueado) "Desbloquear" else "Bloquear",
+            color = if (isBloqueado) Color(0xFF4CAF50) else Color.Red.copy(alpha = 0.7f),
+            onClick = onToggleBlocked
+        )
+    }
+}
 
-            Spacer(modifier = Modifier.width(12.dp))
+@Composable
+fun ActionButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, color: Color, onClick: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .clickable { onClick() }
+            .padding(8.dp)
+    ) {
+        Icon(icon, null, tint = color, modifier = Modifier.size(22.dp))
+        Text(label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = color, fontWeight = FontWeight.Bold)
+    }
+}
 
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "${user.nombre} ${user.apellido_pa}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isBloqueado) Color.Gray else Color.Unspecified
-                    )
-                    if (isFavorito) {
-                        Spacer(Modifier.width(4.dp))
-                        Icon(Icons.Default.Star, null, tint = Color(0xFFFFD700), modifier = Modifier.size(16.dp))
-                    }
-                }
-                Text(
-                    text = if (isBloqueado) "USUARIO BLOQUEADO" else user.rol.uppercase(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (isBloqueado) Color.Red else MaterialTheme.colorScheme.primary
-                )
-            }
-
-            Row {
-                IconButton(onClick = onToggleFav) {
-                    Icon(
-                        imageVector = if (isFavorito) Icons.Default.Star else Icons.Default.StarBorder,
-                        contentDescription = "Favorito",
-                        tint = if (isFavorito) Color(0xFFFFD700) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                    )
-                }
-                
-                IconButton(onClick = onToggleSaved) {
-                    Icon(
-                        imageVector = if (isGuardado) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                        contentDescription = "Guardado",
-                        tint = if (isGuardado) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                    )
-                }
-
-                IconButton(onClick = onToggleBlocked) {
-                    Icon(
-                        imageVector = if (isBloqueado) Icons.Default.CheckCircle else Icons.Default.Block,
-                        contentDescription = "Bloquear",
-                        tint = if (isBloqueado) Color(0xFF4CAF50) else Color.Red.copy(alpha = 0.6f)
-                    )
-                }
-                
-                IconButton(onClick = onToggleHidden) {
-                    Icon(
-                        imageVector = if (isNoDeseado) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                        contentDescription = "No deseado",
-                        tint = if (isNoDeseado) Color.Blue else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                    )
-                }
-            }
+@Composable
+fun UserAvatar(url: String?, size: androidx.compose.ui.unit.Dp) {
+    Surface(
+        modifier = Modifier.size(size),
+        shape = CircleShape,
+        color = CuidaleThemeExtras.customColors.avatarBackground
+    ) {
+        if (!url.isNullOrEmpty() && !url.startsWith("res:")) {
+            AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop)
+        } else {
+            Icon(Icons.Default.Person, null, modifier = Modifier.padding(size/4), tint = Color.White.copy(alpha = 0.6f))
         }
+    }
+}
+
+@Composable
+fun SocialEmptyState(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(icon, null, modifier = Modifier.size(64.dp), tint = Color.White.copy(alpha = 0.5f))
+        Spacer(Modifier.height(16.dp))
+        Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
+        Text(subtitle, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, color = Color.White.copy(alpha = 0.7f))
     }
 }

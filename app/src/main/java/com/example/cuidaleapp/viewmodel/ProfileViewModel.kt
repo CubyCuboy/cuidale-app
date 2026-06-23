@@ -270,7 +270,9 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 // 2. Actualizar Firestore
                 val sanitizedPhone = PhoneUtils.formatChileanPhone(updatedUser.telefono)
                 val userMap = mapOf(
+                    "nombre" to updatedUser.nombre,
                     "nombre_s" to updatedUser.nombre_s,
+                    "apellido_pa" to updatedUser.apellido_pa,
                     "apellido_ma" to updatedUser.apellido_ma,
                     "telefono" to sanitizedPhone,
                     "region" to updatedUser.region,
@@ -323,7 +325,9 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 val finalUser = updatedUser.copy(telefono = sanitizedPhone)
 
                 val userMap = mapOf(
+                    "nombre" to finalUser.nombre,
                     "nombre_s" to finalUser.nombre_s,
+                    "apellido_pa" to finalUser.apellido_pa,
                     "apellido_ma" to finalUser.apellido_ma,
                     "telefono" to finalUser.telefono,
                     "region" to finalUser.region,

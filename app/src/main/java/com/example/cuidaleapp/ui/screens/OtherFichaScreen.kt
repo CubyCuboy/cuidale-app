@@ -284,7 +284,7 @@ fun OtherFichaScreen(
                     Column(
                         modifier = Modifier
                             .padding(horizontal = 16.dp)
-                            .offset(y = (-40).dp),
+                            .padding(top = 16.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Surface(
