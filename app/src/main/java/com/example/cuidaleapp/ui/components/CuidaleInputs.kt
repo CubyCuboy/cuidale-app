@@ -102,7 +102,7 @@ fun CuidaleTextField(
             disabledContainerColor = containerColor,
             errorContainerColor = containerColor,
             focusedBorderColor = borderColor,
-            unfocusedBorderColor = if (isError) borderColor.copy(alpha = 0.55f) else Color.Transparent,
+            unfocusedBorderColor = if (isError) borderColor.copy(alpha = 0.55f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
             errorBorderColor = borderColor
         )
     )

@@ -93,11 +93,11 @@ fun FichaScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
-                .imePadding()
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .imePadding()
                     .verticalScroll(scrollState)
             ) {
                 Box(

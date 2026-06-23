@@ -22,7 +22,6 @@ class FichaActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        hideSystemUI()
 
         val startInEditMode = intent.getBooleanExtra("START_EDIT_MODE", false)
 
@@ -38,11 +37,5 @@ class FichaActivity : ComponentActivity() {
                 )
             }
         }
-    }
-
-    private fun hideSystemUI() {
-        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
-        windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
     }
 }

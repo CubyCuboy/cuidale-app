@@ -127,6 +127,7 @@ fun ChatsScreen(
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                 Scaffold(
                     containerColor = if (isDark) Color(0xFF0D1B2A) else Color(0xFFF8F9FA),
+                    modifier = Modifier.fillMaxSize(),
                     topBar = {
                         CenterAlignedTopAppBar(
                             title = { Text("MENSAJES", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black) },
@@ -137,7 +138,12 @@ fun ChatsScreen(
                         )
                     }
                 ) { innerPadding ->
-                    Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+                            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                    ) {
                         ScrollableTabRow(
                             selectedTabIndex = selectedTab,
                             containerColor = Color.Transparent,

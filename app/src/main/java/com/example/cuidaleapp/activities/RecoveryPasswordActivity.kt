@@ -28,7 +28,6 @@ class RecoveryPasswordActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         
         enableEdgeToEdge()
-        hideSystemUI()
 
         setContent {
             val isDark by themeViewModel.isDarkMode.collectAsState()
@@ -43,11 +42,5 @@ class RecoveryPasswordActivity : ComponentActivity() {
                 )
             }
         }
-    }
-
-    private fun hideSystemUI() {
-        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
-        windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
     }
 }

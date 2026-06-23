@@ -196,7 +196,7 @@ fun ChatScreen(
     var showPinConfirmDialog by remember { mutableStateOf(false) }
 
     Scaffold(
-        modifier = Modifier.fillMaxSize().navigationBarsPadding(),
+        modifier = Modifier.fillMaxSize(),
         topBar = {
             Column {
                 ConnectivityBanner()

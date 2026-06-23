@@ -48,11 +48,10 @@ fun ConnectivityBanner() {
     ) {
         Surface(
             color = if (isOnline) Color(0xFF4CAF50) else Color(0xFFD32F2F),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
         ) {
             Row(
                 modifier = Modifier
-                    .windowInsetsPadding(WindowInsets.statusBars)
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center

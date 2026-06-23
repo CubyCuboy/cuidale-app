@@ -16,6 +16,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -38,6 +40,7 @@ import com.example.cuidaleapp.data.ChileData
 import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
+import com.example.cuidaleapp.utils.PhoneUtils
 import com.example.cuidaleapp.viewmodel.RegisterViewModel
 import com.example.cuidaleapp.viewmodel.RegisterUiState
 import kotlin.math.roundToInt
@@ -86,11 +89,14 @@ fun RegisterScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(listOf(gradient.top, gradient.bottom)))
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .verticalScroll(rememberScrollState())
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
+                .imePadding()
                 .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -148,7 +154,6 @@ fun RegisterScreen(
                     )
                     RegisterStep.LOCATION -> RegisterLocationStep(
                         viewModel = viewModel,
-                        error = error,
                         onNext = { currentStep = RegisterStep.PASSWORD },
                         onBack = { currentStep = RegisterStep.PERSONAL },
                         isDark = isDark
@@ -307,7 +312,6 @@ fun RegisterPersonalStep(
     val isFormValid by viewModel.isFormValid.collectAsState()
 
     Column(
-        modifier = Modifier.verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         HardShadowPanel(
@@ -370,6 +374,21 @@ fun RegisterPersonalStep(
             Spacer(modifier = Modifier.height(16.dp))
 
             InputFieldLabel(stringResource(R.string.register_email_label))
+            if (email.isNotEmpty() && !isEmailValid) {
+                val emailError = when {
+                    !email.contains("@") -> "Falta el '@'"
+                    !email.substringAfter("@").contains(".") -> "Falta el dominio (ej: .com)"
+                    email.substringAfterLast(".").length < 2 -> "Dominio incompleto"
+                    else -> "Correo inválido"
+                }
+                Text(
+                    text = emailError,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(start = 8.dp, bottom = 4.dp).fillMaxWidth(),
+                    textAlign = TextAlign.Start
+                )
+            }
             CuidaleTextField(
                 value = email,
                 onValueChange = viewModel::onEmailChange,
@@ -383,6 +402,15 @@ fun RegisterPersonalStep(
             Spacer(modifier = Modifier.height(16.dp))
 
             InputFieldLabel(stringResource(R.string.register_rut_label))
+            if (rut.isNotEmpty() && !isRutValid) {
+                Text(
+                    text = "RUT inválido (ej: 12.345.678-9)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(start = 8.dp, bottom = 4.dp).fillMaxWidth(),
+                    textAlign = TextAlign.Start
+                )
+            }
             CuidaleTextField(
                 value = rut,
                 onValueChange = viewModel::onRutChange,
@@ -391,24 +419,26 @@ fun RegisterPersonalStep(
                 isError = rut.isNotEmpty() && !isRutValid,
                 imeAction = androidx.compose.ui.text.input.ImeAction.Next
             )
-            if (rut.isNotEmpty() && !isRutValid) {
-                Text(
-                    text = "RUT inválido (ej: 12.345.678-9)",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(start = 8.dp, top = 4.dp)
-                )
-            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            InputFieldLabel("Teléfono")
+            InputFieldLabel("Teléfono (9 dígitos)")
+            if (telefono.isNotEmpty() && !PhoneUtils.isValidChileanPhone(telefono)) {
+                Text(
+                    text = "Debe tener 9 dígitos y empezar con 9 o 2",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(start = 8.dp, bottom = 4.dp).fillMaxWidth(),
+                    textAlign = TextAlign.Start
+                )
+            }
             CuidaleTextField(
                 value = telefono,
                 onValueChange = viewModel::onTelefonoChange,
-                placeholder = "Ej: 9 1234 5678",
+                placeholder = "Ej: 9 8765 4321",
                 containerColor = CuidaleThemeExtras.customColors.inputBackground,
                 keyboardType = KeyboardType.Phone,
+                isError = telefono.isNotEmpty() && !PhoneUtils.isValidChileanPhone(telefono),
                 imeAction = androidx.compose.ui.text.input.ImeAction.Done,
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(
                     onDone = {
@@ -435,8 +465,13 @@ fun RegisterPersonalStep(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            horizontalArrangement = Arrangement.Center, 
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(bottom = 32.dp)
+        ) {
             Text(text = stringResource(R.string.forgot_password_footer_prefix), style = MaterialTheme.typography.bodyMedium, color = CuidaleThemeExtras.customColors.onGradient)
+            Spacer(modifier = Modifier.width(4.dp))
             Text(
                 text = "Ingresa aquí",
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
@@ -450,7 +485,6 @@ fun RegisterPersonalStep(
 @Composable
 fun RegisterLocationStep(
     viewModel: RegisterViewModel,
-    error: String?,
     onNext: () -> Unit,
     onBack: () -> Unit,
     isDark: Boolean
@@ -473,27 +507,79 @@ fun RegisterLocationStep(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            val regionColor = if (selectedRegion.isEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+            
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (selectedRegion.isEmpty()) {
+                    Icon(
+                        imageVector = Icons.Default.LocationOn,
+                        contentDescription = null,
+                        tint = regionColor,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                }
+                Text(
+                    text = if (selectedRegion.isEmpty()) "Selecciona tu Región" else "Región seleccionada",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = regionColor,
+                    fontWeight = if (selectedRegion.isEmpty()) FontWeight.Bold else FontWeight.Normal
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
             CuidaleExposedDropdown(
                 label = stringResource(R.string.register_region_label),
                 options = regions,
                 selectedOption = selectedRegion,
                 onOptionSelected = { regionName ->
-                    val regionId = ChileData.regions.find { it.name == regionName }?.id?.toString() ?: "99"
+                    val regionId = ChileData.regions.find { it.name == regionName }?.id ?: "99"
                     viewModel.onRegionChange(regionName, regionId)
                 },
                 placeholder = stringResource(R.string.register_region_placeholder)
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            AnimatedVisibility(
+                visible = selectedRegion.isNotEmpty(),
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Column {
+                    Spacer(modifier = Modifier.height(24.dp))
 
-            CuidaleExposedDropdown(
-                label = stringResource(R.string.register_comuna_label),
-                options = comunas,
-                selectedOption = selectedComuna,
-                onOptionSelected = viewModel::onComunaChange,
-                enabled = selectedRegion.isNotEmpty(),
-                placeholder = stringResource(R.string.register_comuna_placeholder)
-            )
+                    val comunaColor = if (selectedComuna.isEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                    
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (selectedComuna.isEmpty()) {
+                            Icon(
+                                imageVector = Icons.Default.Map,
+                                contentDescription = null,
+                                tint = comunaColor,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                        }
+                        Text(
+                            text = if (selectedComuna.isEmpty()) "Ahora elige tu Comuna" else "Comuna",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = comunaColor,
+                            fontWeight = if (selectedComuna.isEmpty()) FontWeight.Bold else FontWeight.Normal
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    CuidaleExposedDropdown(
+                        label = stringResource(R.string.register_comuna_label),
+                        options = comunas,
+                        selectedOption = selectedComuna,
+                        onOptionSelected = viewModel::onComunaChange,
+                        enabled = selectedRegion.isNotEmpty(),
+                        placeholder = stringResource(R.string.register_comuna_placeholder)
+                    )
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -523,8 +609,13 @@ fun RegisterLocationStep(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            horizontalArrangement = Arrangement.Center, 
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(bottom = 32.dp)
+        ) {
             Text(text = stringResource(R.string.forgot_password_footer_prefix), style = MaterialTheme.typography.bodyMedium, color = CuidaleThemeExtras.customColors.onGradient)
+            Spacer(modifier = Modifier.width(4.dp))
             Text(
                 text = "Ingresa aquí",
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
@@ -572,16 +663,9 @@ fun RegisterPasswordStep(
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .navigationBarsPadding()
-            .imePadding(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Column(
-            modifier = Modifier
-                .weight(1f, fill = true)
-                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             HardShadowPanel(
@@ -670,57 +754,59 @@ fun RegisterPasswordStep(
             }
 
             Spacer(modifier = Modifier.height(24.dp))
-        }
 
-        if (isLoading) {
-            CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary)
-        } else {
+            if (isLoading) {
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary)
+            } else {
+                HardShadowButton(
+                    text = stringResource(R.string.register_button_finish),
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    shadowColor = if (isDark) {
+                        CuidaleThemeExtras.shadows.hardShadowPrimary
+                    } else {
+                        CuidaleThemeExtras.shadows.hardShadowPrimary
+                    },
+                    icon = Icons.Default.CheckCircle,
+                    enabled = isPassValid && passMatches,
+                    isDark = isDark,
+                    isErrorMode = error != null,
+                    errorText = error,
+                    onClick = onRegister
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
             HardShadowButton(
-                text = stringResource(R.string.register_button_finish),
+                text = stringResource(R.string.register_button_back),
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 shadowColor = if (isDark) {
-                    CuidaleThemeExtras.shadows.hardShadowPrimary
+                    CuidaleThemeExtras.shadows.hardShadowAccent
                 } else {
                     CuidaleThemeExtras.shadows.hardShadowPrimary
                 },
-                icon = Icons.Default.CheckCircle,
-                enabled = isPassValid && passMatches,
+                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                enabled = !isLoading,
                 isDark = isDark,
-                isErrorMode = error != null,
-                errorText = error,
-                onClick = onRegister
+                onClick = onBack
             )
         }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        HardShadowButton(
-            text = stringResource(R.string.register_button_back),
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-            shadowColor = if (isDark) {
-                CuidaleThemeExtras.shadows.hardShadowAccent
-            } else {
-                CuidaleThemeExtras.shadows.hardShadowPrimary
-            },
-            icon = Icons.AutoMirrored.Filled.ArrowBack,
-            enabled = !isLoading,
-            isDark = isDark,
-            onClick = onBack
-        )
 
         Spacer(modifier = Modifier.height(16.dp))
 
         Row(
             horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(bottom = 32.dp)
         ) {
             Text(
                 text = stringResource(R.string.forgot_password_footer_prefix),
                 style = MaterialTheme.typography.bodyMedium,
                 color = CuidaleThemeExtras.customColors.onGradient
             )
+            Spacer(modifier = Modifier.width(4.dp))
             Text(
                 text = "Ingresa aquí",
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),

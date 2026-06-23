@@ -209,8 +209,19 @@ fun EditProfileScreen(
     }
 
     val gradient = CuidaleThemeExtras.gradient
-    Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(gradient.top, gradient.bottom)))) {
-        Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).verticalScroll(scrollState).padding(horizontal = 16.dp)) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(listOf(gradient.top, gradient.bottom)))
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
+                .verticalScroll(scrollState)
+                .padding(horizontal = 16.dp)
+        ) {
             Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onNavigateBack, modifier = Modifier.background(Color.Black.copy(alpha = 0.15f), CircleShape)) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = Color.White)

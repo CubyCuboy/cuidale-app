@@ -28,7 +28,6 @@ class LoginActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        hideSystemUI()
 
         setContent {
             val isDark by viewModel.isDarkMode.collectAsState()
@@ -82,9 +81,6 @@ class LoginActivity : ComponentActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) {
-            hideSystemUI()
-        }
     }
 
     private fun hideSystemUI() {

@@ -68,7 +68,8 @@ fun ProfileScreen(
     val panelBg = customColors.panelBackground
 
     Scaffold(
-        topBar = { ConnectivityBanner() }
+        topBar = { ConnectivityBanner() },
+        modifier = Modifier.fillMaxSize()
     ) { innerPadding ->
         PullToRefreshBox(
             state = pullToRefreshState,
@@ -79,12 +80,15 @@ fun ProfileScreen(
                     fichaViewModel.checkProfile()
                 }
             },
-            modifier = Modifier.fillMaxSize().padding(innerPadding)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background)
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
             ) {
                 Column(
                     modifier = Modifier
