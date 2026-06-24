@@ -6,6 +6,7 @@ build/
 # Environment
 .env
 .env.local
+.local.properties
 *.env.*
 
 # Logs and temp files
@@ -17,4 +18,4 @@ build/
 Thumbs.db
 ```
 .idea/caches/deviceStreaming.xml
-local.properties
+

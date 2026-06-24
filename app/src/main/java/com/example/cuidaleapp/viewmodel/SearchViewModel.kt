@@ -66,18 +66,18 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     private val targetCollection = "fichas"
     private var targetTipo: String = ""
     private var noDeseados: List<String> = emptyList()
-    
+
     private var userRegion = ""
     private var profileCommunes: List<String> = emptyList()
-    
+
     private val PAGE_SIZE = 50L
 
     fun initSearch(userRole: String, residenceRegion: String) {
         val newTargetTipo = if (userRole == "cuidador") "familiar" else "cuidador"
         if (targetTipo == newTargetTipo && userRegion == residenceRegion && currentResults.isNotEmpty()) {
-            return 
+            return
         }
-        
+
         targetTipo = newTargetTipo
         userRegion = residenceRegion
 
@@ -162,7 +162,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun fetchData(isLoadMore: Boolean) {
-        val currentNoDeseados = noDeseados // Capture list to avoid concurrent issues
+        val currentNoDeseados = noDeseados
         viewModelScope.launch {
             if (!isLoadMore) {
                 _state.value = SearchState.Loading
@@ -180,6 +180,15 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                     _isRefreshing.value = false
                     return@launch
                 }
+
+                // Verificar autenticación
+                val currentUser = auth.currentUser
+                if (currentUser == null) {
+                    _state.value = SearchState.Error("Usuario no autenticado")
+                    _isRefreshing.value = false
+                    return@launch
+                }
+
                 val collectionPath = if (targetTipo == "cuidador") "usuarios" else "fichas"
                 val roleField = if (targetTipo == "cuidador") "rol" else "tipo"
                 val orderField = if (targetTipo == "cuidador") "createdAt" else "ultima_actualizacion"
@@ -205,7 +214,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                 }
 
                 val result = query.limit(PAGE_SIZE).get().await()
-                
+
                 val newItems = result.documents.map { doc ->
                     viewModelScope.async {
                         var nombre = ""
@@ -230,7 +239,9 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                                     horarios = @Suppress("UNCHECKED_CAST") (fichaDoc.get("horarios") as? List<String> ?: emptyList())
                                     comunas_trabajo = @Suppress("UNCHECKED_CAST") (fichaDoc.get("comunas") as? List<String> ?: emptyList())
                                 }
-                            } catch (e: Exception) { }
+                            } catch (e: Exception) {
+                                // Log error pero continuar
+                            }
                         } else {
                             nombre = doc.getString("nombre_completo") ?: ""
                             apellido = ""
@@ -266,7 +277,6 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                 }.awaitAll().filter { it.id !in currentNoDeseados }
 
                 if (newItems.isEmpty() && !isLastPage && result.documents.isNotEmpty()) {
-                    // All fetched items were filtered out, fetch next page automatically
                     lastDocument = result.documents.last()
                     fetchData(isLoadMore = true)
                     return@launch
@@ -281,7 +291,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                 }
 
                 currentResults.addAll(newItems)
-                
+
                 _state.value = SearchState.Success(
                     results = currentResults.toList(),
                     isLastPage = isLastPage,
@@ -291,12 +301,17 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
 
             } catch (e: Exception) {
                 _isRefreshing.value = false
-                val errorMessage = if (e.message?.contains("PERMISSION_DENIED") == true) {
-                    "Acceso denegado: Verifica las reglas de Firestore para '$targetCollection'"
-                } else if (e.message?.contains("FAILED_PRECONDITION") == true) {
-                    "Error de índice: Esta búsqueda requiere un índice compuesto en Firestore."
-                } else {
-                    e.message ?: "Error al cargar datos"
+                val errorMessage = when {
+                    e.message?.contains("PERMISSION_DENIED") == true -> {
+                        "Error de permisos: No puedes acceder a las fichas. Verifica tu conexión o contacta soporte."
+                    }
+                    e.message?.contains("FAILED_PRECONDITION") == true -> {
+                        "Error de índice: Esta búsqueda requiere un índice compuesto en Firestore."
+                    }
+                    e.message?.contains("UNAUTHENTICATED") == true -> {
+                        "Sesión expirada. Por favor, inicia sesión nuevamente."
+                    }
+                    else -> e.message ?: "Error al cargar datos"
                 }
                 _state.value = SearchState.Error(errorMessage)
             }
