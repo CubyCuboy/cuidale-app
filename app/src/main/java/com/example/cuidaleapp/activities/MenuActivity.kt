@@ -307,7 +307,7 @@ class MenuActivity : ComponentActivity() {
                                     ) { innerPadding ->
                                         Box(
                                             modifier = Modifier
-                                                .padding(top = innerPadding.calculateTopPadding())
+                                                .padding(innerPadding)
                                                 .fillMaxSize()
                                         ) {
                                             AnimatedContent(

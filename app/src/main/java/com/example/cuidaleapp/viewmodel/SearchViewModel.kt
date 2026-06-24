@@ -70,7 +70,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     private var userRegion = ""
     private var profileCommunes: List<String> = emptyList()
     
-    private val PAGE_SIZE = 15L
+    private val PAGE_SIZE = 50L
 
     fun initSearch(userRole: String, residenceRegion: String) {
         val newTargetTipo = if (userRole == "cuidador") "familiar" else "cuidador"
@@ -162,6 +162,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun fetchData(isLoadMore: Boolean) {
+        val currentNoDeseados = noDeseados // Capture list to avoid concurrent issues
         viewModelScope.launch {
             if (!isLoadMore) {
                 _state.value = SearchState.Loading
@@ -185,7 +186,6 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
 
                 var query = db.collection(collectionPath)
                     .whereEqualTo(roleField, targetTipo)
-                    .orderBy(orderField, Query.Direction.DESCENDING)
 
                 val regionFilter = _selectedRegion.value
                 val communeFilters = _selectedCommunes.value
@@ -197,6 +197,8 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                 if (communeFilters.isNotEmpty()) {
                     query = query.whereIn("comuna", communeFilters)
                 }
+
+                query = query.orderBy(orderField, Query.Direction.DESCENDING)
 
                 if (isLoadMore && lastDocument != null) {
                     query = query.startAfter(lastDocument!!)
@@ -261,7 +263,14 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                             isNew = isNew
                         )
                     }
-                }.awaitAll().filter { it.id !in noDeseados }
+                }.awaitAll().filter { it.id !in currentNoDeseados }
+
+                if (newItems.isEmpty() && !isLastPage && result.documents.isNotEmpty()) {
+                    // All fetched items were filtered out, fetch next page automatically
+                    lastDocument = result.documents.last()
+                    fetchData(isLoadMore = true)
+                    return@launch
+                }
 
                 if (result.documents.size < PAGE_SIZE) {
                     isLastPage = true
