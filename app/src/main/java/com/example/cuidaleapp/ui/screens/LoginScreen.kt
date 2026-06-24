@@ -165,20 +165,20 @@ fun LoginForm(
         modifier = Modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(listOf(gradient.top, gradient.bottom)))
-            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
-                .imePadding()
-                .padding(horizontal = 28.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(horizontal = 28.dp)
+                .imePadding(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
+            Spacer(modifier = Modifier.weight(1f))
 
             Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
                 IconButton(onClick = onToggleTheme) {
@@ -192,8 +192,6 @@ fun LoginForm(
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
-
             Text(
                 text = stringResource(R.string.login_title),
                 style = typography.displaySmall,
@@ -201,16 +199,14 @@ fun LoginForm(
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.weight(0.5f))
 
-            Box(
-                modifier = Modifier.padding(bottom = 24.dp)
-            ) {
-                CuidaleAppLogo(
-                    isDark = isDark,
-                    modifier = Modifier.size(120.dp)
-                )
-            }
+            CuidaleAppLogo(
+                isDark = isDark,
+                modifier = Modifier.size(100.dp)
+            )
+
+            Spacer(modifier = Modifier.weight(1f))
 
             HardShadowPanel(
                 backgroundColor = if (isError) colors.errorContainer.copy(alpha = 0.95f) else panelBg,
@@ -300,7 +296,7 @@ fun LoginForm(
                 }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.weight(0.5f))
 
             val needsVerification = (state as? LoginUiState.Error)?.message?.contains("verificar") == true
 
@@ -338,31 +334,24 @@ fun LoginForm(
                     .padding(8.dp)
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.weight(0.5f))
 
             Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = stringResource(R.string.login_no_account),
                     style = typography.bodyMedium,
-                    color = onGradientText
+                    color = if (isDark) onGradientText else Color(0xFF0D47A1)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = stringResource(R.string.login_register_here),
                     style = typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                    color = customColors.linkColor,
+                    color = if (isDark) customColors.linkColor else Color(0xFF1976D2),
                     modifier = Modifier.clickable { onRegister() }
                 )
             }
-            Spacer(modifier = Modifier.height(56.dp))
+            Spacer(modifier = Modifier.weight(1f))
         }
-
-        Text(
-            text = stringResource(R.string.app_version),
-            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 12.dp),
-            style = typography.labelSmall,
-            color = onGradientText.copy(alpha = 0.55f)
-        )
     }
 }
 

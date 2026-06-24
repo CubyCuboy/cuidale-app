@@ -6,7 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.*
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.core.view.WindowCompat
@@ -29,10 +29,20 @@ class LoginActivity : ComponentActivity() {
             val isDark by viewModel.isDarkMode.collectAsState()
             val uiState by viewModel.uiState.collectAsState()
 
+            var wasCheckingAuth by remember { mutableStateOf(false) }
+
             LaunchedEffect(uiState) {
+                if (uiState is LoginUiState.CheckingAuth) {
+                    wasCheckingAuth = true
+                }
                 when (uiState) {
                     is LoginUiState.Success -> {
-                        startActivity(Intent(this@LoginActivity, MenuActivity::class.java))
+                        val intent = Intent(this@LoginActivity, MenuActivity::class.java)
+                        if (wasCheckingAuth) {
+                            intent.putExtra("SKIP_SPLASH", true)
+                        }
+                        startActivity(intent)
+                        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
                         finish()
                     }
                     is LoginUiState.Unverified -> {

@@ -290,7 +290,11 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                     lastDocument = result.documents.last()
                 }
 
-                currentResults.addAll(newItems)
+                // Asegurar que no haya duplicados por ID
+                val existingIds = currentResults.map { it.id }.toSet()
+                val uniqueNewItems = newItems.filter { it.id !in existingIds }
+                
+                currentResults.addAll(uniqueNewItems)
 
                 _state.value = SearchState.Success(
                     results = currentResults.toList(),

@@ -43,15 +43,16 @@ fun CuidaleUserCard(
     horarios: List<String> = emptyList(), 
     isNew: Boolean = false,
     isLoading: Boolean = false,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     val shadows = CuidaleThemeExtras.shadows; val colors = MaterialTheme.colorScheme; val customColors = CuidaleThemeExtras.customColors
     val context = LocalContext.current
     
     if (isLoading) {
-        SkeletonUserCard()
+        SkeletonUserCard(modifier)
     } else {
-        HardShadowPanel(backgroundColor = customColors.panelBackground, shadowColor = shadows.hardShadowPrimary.copy(alpha = 0.3f), modifier = Modifier.clickable { onClick() }) {
+        HardShadowPanel(backgroundColor = customColors.panelBackground, shadowColor = shadows.hardShadowPrimary.copy(alpha = 0.3f), modifier = modifier.clickable { onClick() }) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Box(modifier = Modifier.size(64.dp)) {
                     Surface(modifier = Modifier.fillMaxSize(), shape = CircleShape, color = customColors.avatarBackground) {
@@ -125,11 +126,12 @@ fun CuidaleUserCard(
 }
 
 @Composable
-fun SkeletonUserCard() {
+fun SkeletonUserCard(modifier: Modifier = Modifier) {
     val brush = shimmerBrush()
     HardShadowPanel(
         backgroundColor = CuidaleThemeExtras.customColors.panelBackground,
-        shadowColor = Color.Transparent
+        shadowColor = Color.Transparent,
+        modifier = modifier
     ) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.size(60.dp).clip(CircleShape).background(brush))

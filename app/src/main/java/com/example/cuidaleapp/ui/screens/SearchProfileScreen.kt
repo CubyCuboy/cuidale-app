@@ -144,7 +144,7 @@ fun UserSearchItem(user: UserData, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             AsyncImage(
-                model = if (user.fotoUrl.startsWith("res:")) null else user.fotoUrl,
+                model = if (user.fotoUrl?.startsWith("res:") == true) null else user.fotoUrl,
                 contentDescription = null,
                 modifier = Modifier
                     .size(50.dp)

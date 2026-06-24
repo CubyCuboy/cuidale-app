@@ -206,11 +206,17 @@ class MenuActivity : ComponentActivity() {
                 }
 
                 val isAppReady = userData.uid.isNotEmpty() && userData.rol.isNotEmpty() && (searchState !is SearchState.Loading || isSearchRefreshing)
-                var showSplash by remember { mutableStateOf(true) }
+                val skipSplash = remember { intent.getBooleanExtra("SKIP_SPLASH", false) }
+                var showSplash by remember { mutableStateOf(!skipSplash) }
 
                 LaunchedEffect(isAppReady) {
                     if (isAppReady) {
-                        delay(1200)
+                        if (!skipSplash) {
+                            delay(1200)
+                        } else {
+                            // Si saltamos el splash, damos un mini respiro para que la UI se asiente
+                            delay(100)
+                        }
                         showSplash = false
                     }
                 }

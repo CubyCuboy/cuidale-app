@@ -78,22 +78,6 @@ fun MenuScreen(
     }
 
     val listState = rememberLazyListState()
-    
-    // Pagination trigger (batch of 50)
-    val shouldLoadMore = remember {
-        derivedStateOf {
-            val layoutInfo = listState.layoutInfo
-            val totalItems = layoutInfo.totalItemsCount
-            val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            totalItems > 0 && lastVisibleItem >= totalItems - 10 // Trigger early for smooth 50-item loading
-        }
-    }
-
-    LaunchedEffect(shouldLoadMore.value, isOnline) {
-        if (shouldLoadMore.value && isOnline) {
-            searchViewModel.loadMore()
-        }
-    }
 
     LaunchedEffect(userData.rol, userData.region, isOnline) {
         if (userData.rol.isNotEmpty() && isOnline) {
@@ -135,14 +119,37 @@ fun MenuScreen(
                     onClick = onViewFicha
                 )
             } else if (!isOnline && searchState !is SearchState.Success) {
-                CuidalePlaceholder(
-                    title = if (userData.rol == "cuidador") "¡Aún no hay pacientes cerca!" else "Buscando cuidadores...",
-                    subtitle = if (userData.rol == "cuidador")
-                        "Activa tu conexión para encontrar personas que necesitan tu ayuda hoy mismo."
-                        else "Necesitas internet para descubrir nuevos perfiles que puedan cuidar a tus seres queridos.",
-                    icon = if (userData.rol == "cuidador") Icons.Default.AccessibilityNew else Icons.Default.Diversity3,
-                    iconColor = if (userData.rol == "cuidador") MaterialTheme.colorScheme.primary else CuidaleThemeExtras.customColors.mint
-                )
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = Icons.Default.WifiOff,
+                            contentDescription = null,
+                            modifier = Modifier.size(80.dp),
+                            tint = Color.White.copy(alpha = 0.2f)
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Text(
+                            text = "Sin conexión a internet",
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                            color = Color.White
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Conéctate para descubrir nuevos ${listTitle.lowercase()}.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White.copy(alpha = 0.7f),
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(32.dp))
+                        HardShadowButton(
+                            text = "REINTENTAR",
+                            onClick = { searchViewModel.refresh() },
+                            containerColor = Color.White.copy(alpha = 0.1f),
+                            contentColor = Color.White,
+                            shadowColor = Color.Transparent
+                        )
+                    }
+                }
             } else {
                 PullToRefreshBox(
                     state = pullToRefreshState,
@@ -173,6 +180,7 @@ fun MenuScreen(
                                 is SearchState.Success -> {
                                     val resultsList = state.results
                                     val isLoadingMore = state.isLoadingMore
+                                    val isLastPage = state.isLastPage
 
                                     if (resultsList.isEmpty()) {
                                         EmptySearchResults(
@@ -184,39 +192,97 @@ fun MenuScreen(
                                             showClearButton = selectedRegion.isNotEmpty() || selectedCommunes.isNotEmpty()
                                         )
                                     } else {
-                                        LazyColumn(
-                                            state = listState,
-                                            verticalArrangement = Arrangement.spacedBy(16.dp),
-                                            contentPadding = PaddingValues(bottom = 100.dp),
-                                            modifier = Modifier.fillMaxSize()
-                                        ) {
-                                            items(resultsList, key = { it.id }) { result ->
-                                                CuidaleUserCard(
-                                                    nombre = result.nombre,
-                                                    apellido = result.apellido_pa,
-                                                    fotoUrl = result.fotoUrl,
-                                                    comuna = result.comuna,
-                                                    comunas = result.comunas,
-                                                    tipo = result.tipo,
-                                                    edad = result.edad,
-                                                    nivelDependencia = result.nivel_dependencia,
-                                                    especializacion = result.especializacion,
-                                                    horarios = result.horarios,
-                                                    isNew = result.isNew,
-                                                    onClick = { onUserClick(result.id) }
-                                                )
-                                            }
+                                        Box(modifier = Modifier.fillMaxSize()) {
+                                            LazyColumn(
+                                                state = listState,
+                                                verticalArrangement = Arrangement.spacedBy(16.dp),
+                                                contentPadding = PaddingValues(bottom = 120.dp),
+                                                modifier = Modifier.fillMaxSize()
+                                            ) {
+                                                items(resultsList, key = { it.id }) { result ->
+                                                    CuidaleUserCard(
+                                                        nombre = result.nombre,
+                                                        apellido = result.apellido_pa,
+                                                        fotoUrl = result.fotoUrl,
+                                                        comuna = result.comuna,
+                                                        comunas = result.comunas,
+                                                        tipo = result.tipo,
+                                                        edad = result.edad,
+                                                        nivelDependencia = result.nivel_dependencia,
+                                                        especializacion = result.especializacion,
+                                                        horarios = result.horarios,
+                                                        isNew = result.isNew,
+                                                        onClick = { onUserClick(result.id) }
+                                                    )
+                                                }
 
-                                            if (isLoadingMore) {
-                                                item {
-                                                    Box(
-                                                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                                        contentAlignment = Alignment.Center
-                                                    ) {
-                                                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                                                if (isLoadingMore) {
+                                                    items(3) {
+                                                        SkeletonUserCard(
+                                                            modifier = Modifier.padding(vertical = 4.dp)
+                                                        )
+                                                    }
+                                                }
+
+                                                if (!isLastPage && !isLoadingMore && resultsList.size >= 50) {
+                                                    item {
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                                .padding(vertical = 24.dp),
+                                                            contentAlignment = Alignment.Center
+                                                        ) {
+                                                            HardShadowButton(
+                                                                text = "CARGAR MÁS ${listTitle.uppercase()}",
+                                                                onClick = { searchViewModel.loadMore() },
+                                                                containerColor = Color.White.copy(alpha = 0.15f),
+                                                                contentColor = Color.White,
+                                                                shadowColor = Color.Transparent,
+                                                                icon = Icons.Default.Add
+                                                            )
+                                                        }
+                                                    }
+                                                }
+
+                                                if (isLastPage && resultsList.isNotEmpty()) {
+                                                    item {
+                                                        Column(
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                                .padding(32.dp),
+                                                            horizontalAlignment = Alignment.CenterHorizontally
+                                                        ) {
+                                                            Icon(
+                                                                Icons.Default.CheckCircle,
+                                                                null,
+                                                                tint = Color.White.copy(alpha = 0.3f),
+                                                                modifier = Modifier.size(40.dp)
+                                                            )
+                                                            Spacer(modifier = Modifier.height(16.dp))
+                                                            Text(
+                                                                "Parece que no hay más ${listTitle.lowercase()} por ahora.",
+                                                                color = Color.White.copy(alpha = 0.6f),
+                                                                textAlign = TextAlign.Center,
+                                                                style = MaterialTheme.typography.bodyMedium
+                                                            )
+                                                            Text(
+                                                                "Prueba con otra configuración para encontrar más perfiles.",
+                                                                color = Color.White.copy(alpha = 0.4f),
+                                                                textAlign = TextAlign.Center,
+                                                                style = MaterialTheme.typography.bodySmall
+                                                            )
+                                                        }
                                                     }
                                                 }
                                             }
+
+                                            // Custom Dynamic Scrollbar
+                                            CuidaleVerticalScrollbar(
+                                                lazyListState = listState,
+                                                modifier = Modifier
+                                                    .align(Alignment.CenterEnd)
+                                                    .padding(end = 4.dp, top = 16.dp, bottom = 120.dp)
+                                            )
                                         }
                                     }
                                 }
@@ -231,12 +297,6 @@ fun MenuScreen(
                                 }
                             }
                         }
-
-                        // Custom Dynamic Scrollbar
-                        CuidaleVerticalScrollbar(
-                            lazyListState = listState,
-                            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp, top = 16.dp, bottom = 100.dp)
-                        )
                     }
                 }
             }
@@ -275,7 +335,7 @@ fun MenuScreen(
                     onClick = { if (isOnline) showSearchSheet = true },
                     icon = {
                         Icon(
-                            imageVector = Icons.Default.FilterList,
+                            imageVector = Icons.Default.Search,
                             contentDescription = "Filtros",
                             tint = Color.White
                         )
@@ -354,10 +414,14 @@ fun CuidaleVerticalScrollbar(
         if (visibleItems.isEmpty()) return
 
         val totalItems = layoutInfo.totalItemsCount
-        val firstItem = visibleItems.first()
+        if (totalItems <= 0) return
+
+        val firstItem = visibleItems.firstOrNull() ?: return
         
         val scrollbarHeightFraction = (visibleItems.size.toFloat() / totalItems).coerceIn(0.1f, 1f)
         val scrollPositionFraction = (firstItem.index.toFloat() / totalItems).coerceIn(0f, 1f)
+
+        if (scrollbarHeightFraction.isNaN() || scrollPositionFraction.isNaN()) return
 
         BoxWithConstraints(modifier = modifier.width(4.dp).fillMaxHeight().alpha(alpha)) {
             val trackHeight = this.maxHeight
