@@ -106,8 +106,11 @@ class TareasViewModel : ViewModel() {
                 )
                 
                 // Se envía al usuario actual (el que tiene el monitoreo activo)
-                db.collection("usuarios").document(emisor)
-                    .collection("notificaciones").document(notif.id).set(notif)
+                db.collection("usuarios").whereEqualTo("uid", emisor).get().addOnSuccessListener { query ->
+                    if (!query.isEmpty) {
+                        query.documents[0].reference.collection("notificaciones").document(notif.id).set(notif)
+                    }
+                }
             } catch (e: Exception) {}
         }
     }
@@ -264,8 +267,11 @@ class TareasViewModel : ViewModel() {
                     timestamp = System.currentTimeMillis(),
                     data = data
                 )
-                db.collection("usuarios").document(receptor)
-                    .collection("notificaciones").document(notif.id).set(notif)
+                db.collection("usuarios").whereEqualTo("uid", receptor).get().addOnSuccessListener { query ->
+                    if (!query.isEmpty) {
+                        query.documents[0].reference.collection("notificaciones").document(notif.id).set(notif)
+                    }
+                }
             } catch (e: Exception) {}
         }
     }

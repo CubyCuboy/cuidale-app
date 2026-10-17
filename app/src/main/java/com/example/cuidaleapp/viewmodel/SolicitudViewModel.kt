@@ -58,8 +58,8 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
         val uid = currentUid ?: return
         
         viewModelScope.launch {
-            val userDoc = db.collection("usuarios").document(uid).get().await()
-            val role = userDoc.getString("rol") ?: ""
+            val query = db.collection("usuarios").whereEqualTo("uid", uid).get().await()
+            val role = if (!query.isEmpty) query.documents[0].getString("rol") ?: "" else ""
 
             if (role == "representante") {
                 listenAsRepresentante(uid)
@@ -245,10 +245,11 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                val userDoc = db.collection("usuarios").document(uid).get().await()
-                val repNombre = "${userDoc.getString("nombre")} ${userDoc.getString("apellido_pa")}"
-                val repRut = userDoc.getString("rut") ?: ""
-                val repTel = userDoc.getString("telefono") ?: ""
+                val query = db.collection("usuarios").whereEqualTo("uid", uid).get().await()
+                val userDoc = if (!query.isEmpty) query.documents[0] else null
+                val repNombre = if (userDoc != null) "${userDoc.getString("nombre")} ${userDoc.getString("apellido_pa")}" else ""
+                val repRut = userDoc?.getString("rut") ?: ""
+                val repTel = userDoc?.getString("telefono") ?: ""
 
                 val id = UUID.randomUUID().toString()
                 val solicitud = SolicitudCuidado(
@@ -297,8 +298,8 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                val userDoc = db.collection("usuarios").document(uid).get().await()
-                val userData = userDoc.toObject(UserData::class.java)
+                val query = db.collection("usuarios").whereEqualTo("uid", uid).get().await()
+                val userData = if (!query.isEmpty) query.documents[0].toObject(UserData::class.java) else null
                 
                 val id = UUID.randomUUID().toString()
                 val postulacion = PostulacionCuidado(
@@ -313,16 +314,20 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                 db.collection("postulaciones").document(id).set(postulacion).await()
                 
                 // 1. Notify representative (Notification collection)
-                val notifRef = db.collection("usuarios").document(solicitud.representanteUid).collection("notificaciones").document()
-                val notif = Notification(
-                    id = notifRef.id,
-                    tipo = "postulacion_recibida",
-                    emisor = uid,
-                    receptor = solicitud.representanteUid,
-                    timestamp = System.currentTimeMillis(),
-                    data = mapOf("solicitudId" to solicitud.id, "postulacionId" to id)
-                )
-                notifRef.set(notif).await()
+                db.collection("usuarios").whereEqualTo("uid", solicitud.representanteUid).get().addOnSuccessListener { targetQuery ->
+                    if (!targetQuery.isEmpty) {
+                        val notifRef = targetQuery.documents[0].reference.collection("notificaciones").document()
+                        val notif = Notification(
+                            id = notifRef.id,
+                            tipo = "postulacion_recibida",
+                            emisor = uid,
+                            receptor = solicitud.representanteUid,
+                            timestamp = System.currentTimeMillis(),
+                            data = mapOf("solicitudId" to solicitud.id, "postulacionId" to id)
+                        )
+                        notifRef.set(notif)
+                    }
+                }
 
                 // 2. Send Message to Chat
                 try {
@@ -408,16 +413,20 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                 }
 
                 // 5. Notify caregiver
-                val notifRef = db.collection("usuarios").document(targetUid).collection("notificaciones").document()
-                val notif = Notification(
-                    id = notifRef.id,
-                    tipo = "postulacion_aceptada",
-                    emisor = myUid,
-                    receptor = targetUid,
-                    timestamp = System.currentTimeMillis(),
-                    data = mapOf("solicitudId" to solicitud.id, "vinculoId" to vinculoId)
-                )
-                notifRef.set(notif).await()
+                db.collection("usuarios").whereEqualTo("uid", targetUid).get().addOnSuccessListener { targetQuery ->
+                    if (!targetQuery.isEmpty) {
+                        val notifRef = targetQuery.documents[0].reference.collection("notificaciones").document()
+                        val notif = Notification(
+                            id = notifRef.id,
+                            tipo = "postulacion_aceptada",
+                            emisor = myUid,
+                            receptor = targetUid,
+                            timestamp = System.currentTimeMillis(),
+                            data = mapOf("solicitudId" to solicitud.id, "vinculoId" to vinculoId)
+                        )
+                        notifRef.set(notif)
+                    }
+                }
 
                 onReady()
             } catch (e: Exception) { } finally {
@@ -483,16 +492,20 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                 // 3. Notify parties
                 val receptor = if (currentUid == solicitud.representanteUid) solicitud.cuidadorUid else solicitud.representanteUid
                 if (receptor != null) {
-                    val notifRef = db.collection("usuarios").document(receptor).collection("notificaciones").document()
-                    val notif = Notification(
-                        id = notifRef.id,
-                        tipo = "servicio_finalizado",
-                        emisor = currentUid ?: "",
-                        receptor = receptor,
-                        timestamp = System.currentTimeMillis(),
-                        data = mapOf("solicitudId" to solicitud.id)
-                    )
-                    notifRef.set(notif).await()
+                    db.collection("usuarios").whereEqualTo("uid", receptor).get().addOnSuccessListener { targetQuery ->
+                        if (!targetQuery.isEmpty) {
+                            val notifRef = targetQuery.documents[0].reference.collection("notificaciones").document()
+                            val notif = Notification(
+                                id = notifRef.id,
+                                tipo = "servicio_finalizado",
+                                emisor = currentUid ?: "",
+                                receptor = receptor,
+                                timestamp = System.currentTimeMillis(),
+                                data = mapOf("solicitudId" to solicitud.id)
+                            )
+                            notifRef.set(notif)
+                        }
+                    }
                 }
                 
                 onReady()

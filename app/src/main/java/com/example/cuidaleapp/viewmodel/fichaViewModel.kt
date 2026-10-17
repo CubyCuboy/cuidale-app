@@ -91,9 +91,10 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
             
             _isRefreshing.value = true
             try {
-                val userDoc = db.collection("usuarios").document(user.uid).get().await()
-                val currentRole = userDoc.getString("rol") ?: ""
-                val currentRegion = userDoc.getString("region") ?: ""
+                val query = db.collection("usuarios").whereEqualTo("uid", user.uid).get().await()
+                val userDoc = if (!query.isEmpty) query.documents[0] else null
+                val currentRole = userDoc?.getString("rol") ?: ""
+                val currentRegion = userDoc?.getString("region") ?: ""
                 
                 _role.value = currentRole
                 _userRegion.value = currentRegion

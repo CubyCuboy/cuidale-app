@@ -24,8 +24,12 @@ class CuidaleMessagingService : FirebaseMessagingService() {
 
     private fun saveTokenToFirestore(token: String) {
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
-        FirebaseFirestore.getInstance().collection("usuarios").document(uid)
-            .update("fcmToken", token)
+        val db = FirebaseFirestore.getInstance()
+        db.collection("usuarios").whereEqualTo("uid", uid).get().addOnSuccessListener { query ->
+            if (!query.isEmpty) {
+                query.documents[0].reference.update("fcmToken", token)
+            }
+        }
     }
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {

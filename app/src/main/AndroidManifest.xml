@@ -104,6 +104,18 @@
             android:theme="@style/Theme.CuidaleApp" />
 
         <activity
+            android:name=".activities.AccountManagementActivity"
+            android:exported="false"
+            android:label="Gestión de Cuenta"
+            android:theme="@style/Theme.CuidaleApp" />
+
+        <activity
+            android:name=".activities.AddEmailPasswordActivity"
+            android:exported="false"
+            android:label="Agregar Correo y Contraseña"
+            android:theme="@style/Theme.CuidaleApp" />
+
+        <activity
             android:name=".activities.SocialManagementActivity"
             android:exported="false"
             android:label="Gestión de Usuarios"

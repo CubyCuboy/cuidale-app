@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.cuidaleapp.data.UserSession
 import com.example.cuidaleapp.models.UserData
+import com.example.cuidaleapp.utils.HashUtils
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +22,7 @@ sealed class LoginUiState {
     data class Transition(val userData: UserData) : LoginUiState()
     object Success : LoginUiState()
     data class Unverified(val email: String) : LoginUiState()
+    data class ExternalRegistrationNeeded(val email: String, val uid: String, val providerId: String, val displayName: String? = null) : LoginUiState()
     data class Error(val message: String) : LoginUiState()
 }
 
@@ -53,40 +55,70 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         } else if (currentUser != null) {
             viewModelScope.launch {
                 try {
-                    // Acceso directo por UID es más eficiente y seguro con las reglas de Firestore
-                    val doc = db.collection("usuarios").document(currentUser.uid).get().await()
-                    
-                    if (doc.exists()) {
-                        val userData = doc.toObject(UserData::class.java)
-                        if (userData != null) {
-                            if (userData.verificado) {
-                                userSession.saveUser(userData)
-                                _uiState.value = LoginUiState.Success
-                            } else {
-                                auth.signOut()
-                                userSession.clear()
-                                _uiState.value = LoginUiState.Idle
+                    var loadedUser: UserData? = null
+
+                    kotlinx.coroutines.withTimeoutOrNull(5000L) {
+                        val cachedUser = userSession.getUser()
+                        if (cachedUser.rut.isNotBlank()) {
+                            val hashedRut = HashUtils.hashRut(cachedUser.rut)
+                            val doc = db.collection("usuarios").document(hashedRut).get().await()
+                            if (doc.exists()) {
+                                val userData = doc.toObject(UserData::class.java)
+                                if (userData != null) {
+                                    loadedUser = userData
+                                    return@withTimeoutOrNull
+                                }
                             }
-                        } else {
-                            _uiState.value = LoginUiState.Idle
                         }
-                    } else {
-                        // Si no existe el documento por UID, intentar por correo por compatibilidad (opcional)
+
                         val query = db.collection("usuarios")
-                            .whereEqualTo("correo", currentUser.email)
+                            .whereEqualTo("uid", currentUser.uid)
                             .get()
                             .await()
                         
                         if (!query.isEmpty) {
                             val userData = query.documents[0].toObject(UserData::class.java)
-                            if (userData != null && userData.verificado) {
-                                userSession.saveUser(userData)
-                                _uiState.value = LoginUiState.Success
-                            } else {
-                                auth.signOut()
-                                userSession.clear()
-                                _uiState.value = LoginUiState.Idle
+                            if (userData != null) {
+                                loadedUser = userData
+                                return@withTimeoutOrNull
                             }
+                        }
+
+                        val email = currentUser.email ?: ""
+                        if (email.isNotBlank()) {
+                            val queryEmail = db.collection("usuarios")
+                                .whereEqualTo("correo", email)
+                                .get()
+                                .await()
+                            
+                            if (!queryEmail.isEmpty) {
+                                val userData = queryEmail.documents[0].toObject(UserData::class.java)
+                                if (userData != null) {
+                                    loadedUser = userData
+                                    return@withTimeoutOrNull
+                                }
+                            }
+                        }
+                    }
+
+                    val user = loadedUser ?: userSession.getUser()
+
+                    // VALIDACIÓN DE SEGURIDAD ESTRICTA: El usuario DEBE haber completado el registro (RUT y Rol obligatorios)
+                    if (user != null && user.completado && user.rut.isNotBlank() && user.rol.isNotBlank()) {
+                        userSession.saveUser(user)
+                        _uiState.value = LoginUiState.Success
+                    } else {
+                        // El usuario no ha completado el registro
+                        val providerId = currentUser.providerData.firstOrNull { it.providerId != "firebase" }?.providerId ?: "google.com"
+                        val email = currentUser.email ?: user?.correo ?: ""
+                        
+                        if (email.isNotBlank()) {
+                            _uiState.value = LoginUiState.ExternalRegistrationNeeded(
+                                email = email,
+                                uid = currentUser.uid,
+                                providerId = providerId,
+                                displayName = currentUser.displayName
+                            )
                         } else {
                             auth.signOut()
                             userSession.clear()
@@ -95,15 +127,53 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 } catch (e: Exception) {
                     val cachedUser = userSession.getUser()
-                    if (cachedUser.correo.isNotEmpty()) {
+                    if (cachedUser.completado && cachedUser.rut.isNotBlank() && cachedUser.rol.isNotBlank()) {
                         _uiState.value = LoginUiState.Success
                     } else {
-                        _uiState.value = LoginUiState.Idle
+                        val providerId = currentUser.providerData.firstOrNull { it.providerId != "firebase" }?.providerId ?: "google.com"
+                        val email = currentUser.email ?: cachedUser.correo
+                        if (email.isNotBlank()) {
+                            _uiState.value = LoginUiState.ExternalRegistrationNeeded(
+                                email = email,
+                                uid = currentUser.uid,
+                                providerId = providerId,
+                                displayName = currentUser.displayName
+                            )
+                        } else {
+                            auth.signOut()
+                            userSession.clear()
+                            _uiState.value = LoginUiState.Idle
+                        }
                     }
                 }
             }
         } else {
             _uiState.value = LoginUiState.Idle
+        }
+    }
+
+    private fun parseLoginErrorMessage(e: Exception): String {
+        val msg = e.localizedMessage ?: e.message ?: ""
+        return when {
+            msg.contains("network-request-failed", ignoreCase = true) || 
+            msg.contains("network", ignoreCase = true) || 
+            msg.contains("unavailable", ignoreCase = true) || 
+            msg.contains("host", ignoreCase = true) || 
+            e is com.google.firebase.FirebaseNetworkException || 
+            e is java.net.UnknownHostException || 
+            e is java.io.IOException -> 
+                "Error de conexión a internet. Revisa tu red e intenta nuevamente"
+            msg.contains("invalid-credential", ignoreCase = true) || 
+            msg.contains("wrong-password", ignoreCase = true) || 
+            msg.contains("user-not-found", ignoreCase = true) || 
+            msg.contains("Credenciales incorrectas", ignoreCase = true) -> 
+                "Credenciales incorrectas. Verifica tu correo/RUT y contraseña"
+            msg.contains("user-disabled", ignoreCase = true) -> 
+                "Esta cuenta ha sido deshabilitada"
+            msg.contains("Usuario no registrado", ignoreCase = true) || 
+            msg.contains("Rut no encontrado", ignoreCase = true) -> 
+                msg
+            else -> if (msg.isNotBlank()) msg else "Error al iniciar sesión"
         }
     }
 
@@ -147,13 +217,11 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 } else {
                     val formattedRut = formatRut(input)
-                    val query = db.collection("usuarios")
-                        .whereEqualTo("rut", formattedRut)
-                        .get()
-                        .await()
+                    val hashedRut = HashUtils.hashRut(formattedRut)
+                    val doc = db.collection("usuarios").document(hashedRut).get().await()
 
-                    if (!query.isEmpty) {
-                        userData = query.documents[0].toObject(UserData::class.java)
+                    if (doc.exists()) {
+                        userData = doc.toObject(UserData::class.java)
                         targetEmail = userData?.correo ?: throw Exception("El usuario no tiene un correo asociado")
                     } else {
                         throw Exception("Rut no encontrado")
@@ -178,7 +246,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
             } catch (e: Exception) {
-                _uiState.value = LoginUiState.Error(e.message ?: "Error desconocido")
+                _uiState.value = LoginUiState.Error(parseLoginErrorMessage(e))
             }
         }
     }
@@ -198,6 +266,100 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     fun clearError() {
         if (_uiState.value is LoginUiState.Error) {
             _uiState.value = LoginUiState.Idle
+        }
+    }
+
+    fun setError(message: String) {
+        _uiState.value = LoginUiState.Error(message)
+    }
+
+    fun loginWithGoogle(idToken: String, email: String?, displayName: String?) {
+        viewModelScope.launch {
+            _uiState.value = LoginUiState.Loading
+            try {
+                if (email.isNullOrBlank()) {
+                    throw Exception("El proveedor no proporcionó un correo electrónico")
+                }
+                val credential = com.google.firebase.auth.GoogleAuthProvider.getCredential(idToken, null)
+                val authResult = auth.signInWithCredential(credential).await()
+                val firebaseUser = authResult.user ?: throw Exception("Error al autenticar con Google")
+                val uid = firebaseUser.uid
+
+                val query = db.collection("usuarios").whereEqualTo("uid", uid).get().await()
+                if (!query.isEmpty) {
+                    val userData = query.documents[0].toObject(UserData::class.java)
+                    if (userData != null && userData.completado) {
+                        userSession.saveUser(userData)
+                        _uiState.value = LoginUiState.Success
+                    } else {
+                        _uiState.value = LoginUiState.ExternalRegistrationNeeded(email, uid, "google.com", displayName)
+                    }
+                } else {
+                    val nameParts = (displayName ?: firebaseUser.displayName ?: "").trim().split(Regex("\\s+"))
+                    val firstName = nameParts.getOrNull(0) ?: ""
+                    val secondName = if (nameParts.size >= 3) nameParts.getOrNull(1) ?: "" else ""
+                    val lastName = if (nameParts.size >= 3) nameParts.getOrNull(2) ?: (nameParts.getOrNull(1) ?: "") else if (nameParts.size == 2) nameParts[1] else ""
+                    val secondLastName = if (nameParts.size >= 4) nameParts.subList(3, nameParts.size).joinToString(" ") else ""
+
+                    val ghostData = hashMapOf(
+                        "uid" to uid,
+                        "correo" to email,
+                        "nombre" to firstName,
+                        "nombre_s" to secondName,
+                        "apellido_pa" to lastName,
+                        "apellido_ma" to secondLastName,
+                        "verificado" to true,
+                        "completado" to false,
+                        "createdAt" to com.google.firebase.Timestamp.now()
+                    )
+                    db.collection("usuarios").document(uid).set(ghostData).await()
+                    _uiState.value = LoginUiState.ExternalRegistrationNeeded(email, uid, "google.com", displayName)
+                }
+            } catch (e: Exception) {
+                _uiState.value = LoginUiState.Error(parseLoginErrorMessage(e))
+            }
+        }
+    }
+
+    fun loginWithProvider(activity: android.app.Activity, providerId: String) {
+        viewModelScope.launch {
+            _uiState.value = LoginUiState.Loading
+            try {
+                val provider = com.google.firebase.auth.OAuthProvider.newBuilder(providerId)
+                val result = auth.startActivityForSignInWithProvider(activity, provider.build()).await()
+                val firebaseUser = result.user ?: throw Exception("Error al autenticar con proveedor")
+                val email = firebaseUser.email ?: throw Exception("El proveedor no proporcionó un correo electrónico")
+                val uid = firebaseUser.uid
+
+                val query = db.collection("usuarios").whereEqualTo("uid", uid).get().await()
+                if (!query.isEmpty) {
+                    val userData = query.documents[0].toObject(UserData::class.java)
+                    if (userData != null && userData.completado) {
+                        userSession.saveUser(userData)
+                        _uiState.value = LoginUiState.Success
+                    } else {
+                        _uiState.value = LoginUiState.ExternalRegistrationNeeded(email, uid, providerId)
+                    }
+                } else {
+                    val nameParts = (firebaseUser.displayName ?: "").split(" ")
+                    val firstName = nameParts.getOrNull(0) ?: ""
+                    val lastName = nameParts.getOrNull(1) ?: ""
+
+                    val ghostData = hashMapOf(
+                        "uid" to uid,
+                        "correo" to email,
+                        "nombre" to firstName,
+                        "apellido_pa" to lastName,
+                        "verificado" to true,
+                        "completado" to false,
+                        "createdAt" to com.google.firebase.Timestamp.now()
+                    )
+                    db.collection("usuarios").document(uid).set(ghostData).await()
+                    _uiState.value = LoginUiState.ExternalRegistrationNeeded(email, uid, providerId)
+                }
+            } catch (e: Exception) {
+                _uiState.value = LoginUiState.Error(parseLoginErrorMessage(e))
+            }
         }
     }
 }

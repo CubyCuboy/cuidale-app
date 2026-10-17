@@ -1,7 +1,12 @@
 package com.example.cuidaleapp.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import android.content.Context
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.cuidaleapp.data.UserSession
+import com.example.cuidaleapp.models.UserData
+import com.example.cuidaleapp.utils.HashUtils
 import com.example.cuidaleapp.utils.PhoneUtils
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -22,9 +27,112 @@ sealed class RegisterUiState {
     data class Error(val message: String) : RegisterUiState()
 }
 
-class RegisterViewModel : ViewModel() {
+class RegisterViewModel(application: Application) : AndroidViewModel(application) {
     private val auth = FirebaseAuth.getInstance()
     private val db = FirebaseFirestore.getInstance()
+
+    var isExternalFlow = false
+        private set
+    private var externalUid = ""
+
+    fun initExternal(email: String, uid: String, provider: String, displayName: String = "") {
+        isExternalFlow = true
+        externalUid = uid
+        _email.value = email
+
+        val prefs = getApplication<Application>().getSharedPreferences("cuidale_prefs", Context.MODE_PRIVATE)
+        val cachedEmail = prefs.getString("incomplete_email", "")
+        val cachedProvider = prefs.getString("incomplete_provider", "")
+
+        if (cachedEmail == email && cachedProvider == provider) {
+            // Restore cached incomplete registration data
+            _role.value = prefs.getString("incomplete_role", "cuidador") ?: "cuidador"
+            _nombre.value = prefs.getString("incomplete_nombre", "") ?: ""
+            _nombreS.value = prefs.getString("incomplete_nombre_s", "") ?: ""
+            _apellidoPa.value = prefs.getString("incomplete_apellido_pa", "") ?: ""
+            _apellidoMa.value = prefs.getString("incomplete_apellido_ma", "") ?: ""
+            _rut.value = prefs.getString("incomplete_rut", "") ?: ""
+            _region.value = prefs.getString("incomplete_region", "") ?: ""
+            _idRegion.value = prefs.getString("incomplete_id_region", "") ?: ""
+            _comuna.value = prefs.getString("incomplete_comuna", "") ?: ""
+            _telefono.value = prefs.getString("incomplete_telefono", "") ?: ""
+        } else {
+            clearIncompleteCache()
+
+            if (displayName.isNotBlank()) {
+                val parts = displayName.trim().split(Regex("\\s+"))
+                val firstName = parts.getOrNull(0) ?: ""
+                val secondName = if (parts.size >= 3) parts.getOrNull(1) ?: "" else ""
+                val lastName = if (parts.size >= 3) parts.getOrNull(2) ?: (parts.getOrNull(1) ?: "") else if (parts.size == 2) parts[1] else ""
+                val secondLastName = if (parts.size >= 4) parts.subList(3, parts.size).joinToString(" ") else ""
+
+                _nombre.value = capitalizeWords(firstName)
+                _nombreS.value = capitalizeWords(secondName)
+                _apellidoPa.value = capitalizeWords(lastName)
+                _apellidoMa.value = capitalizeWords(secondLastName)
+            }
+
+            prefs.edit()
+                .putString("incomplete_email", email)
+                .putString("incomplete_provider", provider)
+                .putString("incomplete_nombre", _nombre.value)
+                .putString("incomplete_nombre_s", _nombreS.value)
+                .putString("incomplete_apellido_pa", _apellidoPa.value)
+                .putString("incomplete_apellido_ma", _apellidoMa.value)
+                .apply()
+        }
+
+        // Ensure ghost user document check in Firestore if needed
+        viewModelScope.launch {
+            try {
+                val query = db.collection("usuarios").whereEqualTo("uid", uid).get().await()
+                if (query.isEmpty) {
+                    val ghostData = hashMapOf(
+                        "uid" to uid,
+                        "correo" to email,
+                        "verificado" to true,
+                        "completado" to false,
+                        "createdAt" to com.google.firebase.Timestamp.now()
+                    )
+                    db.collection("usuarios").document(uid).set(ghostData).await()
+                }
+            } catch (e: Exception) {}
+        }
+    }
+
+    fun saveIncompleteCache() {
+        val prefs = getApplication<Application>().getSharedPreferences("cuidale_prefs", Context.MODE_PRIVATE)
+        prefs.edit()
+            .putString("incomplete_role", _role.value)
+            .putString("incomplete_nombre", _nombre.value)
+            .putString("incomplete_nombre_s", _nombreS.value)
+            .putString("incomplete_apellido_pa", _apellidoPa.value)
+            .putString("incomplete_apellido_ma", _apellidoMa.value)
+            .putString("incomplete_rut", _rut.value)
+            .putString("incomplete_region", _region.value)
+            .putString("incomplete_id_region", _idRegion.value)
+            .putString("incomplete_comuna", _comuna.value)
+            .putString("incomplete_telefono", _telefono.value)
+            .apply()
+    }
+
+    fun clearIncompleteCache() {
+        val prefs = getApplication<Application>().getSharedPreferences("cuidale_prefs", Context.MODE_PRIVATE)
+        prefs.edit()
+            .remove("incomplete_email")
+            .remove("incomplete_provider")
+            .remove("incomplete_role")
+            .remove("incomplete_nombre")
+            .remove("incomplete_nombre_s")
+            .remove("incomplete_apellido_pa")
+            .remove("incomplete_apellido_ma")
+            .remove("incomplete_rut")
+            .remove("incomplete_region")
+            .remove("incomplete_id_region")
+            .remove("incomplete_comuna")
+            .remove("incomplete_telefono")
+            .apply()
+    }
 
     private val _uiState = MutableStateFlow<RegisterUiState>(RegisterUiState.Idle)
     val uiState: StateFlow<RegisterUiState> = _uiState.asStateFlow()
@@ -96,27 +204,34 @@ class RegisterViewModel : ViewModel() {
 
     fun onRoleChange(newRole: String) { 
         _role.value = newRole 
+        saveIncompleteCache()
         clearError()
     }
     fun onNombreChange(newName: String) { 
         _nombre.value = capitalizeWords(newName)
+        saveIncompleteCache()
         clearError()
     }
     fun onNombreSChange(newNameS: String) { 
         _nombreS.value = capitalizeWords(newNameS)
+        saveIncompleteCache()
         clearError()
     }
     fun onApellidoPaChange(newApellidoPa: String) { 
         _apellidoPa.value = capitalizeWords(newApellidoPa)
+        saveIncompleteCache()
         clearError()
     }
     fun onApellidoMaChange(newApellidoMa: String) { 
         _apellidoMa.value = capitalizeWords(newApellidoMa)
+        saveIncompleteCache()
         clearError()
     }
     fun onEmailChange(newEmail: String) { 
-        _email.value = newEmail.trim().lowercase()
-        clearError()
+        if (!isExternalFlow) {
+            _email.value = newEmail.trim().lowercase()
+            clearError()
+        }
     }
     fun onPasswordChange(newPassword: String) { 
         _password.value = newPassword
@@ -124,6 +239,7 @@ class RegisterViewModel : ViewModel() {
     }
     fun onRutChange(newRut: String) { 
         _rut.value = newRut.uppercase().trim()
+        saveIncompleteCache()
         clearError()
     }
 
@@ -135,13 +251,18 @@ class RegisterViewModel : ViewModel() {
     fun onRegionChange(newRegion: String, newIdRegion: String = "99") { 
         _region.value = newRegion 
         _idRegion.value = newIdRegion
+        saveIncompleteCache()
     }
-    fun onComunaChange(newComuna: String) { _comuna.value = newComuna }
+    fun onComunaChange(newComuna: String) { 
+        _comuna.value = newComuna 
+        saveIncompleteCache()
+    }
 
     fun onTelefonoChange(newTelefono: String) {
         val clean = newTelefono.replace(Regex("[^0-9]"), "")
         if (clean.length <= 9) {
             _telefono.value = clean
+            saveIncompleteCache()
         }
     }
 
@@ -178,19 +299,65 @@ class RegisterViewModel : ViewModel() {
         return if (s != 0) (s + 47).toChar().toString() else "K"
     }
 
+    private fun parseErrorMessage(e: Exception): String {
+        val msg = e.localizedMessage ?: e.message ?: ""
+        return when {
+            msg.contains("El RUT ya se encuentra registrado", ignoreCase = true) -> 
+                "El RUT ingresado ya se encuentra registrado por otro usuario"
+            msg.contains("email-already-in-use", ignoreCase = true) || msg.contains("already in use", ignoreCase = true) -> 
+                "El correo electrónico ya se encuentra registrado"
+            msg.contains("network-request-failed", ignoreCase = true) || 
+            msg.contains("network", ignoreCase = true) || 
+            msg.contains("unavailable", ignoreCase = true) || 
+            msg.contains("host", ignoreCase = true) || 
+            e is com.google.firebase.FirebaseNetworkException || 
+            e is java.net.UnknownHostException || 
+            e is java.io.IOException -> 
+                "Error de conexión a internet. Revisa tu red e intenta nuevamente"
+            msg.contains("weak-password", ignoreCase = true) -> 
+                "La contraseña es muy débil. Debe tener al menos 8 caracteres"
+            msg.contains("PERMISSION_DENIED", ignoreCase = true) -> 
+                "Error de permisos en el servidor"
+            else -> if (msg.isNotBlank()) msg else "Error al procesar el registro"
+        }
+    }
+
+    suspend fun validateRutAvailability(): Boolean {
+        val formattedRut = formatRutForSaving(_rut.value)
+        if (formattedRut.isBlank()) {
+            _uiState.value = RegisterUiState.Error("Por favor ingresa un RUT válido")
+            return false
+        }
+        val hashedRut = HashUtils.hashRut(formattedRut)
+        return try {
+            val docCheck = db.collection("usuarios").document(hashedRut).get().await()
+            if (docCheck.exists()) {
+                val existing = docCheck.toObject(UserData::class.java)
+                if (isExternalFlow && existing?.uid == externalUid) {
+                    true
+                } else {
+                    _uiState.value = RegisterUiState.Error("El RUT ingresado ya se encuentra registrado por otro usuario")
+                    false
+                }
+            } else {
+                true
+            }
+        } catch (e: Exception) {
+            _uiState.value = RegisterUiState.Error(parseErrorMessage(e))
+            false
+        }
+    }
+
     fun register() {
         viewModelScope.launch {
             _uiState.value = RegisterUiState.Loading
             try {
                 val formattedRut = formatRutForSaving(_rut.value)
+                val hashedRut = HashUtils.hashRut(formattedRut)
 
-                val rutQuery = db.collection("usuarios")
-                    .whereEqualTo("rut", formattedRut)
-                    .get()
-                    .await()
-                
-                if (!rutQuery.isEmpty) {
-                    throw Exception("El RUT ya se encuentra registrado")
+                val docCheck = db.collection("usuarios").document(hashedRut).get().await()
+                if (docCheck.exists()) {
+                    throw Exception("El RUT ya se encuentra registrado por otro usuario")
                 }
 
                 val result = auth.createUserWithEmailAndPassword(_email.value, _password.value).await()
@@ -210,29 +377,84 @@ class RegisterViewModel : ViewModel() {
                     "id_region" to _idRegion.value,
                     "comuna" to _comuna.value,
                     "verificado" to false,
+                    "completado" to true,
                     "createdAt" to com.google.firebase.Timestamp.now()
                 )
 
-                db.collection("usuarios").document(uid).set(userData).await()
+                db.collection("usuarios").document(hashedRut).set(userData).await()
                 _uiState.value = RegisterUiState.Success
             } catch (e: Exception) {
-                val errorMessage = when {
-                    e.message?.contains("email-already-in-use") == true || e.message?.contains("already in use") == true -> 
-                        "El correo electrónico ya se encuentra registrado"
-                    e.message?.contains("network-request-failed") == true -> "Error de conexión a internet"
-                    e.message?.contains("weak-password") == true -> "La contraseña es muy débil"
-                    e.message?.contains("PERMISSION_DENIED") == true -> "Error de permisos en el servidor"
-                    else -> e.localizedMessage ?: "Error al registrar"
-                }
-                _uiState.value = RegisterUiState.Error(errorMessage)
-                
-                // Desbloquear automáticamente después de 5 segundos
-                viewModelScope.launch {
-                    kotlinx.coroutines.delay(5000)
-                    if (_uiState.value is RegisterUiState.Error) {
-                        _uiState.value = RegisterUiState.Idle
+                _uiState.value = RegisterUiState.Error(parseErrorMessage(e))
+            }
+        }
+    }
+
+    fun registerExternal() {
+        viewModelScope.launch {
+            _uiState.value = RegisterUiState.Loading
+            try {
+                val formattedRut = formatRutForSaving(_rut.value)
+                val hashedRut = HashUtils.hashRut(formattedRut)
+
+                val docCheck = db.collection("usuarios").document(hashedRut).get().await()
+                if (docCheck.exists()) {
+                    val existing = docCheck.toObject(UserData::class.java)
+                    if (existing?.uid != externalUid) {
+                        throw Exception("El RUT ya se encuentra registrado por otro usuario")
                     }
                 }
+
+                val userData = hashMapOf(
+                    "uid" to externalUid,
+                    "rol" to _role.value,
+                    "nombre" to _nombre.value.trim(),
+                    "nombre_s" to _nombreS.value.trim(),
+                    "apellido_pa" to _apellidoPa.value.trim(),
+                    "apellido_ma" to _apellidoMa.value.trim(),
+                    "correo" to _email.value.trim().lowercase(),
+                    "rut" to formattedRut,
+                    "telefono" to PhoneUtils.formatChileanPhone(_telefono.value),
+                    "region" to _region.value,
+                    "id_region" to _idRegion.value,
+                    "comuna" to _comuna.value,
+                    "verificado" to true,
+                    "completado" to true,
+                    "updatedAt" to com.google.firebase.Timestamp.now()
+                )
+
+                db.collection("usuarios").document(hashedRut).set(userData, com.google.firebase.firestore.SetOptions.merge()).await()
+
+                // Limpiar cualquier documento temporal con el UID como ID
+                try {
+                    val tempDoc = db.collection("usuarios").document(externalUid).get().await()
+                    if (tempDoc.exists() && externalUid != hashedRut) {
+                        db.collection("usuarios").document(externalUid).delete().await()
+                    }
+                } catch (e: Exception) {}
+
+                clearIncompleteCache()
+
+                val userObj = UserData(
+                    uid = externalUid,
+                    rol = _role.value,
+                    nombre = _nombre.value.trim(),
+                    nombre_s = _nombreS.value.trim(),
+                    apellido_pa = _apellidoPa.value.trim(),
+                    apellido_ma = _apellidoMa.value.trim(),
+                    correo = _email.value.trim().lowercase(),
+                    rut = formattedRut,
+                    telefono = PhoneUtils.formatChileanPhone(_telefono.value),
+                    region = _region.value,
+                    id_region = _idRegion.value,
+                    comuna = _comuna.value,
+                    verificado = true,
+                    completado = true
+                )
+                UserSession(getApplication()).saveUser(userObj)
+
+                _uiState.value = RegisterUiState.Success
+            } catch (e: Exception) {
+                _uiState.value = RegisterUiState.Error(parseErrorMessage(e))
             }
         }
     }
@@ -243,4 +465,3 @@ class RegisterViewModel : ViewModel() {
         }
     }
 }
-

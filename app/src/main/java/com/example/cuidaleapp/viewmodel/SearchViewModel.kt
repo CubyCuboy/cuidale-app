@@ -125,8 +125,10 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     private suspend fun loadNoDeseados() {
         val uid = auth.currentUser?.uid ?: return
         try {
-            val doc = db.collection("usuarios").document(uid).get().await()
-            noDeseados = (doc.get("no_deseados") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+            val query = db.collection("usuarios").whereEqualTo("uid", uid).get().await()
+            if (!query.isEmpty) {
+                noDeseados = (query.documents[0].get("no_deseados") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+            }
         } catch (e: Exception) {
             noDeseados = emptyList()
         }
@@ -228,12 +230,14 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                         var region = doc.getString("region") ?: ""
                         var comuna = doc.getString("comuna") ?: ""
 
+                        val actualId = doc.getString("uid") ?: doc.id
+
                         if (targetTipo == "cuidador") {
                             nombre = doc.getString("nombre") ?: ""
                             apellido = doc.getString("apellido_pa") ?: ""
                             foto = doc.getString("fotoUrl") ?: doc.getString("foto") ?: ""
                             try {
-                                val fichaDoc = db.collection("fichas").document(doc.id).get().await()
+                                val fichaDoc = db.collection("fichas").document(actualId).get().await()
                                 if (fichaDoc.exists()) {
                                     especializacion = fichaDoc.getString("especializacion") ?: ""
                                     horarios = @Suppress("UNCHECKED_CAST") (fichaDoc.get("horarios") as? List<String> ?: emptyList())
@@ -259,7 +263,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                         val isNew = (System.currentTimeMillis() - timestamp) < (24 * 60 * 60 * 1000)
 
                         SearchResult(
-                            id = doc.id,
+                            id = actualId,
                             nombre = nombre.ifEmpty { "Usuario" },
                             apellido_pa = apellido,
                             fotoUrl = foto,
@@ -274,7 +278,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                             isNew = isNew
                         )
                     }
-                }.awaitAll().filter { it.id !in currentNoDeseados }
+                }.awaitAll().distinctBy { it.id }.filter { it.id !in currentNoDeseados }
 
                 if (newItems.isEmpty() && !isLastPage && result.documents.isNotEmpty()) {
                     lastDocument = result.documents.last()

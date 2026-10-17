@@ -9,6 +9,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material.icons.filled.LockReset
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VerifiedUser
@@ -138,6 +139,61 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(24.dp))
             }
 
+            // Email Verification Notification
+            val emailToCheck = userData.correoAlternativo.ifBlank { userData.correo }
+            if (emailToCheck.isNotEmpty() && !userData.verificado) {
+                HardShadowPanel(
+                    backgroundColor = customColors.warningContainer,
+                    shadowColor = customColors.warning.copy(alpha = 0.2f),
+                    cornerRadius = 24.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(20.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            color = customColors.warning,
+                            shape = CircleShape,
+                            modifier = Modifier.size(44.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.VerifiedUser, null, tint = Color.White, modifier = Modifier.size(24.dp))
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Verifica tu correo",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = customColors.warning
+                            )
+                            Text(
+                                "Tu correo $emailToCheck aún no está verificado.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = customColors.warning.copy(alpha = 0.8f)
+                            )
+                        }
+                    }
+                    
+                    Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
+                        Button(
+                            onClick = {
+                                val intent = Intent(context, com.example.cuidaleapp.activities.EmailVerificationActivity::class.java).apply {
+                                    putExtra("email", emailToCheck)
+                                }
+                                context.startActivity(intent)
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = customColors.warning),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("VERIFICAR CORREO AHORA", fontWeight = FontWeight.Black, color = Color.White)
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+
             HardShadowPanel(
                 backgroundColor = customColors.panelBackground,
                 shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.15f),
@@ -156,14 +212,33 @@ fun SettingsScreen(
                         modifier = Modifier.padding(horizontal = 4.dp)
                     )
 
+                    val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                    val isPasswordLinked = (currentUser?.providerData ?: emptyList()).any { it.providerId == "password" } || userData.correoAlternativo.isNotBlank()
+
+                    if (isPasswordLinked) {
+                        HardShadowButton(
+                            text = stringResource(R.string.profile_reset_pass_button),
+                            containerColor = MaterialTheme.colorScheme.secondary,
+                            contentColor = Color.White,
+                            shadowColor = MaterialTheme.colorScheme.secondaryContainer,
+                            icon = Icons.Default.LockReset,
+                            isDark = isDark,
+                            onClick = onResetPass
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
                     HardShadowButton(
-                        text = stringResource(R.string.profile_reset_pass_button),
-                        containerColor = MaterialTheme.colorScheme.secondary,
+                        text = "Gestión de Cuenta",
+                        containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = Color.White,
-                        shadowColor = MaterialTheme.colorScheme.secondaryContainer,
-                        icon = Icons.Default.LockReset,
+                        shadowColor = MaterialTheme.colorScheme.primaryContainer,
+                        icon = Icons.Default.AccountBox,
                         isDark = isDark,
-                        onClick = onResetPass
+                        onClick = {
+                            context.startActivity(Intent(context, com.example.cuidaleapp.activities.AccountManagementActivity::class.java))
+                        }
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))

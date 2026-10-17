@@ -45,11 +45,17 @@ class FavoritosViewModel(application: Application) : AndroidViewModel(applicatio
         loadSocialData()
     }
 
+    private suspend fun getMyUserDocRef(uid: String): com.google.firebase.firestore.DocumentReference? {
+        val query = db.collection("usuarios").whereEqualTo("uid", uid).get().await()
+        return if (!query.isEmpty) query.documents[0].reference else null
+    }
+
     fun loadSocialData() {
         val uid = auth.currentUser?.uid ?: return
         viewModelScope.launch {
             try {
-                val doc = db.collection("usuarios").document(uid).get().await()
+                val userRef = getMyUserDocRef(uid) ?: return@launch
+                val doc = userRef.get().await()
                 val favs = (doc.get("favoritos") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
                 val saved = (doc.get("guardados") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
                 val hidden = (doc.get("no_deseados") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
@@ -66,7 +72,7 @@ class FavoritosViewModel(application: Application) : AndroidViewModel(applicatio
                         .whereIn("uid", allIds)
                         .get().await()
                         .toObjects(UserData::class.java)
-                    _managedUsers.value = users
+                    _managedUsers.value = users.distinctBy { it.uid }
                 } else {
                     _managedUsers.value = emptyList()
                 }
@@ -83,14 +89,15 @@ class FavoritosViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             _uiState.value = FavoritosUiState.Loading
             try {
+                val userRef = getMyUserDocRef(myUid) ?: throw Exception("Usuario no encontrado")
                 val action = if (isFav) FieldValue.arrayRemove(targetUid) else FieldValue.arrayUnion(targetUid)
-                db.collection("usuarios").document(myUid).update("favoritos", action).await()
+                userRef.update("favoritos", action).await()
                 loadSocialData()
                 _uiState.value = FavoritosUiState.Success(if (isFav) "Eliminado de favoritos" else "Añadido a favoritos")
                 
                 // Si lo añadimos a favoritos, automáticamente lo guardamos también si no estaba
                 if (!isFav && !_guardados.value.contains(targetUid)) {
-                    db.collection("usuarios").document(myUid).update("guardados", FieldValue.arrayUnion(targetUid)).await()
+                    userRef.update("guardados", FieldValue.arrayUnion(targetUid)).await()
                 }
             } catch (e: Exception) {
                 _uiState.value = FavoritosUiState.Error("Error al actualizar favoritos")
@@ -105,8 +112,9 @@ class FavoritosViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             _uiState.value = FavoritosUiState.Loading
             try {
+                val userRef = getMyUserDocRef(myUid) ?: throw Exception("Usuario no encontrado")
                 val action = if (isSaved) FieldValue.arrayRemove(targetUid) else FieldValue.arrayUnion(targetUid)
-                db.collection("usuarios").document(myUid).update("guardados", action).await()
+                userRef.update("guardados", action).await()
                 loadSocialData()
                 _uiState.value = FavoritosUiState.Success(if (isSaved) "Eliminado de guardados" else "Guardado en contactos")
             } catch (e: Exception) {
@@ -122,8 +130,9 @@ class FavoritosViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             _uiState.value = FavoritosUiState.Loading
             try {
+                val userRef = getMyUserDocRef(myUid) ?: throw Exception("Usuario no encontrado")
                 val action = if (isHidden) FieldValue.arrayRemove(targetUid) else FieldValue.arrayUnion(targetUid)
-                db.collection("usuarios").document(myUid).update("no_deseados", action).await()
+                userRef.update("no_deseados", action).await()
                 loadSocialData()
                 _uiState.value = FavoritosUiState.Success(if (isHidden) "Usuario restaurado en búsquedas" else "Usuario ocultado de búsquedas")
             } catch (e: Exception) {
@@ -139,9 +148,10 @@ class FavoritosViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             _uiState.value = FavoritosUiState.Loading
             try {
+                val userRef = getMyUserDocRef(myUid) ?: throw Exception("Usuario no encontrado")
                 if (!isBlocked) {
                     // Si estamos bloqueando, eliminamos de favoritos y guardados
-                    db.collection("usuarios").document(myUid).update(
+                    userRef.update(
                         mapOf(
                             "bloqueados" to FieldValue.arrayUnion(targetUid),
                             "favoritos" to FieldValue.arrayRemove(targetUid),
@@ -169,7 +179,7 @@ class FavoritosViewModel(application: Application) : AndroidViewModel(applicatio
                     db.collection("vinculos").document(vinculoId).delete()
 
                 } else {
-                    db.collection("usuarios").document(myUid).update("bloqueados", FieldValue.arrayRemove(targetUid)).await()
+                    userRef.update("bloqueados", FieldValue.arrayRemove(targetUid)).await()
                 }
                 
                 loadSocialData()

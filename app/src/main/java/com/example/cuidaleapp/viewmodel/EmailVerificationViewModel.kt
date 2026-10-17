@@ -4,8 +4,11 @@ import android.app.Application
 import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.cuidaleapp.data.UserSession
+import com.example.cuidaleapp.utils.HashUtils
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -160,7 +163,30 @@ class EmailVerificationViewModel(application: Application) : AndroidViewModel(ap
                     .getHttpsCallable("verifyVerificationCode")
                     .call(data)
                     .await()
-                
+
+                val authUser = FirebaseAuth.getInstance().currentUser
+                val uid = authUser?.uid
+                if (uid != null) {
+                    val updates = mapOf(
+                        "verificado" to true,
+                        "updatedAt" to com.google.firebase.Timestamp.now()
+                    )
+                    val userSession = UserSession(getApplication())
+                    val cachedUser = userSession.getUser()
+                    val updatedUser = cachedUser.copy(verificado = true)
+                    userSession.saveUser(updatedUser)
+
+                    if (updatedUser.rut.isNotBlank()) {
+                        val hashedRut = HashUtils.hashRut(updatedUser.rut)
+                        db.collection("usuarios").document(hashedRut).set(updates, SetOptions.merge()).await()
+                    } else {
+                        val query = db.collection("usuarios").whereEqualTo("uid", uid).get().await()
+                        if (!query.isEmpty) {
+                            query.documents[0].reference.set(updates, SetOptions.merge()).await()
+                        }
+                    }
+                }
+
                 clearSavedState()
                 _uiState.value = VerificationUiState.Success
             } catch (e: Exception) {

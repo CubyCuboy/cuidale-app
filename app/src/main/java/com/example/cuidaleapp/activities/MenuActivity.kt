@@ -94,6 +94,16 @@ class MenuActivity : ComponentActivity() {
             val isDark by menuViewModel.isDarkMode.collectAsState()
             val userData by menuViewModel.userData.collectAsState()
             val isLoggedOut by menuViewModel.isLoggedOut.collectAsState()
+
+            LaunchedEffect(userData, isLoggedOut) {
+                if (isLoggedOut || !userData.completado || userData.rut.isBlank() || userData.rol.isBlank()) {
+                    val intent = Intent(this@MenuActivity, LoginActivity::class.java)
+                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                    startActivity(intent)
+                    finish()
+                }
+            }
+
             val fichaState by fichaViewModel.state.collectAsState()
             val searchState by searchViewModel.state.collectAsState()
             val isSearchRefreshing by searchViewModel.isRefreshing.collectAsState()
@@ -513,9 +523,11 @@ class MenuActivity : ComponentActivity() {
                                                             var otherUserData by remember { mutableStateOf(cs.otherUser) }
                                                             LaunchedEffect(cs.otherUid) {
                                                                 if (otherUserData == null) {
-                                                                    val doc = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                                                                        .collection("usuarios").document(cs.otherUid).get().await()
-                                                                    otherUserData = doc.toObject(UserData::class.java)
+                                                                    val query = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                                                        .collection("usuarios").whereEqualTo("uid", cs.otherUid).get().await()
+                                                                    if (!query.isEmpty) {
+                                                                        otherUserData = query.documents[0].toObject(UserData::class.java)
+                                                                    }
                                                                 }
                                                             }
                                                             if (otherUserData != null) {

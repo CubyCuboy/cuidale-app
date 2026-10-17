@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.*
 import androidx.compose.runtime.collectAsState
@@ -17,9 +18,44 @@ import com.example.cuidaleapp.ui.screens.LoginScreen
 import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
 import com.example.cuidaleapp.viewmodel.LoginUiState
 import com.example.cuidaleapp.viewmodel.LoginViewModel
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
 
 class LoginActivity : ComponentActivity() {
     private val viewModel: LoginViewModel by viewModels()
+
+    private val googleSignInLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        try {
+            val account = task.getResult(ApiException::class.java)
+            val idToken = account?.idToken
+            if (idToken != null) {
+                viewModel.loginWithGoogle(idToken, account.email, account.displayName)
+            } else {
+                viewModel.loginWithGoogle("", account?.email, account?.displayName)
+            }
+        } catch (e: ApiException) {
+            if (e.statusCode != 12501) {
+                viewModel.setError("Error en Google Sign-In: ${e.message}")
+            }
+        }
+    }
+
+    private fun startGoogleSignIn() {
+        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestIdToken("397845476517-4uhbn38sqf9lhu5b8r075r3ns3glfful.apps.googleusercontent.com")
+            .requestEmail()
+            .requestProfile()
+            .build()
+        val googleSignInClient = GoogleSignIn.getClient(this, gso)
+        googleSignInClient.signOut().addOnCompleteListener {
+            val signInIntent = googleSignInClient.signInIntent
+            googleSignInLauncher.launch(signInIntent)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,6 +87,18 @@ class LoginActivity : ComponentActivity() {
                         startActivity(intent)
                         viewModel.clearError()
                     }
+                    is LoginUiState.ExternalRegistrationNeeded -> {
+                        val state = uiState as LoginUiState.ExternalRegistrationNeeded
+                        val intent = Intent(this@LoginActivity, RegisterActivity::class.java).apply {
+                            putExtra("IS_EXTERNAL", true)
+                            putExtra("EXTERNAL_EMAIL", state.email)
+                            putExtra("EXTERNAL_UID", state.uid)
+                            putExtra("EXTERNAL_PROVIDER", state.providerId)
+                            putExtra("EXTERNAL_DISPLAY_NAME", state.displayName)
+                        }
+                        startActivity(intent)
+                        viewModel.clearError()
+                    }
                     else -> {}
                 }
             }
@@ -73,6 +121,12 @@ class LoginActivity : ComponentActivity() {
                             val intent = Intent(this@LoginActivity, EmailVerificationActivity::class.java)
                             intent.putExtra("email", email)
                             startActivity(intent)
+                        },
+                        onGoogleLogin = {
+                            startGoogleSignIn()
+                        },
+                        onMicrosoftLogin = {
+                            viewModel.loginWithProvider(this@LoginActivity, "microsoft.com")
                         }
                     )
                 }

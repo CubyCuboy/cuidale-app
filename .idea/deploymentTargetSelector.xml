@@ -3,11 +3,11 @@
   <component name="deploymentTargetSelector">
     <selectionStates>
       <SelectionState runConfigName="app">
-        <option name="selectionMode" value="DIALOG" />
-        <DropdownSelection timestamp="2026-06-24T19:38:58.686013700Z">
+        <option name="selectionMode" value="DROPDOWN" />
+        <DropdownSelection timestamp="2026-10-17T16:49:16.707401200Z">
           <Target type="DEFAULT_BOOT">
             <handle>
-              <DeviceId pluginId="LocalEmulator" identifier="path=C:\Users\guill\.android\avd\Medium_Phone_3.avd" />
+              <DeviceId pluginId="Wireless" identifier="serviceName=adb-320144520239-A8cKFo" />
             </handle>
           </Target>
         </DropdownSelection>

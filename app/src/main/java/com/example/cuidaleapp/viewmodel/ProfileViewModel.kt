@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.cuidaleapp.data.UserSession
 import com.example.cuidaleapp.models.UserData
+import com.example.cuidaleapp.utils.HashUtils
 import com.example.cuidaleapp.utils.PhoneUtils
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -43,6 +44,19 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     val remoteState: StateFlow<RemoteState> = _remoteState.asStateFlow()
 
     private val _otherUserData = MutableStateFlow<UserData?>(null)
+
+    private suspend fun updateFirestoreUser(uid: String, updates: Map<String, Any>) {
+        val rut = userSession.getUser().rut
+        if (rut.isNotBlank()) {
+            val hashedRut = HashUtils.hashRut(rut)
+            db.collection("usuarios").document(hashedRut).set(updates, SetOptions.merge()).await()
+        } else {
+            val query = db.collection("usuarios").whereEqualTo("uid", uid).get().await()
+            if (!query.isEmpty) {
+                query.documents[0].reference.set(updates, SetOptions.merge()).await()
+            }
+        }
+    }
     val otherUserData: StateFlow<UserData?> = _otherUserData.asStateFlow()
 
     private val _otherProfileState = MutableStateFlow<RemoteState>(RemoteState.Idle)
@@ -77,17 +91,31 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
 
     private fun startMyProfileListener() {
         val uid = auth.currentUser?.uid ?: return
+        val rut = userSession.getUser().rut
         myProfileListener?.remove()
-        myProfileListener = db.collection("usuarios").document(uid)
-            .addSnapshotListener { snapshot, e ->
-                if (e != null || snapshot == null || !snapshot.exists()) return@addSnapshotListener
-                val user = snapshot.toObject(UserData::class.java)?.copy(uid = uid)
-                android.util.Log.d("ProfileVM", "Snapshot received: fotoUrl=${user?.fotoUrl}")
-                if (user != null) {
-                    userSession.saveUser(user)
-                    _userData.value = user
+
+        if (rut.isNotBlank()) {
+            val hashedRut = HashUtils.hashRut(rut)
+            myProfileListener = db.collection("usuarios").document(hashedRut)
+                .addSnapshotListener { snapshot, e ->
+                    if (e != null || snapshot == null || !snapshot.exists()) return@addSnapshotListener
+                    val user = snapshot.toObject(UserData::class.java)?.copy(uid = uid)
+                    if (user != null) {
+                        userSession.saveUser(user)
+                        _userData.value = user
+                    }
                 }
-            }
+        } else {
+            myProfileListener = db.collection("usuarios").whereEqualTo("uid", uid)
+                .addSnapshotListener { snapshot, e ->
+                    if (e != null || snapshot == null || snapshot.isEmpty) return@addSnapshotListener
+                    val user = snapshot.documents[0].toObject(UserData::class.java)?.copy(uid = uid)
+                    if (user != null) {
+                        userSession.saveUser(user)
+                        _userData.value = user
+                    }
+                }
+        }
     }
 
     fun toggleTheme() {
@@ -105,8 +133,15 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             _isRefreshing.value = true
             try {
-                val document = db.collection("usuarios").document(uid).get().await()
-                val remoteUser = document.toObject(UserData::class.java)?.copy(uid = uid)
+                val rut = userSession.getUser().rut
+                val remoteUser = if (rut.isNotBlank()) {
+                    val hashedRut = HashUtils.hashRut(rut)
+                    val document = db.collection("usuarios").document(hashedRut).get().await()
+                    document.toObject(UserData::class.java)?.copy(uid = uid)
+                } else {
+                    val query = db.collection("usuarios").whereEqualTo("uid", uid).get().await()
+                    if (!query.isEmpty) query.documents[0].toObject(UserData::class.java)?.copy(uid = uid) else null
+                }
                 if (remoteUser != null) {
                     userSession.saveUser(remoteUser)
                     _userData.value = remoteUser
@@ -144,8 +179,8 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 ref.putBytes(compressedBytes, metadata).await()
                 val downloadUrl = ref.downloadUrl.await().toString()
 
-                // Actualización en Firestore (esto disparará el myProfileListener automáticamente)
-                db.collection("usuarios").document(uid).update("fotoUrl", downloadUrl).await()
+                // Actualización en Firestore
+                updateFirestoreUser(uid, mapOf("fotoUrl" to downloadUrl))
 
                 // Sincronizar con Ficha solo si es Cuidador
                 if (_userData.value.rol == "cuidador") {
@@ -192,7 +227,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             _remoteState.value = RemoteState.Loading
             try {
-                db.collection("usuarios").document(uid).update("fotoUrl", "").await()
+                updateFirestoreUser(uid, mapOf("fotoUrl" to ""))
 
                 // Sincronizar con Ficha
                 if (_userData.value.rol == "cuidador") {
@@ -281,7 +316,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     "fotoUrl" to finalPhotoUrl
                 )
 
-                db.collection("usuarios").document(uid).update(userMap).await()
+                updateFirestoreUser(uid, userMap)
 
                 // Sincronizar con Ficha solo si es Cuidador
                 if (updatedUser.rol == "cuidador") {
@@ -334,7 +369,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     "comuna" to finalUser.comuna,
                     "descripcion" to finalUser.descripcion
                 )
-                db.collection("usuarios").document(uid).update(userMap).await()
+                updateFirestoreUser(uid, userMap)
 
                 // Sincronizar con Ficha solo si es Cuidador
                 if (updatedUser.rol == "cuidador") {
@@ -373,21 +408,22 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             _otherFichaState.value = FichaState.Loading
             
             // Listener en tiempo real para que los cambios de otros se reflejen al instante
-            otherProfileListener = db.collection("usuarios").document(targetUid)
+            otherProfileListener = db.collection("usuarios").whereEqualTo("uid", targetUid)
                 .addSnapshotListener { snapshot, e ->
                     if (e != null) {
                         _otherProfileState.value = RemoteState.Error(e.localizedMessage ?: "Error al cargar perfil")
                         return@addSnapshotListener
                     }
 
-                    if (snapshot == null || !snapshot.exists()) {
+                    if (snapshot == null || snapshot.isEmpty) {
                         _otherProfileState.value = RemoteState.Error("El usuario no existe.")
                         return@addSnapshotListener
                     }
 
-                    val user = snapshot.toObject(UserData::class.java)?.copy(uid = targetUid)
+                    val doc = snapshot.documents[0]
+                    val user = doc.toObject(UserData::class.java)?.copy(uid = targetUid)
                     
-                    val targetBlockedList = (snapshot.get("bloqueados") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+                    val targetBlockedList = (doc.get("bloqueados") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
                     if (targetBlockedList.contains(myUid)) {
                         _otherProfileState.value = RemoteState.Error("Este perfil es privado.")
                         _otherFichaState.value = FichaState.Error("Perfil Privado")

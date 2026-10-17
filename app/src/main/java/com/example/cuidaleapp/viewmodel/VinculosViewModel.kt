@@ -133,16 +133,20 @@ class VinculosViewModel(application: Application) : AndroidViewModel(application
                 db.collection("vinculos").document(id).set(nuevoVinculo).await()
 
                 // Crear notificación en Firestore para el receptor
-                val notifRef = db.collection("usuarios").document(targetUid).collection("notificaciones").document()
-                val notification = Notification(
-                    id = notifRef.id,
-                    tipo = "solicitud_vinculo",
-                    emisor = myUid,
-                    receptor = targetUid,
-                    timestamp = System.currentTimeMillis(),
-                    data = mapOf("vinculoId" to id)
-                )
-                notifRef.set(notification).await()
+                db.collection("usuarios").whereEqualTo("uid", targetUid).get().addOnSuccessListener { query ->
+                    if (!query.isEmpty) {
+                        val notifRef = query.documents[0].reference.collection("notificaciones").document()
+                        val notification = Notification(
+                            id = notifRef.id,
+                            tipo = "solicitud_vinculo",
+                            emisor = myUid,
+                            receptor = targetUid,
+                            timestamp = System.currentTimeMillis(),
+                            data = mapOf("vinculoId" to id)
+                        )
+                        notifRef.set(notification)
+                    }
+                }
 
                 _uiState.value = VinculosUiState.Success("Solicitud enviada")
                 loadVinculos()
@@ -165,16 +169,20 @@ class VinculosViewModel(application: Application) : AndroidViewModel(application
 
                 if (targetUid.isNotEmpty()) {
                     // Notificar al solicitante que su solicitud fue aceptada
-                    val notifRef = db.collection("usuarios").document(targetUid).collection("notificaciones").document()
-                    val notification = Notification(
-                        id = notifRef.id,
-                        tipo = "vinculo_aceptado",
-                        emisor = myUid,
-                        receptor = targetUid,
-                        timestamp = System.currentTimeMillis(),
-                        data = mapOf("vinculoId" to vinculoId, "chatId" to vinculoId)
-                    )
-                    notifRef.set(notification).await()
+                    db.collection("usuarios").whereEqualTo("uid", targetUid).get().addOnSuccessListener { query ->
+                        if (!query.isEmpty) {
+                            val notifRef = query.documents[0].reference.collection("notificaciones").document()
+                            val notification = Notification(
+                                id = notifRef.id,
+                                tipo = "vinculo_aceptado",
+                                emisor = myUid,
+                                receptor = targetUid,
+                                timestamp = System.currentTimeMillis(),
+                                data = mapOf("vinculoId" to vinculoId, "chatId" to vinculoId)
+                            )
+                            notifRef.set(notification)
+                        }
+                    }
                 }
 
                 _uiState.value = VinculosUiState.Success("Solicitud aceptada")

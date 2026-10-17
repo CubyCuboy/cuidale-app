@@ -1,6 +1,7 @@
 {
   "project_info": {
     "project_number": "397845476517",
+    "firebase_url": "https://cuidale-app-default-rtdb.firebaseio.com",
     "project_id": "cuidale-app",
     "storage_bucket": "cuidale-app.firebasestorage.app"
   },
@@ -12,7 +13,20 @@
           "package_name": "com.example.cuidaleapp"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "397845476517-t3rnq2hch83npvbvt7hud1gism2pi8m2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.cuidaleapp",
+            "certificate_hash": "7fb4223117c36c7fbc3766890a8f8d367de0722c"
+          }
+        },
+        {
+          "client_id": "397845476517-4uhbn38sqf9lhu5b8r075r3ns3glfful.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBD3RcX6sbjB9HYyNYIywAyMH_mmXB6TJ8"
@@ -20,7 +34,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "397845476517-4uhbn38sqf9lhu5b8r075r3ns3glfful.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

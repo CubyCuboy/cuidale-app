@@ -38,16 +38,31 @@ class MenuViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun startMyProfileListener() {
         val uid = auth.currentUser?.uid ?: return
+        val rut = userSession.getUser().rut
         myProfileListener?.remove()
-        myProfileListener = db.collection("usuarios").document(uid)
-            .addSnapshotListener { snapshot, e ->
-                if (e != null || snapshot == null || !snapshot.exists()) return@addSnapshotListener
-                val user = snapshot.toObject(UserData::class.java)?.copy(uid = uid)
-                if (user != null) {
-                    userSession.saveUser(user)
-                    _userData.value = user
+
+        if (rut.isNotBlank()) {
+            val hashedRut = com.example.cuidaleapp.utils.HashUtils.hashRut(rut)
+            myProfileListener = db.collection("usuarios").document(hashedRut)
+                .addSnapshotListener { snapshot, e ->
+                    if (e != null || snapshot == null || !snapshot.exists()) return@addSnapshotListener
+                    val user = snapshot.toObject(UserData::class.java)?.copy(uid = uid)
+                    if (user != null) {
+                        userSession.saveUser(user)
+                        _userData.value = user
+                    }
                 }
-            }
+        } else {
+            myProfileListener = db.collection("usuarios").whereEqualTo("uid", uid)
+                .addSnapshotListener { snapshot, e ->
+                    if (e != null || snapshot == null || snapshot.isEmpty) return@addSnapshotListener
+                    val user = snapshot.documents[0].toObject(UserData::class.java)?.copy(uid = uid)
+                    if (user != null) {
+                        userSession.saveUser(user)
+                        _userData.value = user
+                    }
+                }
+        }
     }
 
     fun toggleTheme() {
@@ -58,10 +73,17 @@ class MenuViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateUserData() {
         val uid = auth.currentUser?.uid ?: return
+        val rut = userSession.getUser().rut
         viewModelScope.launch {
             try {
-                val doc = db.collection("usuarios").document(uid).get().await()
-                val remoteUser = doc.toObject(UserData::class.java)?.copy(uid = uid)
+                val remoteUser = if (rut.isNotBlank()) {
+                    val hashedRut = com.example.cuidaleapp.utils.HashUtils.hashRut(rut)
+                    val doc = db.collection("usuarios").document(hashedRut).get().await()
+                    doc.toObject(UserData::class.java)?.copy(uid = uid)
+                } else {
+                    val query = db.collection("usuarios").whereEqualTo("uid", uid).get().await()
+                    if (!query.isEmpty) query.documents[0].toObject(UserData::class.java)?.copy(uid = uid) else null
+                }
                 if (remoteUser != null) {
                     userSession.saveUser(remoteUser)
                     _userData.value = remoteUser

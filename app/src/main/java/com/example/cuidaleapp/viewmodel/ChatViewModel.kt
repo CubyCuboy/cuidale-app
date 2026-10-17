@@ -151,10 +151,10 @@ class ChatViewModel : ViewModel() {
         val myUid = auth.currentUser?.uid ?: return
         blockingListener?.remove()
         
-        blockingListener = db.collection("usuarios").document(otherUid)
+        blockingListener = db.collection("usuarios").whereEqualTo("uid", otherUid)
             .addSnapshotListener { snapshot, e ->
-                if (e != null) return@addSnapshotListener
-                val bloqueados = snapshot?.get("bloqueados") as? List<String> ?: emptyList()
+                if (e != null || snapshot == null || snapshot.isEmpty) return@addSnapshotListener
+                val bloqueados = snapshot.documents[0].get("bloqueados") as? List<String> ?: emptyList()
                 _isBlocked.value = bloqueados.contains(myUid)
             }
     }
@@ -246,16 +246,17 @@ class ChatViewModel : ViewModel() {
 
             // 1. User Listener
             if (!userListeners.containsKey(otherUid)) {
-                val uListener = db.collection("usuarios").document(otherUid)
+                val uListener = db.collection("usuarios").whereEqualTo("uid", otherUid)
                     .addSnapshotListener { snapshot, e ->
-                        if (e != null || snapshot == null || !snapshot.exists()) return@addSnapshotListener
-                        val otherUser = snapshot.toObject(UserData::class.java)?.copy(uid = otherUid) ?: return@addSnapshotListener
+                        if (e != null || snapshot == null || snapshot.isEmpty) return@addSnapshotListener
+                        val doc = snapshot.documents[0]
+                        val otherUser = doc.toObject(UserData::class.java)?.copy(uid = otherUid) ?: return@addSnapshotListener
                         
                         _usersMap.value = _usersMap.value + (otherUid to otherUser)
                         updateChatList()
 
                         if (otherUid == currentChatId?.split("_")?.find { it != myUid }) {
-                            val bloqueados = snapshot.get("bloqueados") as? List<String> ?: emptyList()
+                            val bloqueados = doc.get("bloqueados") as? List<String> ?: emptyList()
                             _isBlocked.value = bloqueados.contains(myUid)
                         }
                     }
@@ -361,17 +362,20 @@ class ChatViewModel : ViewModel() {
                 database.child("status").child(otherUid).child("estado").get().addOnSuccessListener { snapshot ->
                     val status = snapshot.getValue(String::class.java)
                     if (status != "en línea") {
-                        val notifRef = db.collection("usuarios").document(otherUid).collection("notificaciones").document()
-                        val notification = com.example.cuidaleapp.models.Notification(
-                            id = notifRef.id,
-                            tipo = "nuevo_mensaje",
-                            emisor = myUid,
-                            receptor = otherUid,
-                            timestamp = System.currentTimeMillis(),
-                            leida = false,
-                            data = mapOf("chatId" to chatId, "text" to text.take(50))
-                        )
-                        notifRef.set(notification)
+                        db.collection("usuarios").whereEqualTo("uid", otherUid).get().addOnSuccessListener { query ->
+                            if (query.isEmpty) return@addOnSuccessListener
+                            val notifRef = query.documents[0].reference.collection("notificaciones").document()
+                            val notification = com.example.cuidaleapp.models.Notification(
+                                id = notifRef.id,
+                                tipo = "nuevo_mensaje",
+                                emisor = myUid,
+                                receptor = otherUid,
+                                timestamp = System.currentTimeMillis(),
+                                leida = false,
+                                data = mapOf("chatId" to chatId, "text" to text.take(50))
+                            )
+                            notifRef.set(notification)
+                        }
                     }
                 }
             }
@@ -427,15 +431,18 @@ class ChatViewModel : ViewModel() {
 
     fun clearChatNotifications(chatId: String) {
         val myUid = auth.currentUser?.uid ?: return
-        db.collection("usuarios").document(myUid).collection("notificaciones")
-            .whereEqualTo("tipo", "nuevo_mensaje")
-            .whereEqualTo("data.chatId", chatId)
-            .get()
-            .addOnSuccessListener { snapshot ->
-                val batch = db.batch()
-                snapshot.documents.forEach { batch.delete(it.reference) }
-                batch.commit()
-            }
+        db.collection("usuarios").whereEqualTo("uid", myUid).get().addOnSuccessListener { query ->
+            if (query.isEmpty) return@addOnSuccessListener
+            query.documents[0].reference.collection("notificaciones")
+                .whereEqualTo("tipo", "nuevo_mensaje")
+                .whereEqualTo("data.chatId", chatId)
+                .get()
+                .addOnSuccessListener { snapshot ->
+                    val batch = db.batch()
+                    snapshot.documents.forEach { batch.delete(it.reference) }
+                    batch.commit()
+                }
+        }
     }
 
     fun markChatAsRead(chatId: String) {

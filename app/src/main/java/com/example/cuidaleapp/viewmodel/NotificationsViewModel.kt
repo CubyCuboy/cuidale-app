@@ -48,22 +48,19 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
         val uid = auth.currentUser?.uid ?: return
         listenerRegistration?.remove()
 
-        listenerRegistration = db.collection("usuarios").document(uid).collection("notificaciones")
-            .orderBy("timestamp", Query.Direction.DESCENDING)
-            .addSnapshotListener { snapshot, e ->
-                if (e != null) return@addSnapshotListener
-                
-                snapshot?.documentChanges?.forEach { dc ->
-                    if (dc.type == DocumentChange.Type.ADDED) {
-                        // Eliminamos showLocalNotification(notif) para evitar duplicados con FCM
-                    }
+        db.collection("usuarios").whereEqualTo("uid", uid).get().addOnSuccessListener { query ->
+            if (query.isEmpty) return@addOnSuccessListener
+            val userDocRef = query.documents[0].reference
+            listenerRegistration = userDocRef.collection("notificaciones")
+                .orderBy("timestamp", Query.Direction.DESCENDING)
+                .addSnapshotListener { snapshot, e ->
+                    if (e != null) return@addSnapshotListener
+                    val list = snapshot?.toObjects(Notification::class.java) ?: emptyList()
+                    _notifications.value = list
+                    _unreadCount.value = list.count { !it.leida }
+                    fetchUsers(list)
                 }
-
-                val list = snapshot?.toObjects(Notification::class.java) ?: emptyList()
-                _notifications.value = list
-                _unreadCount.value = list.count { !it.leida }
-                fetchUsers(list)
-            }
+        }
     }
 
     private fun showLocalNotification(notification: Notification) {
@@ -116,10 +113,12 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
         if (uids.isEmpty()) return
 
         uids.forEach { targetUid ->
-            db.collection("usuarios").document(targetUid).get().addOnSuccessListener { doc ->
-                val user = doc.toObject(UserData::class.java)
-                if (user != null) {
-                    _users.value = _users.value + (targetUid to user)
+            db.collection("usuarios").whereEqualTo("uid", targetUid).get().addOnSuccessListener { query ->
+                if (!query.isEmpty) {
+                    val user = query.documents[0].toObject(UserData::class.java)
+                    if (user != null) {
+                        _users.value = _users.value + (targetUid to user)
+                    }
                 }
             }
         }
@@ -127,30 +126,41 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
 
     fun markAsRead(notificationId: String) {
         val uid = auth.currentUser?.uid ?: return
-        db.collection("usuarios").document(uid).collection("notificaciones").document(notificationId)
-            .update("leida", true)
+        db.collection("usuarios").whereEqualTo("uid", uid).get().addOnSuccessListener { query ->
+            if (!query.isEmpty) {
+                query.documents[0].reference.collection("notificaciones").document(notificationId)
+                    .update("leida", true)
+            }
+        }
     }
 
     fun deleteNotification(notificationId: String) {
         val uid = auth.currentUser?.uid ?: return
-        db.collection("usuarios").document(uid).collection("notificaciones").document(notificationId)
-            .delete()
+        db.collection("usuarios").whereEqualTo("uid", uid).get().addOnSuccessListener { query ->
+            if (!query.isEmpty) {
+                query.documents[0].reference.collection("notificaciones").document(notificationId)
+                    .delete()
+            }
+        }
     }
 
     fun markChatGroupAsRead(chatId: String) {
         val uid = auth.currentUser?.uid ?: return
         
         // 1. Borrar documentos de notificación en Firestore
-        db.collection("usuarios").document(uid).collection("notificaciones")
-            .whereEqualTo("tipo", "nuevo_mensaje")
-            .whereEqualTo("data.chatId", chatId)
-            .get()
-            .addOnSuccessListener { snapshot ->
-                if (snapshot.isEmpty) return@addOnSuccessListener
-                val batch = db.batch()
-                snapshot.documents.forEach { batch.delete(it.reference) }
-                batch.commit()
-            }
+        db.collection("usuarios").whereEqualTo("uid", uid).get().addOnSuccessListener { query ->
+            if (query.isEmpty) return@addOnSuccessListener
+            query.documents[0].reference.collection("notificaciones")
+                .whereEqualTo("tipo", "nuevo_mensaje")
+                .whereEqualTo("data.chatId", chatId)
+                .get()
+                .addOnSuccessListener { snapshot ->
+                    if (snapshot.isEmpty) return@addOnSuccessListener
+                    val batch = db.batch()
+                    snapshot.documents.forEach { batch.delete(it.reference) }
+                    batch.commit()
+                }
+        }
             
         // 2. Marcar mensajes como leídos en Realtime Database
         rtdb.child("messages").child(chatId).get().addOnSuccessListener { snapshot ->

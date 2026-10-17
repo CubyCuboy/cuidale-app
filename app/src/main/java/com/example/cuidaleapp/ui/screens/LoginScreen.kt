@@ -84,7 +84,9 @@ fun LoginScreen(
     viewModel: LoginViewModel = viewModel(),
     onForgotPassword: () -> Unit = {},
     onRegister: () -> Unit = {},
-    onVerify: (String) -> Unit = {}
+    onVerify: (String) -> Unit = {},
+    onGoogleLogin: () -> Unit = {},
+    onMicrosoftLogin: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -104,7 +106,9 @@ fun LoginScreen(
                     onClearError = { viewModel.clearError() },
                     onForgotPassword = onForgotPassword,
                     onRegister = onRegister,
-                    onVerify = onVerify
+                    onVerify = onVerify,
+                    onGoogleLogin = onGoogleLogin,
+                    onMicrosoftLogin = onMicrosoftLogin
                 )
             }
             "success" -> {
@@ -123,7 +127,9 @@ fun LoginForm(
     onClearError: () -> Unit,
     onForgotPassword: () -> Unit,
     onRegister: () -> Unit,
-    onVerify: (String) -> Unit
+    onVerify: (String) -> Unit,
+    onGoogleLogin: () -> Unit,
+    onMicrosoftLogin: () -> Unit
 ) {
     var correoOrRut by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
@@ -321,6 +327,32 @@ fun LoginForm(
                     }
                 }
             )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth().widthIn(max = 340.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Button(
+                    onClick = onGoogleLogin,
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                    shape = RoundedCornerShape(12.dp),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
+                ) {
+                    Text("Google", color = Color.Black, fontWeight = FontWeight.Bold)
+                }
+                Button(
+                    onClick = onMicrosoftLogin,
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2F2F2F)),
+                    shape = RoundedCornerShape(12.dp),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
+                ) {
+                    Text("Microsoft", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 

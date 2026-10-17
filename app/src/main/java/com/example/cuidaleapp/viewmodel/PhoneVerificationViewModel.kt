@@ -153,14 +153,26 @@ class PhoneVerificationViewModel(application: Application) : AndroidViewModel(ap
                     // But standard way is to link. However, linking might fail if phone is already used.
                     
                     // Update Firestore
-                    val uid = user.uid
                     val formattedPhone = PhoneUtils.formatChileanPhone(_phoneNumber.value)
-                    db.collection("usuarios").document(uid)
-                        .update("telefonoVerificado", true, "telefono", formattedPhone)
-                        .await()
+                    val updates = mapOf(
+                        "telefonoVerificado" to true,
+                        "telefono" to formattedPhone
+                    )
+
+                    val currentUserData = userSession.getUser()
+                    if (currentUserData.rut.isNotBlank()) {
+                        val hashedRut = com.example.cuidaleapp.utils.HashUtils.hashRut(currentUserData.rut)
+                        db.collection("usuarios").document(hashedRut)
+                            .set(updates, com.google.firebase.firestore.SetOptions.merge())
+                            .await()
+                    } else {
+                        val query = db.collection("usuarios").whereEqualTo("uid", user.uid).get().await()
+                        if (!query.isEmpty) {
+                            query.documents[0].reference.set(updates, com.google.firebase.firestore.SetOptions.merge()).await()
+                        }
+                    }
                     
                     // Update Local Session
-                    val currentUserData = userSession.getUser()
                     userSession.saveUser(currentUserData.copy(telefono = formattedPhone, telefonoVerificado = true))
                     
                     _uiState.value = PhoneVerificationUiState.Success

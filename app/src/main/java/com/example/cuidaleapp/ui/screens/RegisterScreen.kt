@@ -43,6 +43,7 @@ import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.utils.PhoneUtils
 import com.example.cuidaleapp.viewmodel.RegisterViewModel
 import com.example.cuidaleapp.viewmodel.RegisterUiState
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 enum class RegisterStep {
@@ -52,6 +53,7 @@ enum class RegisterStep {
 @Composable
 fun RegisterScreen(
     viewModel: RegisterViewModel = viewModel(),
+    isExternal: Boolean = false,
     onNavigateBack: () -> Unit,
     onFinish: () -> Unit
 ) {
@@ -70,19 +72,27 @@ fun RegisterScreen(
     val onGradientText = CuidaleThemeExtras.customColors.onGradient
     val typography = MaterialTheme.typography
 
-    val stepsLabels = listOf(
-        stringResource(R.string.register_step_role),
-        stringResource(R.string.register_step_personal),
-        stringResource(R.string.register_step_location),
-        stringResource(R.string.register_step_pass)
-    )
+    val stepsLabels = if (isExternal) {
+        listOf(
+            stringResource(R.string.register_step_role),
+            stringResource(R.string.register_step_personal),
+            stringResource(R.string.register_step_location)
+        )
+    } else {
+        listOf(
+            stringResource(R.string.register_step_role),
+            stringResource(R.string.register_step_personal),
+            stringResource(R.string.register_step_location),
+            stringResource(R.string.register_step_pass)
+        )
+    }
     
     val currentStepIndex = when(currentStep) {
         RegisterStep.ROLE -> 0
         RegisterStep.PERSONAL -> 1
         RegisterStep.LOCATION -> 2
         RegisterStep.PASSWORD -> 3
-        RegisterStep.SUCCESS -> 3
+        RegisterStep.SUCCESS -> if (isExternal) 2 else 3
     }
 
     Box(
@@ -154,7 +164,16 @@ fun RegisterScreen(
                     )
                     RegisterStep.LOCATION -> RegisterLocationStep(
                         viewModel = viewModel,
-                        onNext = { currentStep = RegisterStep.PASSWORD },
+                        isExternal = isExternal,
+                        isLoading = uiState is RegisterUiState.Loading,
+                        error = error,
+                        onNext = { 
+                            if (isExternal) {
+                                viewModel.registerExternal()
+                            } else {
+                                currentStep = RegisterStep.PASSWORD
+                            }
+                        },
                         onBack = { currentStep = RegisterStep.PERSONAL },
                         isDark = isDark
                     )
@@ -448,20 +467,63 @@ fun RegisterPersonalStep(
                     }
                 )
             )
+
+            AnimatedVisibility(visible = error != null) {
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Badge,
+                            contentDescription = "Error",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = error.orEmpty(),
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        HardShadowButton(
-            text = stringResource(R.string.register_button_next),
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-            shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowPrimary else CuidaleThemeExtras.shadows.hardShadowPrimary,
-            icon = Icons.AutoMirrored.Filled.ArrowForward,
-            enabled = isFormValid,
-            isDark = isDark,
-            onClick = onNext
-        )
+        var isCheckingRut by remember { mutableStateOf(false) }
+        val scope = rememberCoroutineScope()
+
+        if (isCheckingRut) {
+            CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary)
+        } else {
+            HardShadowButton(
+                text = stringResource(R.string.register_button_next),
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowPrimary else CuidaleThemeExtras.shadows.hardShadowPrimary,
+                icon = Icons.AutoMirrored.Filled.ArrowForward,
+                enabled = isFormValid,
+                isDark = isDark,
+                onClick = {
+                    scope.launch {
+                        isCheckingRut = true
+                        val isAvailable = viewModel.validateRutAvailability()
+                        isCheckingRut = false
+                        if (isAvailable) {
+                            onNext()
+                        }
+                    }
+                }
+            )
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -485,6 +547,9 @@ fun RegisterPersonalStep(
 @Composable
 fun RegisterLocationStep(
     viewModel: RegisterViewModel,
+    isExternal: Boolean = false,
+    isLoading: Boolean = false,
+    error: String? = null,
     onNext: () -> Unit,
     onBack: () -> Unit,
     isDark: Boolean
@@ -497,7 +562,8 @@ fun RegisterLocationStep(
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         HardShadowPanel(
             backgroundColor = CuidaleThemeExtras.customColors.panelBackground,
-            shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowPrimary else CuidaleThemeExtras.shadows.hardShadowPrimary
+            shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowPrimary else CuidaleThemeExtras.shadows.hardShadowPrimary,
+            isError = error != null
         ) {
             Text(
                 text = stringResource(R.string.register_location_desc),
@@ -582,18 +648,49 @@ fun RegisterLocationStep(
             }
         }
 
+        AnimatedVisibility(visible = error != null) {
+            Surface(
+                color = MaterialTheme.colorScheme.errorContainer,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Badge,
+                        contentDescription = "Error",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = error.orEmpty(),
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(32.dp))
 
-        HardShadowButton(
-            text = stringResource(R.string.register_button_next),
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-            shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowPrimary else CuidaleThemeExtras.shadows.hardShadowPrimary,
-            icon = Icons.AutoMirrored.Filled.ArrowForward,
-            enabled = selectedRegion.isNotEmpty() && selectedComuna.isNotEmpty(),
-            isDark = isDark,
-            onClick = onNext
-        )
+        if (isLoading) {
+            CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary)
+        } else {
+            HardShadowButton(
+                text = if (isExternal) "Finalizar Registro" else stringResource(R.string.register_button_next),
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowPrimary else CuidaleThemeExtras.shadows.hardShadowPrimary,
+                icon = if (isExternal) Icons.Default.CheckCircle else Icons.AutoMirrored.Filled.ArrowForward,
+                enabled = selectedRegion.isNotEmpty() && selectedComuna.isNotEmpty(),
+                isDark = isDark,
+                onClick = onNext
+            )
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 

@@ -27,6 +27,7 @@ data class UserData(
     val telefono: String = "",
     val telefonoVerificado: Boolean = false,
     val verificado: Boolean = false,
+    val completado: Boolean = false,
     val descripcion: String = "",
     val favoritos: List<String> = emptyList(),
     val no_deseados: List<String> = emptyList(),
