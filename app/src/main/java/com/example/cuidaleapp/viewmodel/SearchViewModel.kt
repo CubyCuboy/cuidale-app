@@ -183,7 +183,6 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                     return@launch
                 }
 
-                // Verificar autenticación
                 val currentUser = auth.currentUser
                 if (currentUser == null) {
                     _state.value = SearchState.Error("Usuario no autenticado")
@@ -244,7 +243,6 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                                     comunas_trabajo = @Suppress("UNCHECKED_CAST") (fichaDoc.get("comunas") as? List<String> ?: emptyList())
                                 }
                             } catch (e: Exception) {
-                                // Log error pero continuar
                             }
                         } else {
                             nombre = doc.getString("nombre_completo") ?: ""
@@ -294,7 +292,6 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                     lastDocument = result.documents.last()
                 }
 
-                // Asegurar que no haya duplicados por ID
                 val existingIds = currentResults.map { it.id }.toSet()
                 val uniqueNewItems = newItems.filter { it.id !in existingIds }
                 

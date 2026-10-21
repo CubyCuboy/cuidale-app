@@ -14,13 +14,8 @@ data class UserData(
     val apellido_ma: String = "",
     val comuna: String = "",
     val correo: String = "",
-    val correoAlternativo: String = "",
     val fotoUrl: String = "",
     val id_region: String = "",
-    val mostrarCorreo: Boolean = false,
-    val mostrarRut: Boolean = false,
-    val mostrarTelefono: Boolean = false,
-    val privacidadVinculos: String = "privado",
     val region: String = "",
     val rol: String = "",
     val rut: String = "",
@@ -35,5 +30,19 @@ data class UserData(
     val updatedAt: Timestamp? = null,
     val fcmToken: String = "",
     val guardados: List<String> = emptyList(),
-    val bloqueados: List<String> = emptyList()
-)
+    val bloqueados: List<String> = emptyList(),
+    val linkedAccounts: List<LinkedAccountDetail> = emptyList(),
+    var accountHistory: List<AccountHistoryEntry> = emptyList(),
+    val rateLimits: List<RateLimitEntry> = emptyList()
+) {
+    fun findLinkedAccount(providerId: String): LinkedAccountDetail? {
+        val cleanId = when (providerId.trim().lowercase()) {
+            "google.com", "google" -> "google.com"
+            "microsoft.com", "microsoft" -> "microsoft.com"
+            "password", "email" -> "email"
+            else -> providerId.trim()
+        }
+        return linkedAccounts.firstOrNull { it.providerId == cleanId }
+    }
+    fun hasLinkedAccount(providerId: String): Boolean = findLinkedAccount(providerId) != null
+}

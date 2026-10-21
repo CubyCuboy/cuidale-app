@@ -11,7 +11,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.example.cuidaleapp.ui.screens.PhoneVerificationScreen
-import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
+import com.example.cuidaleapp.ui.components.CuidaleAppRoot
 import com.example.cuidaleapp.viewmodel.LoginViewModel
 
 class PhoneVerificationActivity : ComponentActivity() {
@@ -24,7 +24,7 @@ class PhoneVerificationActivity : ComponentActivity() {
         setContent {
             val isDark by loginViewModel.isDarkMode.collectAsState()
             
-            CuidaleAppTheme(darkTheme = isDark) {
+            CuidaleAppRoot(darkTheme = isDark) {
                 PhoneVerificationScreen(
                     isDark = isDark,
                     onNavigateBack = { finish() },

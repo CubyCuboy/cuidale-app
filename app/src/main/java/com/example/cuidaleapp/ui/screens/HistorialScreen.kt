@@ -39,7 +39,7 @@ fun HistorialScreen(
     val historial by viewModel.historial.collectAsState()
     var showDeleteAllDialog by remember { mutableStateOf(false) }
     
-    var sortOrder by remember { mutableStateOf("fecha_desc") } // "fecha_desc", "fecha_asc", "calificacion", "paciente_alf"
+    var sortOrder by remember { mutableStateOf("fecha_desc") }
     var showSortMenu by remember { mutableStateOf(false) }
 
     val sortedHistorial = remember(historial, sortOrder) {
@@ -205,7 +205,6 @@ fun HistorialCard(
             HorizontalDivider(color = colors.onSurface.copy(alpha = 0.05f))
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Patient Info (Always show)
             CuidaleDetailRow(Icons.Default.FamilyRestroom, "Paciente", "${item.pacienteNombre} (${item.pacienteEdad} años)")
             CuidaleDetailRow(Icons.Default.Person, "Representante", item.representanteNombre)
             
@@ -226,7 +225,6 @@ fun HistorialCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Rating Section
             Surface(
                 color = colors.primary.copy(alpha = 0.05f),
                 shape = RoundedCornerShape(12.dp),

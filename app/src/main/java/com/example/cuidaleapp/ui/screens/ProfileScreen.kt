@@ -70,8 +70,9 @@ fun ProfileScreen(
     Column(
         modifier = Modifier.fillMaxSize()
     ) {
-        ConnectivityBanner()
-        
+
+
+
         PullToRefreshBox(
             state = pullToRefreshState,
             isRefreshing = isRefreshing,
@@ -93,7 +94,6 @@ fun ProfileScreen(
                         .fillMaxSize()
                         .verticalScroll(scrollState)
                 ) {
-                    // Header / Banner
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -128,14 +128,12 @@ fun ProfileScreen(
                         }
                     }
 
-                    // Profile Content Overlay
                     Column(
                         modifier = Modifier
                             .padding(horizontal = 16.dp)
                             .offset(y = (-40).dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Centered Avatar
                         Surface(
                             modifier = Modifier
                                 .size(110.dp)
@@ -170,7 +168,6 @@ fun ProfileScreen(
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // User Info Card
                         HardShadowPanel(
                             backgroundColor = panelBg,
                             shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),

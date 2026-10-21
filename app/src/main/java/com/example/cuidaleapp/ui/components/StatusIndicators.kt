@@ -4,12 +4,15 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,59 +21,173 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.zIndex
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.utils.ConnectivityObserver
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
+private enum class ConnectivityState {
+    NONE,
+    OFF,
+    RESTORED,
+    UNSTABLE
+}
+
+private enum class BannerForm {
+    HIDDEN,
+    INLINE,
+    CHIP,
+    BUBBLE
+}
+
 @Composable
-fun ConnectivityBanner() {
+fun ConnectivityBanner(
+    scrollState: androidx.compose.foundation.ScrollState? = null,
+    lazyListState: LazyListState? = null,
+    modifier: Modifier = Modifier
+) {
     val isOnline by ConnectivityObserver.isOnline.collectAsState()
-    var showConnected by remember { mutableStateOf(false) }
     var wasOffline by remember { mutableStateOf(false) }
+    var state by remember { mutableStateOf(ConnectivityState.NONE) }
+    var bigFormVisible by remember { mutableStateOf(true) }
+    val changes = remember { mutableStateListOf<Long>() }
 
     LaunchedEffect(isOnline) {
-        if (isOnline && wasOffline) {
-            showConnected = true
-            delay(3000)
-            showConnected = false
-            wasOffline = false
-        } else if (!isOnline) {
-            wasOffline = true
-            showConnected = false
+        val now = System.currentTimeMillis()
+        changes.add(now)
+        changes.removeAll { now - it > 5000L }
+        val unstable = changes.size >= 3
+
+        when {
+            !isOnline -> {
+                wasOffline = true
+                state = ConnectivityState.OFF
+                bigFormVisible = true
+                // Forma grande (banner inline o chip) durante 5 s; luego burbuja persistente.
+                delay(5000)
+                if (state == ConnectivityState.OFF) bigFormVisible = false
+            }
+            unstable -> {
+                state = ConnectivityState.UNSTABLE
+                delay(3000)
+                if (state == ConnectivityState.UNSTABLE) state = ConnectivityState.NONE
+            }
+            wasOffline -> {
+                wasOffline = false
+                state = ConnectivityState.RESTORED
+                bigFormVisible = true
+                delay(3000)
+                if (state == ConnectivityState.RESTORED) state = ConnectivityState.NONE
+            }
+            else -> {
+                state = ConnectivityState.NONE
+            }
         }
     }
 
-    AnimatedVisibility(
-        visible = !isOnline || showConnected,
-        enter = slideInVertically { -it } + fadeIn(),
-        exit = slideOutVertically { -it } + fadeOut()
-    ) {
-        Surface(
-            color = if (isOnline) Color(0xFF4CAF50) else Color(0xFFD32F2F),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier
-                    .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(
-                    imageVector = if (isOnline) Icons.Default.CloudDone else Icons.Default.WifiOff,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = if (isOnline) "Conexión restablecida" else "Sin conexión a internet",
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold
-                )
+    val isScrolled = (scrollState?.value ?: 0) > 0 || (lazyListState?.firstVisibleItemIndex ?: 0) > 0
+
+    LaunchedEffect(isScrolled) {
+        com.example.cuidaleapp.utils.AppNavigationState.setScreenScrolled(isScrolled)
+    }
+
+    val form: BannerForm = when {
+        state == ConnectivityState.NONE -> BannerForm.HIDDEN
+        state == ConnectivityState.RESTORED || state == ConnectivityState.UNSTABLE -> BannerForm.INLINE
+        bigFormVisible && isScrolled -> BannerForm.CHIP
+        bigFormVisible -> BannerForm.INLINE
+        else -> BannerForm.BUBBLE
+    }
+
+    AnimatedContent(
+        targetState = form,
+        transitionSpec = {
+            (fadeIn(tween(220)) + expandVertically(tween(220))) togetherWith
+                (fadeOut(tween(220)) + shrinkVertically(tween(220)))
+        },
+        modifier = modifier,
+        label = "connectivityForm"
+    ) { target ->
+        if (target == BannerForm.HIDDEN) return@AnimatedContent
+
+        val (text, color, icon) = when (state) {
+            ConnectivityState.OFF -> Triple("Sin conexión a internet", Color(0xFFD32F2F), Icons.Default.WifiOff)
+            ConnectivityState.RESTORED -> Triple("Conexión restablecida", Color(0xFF4CAF50), Icons.Default.CloudDone)
+            ConnectivityState.UNSTABLE -> Triple("Conexión inestable", Color(0xFFFB8C00), Icons.Default.Warning)
+            else -> Triple("", Color.Transparent, Icons.Default.WifiOff)
+        }
+
+        when (target) {
+            BannerForm.INLINE -> {
+                // Banner en línea: ocupa espacio y desplaza el contenido.
+                Surface(
+                    color = color,
+                    shape = RoundedCornerShape(0.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(text, color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
+            BannerForm.CHIP -> {
+                // Chip flotante: se mantiene arriba sin desplazar (cuando hay scroll).
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                        .zIndex(10f),
+                    contentAlignment = Alignment.TopCenter
+                ) {
+                    Surface(
+                        color = color,
+                        shape = RoundedCornerShape(50),
+                        shadowElevation = 6.dp,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(text, color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+            BannerForm.BUBBLE -> {
+                // Burbuja compacta persistente: centrada por defecto, debajo de la barra de estado.
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Surface(
+                        color = color.copy(alpha = 0.92f),
+                        shape = CircleShape,
+                        shadowElevation = 4.dp
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Sin conexión", color = Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+            else -> {}
         }
     }
 }

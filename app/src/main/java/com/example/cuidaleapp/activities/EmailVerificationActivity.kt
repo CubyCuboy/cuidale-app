@@ -11,7 +11,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.example.cuidaleapp.ui.screens.EmailVerificationScreen
-import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
+import com.example.cuidaleapp.ui.components.CuidaleAppRoot
 import com.example.cuidaleapp.viewmodel.EmailVerificationViewModel
 import com.example.cuidaleapp.viewmodel.LoginViewModel
 
@@ -28,7 +28,7 @@ class EmailVerificationActivity : ComponentActivity() {
         setContent {
             val isDark by loginViewModel.isDarkMode.collectAsState()
             
-            CuidaleAppTheme(darkTheme = isDark) {
+            CuidaleAppRoot(darkTheme = isDark) {
                 EmailVerificationScreen(
                     isDark = isDark,
                     initialEmail = initialEmail,

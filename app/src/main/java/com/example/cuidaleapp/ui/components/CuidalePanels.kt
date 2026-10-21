@@ -59,7 +59,6 @@ fun HardShadowPanel(
             .offset { IntOffset(shakeOffset.value.roundToInt(), 0) }
             .padding(bottom = shadowOffset, end = shadowOffset)
     ) {
-        // Shadow layer - Now correctly sized relative to the content
         Surface(
             modifier = Modifier
                 .matchParentSize()
@@ -68,7 +67,6 @@ fun HardShadowPanel(
             color = animatedShadow
         ) {}
 
-        // Main panel
         Column(
             modifier = Modifier
                 .fillMaxWidth()

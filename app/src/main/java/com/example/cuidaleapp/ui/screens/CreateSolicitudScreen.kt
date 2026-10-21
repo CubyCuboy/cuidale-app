@@ -60,7 +60,6 @@ fun CreateSolicitudScreen(
     var showStartDatePicker by remember { mutableStateOf(false) }
     var showEndDatePicker by remember { mutableStateOf(false) }
     
-    // Time Pickers
     var showStartTimePicker by remember { mutableStateOf(false) }
     var showEndTimePicker by remember { mutableStateOf(false) }
     val startTimeState = rememberTimePickerState(initialHour = 9, initialMinute = 0)
@@ -73,7 +72,6 @@ fun CreateSolicitudScreen(
 
     val periods = listOf("Mañana", "Tarde", "Noche")
 
-    // Update hoursStr and detected periods when time components change
     LaunchedEffect(startHourStr, endHourStr) {
         if (startHourStr.isNotEmpty() && endHourStr.isNotEmpty()) {
             hoursStr = "De $startHourStr a $endHourStr"
@@ -81,7 +79,6 @@ fun CreateSolicitudScreen(
         }
     }
 
-    // Load existing request if editing
     LaunchedEffect(requestId) {
         if (requestId != null) {
             isLoadingExisting = true
@@ -193,7 +190,6 @@ fun CreateSolicitudScreen(
                         
                         Spacer(modifier = Modifier.height(24.dp))
 
-                        // Duration
                         InputFieldLabel("DURACIÓN DEL SERVICIO")
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                             Checkbox(checked = esIndefinido, onCheckedChange = { esIndefinido = it })
@@ -226,7 +222,6 @@ fun CreateSolicitudScreen(
 
                         Spacer(modifier = Modifier.height(24.dp))
 
-                        // Hours Selection
                         InputFieldLabel("HORARIO DEL SERVICIO")
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             OutlinedCard(

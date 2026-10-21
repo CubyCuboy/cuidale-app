@@ -107,6 +107,7 @@ fun RegisterScreen(
                 .verticalScroll(rememberScrollState())
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
                 .imePadding()
+                .navigationBarsPadding()
                 .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -185,7 +186,10 @@ fun RegisterScreen(
                         onBack = { currentStep = RegisterStep.LOCATION },
                         isDark = isDark
                     )
-                    RegisterStep.SUCCESS -> RegisterSuccessStep(onFinish = onFinish)
+                    RegisterStep.SUCCESS -> RegisterSuccessStep(
+                        isExternal = isExternal,
+                        onFinish = onFinish
+                    )
                 }
             }
         }
@@ -916,7 +920,10 @@ fun RegisterPasswordStep(
 
 
 @Composable
-fun RegisterSuccessStep(onFinish: () -> Unit) {
+fun RegisterSuccessStep(
+    isExternal: Boolean = false,
+    onFinish: () -> Unit
+) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(
             imageVector = Icons.Default.CheckCircle,
@@ -937,7 +944,8 @@ fun RegisterSuccessStep(onFinish: () -> Unit) {
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "Tu cuenta ha sido creada correctamente. Ya puedes comenzar a usar Cuidale.",
+            text = if (isExternal) "Tu cuenta ha sido creada correctamente. Ya puedes comenzar a usar Cuidale."
+                   else "Tu cuenta ha sido creada correctamente. Ingresa con tu correo y contraseña para comenzar.",
             style = MaterialTheme.typography.bodyLarge,
             color = CuidaleThemeExtras.customColors.onGradient,
             textAlign = TextAlign.Center
@@ -946,7 +954,7 @@ fun RegisterSuccessStep(onFinish: () -> Unit) {
         Spacer(modifier = Modifier.height(48.dp))
 
         HardShadowButton(
-            text = "Comenzar",
+            text = if (isExternal) "Comenzar" else "Ir a Iniciar Sesión",
             containerColor = Color.White,
             contentColor = MaterialTheme.colorScheme.primary,
             shadowColor = Color.Black.copy(alpha = 0.1f),

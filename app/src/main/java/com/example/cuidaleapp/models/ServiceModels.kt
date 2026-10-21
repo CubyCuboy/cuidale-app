@@ -18,9 +18,9 @@ data class SolicitudCuidado(
     val fechaInicio: Timestamp? = null,
     val fechaFin: Timestamp? = null,
     val esIndefinido: Boolean = false,
-    val horarioStr: String = "", // e.g. "De 09:30 a 11:30"
-    val periodos: List<String> = emptyList(), // ["Mañana", "Tarde", "Noche"]
-    val estado: String = "abierta", // "abierta", "cerrada", "finalizada"
+    val horarioStr: String = "",
+    val periodos: List<String> = emptyList(),
+    val estado: String = "abierta",
     val cuidadorUid: String? = null,
     val cuidadorNombre: String = "",
     val cuidadorFoto: String = "",
@@ -35,7 +35,7 @@ data class PostulacionCuidado(
     val cuidadorUid: String = "",
     val cuidadorNombre: String = "",
     val cuidadorFoto: String = "",
-    val estado: String = "pendiente", // "pendiente", "rechazada", "aceptada"
+    val estado: String = "pendiente",
     val timestamp: Timestamp? = null
 )
 

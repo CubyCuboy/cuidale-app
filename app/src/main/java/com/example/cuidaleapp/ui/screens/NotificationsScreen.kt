@@ -30,6 +30,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import com.example.cuidaleapp.models.Notification
 import com.example.cuidaleapp.models.UserData
+import com.example.cuidaleapp.ui.components.ConnectivityBanner
 import com.example.cuidaleapp.ui.components.CuidaleBottomBar
 import com.example.cuidaleapp.ui.components.CuidaleCircularMenuButton
 import com.example.cuidaleapp.ui.components.CuidaleDrawerContent
@@ -51,6 +52,9 @@ fun NotificationsScreen(
     val users by notificationsViewModel.users.collectAsState()
 
     Column(modifier = Modifier.fillMaxSize()) {
+
+
+
         Text(
             text = "Notificaciones",
             style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black),
@@ -226,6 +230,7 @@ fun NotificationItem(
     onDelete: () -> Unit
 ) {
     val customColors = CuidaleThemeExtras.customColors
+    val isSystemNotification = notification.tipo == "configuracion_cuenta"
     val itemAccent = when (notification.tipo) {
         "solicitud_vinculo" -> customColors.aqua
         "nuevo_mensaje" -> customColors.lime
@@ -235,18 +240,34 @@ fun NotificationItem(
         "tarea_finalizada" -> customColors.successStrong
         "tarea_postergada" -> Color(0xFFFFA000)
         "turno_finalizado" -> customColors.aqua
+        "configuracion_cuenta" -> MaterialTheme.colorScheme.primary
         else -> customColors.successStrong
+    }
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val goToHistoryAndClearNotif = {
+        onDelete()
+        val intent = android.content.Intent(context, com.example.cuidaleapp.activities.AccountHistoryActivity::class.java)
+        context.startActivity(intent)
     }
 
     HardShadowPanel(
         backgroundColor = if (notification.leida) (if (isDark) Color(0xFF1B263B) else Color.White.copy(alpha = 0.9f)) else (if (isDark) Color(0xFF2B3A55) else Color.White),
         shadowColor = if (notification.leida) Color.Transparent else itemAccent.copy(alpha = 0.2f),
-        modifier = modifier
+        modifier = modifier.then(
+            if (isSystemNotification) {
+                Modifier.clickable {
+                    goToHistoryAndClearNotif()
+                }
+            } else {
+                Modifier
+            }
+        )
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(modifier = Modifier.size(48.dp).clip(CircleShape).background(itemAccent.copy(alpha = 0.1f))) {
-                    if (sender?.fotoUrl?.isNotEmpty() == true && notification.tipo !in listOf("recordatorio_tarea", "tarea_atrasada", "tarea_finalizada", "tarea_postergada", "turno_finalizado")) {
+                    if (sender?.fotoUrl?.isNotEmpty() == true && !isSystemNotification && notification.tipo !in listOf("recordatorio_tarea", "tarea_atrasada", "tarea_finalizada", "tarea_postergada", "turno_finalizado")) {
                         AsyncImage(model = sender.fotoUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                     } else {
                         Icon(
@@ -259,6 +280,7 @@ fun NotificationItem(
                                 "tarea_finalizada" -> Icons.Default.TaskAlt
                                 "tarea_postergada" -> Icons.Default.Update
                                 "turno_finalizado" -> Icons.Default.Flag
+                                "configuracion_cuenta" -> Icons.Default.Security
                                 else -> Icons.Default.Notifications
                             },
                             contentDescription = null,
@@ -273,14 +295,18 @@ fun NotificationItem(
                         text = when (notification.tipo) {
                             "solicitud_vinculo" -> "Nueva solicitud de chat"
                             "vinculo_aceptado" -> "¡Solicitud aceptada!"
+                            "postulacion_recibida" -> notification.data["titulo"] ?: "Nueva postulación recibida"
+                            "postulacion_aceptada" -> notification.data["titulo"] ?: "¡Postulación aceptada!"
+                            "servicio_finalizado" -> notification.data["titulo"] ?: "Servicio finalizado"
                             "nuevo_mensaje" -> "Mensaje de ${sender?.nombre ?: "Usuario"}"
-                            "nuevo_usuario" -> "¡Nuevo ${if(userRole == "cuidador") "paciente" else "cuidador"} en tu zona!"
+                            "nuevo_usuario", "nuevo_usuario_zona" -> "¡Nuevo ${if(userRole == "cuidador") "paciente" else "cuidador"} en tu zona!"
                             "recordatorio_tarea" -> notification.data["titulo"] ?: "Recordatorio de Tarea"
                             "tarea_atrasada" -> notification.data["titulo"] ?: "Tarea Atrasada"
                             "tarea_finalizada" -> notification.data["titulo"] ?: "Tarea Realizada"
                             "tarea_postergada" -> notification.data["titulo"] ?: "Tarea Postergada"
                             "turno_finalizado" -> notification.data["titulo"] ?: "Turno Finalizado"
-                            else -> "Notificación"
+                            "configuracion_cuenta" -> notification.data["title"] ?: notification.data["titulo"] ?: "Gestión de Cuenta"
+                            else -> notification.data["titulo"] ?: notification.data["title"] ?: "Notificación"
                         },
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
@@ -290,14 +316,18 @@ fun NotificationItem(
                         text = when (notification.tipo) {
                             "solicitud_vinculo" -> "${sender?.nombre ?: "Alguien"} quiere conectar contigo."
                             "vinculo_aceptado" -> "${sender?.nombre ?: "Un usuario"} aceptó tu solicitud. ¡Ya pueden hablar!"
-                            "nuevo_mensaje" -> notification.data["text"] ?: "Toca para ver el mensaje."
-                            "nuevo_usuario" -> "${sender?.nombre ?: "Alguien"} acaba de unirse a Cuidale. ¡Conócelo!"
-                            "recordatorio_tarea", "tarea_atrasada", "tarea_finalizada", "tarea_postergada", "turno_finalizado" -> notification.data["body"] ?: ""
-                            else -> "Tienes un nuevo aviso."
+                            "postulacion_recibida" -> "${sender?.nombre ?: "Un cuidador"} se ha postulado a tu solicitud de cuidado."
+                            "postulacion_aceptada" -> "Tu postulación ha sido aceptada. ¡Revisa la solicitud de servicio!"
+                            "servicio_finalizado" -> "El servicio de cuidado ha finalizado exitosamente."
+                            "nuevo_mensaje" -> notification.data["text"] ?: notification.data["body"] ?: "Toca para ver el mensaje."
+                            "nuevo_usuario", "nuevo_usuario_zona" -> "${sender?.nombre ?: "Alguien"} acaba de unirse a Cuidale. ¡Conócelo!"
+                            "recordatorio_tarea", "tarea_atrasada", "tarea_finalizada", "tarea_postergada", "turno_finalizado" -> notification.data["body"] ?: notification.data["text"] ?: notification.data["texto"] ?: ""
+                            "configuracion_cuenta" -> notification.data["text"] ?: notification.data["body"] ?: "Actualización de cuenta realizada."
+                            else -> notification.data["body"] ?: notification.data["text"] ?: notification.data["texto"] ?: "Tienes un nuevo aviso."
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = if (isDark) Color.LightGray else Color.DarkGray,
-                        maxLines = 2
+                        maxLines = 3
                     )
                 }
                 IconButton(onClick = onDelete) {
@@ -332,7 +362,7 @@ fun NotificationItem(
                 }
 
                 Button(
-                    onClick = onMainAction,
+                    onClick = if (isSystemNotification) goToHistoryAndClearNotif else onMainAction,
                     shape = RoundedCornerShape(8.dp),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
                     modifier = Modifier.height(32.dp),
@@ -340,11 +370,12 @@ fun NotificationItem(
                 ) {
                     val btnText = when(notification.tipo) {
                         "nuevo_mensaje" -> "IR AL CHAT"
-                        "solicitud_vinculo" -> "VER PERFIL"
-                        "nuevo_usuario" -> "VER PERFIL"
+                        "solicitud_vinculo", "nuevo_usuario", "nuevo_usuario_zona" -> "VER PERFIL"
+                        "postulacion_recibida", "postulacion_aceptada", "servicio_finalizado" -> "VER SOLICITUD"
                         "recordatorio_tarea", "tarea_atrasada", "tarea_finalizada", "tarea_postergada" -> "VER TAREA"
                         "turno_finalizado" -> "VER INFORME"
-                        else -> "VER"
+                        "configuracion_cuenta" -> "VER HISTORIAL"
+                        else -> "VER DETALLES"
                     }
                     Text(btnText, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = Color.White)
                 }

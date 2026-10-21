@@ -33,7 +33,7 @@ class ChatViewModel : ViewModel() {
     private val _usersMap = MutableStateFlow<Map<String, UserData>>(emptyMap())
     private val _lastMessagesMap = MutableStateFlow<Map<String, ChatMessage?>>(emptyMap())
     private val _unreadCountsMap = MutableStateFlow<Map<String, Int>>(emptyMap())
-    private val _chatIdsMap = MutableStateFlow<Map<String, String>>(emptyMap()) // otherUid -> chatId
+    private val _chatIdsMap = MutableStateFlow<Map<String, String>>(emptyMap())
 
     private val _totalUnreadCount = MutableStateFlow(0)
     val totalUnreadCount: StateFlow<Int> = _totalUnreadCount
@@ -56,6 +56,12 @@ class ChatViewModel : ViewModel() {
     private val _isOtherTyping = MutableStateFlow(false)
     val isOtherTyping: StateFlow<Boolean> = _isOtherTyping
 
+    private val _myManualStatus = MutableStateFlow<String?>(null)
+    val myManualStatus: StateFlow<String?> = _myManualStatus
+
+    private val _lastActivityTimestamp = MutableStateFlow(System.currentTimeMillis())
+    val lastActivityTimestamp: StateFlow<Long> = _lastActivityTimestamp
+
     data class ChatPreview(
         val otherUser: UserData,
         val lastMessage: ChatMessage?,
@@ -73,26 +79,60 @@ class ChatViewModel : ViewModel() {
     private val userListeners = mutableMapOf<String, com.google.firebase.firestore.ListenerRegistration>()
     private var currentChatId: String? = null
 
+    fun setManualStatus(status: String?) {
+        _myManualStatus.value = status
+        val uid = auth.currentUser?.uid ?: return
+        if (status == null) {
+            database.child("status").child(uid).child("manual").removeValue()
+        } else {
+            database.child("status").child(uid).child("manual").setValue(status)
+        }
+    }
+
     fun setUserStatus(isOnline: Boolean) {
         val uid = auth.currentUser?.uid ?: return
         val statusRef = database.child("status").child(uid)
-        
-        if (isOnline) {
-            val status = mapOf(
-                "estado" to "en línea",
-                "lastSeen" to ServerValue.TIMESTAMP
-            )
-            statusRef.setValue(status)
-            statusRef.onDisconnect().setValue(mapOf(
-                "estado" to "desconectado",
-                "lastSeen" to ServerValue.TIMESTAMP
-            ))
-        } else {
-            statusRef.setValue(mapOf(
-                "estado" to "desconectado",
-                "lastSeen" to ServerValue.TIMESTAMP
-            ))
+
+        when (_myManualStatus.value) {
+            "no_molestar" -> {
+                statusRef.onDisconnect().cancel()
+                statusRef.setValue(mapOf(
+                    "estado" to "no molestar",
+                    "lastSeen" to ServerValue.TIMESTAMP
+                ))
+            }
+            "desconectado" -> {
+                statusRef.onDisconnect().cancel()
+                statusRef.setValue(mapOf(
+                    "estado" to "desconectado",
+                    "lastSeen" to ServerValue.TIMESTAMP
+                ))
+            }
+            else -> {
+                if (isOnline) {
+                    val status = mapOf(
+                        "estado" to "en línea",
+                        "lastSeen" to ServerValue.TIMESTAMP
+                    )
+                    statusRef.setValue(status)
+                    statusRef.onDisconnect().setValue(mapOf(
+                        "estado" to "desconectado",
+                        "lastSeen" to ServerValue.TIMESTAMP
+                    ))
+                } else {
+                    statusRef.setValue(mapOf(
+                        "estado" to "desconectado",
+                        "lastSeen" to ServerValue.TIMESTAMP
+                    ))
+                }
+            }
         }
+    }
+
+    fun reportActivity() {
+        val uid = auth.currentUser?.uid ?: return
+        _lastActivityTimestamp.value = System.currentTimeMillis()
+        database.child("status").child(uid).child("lastSeen").setValue(ServerValue.TIMESTAMP)
     }
 
     fun setTyping(chatId: String, isTyping: Boolean) {
@@ -122,7 +162,6 @@ class ChatViewModel : ViewModel() {
         val myUid = auth.currentUser?.uid ?: return
         statusListener?.let { database.child("status").child(otherUid).removeEventListener(it) }
         
-        // Verificar si hay un vínculo aceptado antes de mostrar el estado
         db.collection("vinculos")
             .whereArrayContains("uids", myUid)
             .get()
@@ -206,7 +245,7 @@ class ChatViewModel : ViewModel() {
 
     fun listenChats() {
         val myUid = auth.currentUser?.uid ?: return
-        if (chatsListener != null) return // Already listening
+        if (chatsListener != null) return
 
         chatsListener = db.collection("vinculos")
             .whereArrayContains("uids", myUid)
@@ -244,7 +283,6 @@ class ChatViewModel : ViewModel() {
             val chatId = chatIds[index]
             _chatIdsMap.value = _chatIdsMap.value + (otherUid to chatId)
 
-            // 1. User Listener
             if (!userListeners.containsKey(otherUid)) {
                 val uListener = db.collection("usuarios").whereEqualTo("uid", otherUid)
                     .addSnapshotListener { snapshot, e ->
@@ -263,7 +301,6 @@ class ChatViewModel : ViewModel() {
                 userListeners[otherUid] = uListener
             }
 
-            // 2. Message Listener for last message and unread count
             if (!chatMessageListeners.containsKey(chatId)) {
                 val listener = object : ValueEventListener {
                     override fun onDataChange(snapshot: DataSnapshot) {
@@ -286,7 +323,6 @@ class ChatViewModel : ViewModel() {
                 database.child("messages").child(chatId).addValueEventListener(listener)
             }
             
-            // 3. Typing Listener
             if (!chatTypingListeners.containsKey(chatId)) {
                 val tListener = object : ValueEventListener {
                     override fun onDataChange(snapshot: DataSnapshot) {
@@ -351,32 +387,31 @@ class ChatViewModel : ViewModel() {
         )
         msgRef.setValue(message)
 
-        // Lanzar notificación si no es mensaje de sistema
         if (!isSystem) {
             val otherUid = chatId.split("_").firstOrNull { it != myUid } ?: 
                          chatId.split("_").lastOrNull { it != myUid } ?: ""
             
             if (otherUid.isNotEmpty()) {
-                // Verificar si el usuario está conectado antes de crear el documento de notificación
-                // Esto ahorra ejecuciones de Cloud Functions si el usuario ya está en la app
-                database.child("status").child(otherUid).child("estado").get().addOnSuccessListener { snapshot ->
-                    val status = snapshot.getValue(String::class.java)
-                    if (status != "en línea") {
-                        db.collection("usuarios").whereEqualTo("uid", otherUid).get().addOnSuccessListener { query ->
-                            if (query.isEmpty) return@addOnSuccessListener
-                            val notifRef = query.documents[0].reference.collection("notificaciones").document()
-                            val notification = com.example.cuidaleapp.models.Notification(
-                                id = notifRef.id,
-                                tipo = "nuevo_mensaje",
-                                emisor = myUid,
-                                receptor = otherUid,
-                                timestamp = System.currentTimeMillis(),
-                                leida = false,
-                                data = mapOf("chatId" to chatId, "text" to text.take(50))
-                            )
-                            notifRef.set(notification)
-                        }
+                db.collection("usuarios").whereEqualTo("uid", otherUid).get().addOnSuccessListener { query ->
+                    if (query.isEmpty) return@addOnSuccessListener
+                    val notifRef = query.documents[0].reference.collection("notificaciones").document()
+                    val previewText = when {
+                        text.isNotBlank() -> text.take(50)
+                        imageUrl != null -> "📷 Imagen"
+                        videoUrl != null -> "🎬 Video"
+                        fileUrl != null -> "📄 ${fileName ?: "Documento"}"
+                        else -> "Nuevo mensaje"
                     }
+                    val notification = com.example.cuidaleapp.models.Notification(
+                        id = notifRef.id,
+                        tipo = "nuevo_mensaje",
+                        emisor = myUid,
+                        receptor = otherUid,
+                        timestamp = System.currentTimeMillis(),
+                        leida = false,
+                        data = mapOf("chatId" to chatId, "text" to previewText)
+                    )
+                    notifRef.set(notification)
                 }
             }
         }
@@ -448,7 +483,6 @@ class ChatViewModel : ViewModel() {
     fun markChatAsRead(chatId: String) {
         val myUid = auth.currentUser?.uid ?: return
         
-        // Operación optimizada: solo buscar mensajes que NO he leído
         database.child("messages").child(chatId)
             .get()
             .addOnSuccessListener { snapshot ->

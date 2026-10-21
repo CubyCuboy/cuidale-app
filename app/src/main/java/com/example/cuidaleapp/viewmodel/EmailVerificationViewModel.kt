@@ -116,7 +116,11 @@ class EmailVerificationViewModel(application: Application) : AndroidViewModel(ap
         viewModelScope.launch {
             _uiState.value = VerificationUiState.Loading
             try {
-                val data = hashMapOf("email" to _email.value.trim().lowercase())
+                val currentUid = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+                val data = hashMapOf(
+                    "email" to _email.value.trim().lowercase(),
+                    "uid" to currentUid
+                )
                 
                 functions
                     .getHttpsCallable("sendVerificationCode")
@@ -151,12 +155,19 @@ class EmailVerificationViewModel(application: Application) : AndroidViewModel(ap
             return
         }
 
+        if (_timeLeft.value <= 0L) {
+            _uiState.value = VerificationUiState.Error("El código ha caducado. Solicita uno nuevo.")
+            return
+        }
+
         viewModelScope.launch {
             _uiState.value = VerificationUiState.Loading
             try {
+                val currentUid = FirebaseAuth.getInstance().currentUser?.uid ?: ""
                 val data = hashMapOf(
                     "email" to _email.value.trim().lowercase(),
-                    "code" to _code.value.trim()
+                    "code" to _code.value.trim(),
+                    "uid" to currentUid
                 )
 
                 functions
@@ -167,40 +178,82 @@ class EmailVerificationViewModel(application: Application) : AndroidViewModel(ap
                 val authUser = FirebaseAuth.getInstance().currentUser
                 val uid = authUser?.uid
                 if (uid != null) {
-                    val updates = mapOf(
-                        "verificado" to true,
-                        "updatedAt" to com.google.firebase.Timestamp.now()
-                    )
+                    val now = System.currentTimeMillis()
+                    val verifiedEmail = _email.value.trim().lowercase()
+
                     val userSession = UserSession(getApplication())
                     val cachedUser = userSession.getUser()
-                    val updatedUser = cachedUser.copy(verificado = true)
+                    val mergedLinked = com.example.cuidaleapp.utils.AccountUtils.mergeLinkedAccount(
+                        cachedUser.linkedAccounts,
+                        "email",
+                        "",
+                        verifiedEmail.ifBlank { cachedUser.correo },
+                        verificado = true,
+                        timestamp = now
+                    )
+                    val updatedUser = cachedUser.copy(verificado = true, linkedAccounts = mergedLinked)
                     userSession.saveUser(updatedUser)
 
-                    if (updatedUser.rut.isNotBlank()) {
+                    val updates = mapOf(
+                        "verificado" to true,
+                        "linkedAccounts" to mergedLinked,
+                        "updatedAt" to com.google.firebase.Timestamp.now()
+                    )
+
+                    val userDocRef = if (updatedUser.rut.isNotBlank()) {
                         val hashedRut = HashUtils.hashRut(updatedUser.rut)
-                        db.collection("usuarios").document(hashedRut).set(updates, SetOptions.merge()).await()
+                        db.collection("usuarios").document(hashedRut)
                     } else {
                         val query = db.collection("usuarios").whereEqualTo("uid", uid).get().await()
-                        if (!query.isEmpty) {
-                            query.documents[0].reference.set(updates, SetOptions.merge()).await()
+                        if (!query.isEmpty) query.documents[0].reference else null
+                    }
+
+                    userDocRef?.set(updates, SetOptions.merge())?.await()
+
+                    try {
+                        val ghostRef = db.collection("usuarios").document(uid)
+                        if (ghostRef.id != userDocRef?.id) {
+                            val ghostSnapshot = ghostRef.get().await()
+                            if (ghostSnapshot.exists()) {
+                                val ghostOwner = ghostSnapshot.getString("uid")
+                                if (ghostOwner == uid || ghostOwner.isNullOrBlank()) {
+                                    ghostRef.delete().await()
+                                }
+                            }
                         }
+                    } catch (e: Exception) {
+                        android.util.Log.e("EmailVerificationViewModel", "Error limpiando documento temporal: ${e.message}")
+                    }
+
+                    val notifRef = userDocRef?.collection("notificaciones")?.document()
+                    if (notifRef != null) {
+                        val notif = mapOf(
+                            "id" to notifRef.id,
+                            "tipo" to "configuracion_cuenta",
+                            "emisor" to uid,
+                            "receptor" to uid,
+                            "timestamp" to System.currentTimeMillis(),
+                            "leida" to false,
+                            "data" to mapOf("title" to "Verificación de Correo", "text" to "Tu correo electrónico ha sido verificado con éxito.")
+                        )
+                        notifRef.set(notif).await()
                     }
                 }
 
                 clearSavedState()
                 _uiState.value = VerificationUiState.Success
             } catch (e: Exception) {
-                if (e is FirebaseFunctionsException) {
-                    val remaining = e.details?.let { (it as Map<*, *>)["remaining"] as? Int }
-                    if (remaining != null) {
-                        _attemptsLeft.value = remaining
-                        saveState("step2")
-                    }
+                val remaining = if (e is FirebaseFunctionsException) {
+                    e.details?.let { (it as Map<*, *>)["remaining"] as? Int } ?: (_attemptsLeft.value - 1)
+                } else {
+                    _attemptsLeft.value - 1
+                }
+                _attemptsLeft.value = remaining.coerceAtLeast(0)
+                saveState("step2")
 
-                    if (e.code == FirebaseFunctionsException.Code.RESOURCE_EXHAUSTED) {
-                        _uiState.value = VerificationUiState.FailureExhausted
-                        return@launch
-                    }
+                if (e is FirebaseFunctionsException && e.code == FirebaseFunctionsException.Code.RESOURCE_EXHAUSTED || _attemptsLeft.value <= 0) {
+                    _uiState.value = VerificationUiState.FailureExhausted
+                    return@launch
                 }
                 
                 _uiState.value = VerificationUiState.Error(e.localizedMessage ?: "Error de verificación")

@@ -12,7 +12,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.example.cuidaleapp.ui.screens.RegisterScreen
-import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
+import com.example.cuidaleapp.ui.components.CuidaleAppRoot
 import com.example.cuidaleapp.viewmodel.RegisterViewModel
 import com.example.cuidaleapp.viewmodel.LoginViewModel
 
@@ -37,13 +37,14 @@ class RegisterActivity : ComponentActivity() {
         setContent {
             val isDark by loginViewModel.isDarkMode.collectAsState()
             
-            CuidaleAppTheme(darkTheme = isDark) {
+            CuidaleAppRoot(darkTheme = isDark) {
                 RegisterScreen(
                     viewModel = registerViewModel,
                     isExternal = isExternal,
                     onNavigateBack = { finish() },
                     onFinish = {
-                        val intent = Intent(this@RegisterActivity, MenuActivity::class.java).apply {
+                        val targetActivity = if (isExternal) MenuActivity::class.java else LoginActivity::class.java
+                        val intent = Intent(this@RegisterActivity, targetActivity).apply {
                             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
                         }
                         startActivity(intent)

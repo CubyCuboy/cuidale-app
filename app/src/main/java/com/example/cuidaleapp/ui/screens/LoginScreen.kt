@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -69,6 +70,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.cuidaleapp.ui.components.*
+import com.example.cuidaleapp.ui.components.ProviderBrandIcon
 import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.LoginUiState
@@ -112,7 +114,7 @@ fun LoginScreen(
                 )
             }
             "success" -> {
-                CuidaleWelcomeLoading()
+                LoginLoadingScreen()
             }
         }
     }
@@ -175,13 +177,14 @@ fun LoginForm(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(horizontal = 28.dp)
-                .imePadding(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+                .verticalScroll(rememberScrollState())
+                .imePadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.height(40.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -205,14 +208,14 @@ fun LoginForm(
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.weight(0.5f))
+            Spacer(modifier = Modifier.height(24.dp))
 
             CuidaleAppLogo(
                 isDark = isDark,
                 modifier = Modifier.size(100.dp)
             )
 
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.height(32.dp))
 
             HardShadowPanel(
                 backgroundColor = if (isError) colors.errorContainer.copy(alpha = 0.95f) else panelBg,
@@ -302,7 +305,7 @@ fun LoginForm(
                 }
             }
 
-            Spacer(modifier = Modifier.weight(0.5f))
+            Spacer(modifier = Modifier.height(24.dp))
 
             val needsVerification = (state as? LoginUiState.Error)?.message?.contains("verificar") == true
 
@@ -366,7 +369,7 @@ fun LoginForm(
                     .padding(8.dp)
             )
 
-            Spacer(modifier = Modifier.weight(0.5f))
+            Spacer(modifier = Modifier.height(24.dp))
 
             Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -382,7 +385,26 @@ fun LoginForm(
                     modifier = Modifier.clickable { onRegister() }
                 )
             }
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.height(48.dp))
+        }
+    }
+}
+
+@Composable
+fun LoginLoadingScreen() {
+    val gradient = CuidaleThemeExtras.gradient
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(listOf(gradient.top, gradient.bottom))),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            AnimatedLoadingDots(
+                text = "Cargando",
+                color = CuidaleThemeExtras.customColors.onGradient,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }

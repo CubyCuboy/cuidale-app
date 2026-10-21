@@ -9,7 +9,7 @@ import androidx.activity.viewModels
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import com.example.cuidaleapp.ui.screens.ProfileScreen
-import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
+import com.example.cuidaleapp.ui.components.CuidaleAppRoot
 import com.example.cuidaleapp.viewmodel.FichaViewModel
 import com.example.cuidaleapp.viewmodel.ProfileViewModel
 
@@ -24,7 +24,7 @@ class ProfileActivity : ComponentActivity() {
         setContent {
             val isDark by viewModel.isDarkMode.collectAsState()
 
-            CuidaleAppTheme(darkTheme = isDark) {
+            CuidaleAppRoot(darkTheme = isDark) {
                 ProfileScreen(
                     viewModel = viewModel,
                     fichaViewModel = fichaViewModel,

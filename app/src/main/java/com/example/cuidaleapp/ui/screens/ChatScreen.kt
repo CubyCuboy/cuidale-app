@@ -1,6 +1,9 @@
 package com.example.cuidaleapp.ui.screens
 
+import android.content.Context
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -13,6 +16,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -38,7 +43,9 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.IntOffset
+import androidx.core.content.FileProvider
 import kotlin.math.roundToInt
+import java.io.File
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
@@ -56,7 +63,9 @@ import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.ChatViewModel
 import com.example.cuidaleapp.utils.ConnectivityObserver
+import com.example.cuidaleapp.utils.MediaCompressor
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -85,10 +94,19 @@ fun ChatScreen(
     val isOtherTyping by viewModel.isOtherTyping.collectAsState()
     val isBlocked by viewModel.isBlocked.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
+    var searchMediaFilter by remember { mutableStateOf<String?>(null) }
 
-    val filteredMessages = remember(messages, searchQuery) {
-        if (searchQuery.isBlank()) messages 
+    val filteredMessages = remember(messages, searchQuery, searchMediaFilter) {
+        val base = if (searchQuery.isBlank()) messages
         else messages.filter { it.text.contains(searchQuery, ignoreCase = true) }
+        when (searchMediaFilter) {
+            null -> base
+            "media" -> base.filter { it.imageUrl != null || it.videoUrl != null || it.fileUrl != null }
+            "image" -> base.filter { it.imageUrl != null }
+            "video" -> base.filter { it.videoUrl != null }
+            "file" -> base.filter { it.fileUrl != null }
+            else -> base
+        }
     }
     
     val pinnedMessages = remember(messages) {
@@ -101,13 +119,17 @@ fun ChatScreen(
     
     var showShareRequests by remember { mutableStateOf(false) }
     var showShareTasks by remember { mutableStateOf(false) }
+    var showMediaSheet by remember { mutableStateOf(false) }
+    var isUploadingMedia by remember { mutableStateOf(false) }
+    var mediaError by remember { mutableStateOf<String?>(null) }
+    var selectedMediaCount by remember { mutableIntStateOf(0) }
+    var selectedMediaBytes by remember { mutableLongStateOf(0L) }
     var myRequests by remember { mutableStateOf<List<SolicitudCuidado>>(emptyList()) }
-    var activeTasks by remember { mutableStateOf<List<com.example.cuidaleapp.models.RegistroTarea>>(emptyList()) }
-    
+    var activeTasks by remember { mutableStateOf<List<com.example.cuidaleapp.models.RegistroTarea>>(emptyList()) }    
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
     val listState = rememberLazyListState()
-    val customColors = CuidaleThemeExtras.customColors
     val primaryColor = MaterialTheme.colorScheme.primary
 
     var inputText by remember { mutableStateOf("") }
@@ -116,8 +138,177 @@ fun ChatScreen(
     var messageToEdit by remember { mutableStateOf<ChatMessage?>(null) }
     var replyingToMessage by remember { mutableStateOf<ChatMessage?>(null) }
     val selectedMessages = remember { mutableStateListOf<ChatMessage>() }
+
+    val uploadMedia: (Context, String, Uri, String) -> Unit = { ctx, chatIdTarget, uri, kind ->
+        if (!isUploadingMedia) {
+            scope.launch {
+            val size = MediaCompressor.getSize(ctx, uri)
+
+            if (selectedMediaCount >= 10) {
+                mediaError = "Máximo 10 elementos por envío. No se puede enviar más."
+                showMediaSheet = true
+                return@launch
+            }
+            if (size > MediaCompressor.MAX_MEDIA_BYTES) {
+                mediaError = "El archivo supera los 25 MB individuales"
+                showMediaSheet = true
+                return@launch
+            }
+            if (selectedMediaBytes + size > MediaCompressor.MAX_MEDIA_BYTES) {
+                mediaError = "Se superó el límite total de 25 MB. No se puede enviar más."
+                showMediaSheet = true
+                return@launch
+            }
+
+            selectedMediaCount += 1
+            selectedMediaBytes += size
+            isUploadingMedia = true
+            mediaError = null
+            try {
+                val replyMsg = replyingToMessage
+                val extension = when (kind) {
+                    "image" -> ".jpg"
+                    "video" -> ".mp4"
+                    else -> ".dat"
+                }
+                val storageRef = FirebaseStorage.getInstance().reference
+                    .child("chat_media")
+                    .child(chatIdTarget)
+                    .child("${System.currentTimeMillis()}-${(0 until 100000).random()}$extension")
+
+                val downloadUrl: String
+                when (kind) {
+                    "image" -> {
+                        val compressed = MediaCompressor.compressImage(ctx, uri) ?: throw Exception("No se pudo comprimir la imagen")
+                        storageRef.putBytes(compressed).await()
+                        downloadUrl = storageRef.downloadUrl.await().toString()
+                        viewModel.sendMessage(
+                            chatId = chatIdTarget,
+                            text = "",
+                            imageUrl = downloadUrl,
+                            type = "image",
+                            replyToId = replyMsg?.id,
+                            replyToText = replyMsg?.let { com.example.cuidaleapp.ui.components.replyLabelFor(it) },
+                            replyToName = if (replyMsg?.senderId == myUid) "Tú" else otherUser.nombre,
+                            metadata = replyMsg?.let { com.example.cuidaleapp.ui.components.replyPreviewMetadataFor(it) } ?: emptyMap()
+                        )
+                    }
+                    "video" -> {
+                        val input = ctx.contentResolver.openInputStream(uri) ?: throw Exception("No se pudo leer el archivo")
+                        input.use { stream -> storageRef.putStream(stream).await() }
+                        downloadUrl = storageRef.downloadUrl.await().toString()
+                        viewModel.sendMessage(
+                            chatId = chatIdTarget,
+                            text = "",
+                            videoUrl = downloadUrl,
+                            type = "video",
+                            replyToId = replyMsg?.id,
+                            replyToText = replyMsg?.let { com.example.cuidaleapp.ui.components.replyLabelFor(it) },
+                            replyToName = if (replyMsg?.senderId == myUid) "Tú" else otherUser.nombre,
+                            metadata = replyMsg?.let { com.example.cuidaleapp.ui.components.replyPreviewMetadataFor(it) } ?: emptyMap()
+                        )
+                    }
+                    else -> {
+                        val displayName = try {
+                            ctx.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                                val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                                if (idx >= 0 && cursor.moveToFirst()) cursor.getString(idx) else "documento"
+                            } ?: "documento"
+                        } catch (e: Exception) { "documento" }
+                        val input = ctx.contentResolver.openInputStream(uri) ?: throw Exception("No se pudo leer el archivo")
+                        input.use { stream -> storageRef.putStream(stream).await() }
+                        downloadUrl = storageRef.downloadUrl.await().toString()
+                        viewModel.sendMessage(
+                            chatId = chatIdTarget,
+                            text = "",
+                            fileUrl = downloadUrl,
+                            fileName = displayName,
+                            type = "file",
+                            replyToId = replyMsg?.id,
+                            replyToText = replyMsg?.let { com.example.cuidaleapp.ui.components.replyLabelFor(it) },
+                            replyToName = if (replyMsg?.senderId == myUid) "Tú" else otherUser.nombre,
+                            metadata = replyMsg?.let { com.example.cuidaleapp.ui.components.replyPreviewMetadataFor(it) } ?: emptyMap()
+                        )
+                    }
+                }
+                replyingToMessage = null
+            } catch (e: Exception) {
+                mediaError = e.message ?: "Error al enviar multimedia"
+            } finally {
+                isUploadingMedia = false
+                selectedMediaCount = (selectedMediaCount - 1).coerceAtLeast(0)
+                selectedMediaBytes = (selectedMediaBytes - size).coerceAtLeast(0L)
+            }
+            }
+        }
+    }
+
+    var cameraUri by remember { mutableStateOf<Uri?>(null) }
+
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        val uri = cameraUri
+        if (success && uri != null) {
+            uploadMedia(context, chatId, uri, "image")
+        } else if (uri != null) {
+            mediaError = "No se pudo capturar la foto"
+        }
+        cameraUri = null
+    }
+
+    val openCamera: () -> Unit = {
+        try {
+            val pm = context.packageManager
+            if (!pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_CAMERA_ANY)) {
+                mediaError = "Este dispositivo no tiene cámara disponible"
+            } else {
+                val file = File(context.cacheDir, "cam_chat_${System.currentTimeMillis()}.jpg")
+                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                cameraUri = uri
+                cameraLauncher.launch(uri)
+            }
+        } catch (e: Exception) {
+            mediaError = e.message ?: "Error al abrir la cámara"
+        }
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) openCamera()
+    }
+
+    val launchCamera: () -> Unit = {
+        val permission = android.Manifest.permission.CAMERA
+        val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, permission) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (granted) openCamera() else cameraPermissionLauncher.launch(permission)
+    }
+
+    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        val remainingSlots = (10 - selectedMediaCount).coerceAtLeast(0)
+        val toTake = uris.take(remainingSlots)
+        if (uris.size > remainingSlots) {
+            mediaError = "Solo se permiten hasta 10 elementos por envío"
+        }
+        toTake.forEach { uri -> uploadMedia(context, chatId, uri, "image") }
+    }
+
+    val documentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            if (selectedMediaCount >= 10) {
+                mediaError = "Máximo 10 elementos por envío. No se puede enviar más."
+                showMediaSheet = true
+            } else {
+                uploadMedia(context, chatId, uri, "file")
+            }
+        }
+    }
+
+    val videoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) uploadMedia(context, chatId, uri, "video")
+    }
     
     var highlightedMessageId by remember { mutableStateOf<String?>(null) }
+    var fullImageUrl by remember { mutableStateOf<String?>(null) }
+    var fullVideoUrl by remember { mutableStateOf<String?>(null) }
     
     val isFavorite = favs.contains(otherUser.uid)
     val iHaveBlocked = bloqueados.contains(otherUser.uid)
@@ -189,6 +380,7 @@ fun ChatScreen(
             AppNavigationState.setActiveChat(null)
             viewModel.setUserStatus(false)
             viewModel.setTyping(chatId, false)
+            com.example.cuidaleapp.ui.components.VideoPlayerCache.releaseAll()
         }
     }
 
@@ -196,9 +388,9 @@ fun ChatScreen(
     var showPinConfirmDialog by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        ConnectivityBanner()
-        
-        // Custom Top Bar
+
+
+
         Surface(
             shadowElevation = 4.dp,
             color = if (isDark) Color(0xFF1B263B) else Color.White
@@ -217,18 +409,40 @@ fun ChatScreen(
                                 )
                             }
                         } else if (isSearchActive) {
-                            TextField(
-                                value = searchQuery,
-                                onValueChange = { viewModel.setSearchQuery(it) },
-                                placeholder = { Text(if (isOnline) "Buscar..." else "Sin conexión", color = Color.Gray) },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true,
-                                enabled = isOnline,
-                                colors = TextFieldDefaults.colors(
-                                    unfocusedContainerColor = Color.Transparent,
-                                    focusedContainerColor = Color.Transparent
+                            Column {
+                                TextField(
+                                    value = searchQuery,
+                                    onValueChange = { viewModel.setSearchQuery(it) },
+                                    placeholder = { Text(if (isOnline) "Buscar..." else "Sin conexión", color = Color.Gray) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                    enabled = isOnline,
+                                    colors = TextFieldDefaults.colors(
+                                        unfocusedContainerColor = Color.Transparent,
+                                        focusedContainerColor = Color.Transparent
+                                    )
                                 )
-                            )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    val filters = listOf(
+                                        null to "Todos",
+                                        "media" to "Multimedia",
+                                        "image" to "Fotos",
+                                        "video" to "Videos",
+                                        "file" to "Documentos"
+                                    )
+                                    filters.forEach { (value, label) ->
+                                        FilterChip(
+                                            selected = searchMediaFilter == value,
+                                            onClick = { searchMediaFilter = value },
+                                            label = { Text(label, fontSize = 11.sp) },
+                                            enabled = isOnline
+                                        )
+                                    }
+                                }
+                            }
                         } else {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -317,7 +531,13 @@ fun ChatScreen(
                                 }
                             }
                         } else {
-                            IconButton(onClick = { isSearchActive = !isSearchActive }) { Icon(Icons.Default.Search, null) }
+                            IconButton(onClick = {
+                                if (isSearchActive) {
+                                    viewModel.setSearchQuery("")
+                                    searchMediaFilter = null
+                                }
+                                isSearchActive = !isSearchActive
+                            }) { Icon(Icons.Default.Search, null) }
                             IconButton(onClick = { showPinnedMessages = true }) { 
                                 BadgedBox(badge = { if (pinnedMessages.isNotEmpty()) Badge { Text(pinnedMessages.size.toString()) } }) {
                                     Icon(Icons.Default.PushPin, null)
@@ -416,6 +636,8 @@ fun ChatScreen(
                                         },
                                         onLongClick = { if (selectedMessages.isEmpty()) selectedMessages.add(msg) },
                                         onSwipeRight = { if (!isBlocked && !iHaveBlocked && isOnline) replyingToMessage = msg },
+                                        onImageClick = { fullImageUrl = msg.imageUrl },
+                                        onExpandVideo = { fullVideoUrl = it },
                                         onViewPostulacion = { solId -> onViewRequest?.invoke(solId) ?: onRedirectToRequests() },
                                         onDoubleClick = {
                                             if (msg.senderId == myUid && !msg.deleted && isOnline) {
@@ -514,6 +736,10 @@ fun ChatScreen(
                     } else {
                         Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp)) {
                             if (replyingToMessage != null) {
+                                val replyMsg = replyingToMessage!!
+                                val replyName = if (replyMsg.senderId == myUid) "Tú" else otherUser.nombre
+                                val replyMeta = com.example.cuidaleapp.ui.components.replyPreviewMetadataFor(replyMsg)
+                                val replyLabel = com.example.cuidaleapp.ui.components.replyLabelFor(replyMsg)
                                 Surface(
                                     modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                                     color = Color.Gray.copy(alpha = 0.05f),
@@ -523,8 +749,27 @@ fun ChatScreen(
                                         Box(modifier = Modifier.width(4.dp).height(32.dp).background(primaryColor, CircleShape))
                                         Spacer(Modifier.width(12.dp))
                                         Column(modifier = Modifier.weight(1f)) {
-                                            Text(if (replyingToMessage!!.senderId == myUid) "Tú" else otherUser.nombre, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = primaryColor)
-                                            Text(replyingToMessage!!.text, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                                            Text(replyName, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = primaryColor)
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                val previewType = replyMeta["replyPreviewType"]
+                                                val previewUrl = replyMeta["replyPreviewUrl"].orEmpty()
+                                                if (previewType == "image" && previewUrl.isNotBlank()) {
+                                                    com.example.cuidaleapp.ui.components.ChatMediaImage(
+                                                        url = previewUrl,
+                                                        modifier = Modifier.size(28.dp).clip(RoundedCornerShape(4.dp))
+                                                    )
+                                                    Spacer(Modifier.width(6.dp))
+                                                } else if (previewType == "video" || previewType == "file") {
+                                                    Icon(
+                                                        if (previewType == "video") Icons.Default.PlayCircleOutline else Icons.AutoMirrored.Filled.InsertDriveFile,
+                                                        null,
+                                                        tint = primaryColor,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                    Spacer(Modifier.width(6.dp))
+                                                }
+                                                Text(replyLabel, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                                            }
                                         }
                                         IconButton(onClick = { replyingToMessage = null }) { Icon(Icons.Default.Close, null, modifier = Modifier.size(16.dp)) }
                                     }
@@ -534,6 +779,17 @@ fun ChatScreen(
                             Row(verticalAlignment = Alignment.Bottom) {
                                 IconButton(onClick = { if (myRole == "representante") showShareRequests = true else showShareTasks = true }) {
                                     Icon(if (myRole == "representante") Icons.Default.AddCircle else Icons.AutoMirrored.Filled.Assignment, null, tint = primaryColor)
+                                }
+
+                                IconButton(
+                                    onClick = { showMediaSheet = true },
+                                    enabled = !isUploadingMedia && isOnline
+                                ) {
+                                    if (isUploadingMedia) {
+                                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = primaryColor)
+                                    } else {
+                                        Icon(Icons.Default.AttachFile, null, tint = primaryColor)
+                                    }
                                 }
                                 
                                 TextField(
@@ -567,8 +823,9 @@ fun ChatScreen(
                                                     chatId = chatId,
                                                     text = inputText,
                                                     replyToId = replyingToMessage?.id,
-                                                    replyToText = replyingToMessage?.text,
-                                                    replyToName = if (replyingToMessage?.senderId == myUid) "Tú" else otherUser.nombre
+                                                    replyToText = replyingToMessage?.let { com.example.cuidaleapp.ui.components.replyLabelFor(it) },
+                                                    replyToName = if (replyingToMessage?.senderId == myUid) "Tú" else otherUser.nombre,
+                                                    metadata = replyingToMessage?.let { com.example.cuidaleapp.ui.components.replyPreviewMetadataFor(it) } ?: emptyMap()
                                                 )
                                                 replyingToMessage = null
                                             }
@@ -835,28 +1092,207 @@ fun ChatScreen(
         }
     }
     
+    if (showMediaSheet) {
+        ModalBottomSheet(onDismissRequest = { showMediaSheet = false }) {
+            Column(Modifier.padding(16.dp).fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.AttachFile, null, tint = primaryColor)
+                    Spacer(Modifier.width(12.dp))
+                    Text("Enviar multimedia", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                }
+                val limitReached = selectedMediaCount >= 10 || selectedMediaBytes >= MediaCompressor.MAX_MEDIA_BYTES
+                Text(
+                    "${selectedMediaCount}/10 elementos · ${selectedMediaBytes / (1024 * 1024)} MB / 25 MB — Máx 25 MB por archivo. Las imágenes se comprimen conservando calidad.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (limitReached) MaterialTheme.colorScheme.error else Color.Gray,
+                    fontWeight = if (limitReached) FontWeight.Bold else FontWeight.Normal
+                )
+                Spacer(Modifier.height(20.dp))
+
+                if (mediaError != null) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                    ) {
+                        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(mediaError.orEmpty(), color = MaterialTheme.colorScheme.onErrorContainer, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Button(
+                        onClick = { showMediaSheet = false; launchCamera() },
+                        modifier = Modifier.weight(1f).height(56.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        enabled = !isUploadingMedia && !limitReached
+                    ) {
+                        Icon(Icons.Default.PhotoCamera, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Cámara", fontWeight = FontWeight.Bold)
+                    }
+                    Button(
+                        onClick = { showMediaSheet = false; galleryLauncher.launch("image/*") },
+                        modifier = Modifier.weight(1f).height(56.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        enabled = !isUploadingMedia && !limitReached
+                    ) {
+                        Icon(Icons.Default.PhotoLibrary, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Galería", fontWeight = FontWeight.Bold)
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Button(
+                        onClick = { showMediaSheet = false; videoLauncher.launch("video/*") },
+                        modifier = Modifier.weight(1f).height(56.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        enabled = !isUploadingMedia && !limitReached
+                    ) {
+                        Icon(Icons.Default.VideoLibrary, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Video", fontWeight = FontWeight.Bold)
+                    }
+                    Button(
+                        onClick = { showMediaSheet = false; documentLauncher.launch(arrayOf("application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) },
+                        modifier = Modifier.weight(1f).height(56.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        enabled = !isUploadingMedia && !limitReached
+                    ) {
+                        Icon(Icons.Default.Description, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Documento", fontWeight = FontWeight.Bold)
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+            }
+        }
+    }
+
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+    val shareMedia: (String, String) -> Unit = { url, kind ->
+        val mime = when (kind) {
+            "image" -> "image/*"
+            "video" -> "video/*"
+            else -> "text/plain"
+        }
+        val sendIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+            this.type = mime
+            putExtra(android.content.Intent.EXTRA_TEXT, url)
+            putExtra(android.content.Intent.EXTRA_SUBJECT, "Cuidale App - Multimedia")
+        }
+        try {
+            context.startActivity(android.content.Intent.createChooser(sendIntent, "Compartir multimedia"))
+        } catch (e: Exception) {
+            android.util.Log.e("Chat", "Error compartiendo multimedia: ${e.message}")
+        }
+    }
+
+    fullImageUrl?.let { url ->
+        val target = messages.find { it.imageUrl == url } ?: filteredMessages.find { it.imageUrl == url }
+        com.example.cuidaleapp.ui.components.FullImageViewer(
+            url = url,
+            onDismiss = { fullImageUrl = null },
+            onReply = {
+                if (target != null) replyingToMessage = target
+                fullImageUrl = null
+            },
+            onCopy = {
+                clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(url))
+                fullImageUrl = null
+            },
+            onShare = { shareMedia(url, "image") },
+            canPin = target != null && isOnline,
+            isPinned = target?.pinned == true,
+            onTogglePin = {
+                if (target != null) viewModel.togglePin(chatId, target.id, target.pinned, myName)
+            }
+        )
+    }
+
+    fullVideoUrl?.let { url ->
+        val target = messages.find { it.videoUrl == url } ?: filteredMessages.find { it.videoUrl == url }
+        com.example.cuidaleapp.ui.components.FullVideoViewer(
+            url = url,
+            onDismiss = { fullVideoUrl = null },
+            onReply = {
+                if (target != null) replyingToMessage = target
+                fullVideoUrl = null
+            },
+            onCopy = {
+                clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(url))
+                fullVideoUrl = null
+            },
+            onShare = { shareMedia(url, "video") },
+            canPin = target != null && isOnline,
+            isPinned = target?.pinned == true,
+            onTogglePin = {
+                if (target != null) viewModel.togglePin(chatId, target.id, target.pinned, myName)
+            }
+        )
+    }
+
     if (showPinnedMessages) {
+        var pinnedFilter by remember { mutableStateOf<String?>(null) }
+        val filteredPinned = remember(pinnedMessages, pinnedFilter) {
+            pinnedMessages.filter { msg ->
+                when (pinnedFilter) {
+                    null -> true
+                    "text" -> msg.imageUrl == null && msg.videoUrl == null && msg.fileUrl == null
+                    "media" -> msg.imageUrl != null || msg.videoUrl != null || msg.fileUrl != null
+                    else -> true
+                }
+            }
+        }
         ModalBottomSheet(onDismissRequest = { showPinnedMessages = false }) {
-            Column(Modifier.padding(16.dp).fillMaxWidth().fillMaxHeight(0.6f)) {
+            Column(Modifier.padding(16.dp).fillMaxWidth().fillMaxHeight(0.65f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.PushPin, null, tint = primaryColor)
                     Spacer(Modifier.width(12.dp))
                     Text("Mensajes fijados", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 }
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    val filters = listOf(null to "Todos", "text" to "Mensajes", "media" to "Multimedia")
+                    filters.forEach { (value, label) ->
+                        FilterChip(
+                            selected = pinnedFilter == value,
+                            onClick = { pinnedFilter = value },
+                            label = { Text(label, fontSize = 11.sp) }
+                        )
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
                 LazyColumn {
-                    items(pinnedMessages) { msg ->
+                    items(filteredPinned) { msg ->
                         Surface(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), 
-                            color = Color.Gray.copy(alpha = 0.05f), 
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            color = Color.Gray.copy(alpha = 0.05f),
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Column(Modifier.padding(12.dp)) {
-                                Text(msg.text, style = MaterialTheme.typography.bodyMedium, maxLines = 3)
+                                when {
+                                    msg.imageUrl != null -> com.example.cuidaleapp.ui.components.ChatMediaImage(
+                                        url = msg.imageUrl,
+                                        modifier = Modifier.fillMaxWidth().heightIn(max = 200.dp).clip(RoundedCornerShape(8.dp)),
+                                        onClick = { fullImageUrl = msg.imageUrl }
+                                    )
+                                    msg.videoUrl != null -> com.example.cuidaleapp.ui.components.ChatMediaVideoPlayer(
+                                        url = msg.videoUrl,
+                                        modifier = Modifier.fillMaxWidth().heightIn(max = 200.dp).clip(RoundedCornerShape(8.dp)),
+                                        onExpand = { fullVideoUrl = msg.videoUrl }
+                                    )
+                                    msg.fileUrl != null -> FileBubble(msg.fileName ?: "Archivo", msg.fileUrl)
+                                    else -> Text(msg.text, style = MaterialTheme.typography.bodyMedium, maxLines = 3)
+                                }
                                 Spacer(Modifier.height(8.dp))
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Button(
-                                        onClick = { 
+                                        onClick = {
                                             showPinnedMessages = false
                                             val index = filteredMessages.reversed().indexOfFirst { it.id == msg.id }
                                             if (index != -1) {
@@ -957,6 +1393,8 @@ fun ChatBubble(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onSwipeRight: () -> Unit,
+    onImageClick: (ChatMessage) -> Unit,
+    onExpandVideo: (String) -> Unit,
     onViewPostulacion: (String) -> Unit,
     onDoubleClick: () -> Unit
 ) {
@@ -1018,12 +1456,12 @@ fun ChatBubble(
             ) {
                 Column(modifier = Modifier.padding(12.dp, 8.dp).widthIn(max = 280.dp)) {
                     if (msg.replyToId != null) {
-                        Surface(Modifier.fillMaxWidth().padding(bottom = 4.dp), color = Color.Black.copy(alpha = 0.1f), shape = RoundedCornerShape(4.dp)) {
-                            Column(Modifier.padding(8.dp)) {
-                                Text(msg.replyToName ?: "Usuario", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = if (isMe) Color.White.copy(alpha = 0.9f) else MaterialTheme.colorScheme.primary)
-                                Text(msg.replyToText ?: "", style = MaterialTheme.typography.bodySmall, maxLines = 1, color = textColor.copy(alpha = 0.7f))
-                            }
-                        }
+                        com.example.cuidaleapp.ui.components.ReplyPreviewBubble(
+                            metadata = msg.metadata,
+                            fallbackText = msg.replyToText ?: "",
+                            fallbackName = msg.replyToName ?: "Usuario",
+                            textColor = textColor
+                        )
                     }
                     
                     if (msg.deleted) {
@@ -1034,11 +1472,21 @@ fun ChatBubble(
                         }
                     } else {
                         if (msg.imageUrl != null) {
-                            AsyncImage(model = msg.imageUrl, contentDescription = null, Modifier.fillMaxWidth().heightIn(max = 200.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop)
+                            com.example.cuidaleapp.ui.components.ChatMediaImage(
+                                url = msg.imageUrl,
+                                modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp).clip(RoundedCornerShape(8.dp)),
+                                onClick = { onImageClick(msg) },
+                                onLongClick = onLongClick
+                            )
                             Spacer(Modifier.height(4.dp))
                         }
                         if (msg.videoUrl != null) {
-                            VideoPlayer(msg.videoUrl, Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(8.dp)))
+                            com.example.cuidaleapp.ui.components.ChatMediaVideoPlayer(
+                                url = msg.videoUrl,
+                                modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp).clip(RoundedCornerShape(8.dp)),
+                                onExpand = { onExpandVideo(msg.videoUrl) },
+                                onLongClick = onLongClick
+                            )
                             Spacer(Modifier.height(4.dp))
                         }
                         if (msg.fileUrl != null) {
@@ -1173,21 +1621,6 @@ fun FileBubble(fileName: String, fileUrl: String) {
             Text(fileName, style = MaterialTheme.typography.bodySmall, maxLines = 1)
         }
     }
-}
-
-@Composable
-fun VideoPlayer(videoUrl: String, modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    val exoPlayer = remember {
-        ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(videoUrl))
-            prepare()
-        }
-    }
-    DisposableEffect(videoUrl) {
-        onDispose { exoPlayer.release() }
-    }
-    AndroidView(factory = { PlayerView(it).apply { player = exoPlayer } }, modifier = modifier)
 }
 
 @Composable

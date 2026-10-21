@@ -124,7 +124,6 @@ fun CuidaleDrawerContent(
                     )
                 }
                 
-                // Active status dot
                 Box(
                     modifier = Modifier
                         .size(16.dp)

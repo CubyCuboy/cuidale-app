@@ -65,6 +65,7 @@ class MenuActivity : ComponentActivity() {
         super.onResume()
         val chatViewModel = androidx.lifecycle.ViewModelProvider(this)[ChatViewModel::class.java]
         chatViewModel.setUserStatus(true)
+        android.util.Log.d("MenuActivity", "presence: online on resume")
     }
 
     override fun onPause() {
@@ -80,6 +81,29 @@ class MenuActivity : ComponentActivity() {
         window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         enableEdgeToEdge()
 
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                androidx.core.app.ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
+            }
+        }
+
+        com.google.firebase.messaging.FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+            val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return@addOnSuccessListener
+            val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            val userSession = com.example.cuidaleapp.data.UserSession(applicationContext)
+            val rut = userSession.getUser().rut
+            if (rut.isNotBlank()) {
+                val hashedRut = com.example.cuidaleapp.utils.HashUtils.hashRut(rut)
+                db.collection("usuarios").document(hashedRut).update("fcmToken", token)
+            } else {
+                db.collection("usuarios").whereEqualTo("uid", uid).get().addOnSuccessListener { query ->
+                    if (!query.isEmpty) {
+                        query.documents[0].reference.update("fcmToken", token)
+                    }
+                }
+            }
+        }
+
         setContent {
             val menuViewModel: MenuViewModel = viewModel()
             val profileViewModel: ProfileViewModel = viewModel()
@@ -91,12 +115,36 @@ class MenuActivity : ComponentActivity() {
             val chatViewModel: ChatViewModel = viewModel()
             val notificationsViewModel: NotificationsViewModel = viewModel()
 
+            // Presence: reflect app-wide visibility and detect inactivity.
+            LaunchedEffect(Unit) {
+                AppNavigationState.isAppVisible.collect { visible ->
+                    chatViewModel.setUserStatus(visible)
+                }
+            }
+            LaunchedEffect(Unit) {
+                while (true) {
+                    delay(60_000)
+                    val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: continue
+                    val manualStatus = chatViewModel.myManualStatus.value
+                    if (manualStatus == "no_molestar" || manualStatus == "desconectado") continue
+                    val lastActivity = chatViewModel.lastActivityTimestamp.value
+                    val fiveMinutesAgo = System.currentTimeMillis() - 5 * 60 * 1000
+                    if (lastActivity < fiveMinutesAgo) {
+                        com.google.firebase.database.FirebaseDatabase.getInstance().reference
+                            .child("status").child(uid).child("estado").setValue("inactivo")
+                    }
+                }
+            }
+
             val isDark by menuViewModel.isDarkMode.collectAsState()
             val userData by menuViewModel.userData.collectAsState()
             val isLoggedOut by menuViewModel.isLoggedOut.collectAsState()
 
             LaunchedEffect(userData, isLoggedOut) {
-                if (isLoggedOut || !userData.completado || userData.rut.isBlank() || userData.rol.isBlank()) {
+                val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                if (isLoggedOut || currentUser == null || (userData.uid.isNotBlank() && currentUser.uid != userData.uid)) {
+                    com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
+                    com.example.cuidaleapp.utils.AppCacheManager.clearAllExceptTheme(applicationContext)
                     val intent = Intent(this@MenuActivity, LoginActivity::class.java)
                     intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
                     startActivity(intent)
@@ -162,6 +210,7 @@ class MenuActivity : ComponentActivity() {
                     "OTHER_FICHA" -> if (uid != null) currentScreen = OtherFicha(uid, returnTo = SocialManagement)
                     "CHATS" -> currentScreen = Chats
                     "NOTIFICATIONS" -> currentScreen = Notifications
+                    "SOLICITUDES" -> currentScreen = Requests
                     "CHAT_DETAIL" -> {
                         if (chatId != null && uid != null) {
                             currentScreen = Chat(chatId, uid, returnTo = Chats)
@@ -224,7 +273,6 @@ class MenuActivity : ComponentActivity() {
                         if (!skipSplash) {
                             delay(1200)
                         } else {
-                            // Si saltamos el splash, damos un mini respiro para que la UI se asiente
                             delay(100)
                         }
                         showSplash = false
@@ -454,16 +502,28 @@ class MenuActivity : ComponentActivity() {
                                                                 isDark = isDark,
                                                                 onNotificationClick = { notification ->
                                                                     when (notification.tipo) {
-                                                                        "solicitud_vinculo" -> currentScreen = OtherFicha(uid = notification.emisor, returnTo = Notifications)
+                                                                        "solicitud_vinculo", "nuevo_usuario", "nuevo_usuario_zona" -> {
+                                                                            if (notification.emisor.isNotEmpty()) {
+                                                                                currentScreen = OtherFicha(uid = notification.emisor, returnTo = Notifications)
+                                                                            }
+                                                                        }
                                                                         "vinculo_aceptado", "nuevo_mensaje" -> {
                                                                             val chatId = notification.data["chatId"] ?: ""
-                                                                            if (chatId.isNotEmpty()) currentScreen = Chat(chatId = chatId, otherUid = notification.emisor, returnTo = Notifications)
+                                                                            if (chatId.isNotEmpty()) {
+                                                                                currentScreen = Chat(chatId = chatId, otherUid = notification.emisor, returnTo = Notifications)
+                                                                            } else {
+                                                                                currentScreen = Chats
+                                                                            }
                                                                         }
-                                                                        "nuevo_usuario" -> currentScreen = OtherFicha(uid = notification.emisor, returnTo = Notifications)
-                                                                        "recordatorio_tarea", "tarea_atrasada", "tarea_finalizada", "tarea_postergada" -> {
+                                                                        "postulacion_recibida", "postulacion_aceptada", "servicio_finalizado",
+                                                                        "recordatorio_tarea", "tarea_atrasada", "tarea_finalizada", "tarea_postergada", "turno_finalizado" -> {
                                                                             currentScreen = Requests
                                                                         }
-                                                                        "turno_finalizado" -> {
+                                                                        "configuracion_cuenta" -> {
+                                                                            val intent = Intent(this@MenuActivity, AccountHistoryActivity::class.java)
+                                                                            startActivity(intent)
+                                                                        }
+                                                                        else -> {
                                                                             currentScreen = Requests
                                                                         }
                                                                     }
@@ -662,7 +722,27 @@ class MenuActivity : ComponentActivity() {
                     ) {
                         CuidaleWelcomeLoading()
                     }
+
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        com.example.cuidaleapp.ui.components.ConnectivityBanner()
+                        InAppNotificationHost(
+                            onNotificationClick = { notification ->
+                                currentScreen = when (notification.targetScreen) {
+                                    "CHAT_DETAIL" -> Chats
+                                    "CHATS" -> Chats
+                                    "NOTIFICATIONS" -> Notifications
+                                    "SOLICITUDES" -> Requests
+                                    "OTHER_FICHA" -> OtherFicha(
+                                        uid = notification.payload["uid"] ?: notification.payload["emisor"] ?: "",
+                                        returnTo = Main
+                                    )
+                                    else -> Main
+                                }
+                            }
+                        )
+                    }
                 }
             }
         }
+
     }

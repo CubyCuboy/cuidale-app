@@ -17,11 +17,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.cuidaleapp.R
 import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.PhoneVerificationViewModel
@@ -40,11 +42,16 @@ fun PhoneVerificationScreen(
     val phone by viewModel.phoneNumber.collectAsState()
     val code by viewModel.code.collectAsState()
     val timeLeft by viewModel.timeLeft.collectAsState()
+    val attemptsLeft by viewModel.attemptsLeft.collectAsState()
     val context = LocalContext.current
 
     val gradient = CuidaleThemeExtras.gradient
     val onGradientText = CuidaleThemeExtras.customColors.onGradient
-    val stepsLabels = listOf("Número", "Código", "Listo")
+    val stepsLabels = listOf(
+        stringResource(R.string.verification_step_phone),
+        stringResource(R.string.verification_step_code),
+        stringResource(R.string.verification_step_done)
+    )
     
     val currentStepIndex = when(uiState) {
         is PhoneVerificationUiState.Step1Phone -> 0
@@ -87,7 +94,7 @@ fun PhoneVerificationScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             Text(
-                text = "Verificación de Teléfono",
+                text = stringResource(R.string.verification_title_phone),
                 style = MaterialTheme.typography.displaySmall,
                 color = onGradientText,
                 textAlign = TextAlign.Center
@@ -121,6 +128,7 @@ fun PhoneVerificationScreen(
                             code = code,
                             phone = phone,
                             timeLeft = timeLeft,
+                            attemptsLeft = attemptsLeft,
                             onCodeChange = viewModel::onCodeChange,
                             onVerify = viewModel::verifyCode,
                             onResend = { viewModel.sendVerificationCode(context as Activity) },
@@ -141,7 +149,7 @@ fun PhoneVerificationScreen(
                     is PhoneVerificationUiState.Error -> {
                         if (timeLeft > 0 || code.isNotEmpty()) {
                              Step2CodeContent(
-                                code = code, phone = phone, timeLeft = timeLeft,
+                                code = code, phone = phone, timeLeft = timeLeft, attemptsLeft = attemptsLeft,
                                 onCodeChange = viewModel::onCodeChange, onVerify = viewModel::verifyCode, 
                                 onResend = { viewModel.sendVerificationCode(context as Activity) }, 
                                 onBack = viewModel::resetToStep1, isDark = isDark, isLoading = false, error = error
@@ -235,6 +243,7 @@ fun Step2CodeContent(
     code: String,
     phone: String,
     timeLeft: Long,
+    attemptsLeft: Int,
     onCodeChange: (String) -> Unit,
     onVerify: () -> Unit,
     onResend: () -> Unit,
@@ -243,88 +252,21 @@ fun Step2CodeContent(
     isLoading: Boolean,
     error: String? = null
 ) {
-    val colors = MaterialTheme.colorScheme
-    val shadows = CuidaleThemeExtras.shadows
-    val panelShadowColor = if (isDark) shadows.hardShadowAccent else shadows.hardShadowPrimary
-
-    val seconds = timeLeft / 1000
-    val timerText = if (seconds > 0) "Reenviar en ${seconds}s" else "Reenviar ahora"
-
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        HardShadowPanel(
-            backgroundColor = CuidaleThemeExtras.customColors.panelBackground,
-            shadowColor = panelShadowColor,
-            isError = error != null
-        ) {
-            Text(
-                text = "Código de SMS",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-            
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                text = "Hemos enviado un código al +56 $phone",
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-            
-            Spacer(modifier = Modifier.height(24.dp))
-
-            InputFieldLabel("Código de 6 dígitos")
-
-            if (error != null) {
-                Text(
-                    text = error,
-                    color = colors.error,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.ExtraBold),
-                    modifier = Modifier.padding(bottom = 12.dp).fillMaxWidth(),
-                    textAlign = TextAlign.Center
-                )
-            }
-
-            OtpInputField(
-                otpText = code,
-                onOtpTextChange = onCodeChange,
-                enabled = !isLoading,
-                isError = error != null
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            TextButton(
-                onClick = onResend,
-                enabled = timeLeft == 0L && !isLoading,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-            ) {
-                Text(
-                    text = timerText,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                    color = if (timeLeft == 0L) colors.primary else colors.onSurfaceVariant
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        HardShadowButton(
-            text = "Verificar Número",
-            containerColor = colors.primary,
-            contentColor = colors.onPrimary,
-            shadowColor = panelShadowColor,
-            icon = Icons.Default.CheckCircle,
-            isDark = isDark,
-            enabled = code.length == 6 && !isLoading,
-            onClick = onVerify
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        TextButton(onClick = onBack, enabled = !isLoading) {
-            Text("Cambiar número de teléfono", color = Color.White)
-        }
-    }
+    CodeVerificationStep(
+        title = "Código de SMS",
+        targetLabel = "Hemos enviado un código al +56 ",
+        targetValue = phone,
+        code = code,
+        onCodeChange = onCodeChange,
+        timeLeft = timeLeft,
+        attemptsLeft = attemptsLeft,
+        onResend = onResend,
+        onVerify = onVerify,
+        onBack = onBack,
+        verifyLabel = "Verificar Número",
+        backLabel = "Cambiar número de teléfono",
+        isDark = isDark,
+        isLoading = isLoading,
+        error = error
+    )
 }

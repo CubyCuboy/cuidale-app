@@ -9,7 +9,7 @@ import androidx.activity.viewModels
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import com.example.cuidaleapp.ui.screens.SocialManagementScreen
-import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
+import com.example.cuidaleapp.ui.components.CuidaleAppRoot
 import com.example.cuidaleapp.viewmodel.ProfileViewModel
 
 class SocialManagementActivity : ComponentActivity() {
@@ -22,7 +22,7 @@ class SocialManagementActivity : ComponentActivity() {
         setContent {
             val isDark by profileViewModel.isDarkMode.collectAsState()
 
-            CuidaleAppTheme(darkTheme = isDark) {
+            CuidaleAppRoot(darkTheme = isDark) {
                 SocialManagementScreen(
                     onNavigateBack = { finish() },
                     onUserClick = { uid ->

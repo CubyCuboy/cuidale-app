@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.example.cuidaleapp.R
+import com.example.cuidaleapp.ui.components.ConnectivityBanner
 import com.example.cuidaleapp.ui.components.CuidaleTextField
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.models.UserData
@@ -60,7 +61,6 @@ fun SearchProfileScreen(
                 
                 searchResults = query.toObjects(UserData::class.java)
             } catch (e: Exception) {
-                // Error handled
             } finally {
                 isLoading = false
             }
@@ -74,12 +74,15 @@ fun SearchProfileScreen(
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
+
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.safeDrawing)
                 .padding(horizontal = 24.dp)
         ) {
+
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
                 verticalAlignment = Alignment.CenterVertically

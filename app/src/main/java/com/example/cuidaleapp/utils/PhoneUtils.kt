@@ -4,8 +4,6 @@ object PhoneUtils {
     fun isValidChileanPhone(phone: String): Boolean {
         if (phone.isEmpty()) return true
         val clean = phone.replace(Regex("[^0-9]"), "")
-        // En Chile todos los números tienen 9 dígitos
-        // Móviles empiezan con 9, Fijos con el código de área (ej: Santiago es 2)
         return clean.length == 9 && (clean.startsWith("9") || clean.startsWith("2"))
     }
     fun formatChileanPhone(phone: String): String {

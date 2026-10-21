@@ -3,9 +3,13 @@ package com.example.cuidaleapp.ui.screens
 import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -29,6 +33,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.style.TextAlign
@@ -43,6 +48,7 @@ import com.example.cuidaleapp.viewmodel.ProfileViewModel
 import com.example.cuidaleapp.utils.ConnectivityObserver
 import com.example.cuidaleapp.utils.PhoneUtils
 import java.io.File
+import kotlin.math.roundToInt
 
 @Composable
 fun EditProfileScreen(
@@ -79,6 +85,7 @@ fun EditProfileScreen(
 
     LaunchedEffect(remoteState) {
         if (remoteState is ProfileViewModel.RemoteState.Success) {
+            Toast.makeText(context, "Perfil actualizado correctamente", Toast.LENGTH_SHORT).show()
             viewModel.resetRemoteState()
             onNavigateBack()
         }
@@ -88,6 +95,29 @@ fun EditProfileScreen(
     val isApellidoPaValid = apellidoPa.length >= 2
     val isPhoneValid = PhoneUtils.isValidChileanPhone(telefono) && telefono.length == 9
     val isFormValid = isNombreValid && isApellidoPaValid && isPhoneValid && region.isNotEmpty() && comuna.isNotEmpty()
+
+    val nombreShake = remember { Animatable(0f) }
+    val apellidoShake = remember { Animatable(0f) }
+    val phoneShake = remember { Animatable(0f) }
+
+    LaunchedEffect(isNombreValid) {
+        if (!isNombreValid && nombre.isNotEmpty()) {
+            repeat(4) { i -> nombreShake.animateTo(if (i % 2 == 0) 8f else -8f, tween(50, easing = LinearEasing)) }
+            nombreShake.animateTo(0f)
+        }
+    }
+    LaunchedEffect(isApellidoPaValid) {
+        if (!isApellidoPaValid && apellidoPa.isNotEmpty()) {
+            repeat(4) { i -> apellidoShake.animateTo(if (i % 2 == 0) 8f else -8f, tween(50, easing = LinearEasing)) }
+            apellidoShake.animateTo(0f)
+        }
+    }
+    LaunchedEffect(isPhoneValid) {
+        if (!isPhoneValid && telefono.isNotEmpty()) {
+            repeat(4) { i -> phoneShake.animateTo(if (i % 2 == 0) 8f else -8f, tween(50, easing = LinearEasing)) }
+            phoneShake.animateTo(0f)
+        }
+    }
 
     var showImageSourceDialog by remember { mutableStateOf(false) }
     var tempPhotoUri by remember { mutableStateOf<Uri?>(null) }
@@ -228,6 +258,8 @@ fun EditProfileScreen(
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
                 .verticalScroll(scrollState)
+                .imePadding()
+                .navigationBarsPadding()
                 .padding(horizontal = 16.dp)
         ) {
             Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -247,7 +279,6 @@ fun EditProfileScreen(
                 }
             }
 
-            // Profile Picture Section
             Box(modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
                 Box(
                     modifier = Modifier
@@ -275,7 +306,6 @@ fun EditProfileScreen(
                         }
                     }
 
-                    // Floating Action Button for Photo Edit - Fixed positioning
                     if (isOnline) {
                         Surface(
                             modifier = Modifier
@@ -300,7 +330,6 @@ fun EditProfileScreen(
                 }
             }
 
-            // --- ALL DATA IN ONE CONTAINER ---
             HardShadowPanel(
                 backgroundColor = customColors.panelBackground,
                 shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
@@ -308,7 +337,6 @@ fun EditProfileScreen(
             ) {
                 Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
                     
-                    // SECTION 1: PERSONAL INFO
                     EditSectionHeader(icon = Icons.Default.Person, title = "Información Personal", accentColor = accentColor)
                     
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -319,6 +347,7 @@ fun EditProfileScreen(
                                 placeholder = "Tu nombre", 
                                 leadingIcon = { Icon(Icons.Default.Badge, null, tint = accentColor.copy(alpha = 0.6f)) },
                                 isError = !isNombreValid && nombre.isNotEmpty(), 
+                                modifier = Modifier.offset { IntOffset(nombreShake.value.roundToInt(), 0) },
                                 enabled = !isLoading && isOnline
                             )
                         }
@@ -341,6 +370,7 @@ fun EditProfileScreen(
                                         onValueChange = { apellidoPa = it }, 
                                         placeholder = "Paterno", 
                                         isError = !isApellidoPaValid && apellidoPa.isNotEmpty(), 
+                                        modifier = Modifier.offset { IntOffset(apellidoShake.value.roundToInt(), 0) },
                                         enabled = !isLoading && isOnline
                                     )
                                 }
@@ -360,7 +390,6 @@ fun EditProfileScreen(
 
                     HorizontalDivider(color = textColor.copy(alpha = 0.08f))
 
-                    // SECTION 2: CONTACT & LOCATION
                     EditSectionHeader(icon = Icons.Default.LocationOn, title = "Contacto y Ubicación", accentColor = accentColor)
 
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -372,6 +401,7 @@ fun EditProfileScreen(
                                 keyboardType = KeyboardType.Phone, 
                                 leadingIcon = { Icon(Icons.Default.Phone, null, tint = accentColor.copy(alpha = 0.6f)) },
                                 isError = !isPhoneValid && telefono.isNotEmpty(), 
+                                modifier = Modifier.offset { IntOffset(phoneShake.value.roundToInt(), 0) },
                                 enabled = !isLoading && isOnline
                             )
                         }
@@ -397,7 +427,6 @@ fun EditProfileScreen(
 
                     HorizontalDivider(color = textColor.copy(alpha = 0.08f))
 
-                    // SECTION 3: PRESENTATION
                     EditSectionHeader(icon = Icons.Default.FormatQuote, title = "Sobre mí", accentColor = accentColor)
 
                     Column {
@@ -419,6 +448,36 @@ fun EditProfileScreen(
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
+
+                    val errorMessage = (remoteState as? ProfileViewModel.RemoteState.Error)?.message
+                    if (errorMessage != null) {
+                        AnimatedVisibility(visible = true, enter = fadeIn(), exit = fadeOut()) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.errorContainer,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.ErrorOutline,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = errorMessage,
+                                        color = MaterialTheme.colorScheme.onErrorContainer,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
 
                     HardShadowButton(
                         text = if (isLoading) "GUARDANDO..." else "GUARDAR CAMBIOS",

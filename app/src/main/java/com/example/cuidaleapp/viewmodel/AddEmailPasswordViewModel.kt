@@ -4,7 +4,8 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.cuidaleapp.data.UserSession
-import com.example.cuidaleapp.models.UserData
+import com.example.cuidaleapp.models.AccountHistoryEntry
+import com.example.cuidaleapp.utils.AccountUtils
 import com.example.cuidaleapp.utils.HashUtils
 import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
@@ -47,28 +48,20 @@ class AddEmailPasswordViewModel(application: Application) : AndroidViewModel(app
         clearError()
     }
 
-    fun validateEmail(email: String): Boolean {
-        val trimmed = email.trim()
-        if (trimmed.isEmpty()) return false
-        val pattern = android.util.Patterns.EMAIL_ADDRESS
-        if (!pattern.matcher(trimmed).matches()) return false
-        val parts = trimmed.split("@")
-        if (parts.size != 2) return false
-        val domain = parts[1]
-        return domain.contains(".") && domain.substringAfterLast(".").length >= 2
-    }
+    fun validateEmail(email: String): Boolean = AccountUtils.validateEmail(email)
 
     fun linkEmailPassword() {
         val emailVal = _email.value.trim().lowercase()
         val passVal = _password.value
 
-        if (!validateEmail(emailVal)) {
+        if (!AccountUtils.validateEmail(emailVal)) {
             _uiState.value = AddEmailPasswordState.Error("Correo electrónico no válido")
             return
         }
 
-        if (passVal.length < 8 || !passVal.any { it.isUpperCase() } || !passVal.any { !it.isLetterOrDigit() }) {
-            _uiState.value = AddEmailPasswordState.Error("La contraseña no cumple con los requisitos de seguridad")
+        val passwordError = AccountUtils.validatePassword(passVal)
+        if (passwordError != null) {
+            _uiState.value = AddEmailPasswordState.Error(passwordError)
             return
         }
 
@@ -83,7 +76,7 @@ class AddEmailPasswordViewModel(application: Application) : AndroidViewModel(app
                     try {
                         currentUser.updateEmail(emailVal).await()
                         currentUser.updatePassword(passVal).await()
-                    } catch (e: Exception) {
+                    } catch (_: Exception) {
                         currentUser.linkWithCredential(credential).await()
                     }
                 } else {
@@ -91,38 +84,57 @@ class AddEmailPasswordViewModel(application: Application) : AndroidViewModel(app
                 }
                 currentUser.reload().await()
 
+                val now = System.currentTimeMillis()
+                val currentUserData = userSession.getUser()
+
+                val entry = AccountHistoryEntry(
+                    id = java.util.UUID.randomUUID().toString(),
+                    action = "provider_linked",
+                    title = "Cuenta de Correo y Contraseña Vinculada",
+                    description = "Has vinculado tu correo ($emailVal) y contraseña",
+                    timestamp = now
+                )
+
+                val newHistory = (listOf(entry) + currentUserData.accountHistory).distinctBy { it.id }.sortedByDescending { it.timestamp }
+                val newLinked = AccountUtils.mergeLinkedAccount(
+                    currentUserData.linkedAccounts,
+                    "email",
+                    "",
+                    emailVal,
+                    verificado = false,
+                    timestamp = now
+                )
+
                 val updates = mapOf(
-                    "correoAlternativo" to emailVal,
                     "verificado" to false,
+                    "linkedAccounts" to newLinked,
+                    "accountHistory" to newHistory,
                     "updatedAt" to com.google.firebase.Timestamp.now()
                 )
 
-                val currentUserData = userSession.getUser()
                 val rut = currentUserData.rut
-                if (rut.isNotBlank()) {
+                val userDocRef = if (rut.isNotBlank()) {
                     val hashedRut = HashUtils.hashRut(rut)
-                    db.collection("usuarios").document(hashedRut).set(updates, SetOptions.merge()).await()
+                    db.collection("usuarios").document(hashedRut)
                 } else {
                     val query = db.collection("usuarios").whereEqualTo("uid", uid).get().await()
-                    if (!query.isEmpty) {
-                        query.documents[0].reference.set(updates, SetOptions.merge()).await()
-                    }
+                    if (!query.isEmpty) query.documents[0].reference else null
+                }
+
+                if (userDocRef != null) {
+                    userDocRef.set(updates, SetOptions.merge()).await()
                 }
 
                 val updatedSessionUser = currentUserData.copy(
-                    correoAlternativo = emailVal,
-                    verificado = false
+                    verificado = false,
+                    accountHistory = newHistory,
+                    linkedAccounts = newLinked
                 )
                 userSession.saveUser(updatedSessionUser)
 
                 _uiState.value = AddEmailPasswordState.Success
             } catch (e: Exception) {
-                val msg = when {
-                    e.message?.contains("email-already-in-use") == true -> "El correo ya se encuentra registrado"
-                    e.message?.contains("requires-recent-login") == true -> "Por seguridad, vuelve a iniciar sesión antes de agregar contraseña"
-                    else -> e.localizedMessage ?: "Error al agregar correo y contraseña"
-                }
-                _uiState.value = AddEmailPasswordState.Error(msg)
+                _uiState.value = AddEmailPasswordState.Error(AccountUtils.parseAccountError(e, getApplication()))
             }
         }
     }

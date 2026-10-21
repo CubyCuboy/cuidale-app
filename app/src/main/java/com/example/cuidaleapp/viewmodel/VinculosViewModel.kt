@@ -97,7 +97,6 @@ class VinculosViewModel(application: Application) : AndroidViewModel(application
                 
                 _vinculosUsers.value = _vinculosUsers.value + fetchedUsers
             } catch (e: Exception) {
-                // Silent fail
             }
         }
     }
@@ -132,7 +131,6 @@ class VinculosViewModel(application: Application) : AndroidViewModel(application
 
                 db.collection("vinculos").document(id).set(nuevoVinculo).await()
 
-                // Crear notificación en Firestore para el receptor
                 db.collection("usuarios").whereEqualTo("uid", targetUid).get().addOnSuccessListener { query ->
                     if (!query.isEmpty) {
                         val notifRef = query.documents[0].reference.collection("notificaciones").document()
@@ -168,7 +166,6 @@ class VinculosViewModel(application: Application) : AndroidViewModel(application
                 val targetUid = uids.firstOrNull { it != myUid } ?: ""
 
                 if (targetUid.isNotEmpty()) {
-                    // Notificar al solicitante que su solicitud fue aceptada
                     db.collection("usuarios").whereEqualTo("uid", targetUid).get().addOnSuccessListener { query ->
                         if (!query.isEmpty) {
                             val notifRef = query.documents[0].reference.collection("notificaciones").document()

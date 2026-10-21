@@ -62,7 +62,11 @@ fun EmailVerificationScreen(
 
     val gradient = CuidaleThemeExtras.gradient
     val onGradientText = CuidaleThemeExtras.customColors.onGradient
-    val stepsLabels = listOf("Correo", "Verificación", "Listo")
+    val stepsLabels = listOf(
+        stringResource(R.string.verification_step_email),
+        stringResource(R.string.verification_step_code),
+        stringResource(R.string.verification_step_done)
+    )
     
     val currentStepIndex = when(uiState) {
         is VerificationUiState.Step1Email -> 0
@@ -103,7 +107,7 @@ fun EmailVerificationScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             Text(
-                text = "Verificación de Cuenta",
+                text = stringResource(R.string.verification_title_email),
                 style = MaterialTheme.typography.displaySmall,
                 color = onGradientText,
                 textAlign = TextAlign.Center
@@ -208,14 +212,14 @@ fun Step1Email(
             isError = error != null
         ) {
             Text(
-                text = "Ingresa tu correo para recibir un código de verificación.",
+                text = stringResource(R.string.verification_enter_email),
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center
             )
             
             Spacer(modifier = Modifier.height(24.dp))
 
-            InputFieldLabel("Correo electrónico")
+            InputFieldLabel(stringResource(R.string.forgot_password_email_label))
             
             if (error != null) {
                 Text(
@@ -244,7 +248,7 @@ fun Step1Email(
             CircularProgressIndicator(color = colors.primary, modifier = Modifier.padding(vertical = 8.dp))
         } else {
             HardShadowButton(
-                text = "Enviar Código",
+                text = stringResource(R.string.verification_send_button),
                 containerColor = colors.primary,
                 contentColor = colors.onPrimary,
                 shadowColor = panelShadowColor,
@@ -271,134 +275,23 @@ fun Step2Code(
     isLoading: Boolean,
     error: String? = null
 ) {
-    val colors = MaterialTheme.colorScheme
-    val shadows = CuidaleThemeExtras.shadows
-    val panelShadowColor = if (isDark) shadows.hardShadowAccent else shadows.hardShadowPrimary
-
-    val minutes = TimeUnit.MILLISECONDS.toMinutes(timeLeft)
-    val seconds = TimeUnit.MILLISECONDS.toSeconds(timeLeft) % 60
-    val timerText = String.format("%02d:%02d", minutes, seconds)
-
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        HardShadowPanel(
-            backgroundColor = CuidaleThemeExtras.customColors.panelBackground,
-            shadowColor = panelShadowColor,
-            isError = error != null
-        ) {
-            Text(
-                text = "Código de Verificación",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-            
-            Spacer(modifier = Modifier.height(16.dp))
-
-            val annotatedText = buildAnnotatedString {
-                append("Hemos enviado un código a ")
-                withStyle(style = SpanStyle(color = colors.primary, fontWeight = FontWeight.Bold)) {
-                    append(email)
-                }
-            }
-
-            Text(
-                text = annotatedText,
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-            
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                text = "Expira en: $timerText",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = if (timeLeft < 60000) colors.error else colors.onSurface,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            val attemptsColor by animateColorAsState(
-                targetValue = if (attemptsLeft <= 1) colors.error else colors.onSurface,
-                label = "attemptsColor"
-            )
-
-            Text(
-                text = "Intentos restantes: $attemptsLeft",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = attemptsColor,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            InputFieldLabel("Código de 6 dígitos")
-
-            if (error != null) {
-                Text(
-                    text = error,
-                    color = colors.error,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.ExtraBold),
-                    modifier = Modifier.padding(bottom = 12.dp).fillMaxWidth(),
-                    textAlign = TextAlign.Center
-                )
-            }
-
-            OtpInputField(
-                otpText = code,
-                onOtpTextChange = onCodeChange,
-                enabled = !isLoading,
-                isError = error != null
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "¿No recibiste el código?",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = colors.onSurface
-                )
-                Text(
-                    text = "Reenviar código",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                    color = CuidaleThemeExtras.customColors.linkColor,
-                    modifier = Modifier.clickable(enabled = !isLoading) { onResend() }
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        if (isLoading) {
-            CircularProgressIndicator(color = colors.primary, modifier = Modifier.padding(vertical = 8.dp))
-        } else {
-            HardShadowButton(
-                text = "Verificar",
-                containerColor = colors.primary,
-                contentColor = colors.onPrimary,
-                shadowColor = panelShadowColor,
-                icon = Icons.Default.CheckCircle,
-                isDark = isDark,
-                enabled = code.length == 6,
-                onClick = onVerify
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        HardShadowButton(
-            text = "Cancelar / Cambiar Correo",
-            containerColor = colors.secondary.copy(alpha = 0.8f),
-            contentColor = colors.onSecondary,
-            shadowColor = Color.Transparent,
-            icon = Icons.AutoMirrored.Filled.ArrowBack,
-            isDark = isDark,
-            onClick = onBack,
-            enabled = !isLoading
-        )
-    }
+    CodeVerificationStep(
+        title = "Código de Verificación",
+        targetLabel = "Hemos enviado un código a ",
+        targetValue = email,
+        code = code,
+        onCodeChange = onCodeChange,
+        timeLeft = timeLeft,
+        attemptsLeft = attemptsLeft,
+        onResend = onResend,
+        onVerify = onVerify,
+        onBack = onBack,
+        verifyLabel = "Verificar",
+        backLabel = "Cancelar / Cambiar Correo",
+        isDark = isDark,
+        isLoading = isLoading,
+        error = error
+    )
 }
 
 @Composable
@@ -419,7 +312,7 @@ fun FailureExhaustedContent(onRetry: () -> Unit, isDark: Boolean) {
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "Proceso fallido",
+                text = stringResource(R.string.verification_failed_title),
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                 color = colors.onErrorContainer,
                 textAlign = TextAlign.Center,
@@ -427,7 +320,7 @@ fun FailureExhaustedContent(onRetry: () -> Unit, isDark: Boolean) {
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Has agotado los intentos permitidos. Se enviará un nuevo código a tu correo para que lo intentes nuevamente.",
+                text = stringResource(R.string.verification_failed_desc),
                 style = MaterialTheme.typography.bodyLarge,
                 color = colors.onErrorContainer,
                 textAlign = TextAlign.Center
@@ -435,7 +328,7 @@ fun FailureExhaustedContent(onRetry: () -> Unit, isDark: Boolean) {
         }
         Spacer(modifier = Modifier.height(32.dp))
         HardShadowButton(
-            text = "Entendido, reintentar",
+            text = stringResource(R.string.verification_retry),
             containerColor = colors.primary,
             contentColor = colors.onPrimary,
             shadowColor = if (isDark) shadows.hardShadowAccent else shadows.hardShadowPrimary,
@@ -458,14 +351,14 @@ fun SuccessContent(onFinish: () -> Unit) {
         )
         Spacer(modifier = Modifier.height(24.dp))
         Text(
-            text = "¡Cuenta Verificada!",
+            text = stringResource(R.string.verification_success_title),
             style = MaterialTheme.typography.displaySmall,
             color = CuidaleThemeExtras.customColors.onGradient,
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(48.dp))
         HardShadowButton(
-            text = "Ir al Login",
+            text = stringResource(R.string.verification_go_login),
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
             shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowAccent else CuidaleThemeExtras.shadows.hardShadowPrimary,
@@ -486,7 +379,7 @@ fun ErrorContent(message: String, onRetry: () -> Unit, isDark: Boolean) {
         }
         Spacer(modifier = Modifier.height(32.dp))
         HardShadowButton(
-            text = "Reintentar",
+            text = stringResource(R.string.verification_retry_button),
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
             shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowAccent else CuidaleThemeExtras.shadows.hardShadowPrimary,

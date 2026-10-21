@@ -5,6 +5,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.functions.FirebaseFunctionsException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -80,7 +81,11 @@ class RecoveryViewModel : ViewModel() {
         viewModelScope.launch {
             _uiState.value = RecoveryUiState.Loading
             try {
-                val data = hashMapOf("email" to emailValue)
+                val currentUid = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+                val data = hashMapOf(
+                    "email" to emailValue,
+                    "uid" to currentUid
+                )
                 val result = functions
                     .getHttpsCallable("sendRecoveryCode")
                     .call(data)
@@ -118,7 +123,12 @@ class RecoveryViewModel : ViewModel() {
         viewModelScope.launch {
             _uiState.value = RecoveryUiState.Loading
             try {
-                val data = hashMapOf("email" to emailValue, "code" to codeValue)
+                val currentUid = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+                val data = hashMapOf(
+                    "email" to emailValue,
+                    "code" to codeValue,
+                    "uid" to currentUid
+                )
                 functions
                     .getHttpsCallable("verifyRecoveryCode")
                     .call(data)
@@ -127,15 +137,15 @@ class RecoveryViewModel : ViewModel() {
                 stopTimer()
                 _uiState.value = RecoveryUiState.CodeVerified
             } catch (e: Exception) {
-                if (e is FirebaseFunctionsException) {
-                    val remaining = e.details?.let { (it as Map<*, *>)["remaining"] as? Int }
-                    if (remaining != null) {
-                        _attemptsRemaining.value = remaining
-                    }
-                    _uiState.value = RecoveryUiState.Error(e.message ?: "Código incorrecto")
+                val remaining = if (e is FirebaseFunctionsException) {
+                    e.details?.let { (it as Map<*, *>)["remaining"] as? Int } ?: (_attemptsRemaining.value - 1)
                 } else {
-                    _uiState.value = RecoveryUiState.Error(e.localizedMessage ?: "Error de verificación")
+                    _attemptsRemaining.value - 1
                 }
+                _attemptsRemaining.value = remaining.coerceAtLeast(0)
+
+                val message = if (e is FirebaseFunctionsException) e.message else e.localizedMessage
+                _uiState.value = RecoveryUiState.Error(message ?: "Código incorrecto")
                 delay(3000)
                 if (_uiState.value is RecoveryUiState.Error) {
                     _uiState.value = RecoveryUiState.CodeSent
@@ -150,7 +160,12 @@ class RecoveryViewModel : ViewModel() {
         viewModelScope.launch {
             _uiState.value = RecoveryUiState.Loading
             try {
-                val data = hashMapOf("email" to emailValue, "newPassword" to newPassword)
+                val currentUid = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+                val data = hashMapOf(
+                    "email" to emailValue,
+                    "newPassword" to newPassword,
+                    "uid" to currentUid
+                )
                 functions
                     .getHttpsCallable("confirmPasswordReset")
                     .call(data)

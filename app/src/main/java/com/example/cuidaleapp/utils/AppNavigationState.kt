@@ -10,11 +10,25 @@ object AppNavigationState {
     private val _activeChatId = MutableStateFlow<String?>(null)
     val activeChatId = _activeChatId.asStateFlow()
 
+    private val _isAppVisible = MutableStateFlow(false)
+    val isAppVisible = _isAppVisible.asStateFlow()
+
+    private val _isScreenScrolled = MutableStateFlow(false)
+    val isScreenScrolled = _isScreenScrolled.asStateFlow()
+
     fun setScreen(screen: String) {
         _currentScreen.value = screen
     }
 
     fun setActiveChat(chatId: String?) {
         _activeChatId.value = chatId
+    }
+
+    fun setAppVisible(visible: Boolean) {
+        _isAppVisible.value = visible
+    }
+
+    fun setScreenScrolled(scrolled: Boolean) {
+        _isScreenScrolled.value = scrolled
     }
 }

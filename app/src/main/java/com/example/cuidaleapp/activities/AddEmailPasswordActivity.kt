@@ -8,7 +8,7 @@ import androidx.activity.viewModels
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import com.example.cuidaleapp.ui.screens.AddEmailPasswordScreen
-import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
+import com.example.cuidaleapp.ui.components.CuidaleAppRoot
 import com.example.cuidaleapp.viewmodel.AddEmailPasswordViewModel
 import com.example.cuidaleapp.viewmodel.LoginViewModel
 
@@ -23,7 +23,7 @@ class AddEmailPasswordActivity : ComponentActivity() {
         setContent {
             val isDark by loginViewModel.isDarkMode.collectAsState()
 
-            CuidaleAppTheme(darkTheme = isDark) {
+            CuidaleAppRoot(darkTheme = isDark) {
                 AddEmailPasswordScreen(
                     viewModel = viewModel,
                     onNavigateBack = { finish() },

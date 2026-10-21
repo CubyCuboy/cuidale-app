@@ -13,9 +13,8 @@ import androidx.compose.runtime.getValue
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import com.example.cuidaleapp.ui.components.CuidaleWelcomeLoading
+import com.example.cuidaleapp.ui.components.CuidaleAppRoot
 import com.example.cuidaleapp.ui.screens.LoginScreen
-import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
 import com.example.cuidaleapp.viewmodel.LoginUiState
 import com.example.cuidaleapp.viewmodel.LoginViewModel
 import com.google.android.gms.auth.api.signin.GoogleSignIn
@@ -28,30 +27,45 @@ class LoginActivity : ComponentActivity() {
     private val googleSignInLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
+        if (result.resultCode == RESULT_CANCELED) {
+            viewModel.clearError()
+            return@registerForActivityResult
+        }
         val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
         try {
             val account = task.getResult(ApiException::class.java)
             val idToken = account?.idToken
-            if (idToken != null) {
-                viewModel.loginWithGoogle(idToken, account.email, account.displayName)
+            val email = account?.email
+            if (!idToken.isNullOrBlank() && !email.isNullOrBlank()) {
+                viewModel.loginWithGoogle(idToken, email, account.displayName)
+            } else if (!email.isNullOrBlank()) {
+                viewModel.setError("No se pudo obtener el token de autenticación de Google.")
             } else {
-                viewModel.loginWithGoogle("", account?.email, account?.displayName)
+                viewModel.setError("No se pudo obtener la información de la cuenta de Google.")
             }
         } catch (e: ApiException) {
-            if (e.statusCode != 12501) {
+            if (e.statusCode != 12501 && e.statusCode != 16) {
                 viewModel.setError("Error en Google Sign-In: ${e.message}")
+            } else {
+                viewModel.clearError()
             }
         }
     }
 
     private fun startGoogleSignIn() {
+        viewModel.clearError()
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestIdToken("397845476517-4uhbn38sqf9lhu5b8r075r3ns3glfful.apps.googleusercontent.com")
             .requestEmail()
             .requestProfile()
             .build()
         val googleSignInClient = GoogleSignIn.getClient(this, gso)
-        googleSignInClient.signOut().addOnCompleteListener {
+        try {
+            googleSignInClient.signOut().addOnCompleteListener {
+                val signInIntent = googleSignInClient.signInIntent
+                googleSignInLauncher.launch(signInIntent)
+            }
+        } catch (_: Exception) {
             val signInIntent = googleSignInClient.signInIntent
             googleSignInLauncher.launch(signInIntent)
         }
@@ -60,6 +74,13 @@ class LoginActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // Login en modo inmersivo: oculta la barra de navegación del sistema
+        // (se muestra de forma transitoria al deslizar el borde).
+        val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+        insetsController.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        insetsController.hide(WindowInsetsCompat.Type.navigationBars())
 
         setContent {
             val isDark by viewModel.isDarkMode.collectAsState()
@@ -103,9 +124,9 @@ class LoginActivity : ComponentActivity() {
                 }
             }
             
-            CuidaleAppTheme(darkTheme = isDark) {
+            CuidaleAppRoot(darkTheme = isDark) {
                 if (uiState is LoginUiState.CheckingAuth) {
-                    CuidaleWelcomeLoading()
+                    com.example.cuidaleapp.ui.screens.LoginLoadingScreen()
                 } else {
                     LoginScreen(
                         isDark = isDark,
@@ -117,10 +138,12 @@ class LoginActivity : ComponentActivity() {
                         onRegister = {
                             startActivity(Intent(this@LoginActivity, RegisterActivity::class.java))
                         },
-                        onVerify = { email ->
-                            val intent = Intent(this@LoginActivity, EmailVerificationActivity::class.java)
-                            intent.putExtra("email", email)
-                            startActivity(intent)
+                        onVerify = { identifier ->
+                            viewModel.resolveEmailForVerification(identifier) { resolvedEmail ->
+                                val intent = Intent(this@LoginActivity, EmailVerificationActivity::class.java)
+                                intent.putExtra("email", resolvedEmail)
+                                startActivity(intent)
+                            }
                         },
                         onGoogleLogin = {
                             startGoogleSignIn()

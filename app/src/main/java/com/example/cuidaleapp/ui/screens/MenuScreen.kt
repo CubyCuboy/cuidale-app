@@ -85,7 +85,6 @@ fun MenuScreen(
         }
     }
 
-    // Scroll to Top visibility
     val showScrollToTop by remember {
         derivedStateOf { listState.firstVisibleItemIndex > 10 }
     }
@@ -93,12 +92,15 @@ fun MenuScreen(
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
+
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
                 .padding(horizontal = 24.dp)
         ) {
+
             val listTitle = if (userData.rol == "cuidador") "Pacientes" else "Cuidadores"
 
             Row(
@@ -276,7 +278,6 @@ fun MenuScreen(
                                                 }
                                             }
 
-                                            // Custom Dynamic Scrollbar
                                             CuidaleVerticalScrollbar(
                                                 lazyListState = listState,
                                                 modifier = Modifier
@@ -302,11 +303,10 @@ fun MenuScreen(
             }
         }
 
-        // Action Buttons Layer (Overlay)
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(bottom = 24.dp), // Height above bottom bar
+                .padding(bottom = 24.dp),
             contentAlignment = Alignment.BottomCenter
         ) {
             Row(
@@ -314,7 +314,6 @@ fun MenuScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Centered Scroll to Top Button (Hidden by weight if not visible)
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     androidx.compose.animation.AnimatedVisibility(
                         visible = showScrollToTop,
@@ -330,7 +329,6 @@ fun MenuScreen(
                     }
                 }
 
-                // Filter FAB at Bottom End
                 CuidaleCircularMenuButton(
                     onClick = { if (isOnline) showSearchSheet = true },
                     icon = {

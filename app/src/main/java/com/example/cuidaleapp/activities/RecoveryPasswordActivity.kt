@@ -12,7 +12,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.example.cuidaleapp.ui.screens.RecoveryPasswordScreen
-import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
+import com.example.cuidaleapp.ui.components.CuidaleAppRoot
 
 import androidx.activity.viewModels
 import androidx.compose.runtime.collectAsState
@@ -33,7 +33,7 @@ class RecoveryPasswordActivity : ComponentActivity() {
             val isDark by themeViewModel.isDarkMode.collectAsState()
             val fromProfile = intent.getBooleanExtra("FROM_PROFILE", false)
             
-            CuidaleAppTheme(darkTheme = isDark) {
+            CuidaleAppRoot(darkTheme = isDark) {
                 RecoveryPasswordScreen(
                     viewModel = recoveryViewModel,
                     onNavigateBack = { finish() },

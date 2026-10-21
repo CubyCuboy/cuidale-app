@@ -118,7 +118,7 @@ fun ReviewSolicitudScreen(
                 TextButton(onClick = {
                     viewModel.cancelarPostulacion(solicitud.id)
                     showCancelPostulationConfirm = false
-                    onNavigateBack() // Go back after canceling
+                    onNavigateBack()
                 }) { Text("SÍ, CANCELAR", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
@@ -200,7 +200,6 @@ fun ReviewSolicitudScreen(
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             } else if (patientFicha != null) {
                 
-                // Patient Header
                 Box(modifier = Modifier.fillMaxWidth().padding(top = 24.dp), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Surface(
@@ -248,7 +247,6 @@ fun ReviewSolicitudScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
                 
-                // Main Actions
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -285,7 +283,6 @@ fun ReviewSolicitudScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Section: Representante
                 HardShadowPanel(
                     backgroundColor = customColors.panelBackground,
                     shadowColor = Color.Black.copy(alpha = 0.05f),
@@ -320,7 +317,6 @@ fun ReviewSolicitudScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Section: Datos Médicos
                 HardShadowPanel(
                     backgroundColor = customColors.panelBackground,
                     shadowColor = Color.Black.copy(alpha = 0.05f),
@@ -355,7 +351,6 @@ fun ReviewSolicitudScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                // Section: Detalles del Servicio (Dirección/Horario)
                 HardShadowPanel(
                     backgroundColor = if (isDark) customColors.panelBackground else Color.White,
                     shadowColor = Color.Black.copy(alpha = 0.05f),
@@ -407,7 +402,6 @@ fun ReviewSolicitudScreen(
                     }
                 }
 
-                // 6. Tasks (Only if accepted)
                 if (isAccepted && patientTareas.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(24.dp))
                     Column(modifier = Modifier.padding(horizontal = 24.dp)) {

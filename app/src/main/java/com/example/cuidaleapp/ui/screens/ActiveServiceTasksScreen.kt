@@ -36,7 +36,7 @@ fun ActiveServiceTasksScreen(
     tareasViewModel: TareasViewModel,
     currentUserId: String,
     onNavigateBack: () -> Unit,
-    onNavigateToChat: (String, String, String?) -> Unit // chatId, otherUid, initialMsg
+    onNavigateToChat: (String, String, String?) -> Unit
 ) {
     val isOnline by ConnectivityObserver.isOnline.collectAsState()
     val tareasHoy by tareasViewModel.tareasHoy.collectAsState()
@@ -79,7 +79,6 @@ fun ActiveServiceTasksScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             Column {
-                ConnectivityBanner()
                 CenterAlignedTopAppBar(
                     title = { 
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -168,6 +167,9 @@ fun ActiveServiceTasksScreen(
                 .background(Brush.verticalGradient(listOf(gradient.top, gradient.bottom)))
                 .padding(innerPadding)
         ) {
+
+
+
             if (!isOnline && tareasHoy.isEmpty()) {
                 OfflinePlaceholder(subtitle = "No se pueden cargar las tareas sin conexión.")
             } else if (tareasHoy.isEmpty()) {

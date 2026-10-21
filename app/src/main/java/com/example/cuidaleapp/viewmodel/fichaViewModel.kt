@@ -337,7 +337,6 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     _resenas.value = list
                     
-                    // Calcular promedio y actualizar ficha localmente
                     if (list.isNotEmpty()) {
                         val promedio = list.map { it.calificacion }.average().toFloat()
                         val total = list.size

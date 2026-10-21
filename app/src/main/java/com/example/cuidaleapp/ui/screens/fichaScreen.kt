@@ -92,12 +92,15 @@ fun FichaScreen(
         Box(
             modifier = Modifier.fillMaxSize()
         ) {
+
+
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .imePadding()
                     .verticalScroll(scrollState)
             ) {
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -105,7 +108,6 @@ fun FichaScreen(
                         .statusBarsPadding()
                 ) {
                     Column {
-                        ConnectivityBanner()
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()

@@ -9,11 +9,19 @@ import androidx.activity.viewModels
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import com.example.cuidaleapp.ui.screens.SettingsScreen
-import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
+import com.example.cuidaleapp.ui.components.CuidaleAppRoot
+import com.example.cuidaleapp.viewmodel.ChatViewModel
 import com.example.cuidaleapp.viewmodel.ProfileViewModel
 
 class SettingsActivity : ComponentActivity() {
     private val viewModel: ProfileViewModel by viewModels()
+
+    override fun onResume() {
+        super.onResume()
+        com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.reload()?.addOnCompleteListener {
+            viewModel.refreshFromFirestore()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -22,7 +30,7 @@ class SettingsActivity : ComponentActivity() {
         setContent {
             val isDark by viewModel.isDarkMode.collectAsState()
 
-            CuidaleAppTheme(darkTheme = isDark) {
+            CuidaleAppRoot(darkTheme = isDark) {
                 SettingsScreen(
                     viewModel = viewModel,
                     isDark = isDark,
@@ -36,7 +44,8 @@ class SettingsActivity : ComponentActivity() {
                     },
                     onResetPass = {
                         startActivity(Intent(this, RecoveryPasswordActivity::class.java))
-                    }
+                    },
+                    chatViewModel = androidx.lifecycle.ViewModelProvider(this)[ChatViewModel::class.java]
                 )
             }
         }

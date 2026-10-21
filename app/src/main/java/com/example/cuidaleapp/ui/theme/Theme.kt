@@ -163,7 +163,7 @@ fun CuidaleAppTheme(
             onGradient = Color.White,
             panelBackground = panelBackground,
             panelGradient = panelGradient,
-            avatarBackground = Color(0xFF2C2F33), // Grey for dark
+            avatarBackground = Color(0xFF2C2F33),
             inputBackground = CuidaleSurfaceDark,
             linkColor = CuidaleLinkDark,
             aqua = CuidaleAquaDark,
@@ -180,7 +180,7 @@ fun CuidaleAppTheme(
             onGradient = Color(0xFF1A233A),
             panelBackground = panelBackground,
             panelGradient = panelGradient,
-            avatarBackground = Color(0xFFBBDEFB), // Soft blue for light theme avatars
+            avatarBackground = Color(0xFFBBDEFB),
             inputBackground = Color(0xFFE3F2FD),
             linkColor = CuidaleLinkLight,
             aqua = CuidaleAqua,

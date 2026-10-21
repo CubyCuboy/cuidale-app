@@ -82,8 +82,9 @@ fun SolicitudesScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
-        ConnectivityBanner()
-        
+
+
+
         PullToRefreshBox(
             state = pullToRefreshState,
             isRefreshing = isLoading,

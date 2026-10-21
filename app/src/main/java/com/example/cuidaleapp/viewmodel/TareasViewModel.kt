@@ -36,7 +36,7 @@ class TareasViewModel : ViewModel() {
         monitoringJob = viewModelScope.launch {
             while (true) {
                 verificarRecordatorios(context)
-                delay(60000) // Verificar cada minuto
+                delay(60000)
             }
         }
     }
@@ -64,18 +64,15 @@ class TareasViewModel : ViewModel() {
             val diffMillis = calendarTarea.timeInMillis - ahora.timeInMillis
             val diffMinutes = diffMillis / 60000
             
-            // Recordatorio 15 minutos antes
             if (diffMinutes in 14..15) {
                 val title = "Tarea Próxima: ${tarea.titulo}"
                 val body = "Inicia en 15 minutos (${tarea.horarioPrevisto})"
                 NotificationHelper.showNotification(context, title, body)
                 
-                // Persistir notificación en Firestore para ambos usuarios si aplica
                 val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
                 enviarNotificacionApp(uid, "recordatorio_tarea", title, body, mapOf("tareaId" to tarea.id, "solicitudId" to tarea.solicitudId))
             }
             
-            // Recordatorio de tarea pendiente (cada 30 min de retraso)
             if (diffMinutes < 0) {
                 val delayMinutes = -diffMinutes
                 if (delayMinutes > 0 && delayMinutes % 30 == 0L) {
@@ -105,7 +102,6 @@ class TareasViewModel : ViewModel() {
                     data = data
                 )
                 
-                // Se envía al usuario actual (el que tiene el monitoreo activo)
                 db.collection("usuarios").whereEqualTo("uid", emisor).get().addOnSuccessListener { query ->
                     if (!query.isEmpty) {
                         query.documents[0].reference.collection("notificaciones").document(notif.id).set(notif)
@@ -165,7 +161,6 @@ class TareasViewModel : ViewModel() {
             try {
                 val today = getTodayDate()
                 
-                // Evitar duplicados para la misma tarea el mismo día
                 val existing = db.collection("solicitudes").document(solicitudId)
                     .collection("registros_tareas")
                     .whereEqualTo("tareaId", tarea.id)
@@ -214,7 +209,6 @@ class TareasViewModel : ViewModel() {
                     val texto = "✅ Tarea finalizada ($hora): $titulo"
                     enviarMensajeSistemaChat(userId, otherUid, texto)
                     
-                    // Notificación en la pantalla de notificaciones para el otro usuario
                     enviarNotificacionAUsuario(otherUid, userId, "tarea_finalizada", "Tarea Finalizada", texto, mapOf("solicitudId" to solicitudId, "registroId" to registroId))
                 }
             } catch (e: Exception) {
@@ -243,7 +237,6 @@ class TareasViewModel : ViewModel() {
                     val texto = "⏳ Tarea postergada ($hora): $titulo\nMotivo: $motivo"
                     enviarMensajeSistemaChat(userId, otherUid, texto)
                     
-                    // Notificación en la pantalla de notificaciones para el otro usuario
                     enviarNotificacionAUsuario(otherUid, userId, "tarea_postergada", "Tarea Postergada", texto, mapOf("solicitudId" to solicitudId, "registroId" to registroId))
                 }
             } catch (e: Exception) {
@@ -300,16 +293,13 @@ class TareasViewModel : ViewModel() {
 
         viewModelScope.launch {
             try {
-                // Evitar múltiples ejecuciones el mismo día para no re-crear lo borrado
                 val solRef = db.collection("solicitudes").document(solicitudId)
                 val solDoc = solRef.get().await()
                 if (solDoc.getString("ultimaGeneracion") == today) return@launch
 
-                // 1. Obtener tareas actuales del servicio
                 var plantillas = solRef.collection("tareas_servicio")
                     .get().await().toObjects(Tarea::class.java)
 
-                // 2. Solo importar de la ficha si es la PRIMERA vez (nunca se ha generado nada)
                 if (solDoc.getString("ultimaGeneracion") == null && plantillas.isEmpty() && pacienteFichaId.isNotEmpty()) {
                     val fichaTareas = db.collection("fichas").document(pacienteFichaId)
                         .collection("rutina_data").document("actual").get().await()
@@ -338,7 +328,6 @@ class TareasViewModel : ViewModel() {
                     }
                 }
 
-                // 3. Filtrar cuáles deben ejecutarse HOY
                 val monthOfYear = calendar.get(Calendar.MONTH) + 1
                 val tareasParaHoy = plantillas.filter { tarea ->
                     when (tarea.frecuencia) {
@@ -355,14 +344,12 @@ class TareasViewModel : ViewModel() {
                     }
                 }
 
-                // 4. Obtener registros que YA existen para hoy
                 val existingRegistros = solRef.collection("registros_tareas")
                     .whereEqualTo("fecha", today)
                     .get().await().toObjects(RegistroTarea::class.java)
 
                 val batch = db.batch()
                 
-                // 5. Agregar solo las que NO existen o actualizar las existentes si cambiaron
                 tareasParaHoy.forEach { tarea ->
                     val existing = existingRegistros.find { it.tareaId == tarea.id }
                     
@@ -392,7 +379,6 @@ class TareasViewModel : ViewModel() {
                     }
                 }
                 
-                // 6. Eliminar registros de hoy que ya no están en la plantilla y NO están completados
                 val plantillasIds = plantillas.map { it.id }
                 existingRegistros.forEach { reg ->
                     if (!plantillasIds.contains(reg.tareaId) && !reg.completada) {
@@ -401,7 +387,6 @@ class TareasViewModel : ViewModel() {
                     }
                 }
 
-                // Marcar generación exitosa hoy
                 batch.update(solRef, "ultimaGeneracion", today)
 
                 batch.commit().await()
@@ -430,7 +415,6 @@ class TareasViewModel : ViewModel() {
                     .collection("tareas_servicio").document(tareaActiva.id)
                     .set(tareaActiva).await()
                 
-                // Actualizar lista local de plantillas
                 val currentPlantillas = _tareasPlantilla.value.toMutableList()
                 currentPlantillas.removeAll { it.id == tareaActiva.id }
                 currentPlantillas.add(tareaActiva)
@@ -471,7 +455,6 @@ class TareasViewModel : ViewModel() {
 
                 batch.commit().await()
                 
-                // Forzar actualización inmediata del estado local para evitar que reaparezcan
                 _tareasHoy.value = _tareasHoy.value.filter { reg -> 
                     !(tareaIds.contains(reg.tareaId) && !reg.completada)
                 }
@@ -503,7 +486,7 @@ class TareasViewModel : ViewModel() {
         val calendar = Calendar.getInstance()
         val dayOfWeek = calendar.get(Calendar.DAY_OF_WEEK)
         val dayOfMonth = calendar.get(Calendar.DAY_OF_MONTH)
-        val monthOfYear = calendar.get(Calendar.MONTH) + 1 // 1-12
+        val monthOfYear = calendar.get(Calendar.MONTH) + 1
         
         return when (tarea.frecuencia) {
             FrecuenciaTarea.DIARIA -> true

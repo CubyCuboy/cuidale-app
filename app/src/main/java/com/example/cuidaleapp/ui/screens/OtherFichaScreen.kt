@@ -202,6 +202,8 @@ fun OtherFichaScreen(
                 .padding(paddingValues)
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
         ) {
+
+
             if (otherProfileState is ProfileViewModel.RemoteState.Loading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = accentColor)
@@ -236,8 +238,7 @@ fun OtherFichaScreen(
                         .fillMaxSize()
                         .verticalScroll(scrollState)
                 ) {
-                    ConnectivityBanner()
-                    
+
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()

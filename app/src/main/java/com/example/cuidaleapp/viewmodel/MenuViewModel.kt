@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.cuidaleapp.data.UserSession
 import com.example.cuidaleapp.models.UserData
+import com.example.cuidaleapp.utils.AppCacheManager
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
@@ -99,6 +100,7 @@ class MenuViewModel(application: Application) : AndroidViewModel(application) {
     fun logout() {
         auth.signOut()
         userSession.clear()
+        AppCacheManager.clearAllExceptTheme(getApplication())
         _isLoggedOut.value = true
     }
 

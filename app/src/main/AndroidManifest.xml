@@ -59,7 +59,8 @@
             android:name=".activities.MenuActivity"
             android:exported="false"
             android:label="Menú Principal"
-            android:theme="@style/Theme.CuidaleApp" />
+            android:theme="@style/Theme.CuidaleApp"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode" />
 
         <activity
             android:name=".activities.RegisterActivity"
@@ -107,6 +108,12 @@
             android:name=".activities.AccountManagementActivity"
             android:exported="false"
             android:label="Gestión de Cuenta"
+            android:theme="@style/Theme.CuidaleApp" />
+
+        <activity
+            android:name=".activities.AccountHistoryActivity"
+            android:exported="false"
+            android:label="Historial de Cambios"
             android:theme="@style/Theme.CuidaleApp" />
 
         <activity

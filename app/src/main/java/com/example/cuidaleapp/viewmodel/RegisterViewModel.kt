@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.cuidaleapp.data.UserSession
 import com.example.cuidaleapp.models.UserData
+import com.example.cuidaleapp.utils.ErrorMessages
 import com.example.cuidaleapp.utils.HashUtils
 import com.example.cuidaleapp.utils.PhoneUtils
 import com.google.firebase.auth.FirebaseAuth
@@ -45,7 +46,6 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
         val cachedProvider = prefs.getString("incomplete_provider", "")
 
         if (cachedEmail == email && cachedProvider == provider) {
-            // Restore cached incomplete registration data
             _role.value = prefs.getString("incomplete_role", "cuidador") ?: "cuidador"
             _nombre.value = prefs.getString("incomplete_nombre", "") ?: ""
             _nombreS.value = prefs.getString("incomplete_nombre_s", "") ?: ""
@@ -82,7 +82,6 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
                 .apply()
         }
 
-        // Ensure ghost user document check in Firestore if needed
         viewModelScope.launch {
             try {
                 val query = db.collection("usuarios").whereEqualTo("uid", uid).get().await()
@@ -301,24 +300,25 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
 
     private fun parseErrorMessage(e: Exception): String {
         val msg = e.localizedMessage ?: e.message ?: ""
+        val app = getApplication<Application>()
         return when {
-            msg.contains("El RUT ya se encuentra registrado", ignoreCase = true) -> 
+            msg.contains("El RUT ya se encuentra registrado", ignoreCase = true) ->
                 "El RUT ingresado ya se encuentra registrado por otro usuario"
-            msg.contains("email-already-in-use", ignoreCase = true) || msg.contains("already in use", ignoreCase = true) -> 
-                "El correo electrónico ya se encuentra registrado"
-            msg.contains("network-request-failed", ignoreCase = true) || 
-            msg.contains("network", ignoreCase = true) || 
-            msg.contains("unavailable", ignoreCase = true) || 
-            msg.contains("host", ignoreCase = true) || 
-            e is com.google.firebase.FirebaseNetworkException || 
-            e is java.net.UnknownHostException || 
-            e is java.io.IOException -> 
-                "Error de conexión a internet. Revisa tu red e intenta nuevamente"
-            msg.contains("weak-password", ignoreCase = true) -> 
-                "La contraseña es muy débil. Debe tener al menos 8 caracteres"
-            msg.contains("PERMISSION_DENIED", ignoreCase = true) -> 
-                "Error de permisos en el servidor"
-            else -> if (msg.isNotBlank()) msg else "Error al procesar el registro"
+            msg.contains("email-already-in-use", ignoreCase = true) || msg.contains("already in use", ignoreCase = true) ->
+                app.getString(com.example.cuidaleapp.R.string.error_email_in_use)
+            msg.contains("network-request-failed", ignoreCase = true) ||
+            msg.contains("network", ignoreCase = true) ||
+            msg.contains("unavailable", ignoreCase = true) ||
+            msg.contains("host", ignoreCase = true) ||
+            e is com.google.firebase.FirebaseNetworkException ||
+            e is java.net.UnknownHostException ||
+            e is java.io.IOException ->
+                app.getString(com.example.cuidaleapp.R.string.error_network)
+            msg.contains("weak-password", ignoreCase = true) ->
+                app.getString(com.example.cuidaleapp.R.string.error_weak_password)
+            msg.contains("PERMISSION_DENIED", ignoreCase = true) ->
+                app.getString(com.example.cuidaleapp.R.string.error_permissions)
+            else -> ErrorMessages.get(app, msg)
         }
     }
 
@@ -363,6 +363,28 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
                 val result = auth.createUserWithEmailAndPassword(_email.value, _password.value).await()
                 val uid = result.user?.uid ?: throw Exception("No se pudo obtener el ID de usuario")
 
+                val now = System.currentTimeMillis()
+                val entryId = java.util.UUID.randomUUID().toString()
+                val initialEntry = com.example.cuidaleapp.models.AccountHistoryEntry(
+                    id = entryId,
+                    action = "account_created",
+                    title = "Cuenta Creada",
+                    description = "Creación e inicio de cuenta con Correo y Contraseña (${_email.value.trim().lowercase()})",
+                    timestamp = now
+                )
+                val initialHistory = listOf(initialEntry)
+
+                val nowTimestamp = com.google.firebase.Timestamp(now / 1000, 0)
+                val passwordEmail = _email.value.trim().lowercase()
+                val initialLinked = listOf(
+                    com.example.cuidaleapp.models.LinkedAccountDetail(
+                        providerId = "email",
+                        providerName = "Correo y Contraseña",
+                        accountName = passwordEmail,
+                        linkedAt = now,
+                        verificado = false
+                    )
+                )
                 val userData = hashMapOf(
                     "uid" to uid,
                     "rol" to _role.value,
@@ -378,10 +400,38 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
                     "comuna" to _comuna.value,
                     "verificado" to false,
                     "completado" to true,
-                    "createdAt" to com.google.firebase.Timestamp.now()
+                    "linkedAccounts" to initialLinked,
+                    "accountHistory" to initialHistory,
+                    "createdAt" to nowTimestamp,
+                    "updatedAt" to nowTimestamp
                 )
 
-                db.collection("usuarios").document(hashedRut).set(userData).await()
+                val userDocRef = db.collection("usuarios").document(hashedRut)
+                userDocRef.set(userData).await()
+
+                val userObj = UserData(
+                    uid = uid,
+                    rol = _role.value,
+                    nombre = _nombre.value.trim(),
+                    nombre_s = _nombreS.value.trim(),
+                    apellido_pa = _apellidoPa.value.trim(),
+                    apellido_ma = _apellidoMa.value.trim(),
+                    correo = _email.value.trim().lowercase(),
+                    rut = formattedRut,
+                    telefono = PhoneUtils.formatChileanPhone(_telefono.value),
+                    region = _region.value,
+                    id_region = _idRegion.value,
+                    comuna = _comuna.value,
+                    verificado = false,
+                    completado = true,
+                    createdAt = nowTimestamp,
+                    updatedAt = nowTimestamp,
+                    linkedAccounts = initialLinked,
+                    accountHistory = initialHistory
+                )
+                UserSession(getApplication()).saveUser(userObj)
+                auth.signOut()
+
                 _uiState.value = RegisterUiState.Success
             } catch (e: Exception) {
                 _uiState.value = RegisterUiState.Error(parseErrorMessage(e))
@@ -404,6 +454,41 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
                     }
                 }
 
+                val now = System.currentTimeMillis()
+                val nowTimestamp = com.google.firebase.Timestamp(now / 1000, 0)
+                val entryId = java.util.UUID.randomUUID().toString()
+                val prefs = getApplication<Application>().getSharedPreferences("cuidale_prefs", Context.MODE_PRIVATE)
+                val providerId = prefs.getString("incomplete_provider", "")?.ifBlank { null } ?: "external"
+                val providerName = when (providerId) {
+                    "microsoft.com" -> "Microsoft"
+                    "google.com" -> "Google"
+                    else -> providerId
+                }
+
+                val initialEntry = com.example.cuidaleapp.models.AccountHistoryEntry(
+                    id = entryId,
+                    action = "account_created",
+                    title = "Cuenta Creada",
+                    description = "Creación e inicio de cuenta con $providerName (${_email.value.trim().lowercase()})",
+                    timestamp = now
+                )
+                val initialHistory = listOf(initialEntry)
+
+                val providerIdCanonical = when (providerId.trim().lowercase()) {
+                    "google.com", "google" -> "google.com"
+                    "microsoft.com", "microsoft" -> "microsoft.com"
+                    else -> providerId
+                }
+                val initialLinked = listOf(
+                    com.example.cuidaleapp.models.LinkedAccountDetail(
+                        providerId = providerIdCanonical,
+                        providerName = providerName,
+                        accountName = _email.value.trim().lowercase(),
+                        linkedAt = now,
+                        verificado = true
+                    )
+                )
+
                 val userData = hashMapOf(
                     "uid" to externalUid,
                     "rol" to _role.value,
@@ -419,12 +504,15 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
                     "comuna" to _comuna.value,
                     "verificado" to true,
                     "completado" to true,
-                    "updatedAt" to com.google.firebase.Timestamp.now()
+                    "linkedAccounts" to initialLinked,
+                    "accountHistory" to initialHistory,
+                    "createdAt" to nowTimestamp,
+                    "updatedAt" to nowTimestamp
                 )
 
-                db.collection("usuarios").document(hashedRut).set(userData, com.google.firebase.firestore.SetOptions.merge()).await()
+                val userDocRef = db.collection("usuarios").document(hashedRut)
+                userDocRef.set(userData, com.google.firebase.firestore.SetOptions.merge()).await()
 
-                // Limpiar cualquier documento temporal con el UID como ID
                 try {
                     val tempDoc = db.collection("usuarios").document(externalUid).get().await()
                     if (tempDoc.exists() && externalUid != hashedRut) {
@@ -448,7 +536,11 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
                     id_region = _idRegion.value,
                     comuna = _comuna.value,
                     verificado = true,
-                    completado = true
+                    completado = true,
+                    createdAt = nowTimestamp,
+                    updatedAt = nowTimestamp,
+                    linkedAccounts = initialLinked,
+                    accountHistory = initialHistory
                 )
                 UserSession(getApplication()).saveUser(userObj)
 

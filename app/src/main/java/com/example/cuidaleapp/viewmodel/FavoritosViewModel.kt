@@ -77,7 +77,6 @@ class FavoritosViewModel(application: Application) : AndroidViewModel(applicatio
                     _managedUsers.value = emptyList()
                 }
             } catch (e: Exception) {
-                // Silent fail
             }
         }
     }
@@ -95,7 +94,6 @@ class FavoritosViewModel(application: Application) : AndroidViewModel(applicatio
                 loadSocialData()
                 _uiState.value = FavoritosUiState.Success(if (isFav) "Eliminado de favoritos" else "Añadido a favoritos")
                 
-                // Si lo añadimos a favoritos, automáticamente lo guardamos también si no estaba
                 if (!isFav && !_guardados.value.contains(targetUid)) {
                     userRef.update("guardados", FieldValue.arrayUnion(targetUid)).await()
                 }
@@ -150,7 +148,6 @@ class FavoritosViewModel(application: Application) : AndroidViewModel(applicatio
             try {
                 val userRef = getMyUserDocRef(myUid) ?: throw Exception("Usuario no encontrado")
                 if (!isBlocked) {
-                    // Si estamos bloqueando, eliminamos de favoritos y guardados
                     userRef.update(
                         mapOf(
                             "bloqueados" to FieldValue.arrayUnion(targetUid),
@@ -159,7 +156,6 @@ class FavoritosViewModel(application: Application) : AndroidViewModel(applicatio
                         )
                     ).await()
                     
-                    // Cancelar servicios activos entre ambos
                     val sols1 = db.collection("solicitudes")
                         .whereEqualTo("representanteUid", myUid)
                         .whereEqualTo("cuidadorUid", targetUid)
@@ -174,7 +170,6 @@ class FavoritosViewModel(application: Application) : AndroidViewModel(applicatio
                         doc.reference.delete()
                     }
                     
-                    // También eliminar vínculo si existe
                     val vinculoId = if (myUid < targetUid) "${myUid}_$targetUid" else "${targetUid}_$myUid"
                     db.collection("vinculos").document(vinculoId).delete()
 

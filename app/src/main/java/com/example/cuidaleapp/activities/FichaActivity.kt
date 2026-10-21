@@ -11,7 +11,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.example.cuidaleapp.ui.screens.FichaScreen
-import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
+import com.example.cuidaleapp.ui.components.CuidaleAppRoot
 import com.example.cuidaleapp.viewmodel.FichaViewModel
 import com.example.cuidaleapp.viewmodel.ProfileViewModel
 
@@ -28,7 +28,7 @@ class FichaActivity : ComponentActivity() {
         setContent {
             val isDark by profileViewModel.isDarkMode.collectAsState()
 
-            CuidaleAppTheme(darkTheme = isDark) {
+            CuidaleAppRoot(darkTheme = isDark) {
                 FichaScreen(
                     viewModel = fichaViewModel,
                     profileViewModel = profileViewModel,

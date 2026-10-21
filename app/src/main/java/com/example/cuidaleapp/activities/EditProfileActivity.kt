@@ -11,7 +11,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.example.cuidaleapp.ui.screens.EditProfileScreen
-import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
+import com.example.cuidaleapp.ui.components.CuidaleAppRoot
 import com.example.cuidaleapp.viewmodel.ProfileViewModel
 
 class EditProfileActivity : ComponentActivity() {
@@ -24,7 +24,7 @@ class EditProfileActivity : ComponentActivity() {
         setContent {
             val isDark by viewModel.isDarkMode.collectAsState()
 
-            CuidaleAppTheme(darkTheme = isDark) {
+            CuidaleAppRoot(darkTheme = isDark) {
                 EditProfileScreen(
                     viewModel = viewModel,
                     onNavigateBack = { finish() }

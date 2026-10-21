@@ -2,6 +2,9 @@ package com.example.cuidaleapp.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -26,6 +29,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.input.key.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 
 @Composable
@@ -122,37 +126,65 @@ fun CuidaleTextField(
 
 @Composable
 fun OtpInputField(otpText: String, onOtpTextChange: (String) -> Unit, modifier: Modifier = Modifier, otpCount: Int = 6, isError: Boolean = false, enabled: Boolean = true) {
-    val focusRequesters = remember { List(otpCount) { FocusRequester() } }
-    LaunchedEffect(Unit) { if (enabled && otpText.length < otpCount) focusRequesters[otpText.length].requestFocus() }
-    BasicTextField(
-        value = otpText,
-        onValueChange = { if (it.length <= otpCount && it.all { char -> char.isDigit() }) onOtpTextChange(it) },
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        enabled = enabled,
-        decorationBox = {
-            Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
-                repeat(otpCount) { index ->
-                    val char = when { index >= otpText.length -> "" else -> otpText[index].toString() }
-                    val isFocused = index == otpText.length
-                    OtpCharBox(
-                        char = char,
-                        isFocused = isFocused && enabled,
-                        isError = isError,
-                        isDark = CuidaleThemeExtras.customColors.isDark,
-                        modifier = Modifier.weight(1f).focusRequester(focusRequesters[index])
-                    )
+    Box(
+        modifier = modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center
+    ) {
+        BasicTextField(
+            value = otpText,
+            onValueChange = {
+                val filtered = it.filter { char -> char.isDigit() }.take(otpCount)
+                onOtpTextChange(filtered)
+            },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+            enabled = enabled,
+            modifier = Modifier
+                .matchParentSize()
+                .alpha(0.01f),
+            singleLine = true
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            repeat(otpCount) { index ->
+                val char = when {
+                    index >= otpText.length -> ""
+                    else -> otpText[index].toString()
                 }
+                val isFocused = index == otpText.length || (index == otpCount - 1 && otpText.length == otpCount)
+                OtpCharBox(
+                    char = char,
+                    isFocused = isFocused && enabled,
+                    isError = isError,
+                    isDark = CuidaleThemeExtras.customColors.isDark,
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
-    )
+    }
 }
 
 @Composable
 private fun OtpCharBox(char: String, isFocused: Boolean, isError: Boolean, isDark: Boolean, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
     val customColors = CuidaleThemeExtras.customColors
-    val borderColor by animateColorAsState(targetValue = when { isError -> colors.error; isFocused -> colors.primary; else -> if (isDark) Color.White.copy(alpha = 0.35f) else colors.outline.copy(alpha = 0.25f) }, label = "otpBorderColor")
-    val borderWidth by animateDpAsState(targetValue = if (isFocused || isError) 2.dp else 1.dp, label = "otpBorderWidth")
+    val borderColor by animateColorAsState(
+        targetValue = when { 
+            isError -> colors.error
+            isFocused -> colors.primary
+            else -> if (isDark) Color.White.copy(alpha = 0.35f) else colors.outline.copy(alpha = 0.25f) 
+        },
+        animationSpec = tween(300, easing = FastOutSlowInEasing),
+        label = "otpBorderColor"
+    )
+    val borderWidth by animateDpAsState(
+        targetValue = if (isFocused || isError) 2.dp else 1.dp,
+        animationSpec = tween(300, easing = FastOutSlowInEasing),
+        label = "otpBorderWidth"
+    )
     Box(
         modifier = modifier.aspectRatio(1f).clip(RoundedCornerShape(12.dp)).background(customColors.inputBackground).border(borderWidth, borderColor, RoundedCornerShape(12.dp)),
         contentAlignment = Alignment.Center

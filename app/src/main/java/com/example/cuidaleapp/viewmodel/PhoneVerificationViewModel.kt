@@ -46,6 +46,9 @@ class PhoneVerificationViewModel(application: Application) : AndroidViewModel(ap
     private val _timeLeft = MutableStateFlow(0L)
     val timeLeft: StateFlow<Long> = _timeLeft.asStateFlow()
 
+    private val _attemptsLeft = MutableStateFlow(5)
+    val attemptsLeft: StateFlow<Int> = _attemptsLeft.asStateFlow()
+
     private var verificationId: String? = null
     private var resendToken: PhoneAuthProvider.ForceResendingToken? = null
     private var timerJob: Job? = null
@@ -59,13 +62,9 @@ class PhoneVerificationViewModel(application: Application) : AndroidViewModel(ap
 
     fun onPhoneChange(newPhone: String) {
         val clean = newPhone.replace(Regex("[^0-9]"), "")
-        // If the user starts typing '9', limit to 9 digits. 
-        // If they pasted something with 56, we can handle it but let's keep it simple: 
-        // always limit to 9 digits as per requirement "must be strictly 9-digit Chilean format".
         if (clean.length <= 9) {
             _phoneNumber.value = clean
         } else if (clean.startsWith("56") && clean.length <= 11) {
-            // Allow typing/pasting 56 + 9 digits but we'll trim it to the last 9 in the state
             _phoneNumber.value = clean.takeLast(9)
         }
 
@@ -96,7 +95,6 @@ class PhoneVerificationViewModel(application: Application) : AndroidViewModel(ap
 
         val callbacks = object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
             override fun onVerificationCompleted(credential: PhoneAuthCredential) {
-                // This callback will be invoked in some cases of automatic verification
                 viewModelScope.launch {
                     signInWithPhoneAuthCredential(credential)
                 }
@@ -112,8 +110,10 @@ class PhoneVerificationViewModel(application: Application) : AndroidViewModel(ap
             ) {
                 this@PhoneVerificationViewModel.verificationId = verificationId
                 this@PhoneVerificationViewModel.resendToken = token
+                _attemptsLeft.value = 5
+                _code.value = ""
                 _uiState.value = PhoneVerificationUiState.Step2Code
-                startTimer(60000) // 60 seconds
+                startTimer(60000)
             }
         }
 
@@ -127,6 +127,16 @@ class PhoneVerificationViewModel(application: Application) : AndroidViewModel(ap
     }
 
     fun verifyCode() {
+        if (_attemptsLeft.value <= 0) {
+            _uiState.value = PhoneVerificationUiState.Error("Has agotado los intentos permitidos.")
+            return
+        }
+
+        if (_timeLeft.value <= 0L) {
+            _uiState.value = PhoneVerificationUiState.Error("El código ha caducado. Solicita uno nuevo.")
+            return
+        }
+
         val codeStr = _code.value
         val id = verificationId
 
@@ -143,16 +153,8 @@ class PhoneVerificationViewModel(application: Application) : AndroidViewModel(ap
     private fun signInWithPhoneAuthCredential(credential: PhoneAuthCredential) {
         viewModelScope.launch {
             try {
-                // Note: Standard Phone Auth signs in or links. 
-                // Since user is already signed in (presumably), we might want to link or just update the DB.
-                // For this app, if we assume the user is already logged in with email, we verify the phone.
-                
                 val user = auth.currentUser
                 if (user != null) {
-                    // We don't necessarily need to call linkWithCredential if we only want to mark it as verified in Firestore
-                    // But standard way is to link. However, linking might fail if phone is already used.
-                    
-                    // Update Firestore
                     val formattedPhone = PhoneUtils.formatChileanPhone(_phoneNumber.value)
                     val updates = mapOf(
                         "telefonoVerificado" to true,
@@ -160,19 +162,30 @@ class PhoneVerificationViewModel(application: Application) : AndroidViewModel(ap
                     )
 
                     val currentUserData = userSession.getUser()
-                    if (currentUserData.rut.isNotBlank()) {
+                    val userDocRef = if (currentUserData.rut.isNotBlank()) {
                         val hashedRut = com.example.cuidaleapp.utils.HashUtils.hashRut(currentUserData.rut)
                         db.collection("usuarios").document(hashedRut)
-                            .set(updates, com.google.firebase.firestore.SetOptions.merge())
-                            .await()
                     } else {
                         val query = db.collection("usuarios").whereEqualTo("uid", user.uid).get().await()
-                        if (!query.isEmpty) {
-                            query.documents[0].reference.set(updates, com.google.firebase.firestore.SetOptions.merge()).await()
-                        }
+                        if (!query.isEmpty) query.documents[0].reference else null
+                    }
+
+                    userDocRef?.set(updates, com.google.firebase.firestore.SetOptions.merge())?.await()
+
+                    val notifRef = userDocRef?.collection("notificaciones")?.document()
+                    if (notifRef != null) {
+                        val notif = mapOf(
+                            "id" to notifRef.id,
+                            "tipo" to "configuracion_cuenta",
+                            "emisor" to user.uid,
+                            "receptor" to user.uid,
+                            "timestamp" to System.currentTimeMillis(),
+                            "leida" to false,
+                            "data" to mapOf("title" to "Verificación de Teléfono", "text" to "Tu número de teléfono ha sido verificado con éxito vía SMS.")
+                        )
+                        notifRef.set(notif).await()
                     }
                     
-                    // Update Local Session
                     userSession.saveUser(currentUserData.copy(telefono = formattedPhone, telefonoVerificado = true))
                     
                     _uiState.value = PhoneVerificationUiState.Success
@@ -180,7 +193,13 @@ class PhoneVerificationViewModel(application: Application) : AndroidViewModel(ap
                     _uiState.value = PhoneVerificationUiState.Error("Usuario no autenticado")
                 }
             } catch (e: Exception) {
-                _uiState.value = PhoneVerificationUiState.Error(e.localizedMessage ?: "Error al verificar código")
+                _attemptsLeft.value = (_attemptsLeft.value - 1).coerceAtLeast(0)
+                val message = if (_attemptsLeft.value <= 0) {
+                    "Has agotado los intentos permitidos. Solicita un nuevo código."
+                } else {
+                    e.localizedMessage ?: "Error al verificar código"
+                }
+                _uiState.value = PhoneVerificationUiState.Error(message)
             }
         }
     }
@@ -195,12 +214,14 @@ class PhoneVerificationViewModel(application: Application) : AndroidViewModel(ap
                 remaining -= 1000
             }
             _timeLeft.value = 0
+            _code.value = ""
         }
     }
 
     fun resetToStep1() {
         _uiState.value = PhoneVerificationUiState.Step1Phone
         _code.value = ""
+        _attemptsLeft.value = 5
         verificationId = null
     }
 }

@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.cuidaleapp.ui.components.ConnectivityBanner
 import com.example.cuidaleapp.ui.components.CuidaleBottomBar
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import androidx.compose.foundation.clickable
@@ -87,6 +88,9 @@ fun ChatsScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
+
+
+
         CenterAlignedTopAppBar(
             title = { Text("MENSAJES", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = Color.White) },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
@@ -164,7 +168,8 @@ fun ChatsScreen(
                     onLongClick = {
                         chatToMenu = it
                         showChatMenu = true
-                    }
+                    },
+                    onMarkRead = { chatId -> chatViewModel.clearChatNotifications(chatId) }
                 )
                 1 -> RequestListSection(
                     vinculos = misVinculos,
@@ -250,7 +255,8 @@ fun ChatListSection(
     bloqueados: List<String>,
     isDark: Boolean,
     onChatClick: (String, UserData) -> Unit,
-    onLongClick: (ChatViewModel.ChatPreview) -> Unit
+    onLongClick: (ChatViewModel.ChatPreview) -> Unit,
+    onMarkRead: (String) -> Unit
 ) {
     if (chatList.isEmpty()) {
         EmptyState("No tienes mensajes aún", Icons.Default.ChatBubbleOutline)
@@ -268,6 +274,7 @@ fun ChatListSection(
                     isDark = isDark,
                     onClick = { onChatClick(chat.chatId, chat.otherUser) },
                     onLongClick = { onLongClick(chat) },
+                    onMarkRead = onMarkRead,
                     context = LocalContext.current
                 )
             }
@@ -285,6 +292,7 @@ fun ChatCard(
     isDark: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    onMarkRead: (String) -> Unit,
     context: android.content.Context
 ) {
     val customColors = CuidaleThemeExtras.customColors
@@ -303,7 +311,7 @@ fun ChatCard(
         ) {
             Box(modifier = Modifier.size(52.dp)) {
                 Surface(modifier = Modifier.fillMaxSize(), shape = CircleShape, color = Color.White.copy(alpha = 0.2f)) {
-                    if (chat.otherUser.fotoUrl.isNotEmpty()) {
+                    if (chat.otherUser.fotoUrl.isNotBlank() && chat.otherUser.fotoUrl != "n/a") {
                         AsyncImage(
                             model = ImageRequest.Builder(context)
                                 .data(chat.otherUser.fotoUrl)
@@ -364,6 +372,9 @@ fun ChatCard(
                         isBlocked -> "Usuario bloqueado"
                         isTyping -> "escribiendo..."
                         chat.lastMessage?.deleted == true -> "Mensaje eliminado"
+                        chat.lastMessage?.imageUrl != null -> "📷 Foto"
+                        chat.lastMessage?.videoUrl != null -> "🎬 Video"
+                        chat.lastMessage?.fileUrl != null -> "📄 ${chat.lastMessage.fileName ?: "Documento"}"
                         else -> chat.lastMessage?.text ?: "Inicia un chat"
                     }
                     val textColor = if (isTyping) MaterialTheme.colorScheme.primary else Color.Gray
@@ -383,6 +394,13 @@ fun ChatCard(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(chat.unreadCount.toString(), color = Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        }
+                        IconButton(onClick = { onMarkRead(chat.chatId) }) {
+                            Icon(
+                                Icons.Default.DoneAll,
+                                contentDescription = "Marcar como leído",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
                         }
                     }
                 }
@@ -504,7 +522,6 @@ fun BlockedListSection(bloqueados: List<String>, managedUsers: List<UserData>, i
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(
                                 onClick = { 
-                                    // Chat ID logic
                                     val myUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
                                     val chatId = if (myUid < user.uid) "${myUid}_${user.uid}" else "${user.uid}_$myUid"
                                     onChatClick(chatId, user)

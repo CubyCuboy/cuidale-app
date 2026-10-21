@@ -3,13 +3,12 @@ package com.example.cuidaleapp.ui.theme
 import androidx.compose.ui.graphics.Color
 
 
-// Light Theme - "Vitality & Trust" Healthcare Palette
-val CuidaleBlueTopLight = Color(0xFF48CAE4)  // More vibrant sky blue
-val CuidaleBlueBottomLight = Color(0xFF0077B6)  // Strong blue
-val CuidaleSurfaceLight = Color(0xFFADE8F4)  // Less white, more aqua
-val CuidaleSurfaceSoftLight = Color(0xFF90E0EF)  // Even more aqua
+val CuidaleBlueTopLight = Color(0xFF48CAE4)
+val CuidaleBlueBottomLight = Color(0xFF0077B6)
+val CuidaleSurfaceLight = Color(0xFFADE8F4)
+val CuidaleSurfaceSoftLight = Color(0xFF90E0EF)
 val CuidaleSurfaceSoftLightVariant = Color(0xFF48CAE4)
-val CuidalePrimaryLight = Color(0xFF03045E)  // Navy primary
+val CuidalePrimaryLight = Color(0xFF03045E)
 val CuidalePrimaryVariantLight = Color(0xFF023E8A)
 val CuidaleOnPrimaryLight = Color(0xFFFFFFFF)
 val CuidaleOnSurfaceLight = Color(0xFF03045E)
@@ -27,7 +26,6 @@ val CuidaleShadowBlueLight = Color(0xFF03045E).copy(alpha = 0.3f)
 val CuidaleShadowMintLight = Color(0xFF2A9D8F).copy(alpha = 0.3f)
 val CuidaleShadowLavenderLight = Color(0xFF7209B7).copy(alpha = 0.3f)
 
-// Green & Lime accents
 val CuidaleAqua = Color(0xFF00D2D3)
 val CuidaleLime = Color(0xFFCCFF00)
 val CuidaleMint = Color(0xFF1DD1A1)

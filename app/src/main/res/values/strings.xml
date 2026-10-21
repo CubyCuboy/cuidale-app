@@ -174,4 +174,63 @@
     <string name="search_filter_commune">Filtrar por comuna</string>
     <string name="search_max_communes">Máximo 3 comunas</string>
     <string name="search_empty_results">No se encontraron resultados para los filtros seleccionados.</string>
+
+    <!-- Errores genéricos -->
+    <string name="error_generic">Ocurrió un error inesperado. Inténtalo nuevamente.</string>
+    <string name="error_network">Error de conexión a internet. Revisa tu red e intenta nuevamente.</string>
+    <string name="error_permissions">Error de permisos en el servidor. Inténtalo nuevamente.</string>
+    <string name="error_invalid_email">Correo electrónico no válido.</string>
+    <string name="error_invalid_rut">RUT inválido. Usa el formato 12.345.678-9.</string>
+    <string name="error_invalid_code">El código debe ser de 6 dígitos.</string>
+    <string name="error_code_incorrect">Código incorrecto. Verifica e intenta nuevamente.</string>
+    <string name="error_code_expired">El código ha caducado. Solicita uno nuevo.</string>
+    <string name="error_attempts_exhausted">Has agotado los intentos permitidos. Solicita un nuevo código.</string>
+    <string name="error_fields_required">Todos los campos son obligatorios.</string>
+    <string name="error_user_not_found">Usuario no encontrado.</string>
+    <string name="error_credentials">Credenciales incorrectas. Verifica tus datos e intenta nuevamente.</string>
+    <string name="error_email_in_use">El correo electrónico ya se encuentra registrado.</string>
+    <string name="error_weak_password">La contraseña es muy débil. Debe tener al menos 8 caracteres, una mayúscula y un carácter especial.</string>
+    <string name="error_recent_login">Por seguridad, debes cerrar sesión y volver a ingresar antes de realizar esta acción.</string>
+
+    <!-- Verificación: correo y teléfono -->
+    <string name="verification_title_email">Verificación de Cuenta</string>
+    <string name="verification_title_phone">Verificación de Teléfono</string>
+    <string name="verification_step_email">Correo</string>
+    <string name="verification_step_code">Verificación</string>
+    <string name="verification_step_done">Listo</string>
+    <string name="verification_step_phone">Número</string>
+    <string name="verification_send_button">Enviar Código</string>
+    <string name="verification_verify_button">Verificar</string>
+    <string name="verification_verify_phone_button">Verificar Número</string>
+    <string name="verification_cancel_button">Cancelar / Cambiar Correo</string>
+    <string name="verification_change_phone_button">Cambiar número de teléfono</string>
+    <string name="verification_code_title">Código de Verificación</string>
+    <string name="verification_phone_code_title">Código de SMS</string>
+    <string name="verification_code_sent_to">Hemos enviado un código a </string>
+    <string name="verification_code_sent_phone">Hemos enviado un código al +56 </string>
+    <string name="verification_code_expires">Expira en: %1$s</string>
+    <string name="verification_attempts_left">Intentos restantes: %1$d</string>
+    <string name="verification_otp_label">Código de 6 dígitos</string>
+    <string name="verification_not_received">¿No recibiste el código?</string>
+    <string name="verification_resend">Reenviar código</string>
+    <string name="verification_resend_in">Reenviar en %1$s</string>
+    <string name="verification_enter_email">Ingresa tu correo para recibir un código de verificación.</string>
+    <string name="verification_success_title">¡Cuenta Verificada!</string>
+    <string name="verification_success_phone_title">¡Teléfono Verificado!</string>
+    <string name="verification_failed_title">Proceso fallido</string>
+    <string name="verification_failed_desc">Has agotado los intentos permitidos. Se enviará un nuevo código a tu correo para que lo intentes nuevamente.</string>
+    <string name="verification_retry">Entendido, reintentar</string>
+    <string name="verification_go_login">Ir al Login</string>
+    <string name="verification_retry_button">Reintentar</string>
+
+    <!-- Notificaciones in-app -->
+    <string name="notification_dismiss">Cerrar</string>
+    <string name="notification_chat">Nuevo Mensaje</string>
+    <string name="notification_chat_body">Tienes un nuevo mensaje sin leer en el chat.</string>
+    <string name="notification_request">Nueva Solicitud de Vínculo</string>
+    <string name="notification_request_body">Un usuario desea conectar contigo para coordinar cuidados.</string>
+    <string name="notification_accept">¡Solicitud Aceptada!</string>
+    <string name="notification_accept_body">Tu solicitud fue aceptada. Ya puedes chatear.</string>
+    <string name="notification_generic">Notificación de CuidaleApp</string>
+    <string name="notification_generic_body">Tienes una nueva actualización en la aplicación.</string>
 </resources>

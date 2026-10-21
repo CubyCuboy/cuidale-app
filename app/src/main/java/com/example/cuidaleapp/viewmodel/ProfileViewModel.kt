@@ -74,6 +74,10 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     private var statusListener: ValueEventListener? = null
     private var otherProfileListener: com.google.firebase.firestore.ListenerRegistration? = null
     private var myProfileListener: com.google.firebase.firestore.ListenerRegistration? = null
+    private var historyListener: com.google.firebase.firestore.ListenerRegistration? = null
+
+    private val _accountHistory = MutableStateFlow<List<com.example.cuidaleapp.models.AccountHistoryEntry>>(emptyList())
+    val accountHistory: StateFlow<List<com.example.cuidaleapp.models.AccountHistoryEntry>> = _accountHistory.asStateFlow()
 
     private val _photoUpdateTrigger = MutableStateFlow(0L)
     val photoUpdateTrigger: StateFlow<Long> = _photoUpdateTrigger.asStateFlow()
@@ -89,6 +93,37 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         startMyProfileListener()
     }
 
+    private fun applyLinkedAccountsMigration(user: UserData, snapshot: com.google.firebase.firestore.DocumentSnapshot): UserData {
+        if (!user.linkedAccounts.isEmpty()) return user
+        try {
+            val rawMap = snapshot.get("providerTimestamps") as? Map<*, *> ?: return user
+            val rawTimestamps = mutableMapOf<String, Long>()
+            rawMap.forEach { (k, v) ->
+                if (k is String && v != null) {
+                    when (v) {
+                        is Number -> rawTimestamps[k] = v.toLong()
+                        is String -> v.toLongOrNull()?.let { rawTimestamps[k] = it }
+                        is Map<*, *> -> {
+                            val firstNum = v.values.firstOrNull { it is Number } as? Number
+                            if (firstNum != null) rawTimestamps[k] = firstNum.toLong()
+                        }
+                    }
+                }
+            }
+            if (rawTimestamps.isEmpty()) return user
+            val migrated = com.example.cuidaleapp.utils.AccountUtils.migrateLegacyToLinkedAccounts(
+                user.linkedAccounts,
+                rawTimestamps,
+                user.correo,
+                user.verificado
+            )
+            return user.copy(linkedAccounts = migrated)
+        } catch (e: Exception) {
+            android.util.Log.e("ProfileViewModel", "Error migrating legacy linked accounts: ${e.message}")
+            return user
+        }
+    }
+
     private fun startMyProfileListener() {
         val uid = auth.currentUser?.uid ?: return
         val rut = userSession.getUser().rut
@@ -96,23 +131,34 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
 
         if (rut.isNotBlank()) {
             val hashedRut = HashUtils.hashRut(rut)
-            myProfileListener = db.collection("usuarios").document(hashedRut)
-                .addSnapshotListener { snapshot, e ->
-                    if (e != null || snapshot == null || !snapshot.exists()) return@addSnapshotListener
-                    val user = snapshot.toObject(UserData::class.java)?.copy(uid = uid)
-                    if (user != null) {
-                        userSession.saveUser(user)
-                        _userData.value = user
-                    }
+            val userDocRef = db.collection("usuarios").document(hashedRut)
+            myProfileListener = userDocRef.addSnapshotListener { snapshot, e ->
+                if (e != null || snapshot == null || !snapshot.exists()) return@addSnapshotListener
+                val user = snapshot.toObject(UserData::class.java)
+                    ?.copy(uid = uid)
+                    ?.let { applyLinkedAccountsMigration(it, snapshot) }
+                if (user != null) {
+                    val sortedHistory = user.accountHistory.sortedByDescending { it.timestamp }
+                    _accountHistory.value = sortedHistory
+                    val updatedUser = user.copy(accountHistory = sortedHistory)
+                    userSession.saveUser(updatedUser)
+                    _userData.value = updatedUser
                 }
+            }
         } else {
             myProfileListener = db.collection("usuarios").whereEqualTo("uid", uid)
                 .addSnapshotListener { snapshot, e ->
                     if (e != null || snapshot == null || snapshot.isEmpty) return@addSnapshotListener
-                    val user = snapshot.documents[0].toObject(UserData::class.java)?.copy(uid = uid)
+                    val doc = snapshot.documents[0]
+                    val user = doc.toObject(UserData::class.java)
+                        ?.copy(uid = uid)
+                        ?.let { applyLinkedAccountsMigration(it, doc) }
                     if (user != null) {
-                        userSession.saveUser(user)
-                        _userData.value = user
+                        val sortedHistory = user.accountHistory.sortedByDescending { it.timestamp }
+                        _accountHistory.value = sortedHistory
+                        val updatedUser = user.copy(accountHistory = sortedHistory)
+                        userSession.saveUser(updatedUser)
+                        _userData.value = updatedUser
                     }
                 }
         }
@@ -134,17 +180,32 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             _isRefreshing.value = true
             try {
                 val rut = userSession.getUser().rut
-                val remoteUser = if (rut.isNotBlank()) {
+                val userDocRef = if (rut.isNotBlank()) {
                     val hashedRut = HashUtils.hashRut(rut)
-                    val document = db.collection("usuarios").document(hashedRut).get().await()
-                    document.toObject(UserData::class.java)?.copy(uid = uid)
+                    db.collection("usuarios").document(hashedRut)
                 } else {
                     val query = db.collection("usuarios").whereEqualTo("uid", uid).get().await()
-                    if (!query.isEmpty) query.documents[0].toObject(UserData::class.java)?.copy(uid = uid) else null
+                    if (!query.isEmpty) query.documents[0].reference else null
                 }
-                if (remoteUser != null) {
-                    userSession.saveUser(remoteUser)
-                    _userData.value = remoteUser
+
+                if (userDocRef != null) {
+                    val document = kotlinx.coroutines.withTimeoutOrNull(8000L) { userDocRef.get().await() }
+                    if (document != null) {
+                        val remoteUser = document.toObject(UserData::class.java)
+                            ?.copy(uid = uid)
+                            ?.let { applyLinkedAccountsMigration(it, document) }
+                        if (remoteUser != null) {
+                            val sortedHistory = remoteUser.accountHistory.sortedByDescending { it.timestamp }
+                            _accountHistory.value = sortedHistory
+                            val finalUser = remoteUser.copy(accountHistory = sortedHistory)
+                            userSession.saveUser(finalUser)
+                            _userData.value = finalUser
+
+                            if (document.get("linkedAccounts") == null && finalUser.linkedAccounts.isNotEmpty()) {
+                                userDocRef.set(mapOf("linkedAccounts" to finalUser.linkedAccounts), com.google.firebase.firestore.SetOptions.merge()).await()
+                            }
+                        }
+                    }
                 }
             } catch (e: Exception) {
                 _userData.value = userSession.getUser()
@@ -163,11 +224,9 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             try {
                 val context = getApplication<Application>()
                 
-                // Compresión para asegurar los < 5MB de tus reglas
                 val compressedBytes = com.example.cuidaleapp.utils.ImageUtils.getCompressedImage(context, uri) 
                     ?: throw Exception("No se pudo procesar la imagen")
                 
-                // Nombre único para evitar caché de navegador/app
                 val filename = "profile_${System.currentTimeMillis()}.jpg"
                 val ref = storage.reference.child("profiles/$uid/$filename")
                 
@@ -175,14 +234,11 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     .setContentType("image/jpeg")
                     .build()
 
-                // Subida física
                 ref.putBytes(compressedBytes, metadata).await()
                 val downloadUrl = ref.downloadUrl.await().toString()
 
-                // Actualización en Firestore
                 updateFirestoreUser(uid, mapOf("fotoUrl" to downloadUrl))
 
-                // Sincronizar con Ficha solo si es Cuidador
                 if (_userData.value.rol == "cuidador") {
                     try {
                         val fichaRef = db.collection("fichas").document(uid)
@@ -195,7 +251,6 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     }
                 }
 
-                // Borrar rastro de la anterior en Storage
                 if (oldPhotoUrl.isNotEmpty() && oldPhotoUrl.contains("firebasestorage.googleapis.com")) {
                     try {
                         val oldRef = storage.getReferenceFromUrl(oldPhotoUrl)
@@ -205,13 +260,12 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     }
                 }
 
-                // Forzamos actualización local por si el listener tarda unos ms
                 val updatedUser = _userData.value.copy(fotoUrl = downloadUrl)
                 userSession.saveUser(updatedUser)
                 _userData.value = updatedUser
+                logAccountHistory("photo_upload", "Foto de Perfil Actualizada", "Has cambiado tu foto de perfil correctamente.")
                 
                 _remoteState.value = RemoteState.Success
-                // Reset inmediato para permitir siguientes acciones
                 kotlinx.coroutines.delay(500)
                 _remoteState.value = RemoteState.Idle
             } catch (e: Exception) {
@@ -229,7 +283,6 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             try {
                 updateFirestoreUser(uid, mapOf("fotoUrl" to ""))
 
-                // Sincronizar con Ficha
                 if (_userData.value.rol == "cuidador") {
                     try {
                         val fichaRef = db.collection("fichas").document(uid)
@@ -264,7 +317,6 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             try {
                 var finalPhotoUrl = updatedUser.fotoUrl
 
-                // 1. Manejo de foto (Subir nueva o Marcar para eliminar)
                 if (newPhotoUri != null) {
                     val context = getApplication<Application>()
                     val compressedBytes = com.example.cuidaleapp.utils.ImageUtils.getCompressedImage(context, newPhotoUri)
@@ -277,11 +329,9 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                         .setContentType("image/jpeg")
                         .build()
 
-                    // Subida física
                     ref.putBytes(compressedBytes, metadata).await()
                     val newDownloadUrl = ref.downloadUrl.await().toString()
 
-                    // Intentar borrar la vieja (ignoramos error si las reglas lo bloquean)
                     if (finalPhotoUrl.isNotEmpty() && finalPhotoUrl.contains("firebasestorage.googleapis.com")) {
                         try {
                             storage.getReferenceFromUrl(finalPhotoUrl).delete().await()
@@ -291,7 +341,6 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     }
                     finalPhotoUrl = newDownloadUrl
                 } else if (shouldDeleteOld) {
-                    // Borrado solicitado por el usuario
                     if (finalPhotoUrl.isNotEmpty() && finalPhotoUrl.contains("firebasestorage.googleapis.com")) {
                         try {
                             storage.getReferenceFromUrl(finalPhotoUrl).delete().await()
@@ -302,7 +351,6 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     finalPhotoUrl = ""
                 }
 
-                // 2. Actualizar Firestore
                 val sanitizedPhone = PhoneUtils.formatChileanPhone(updatedUser.telefono)
                 val userMap = mapOf(
                     "nombre" to updatedUser.nombre,
@@ -318,7 +366,6 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
 
                 updateFirestoreUser(uid, userMap)
 
-                // Sincronizar con Ficha solo si es Cuidador
                 if (updatedUser.rol == "cuidador") {
                     try {
                         val fichaRef = db.collection("fichas").document(uid)
@@ -336,7 +383,6 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     }
                 }
                 
-                // Forzar actualización local para que la UI no parpadee
                 val finalUser = updatedUser.copy(telefono = sanitizedPhone, fotoUrl = finalPhotoUrl)
                 userSession.saveUser(finalUser)
                 _userData.value = finalUser
@@ -371,7 +417,6 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 )
                 updateFirestoreUser(uid, userMap)
 
-                // Sincronizar con Ficha solo si es Cuidador
                 if (updatedUser.rol == "cuidador") {
                     try {
                         val fichaRef = db.collection("fichas").document(uid)
@@ -389,7 +434,10 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 }
                 userSession.saveUser(finalUser)
                 _userData.value = finalUser
+                logAccountHistory("profile_update", "Actualización de Perfil", "Has modificado la información de tu perfil correctamente.")
                 _remoteState.value = RemoteState.Success
+                kotlinx.coroutines.delay(400)
+                _remoteState.value = RemoteState.Idle
             } catch (e: Exception) {
                 _remoteState.value = RemoteState.Error(e.message ?: "Error al actualizar perfil")
             }
@@ -407,7 +455,6 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             _otherProfileState.value = RemoteState.Loading
             _otherFichaState.value = FichaState.Loading
             
-            // Listener en tiempo real para que los cambios de otros se reflejen al instante
             otherProfileListener = db.collection("usuarios").whereEqualTo("uid", targetUid)
                 .addSnapshotListener { snapshot, e ->
                     if (e != null) {
@@ -434,7 +481,6 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     _otherProfileState.value = RemoteState.Success
                 }
 
-            // Carga de ficha y tareas (mantenemos lógica de carga inicial)
             try {
                 val fichaDoc = db.collection("fichas").document(targetUid).get().await()
                 if (fichaDoc.exists()) {
@@ -465,9 +511,110 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         _userData.value = userSession.getUser()
     }
 
+    fun logAccountHistory(action: String, title: String, description: String) {
+        val uid = auth.currentUser?.uid ?: return
+        viewModelScope.launch {
+            try {
+                val db = FirebaseFirestore.getInstance()
+                val entryId = java.util.UUID.randomUUID().toString()
+                val entry = com.example.cuidaleapp.models.AccountHistoryEntry(
+                    id = entryId,
+                    action = action,
+                    title = title,
+                    description = description,
+                    timestamp = System.currentTimeMillis()
+                )
+
+                val updatedLocalList = (listOf(entry) + _accountHistory.value).distinctBy { it.id }.sortedByDescending { it.timestamp }
+                _accountHistory.value = updatedLocalList
+                val currentUser = _userData.value
+                val updatedUser = currentUser.copy(accountHistory = updatedLocalList)
+                _userData.value = updatedUser
+                userSession.saveUser(updatedUser)
+
+                val query = db.collection("usuarios").whereEqualTo("uid", uid).get().await()
+                val userDocRef = if (!query.isEmpty) {
+                    query.documents[0].reference
+                } else {
+                    val rut = userSession.getUser().rut
+                    if (rut.isNotBlank()) {
+                        val hashedRut = HashUtils.hashRut(rut)
+                        db.collection("usuarios").document(hashedRut)
+                    } else null
+                }
+                
+                if (userDocRef != null) {
+                    userDocRef.set(mapOf("accountHistory" to updatedLocalList), SetOptions.merge()).await()
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ProfileViewModel", "Error logging history: ${e.message}")
+            }
+        }
+    }
+
+    fun deleteHistoryEntry(entryId: String) {
+        val uid = auth.currentUser?.uid ?: return
+        viewModelScope.launch {
+            try {
+                val updatedLocalList = _accountHistory.value.filter { it.id != entryId }
+                _accountHistory.value = updatedLocalList
+                val currentUser = _userData.value
+                val updatedUser = currentUser.copy(accountHistory = updatedLocalList)
+                _userData.value = updatedUser
+                userSession.saveUser(updatedUser)
+
+                val db = FirebaseFirestore.getInstance()
+                val query = db.collection("usuarios").whereEqualTo("uid", uid).get().await()
+                val userDocRef = if (!query.isEmpty) query.documents[0].reference else {
+                    val rut = userSession.getUser().rut
+                    if (rut.isNotBlank()) {
+                        val hashedRut = HashUtils.hashRut(rut)
+                        db.collection("usuarios").document(hashedRut)
+                    } else null
+                }
+                
+                if (userDocRef != null) {
+                    userDocRef.update("accountHistory", updatedLocalList).await()
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ProfileViewModel", "Error deleting history entry: ${e.message}")
+            }
+        }
+    }
+
+    fun clearAllHistory() {
+        val uid = auth.currentUser?.uid ?: return
+        viewModelScope.launch {
+            try {
+                _accountHistory.value = emptyList()
+                val currentUser = _userData.value
+                val updatedUser = currentUser.copy(accountHistory = emptyList())
+                _userData.value = updatedUser
+                userSession.saveUser(updatedUser)
+
+                val db = FirebaseFirestore.getInstance()
+                val query = db.collection("usuarios").whereEqualTo("uid", uid).get().await()
+                val userDocRef = if (!query.isEmpty) query.documents[0].reference else {
+                    val rut = userSession.getUser().rut
+                    if (rut.isNotBlank()) {
+                        val hashedRut = HashUtils.hashRut(rut)
+                        db.collection("usuarios").document(hashedRut)
+                    } else null
+                }
+                
+                if (userDocRef != null) {
+                    userDocRef.update("accountHistory", emptyList<Any>()).await()
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ProfileViewModel", "Error clearing history: ${e.message}")
+            }
+        }
+    }
+
     fun logout(onComplete: () -> Unit) {
         auth.signOut()
         userSession.clear()
+        com.example.cuidaleapp.utils.AppCacheManager.clearAllExceptTheme(getApplication())
         onComplete()
     }
 
@@ -475,6 +622,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         super.onCleared()
         myProfileListener?.remove()
         otherProfileListener?.remove()
+        historyListener?.remove()
         statusListener?.let { listener ->
             _otherUserData.value?.uid?.let { uid ->
                 rtdb.child("status").child(uid).removeEventListener(listener)

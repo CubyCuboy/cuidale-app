@@ -102,7 +102,6 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                         .sortedByDescending { it.createdAt }
                     _misSolicitudes.value = list
                     
-                    // Always refresh applications listening when requests change
                     listenToPostulaciones(list.map { it.id })
                 }
             }
@@ -120,7 +119,6 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                     .sortedByDescending { it.createdAt }
                 _misSolicitudes.value = list
                 
-                // Refresh applications for these requests
                 val solIds = list.map { it.id }
                 if (solIds.isNotEmpty()) {
                     val postSnapshot = db.collection("postulaciones")
@@ -200,19 +198,14 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                     viewModelScope.launch {
                         val result = mutableListOf<Pair<SolicitudCuidado, PostulacionCuidado>>()
                         postulaciones.forEach { post ->
-                            // Mostramos postulaciones pendientes o rechazadas. 
-                            // Las aceptadas ya aparecen en la sección de "Servicios Activos"
                             if (post.estado == "pendiente" || post.estado == "rechazada") {
                                 val solDoc = db.collection("solicitudes").document(post.solicitudId).get().await()
                                 val sol = solDoc.toObject(SolicitudCuidado::class.java)
                                 
-                                // Si la solicitud fue eliminada, no la mostramos
                                 if (sol != null) {
-                                    // Para las pendientes, solo las mostramos si la solicitud sigue abierta
                                     if (post.estado == "pendiente" && sol.estado == "abierta") {
                                         result.add(sol to post)
                                     } 
-                                    // Para las rechazadas, las mostramos siempre para que el usuario sepa
                                     else if (post.estado == "rechazada") {
                                         result.add(sol to post)
                                     }
@@ -284,7 +277,6 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             try {
                 db.collection("solicitudes").document(id).delete().await()
-                // Also delete applications? User didn't specify but good practice
                 val postulaciones = db.collection("postulaciones").whereEqualTo("solicitudId", id).get().await()
                 for (doc in postulaciones.documents) {
                     doc.reference.delete().await()
@@ -313,7 +305,6 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                 
                 db.collection("postulaciones").document(id).set(postulacion).await()
                 
-                // 1. Notify representative (Notification collection)
                 db.collection("usuarios").whereEqualTo("uid", solicitud.representanteUid).get().addOnSuccessListener { targetQuery ->
                     if (!targetQuery.isEmpty) {
                         val notifRef = targetQuery.documents[0].reference.collection("notificaciones").document()
@@ -329,7 +320,6 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                     }
                 }
 
-                // 2. Send Message to Chat
                 try {
                     val chatId = if (uid < solicitud.representanteUid) "${uid}_${solicitud.representanteUid}" else "${solicitud.representanteUid}_$uid"
                     val chatMsgRef = com.google.firebase.database.FirebaseDatabase.getInstance().reference
@@ -351,10 +341,9 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                 } catch (e: Exception) { }
                 
             } catch (e: Exception) { 
-                // Log application error
             } finally {
                 _isLoading.value = false
-                onReady() // Always call onReady to allow redirection even if partial fail
+                onReady()
             }
         }
     }
@@ -371,7 +360,6 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                // 1. Establish vínculo (Bidirectional connection)
                 val myUid = solicitud.representanteUid
                 val targetUid = postulacion.cuidadorUid
                 val vinculoId = if (myUid < targetUid) "${myUid}_$targetUid" else "${targetUid}_$myUid"
@@ -387,7 +375,6 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                 )
                 db.collection("vinculos").document(vinculoId).set(vinculo).await()
 
-                // 2. Assign caregiver to request and close it
                 db.collection("solicitudes").document(solicitud.id).update(
                     mapOf(
                         "cuidadorUid" to targetUid,
@@ -398,10 +385,8 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                     )
                 ).await()
 
-                // 3. Mark application as accepted
                 db.collection("postulaciones").document(postulacion.id).update("estado", "aceptada").await()
 
-                // 4. Reject other candidates for this specific request
                 val otherPostulaciones = db.collection("postulaciones")
                     .whereEqualTo("solicitudId", solicitud.id)
                     .get().await()
@@ -412,7 +397,6 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                     }
                 }
 
-                // 5. Notify caregiver
                 db.collection("usuarios").whereEqualTo("uid", targetUid).get().addOnSuccessListener { targetQuery ->
                     if (!targetQuery.isEmpty) {
                         val notifRef = targetQuery.documents[0].reference.collection("notificaciones").document()
@@ -442,7 +426,6 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
         
         viewModelScope.launch {
             try {
-                // Check if already deleted/finalized by other party
                 val check = db.collection("solicitudes").document(solicitud.id).get().await()
                 if (!check.exists()) {
                     finalizingIds.remove(solicitud.id)
@@ -450,10 +433,8 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                     return@launch
                 }
 
-                // 1. Create history record before deleting
                 val histId = UUID.randomUUID().toString()
                 
-                // Get caregiver specialty for history
                 val cuidadorDoc = db.collection("fichas").document(solicitud.cuidadorUid ?: "").get().await()
                 val especialidad = cuidadorDoc.getString("especializacion") ?: "No especificada"
                 val pacienteDoc = db.collection("fichas").document(solicitud.pacienteFichaId).get().await()
@@ -476,20 +457,16 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                 )
                 db.collection("historial_servicios").document(histId).set(historial).await()
 
-                // 2. Delete request and applications
                 db.collection("solicitudes").document(solicitud.id).delete().await()
                 
-                // Cleanup applications for this request
                 try {
                     val postSnapshot = db.collection("postulaciones").whereEqualTo("solicitudId", solicitud.id).get().await()
                     for (doc in postSnapshot.documents) {
                         doc.reference.delete().await()
                     }
                 } catch (e: Exception) {
-                    // Non-critical cleanup error
                 }
 
-                // 3. Notify parties
                 val receptor = if (currentUid == solicitud.representanteUid) solicitud.cuidadorUid else solicitud.representanteUid
                 if (receptor != null) {
                     db.collection("usuarios").whereEqualTo("uid", receptor).get().addOnSuccessListener { targetQuery ->

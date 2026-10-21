@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.cuidaleapp.R
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
+import kotlinx.coroutines.delay
 
 @Composable
 fun shimmerBrush(
@@ -63,6 +64,28 @@ fun shimmerBrush(
             end = Offset.Zero
         )
     }
+}
+
+@Composable
+fun AnimatedLoadingDots(
+    text: String = "Cargando",
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.onSurface
+) {
+    var dots by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(400)
+            dots = (dots + 1) % 4
+        }
+    }
+    Text(
+        text = "$text${ ".".repeat(dots)}",
+        modifier = modifier,
+        color = color,
+        fontWeight = FontWeight.Bold,
+        style = MaterialTheme.typography.bodyLarge
+    )
 }
 
 @Composable

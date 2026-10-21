@@ -64,7 +64,6 @@ fun SocialManagementScreen(
         containerColor = Color.Transparent,
         topBar = {
             Column(modifier = Modifier.background(customColors.panelBackground)) {
-                ConnectivityBanner()
                 TopAppBar(
                     title = { Text("Red de Contactos", fontWeight = FontWeight.Black) },
                     navigationIcon = {
@@ -97,13 +96,16 @@ fun SocialManagementScreen(
         }
     ) { paddingValues ->
         Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+
+
+
             AnimatedContent(
                 targetState = selectedTab,
                 transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(300)) },
                 label = "socialTabContent"
             ) { targetTab ->
                 when (targetTab) {
-                    0 -> { // Contactos (Vínculos Aceptados)
+                    0 -> {
                         val acceptedVinculos = misVinculos.filter { it.estado == "aceptado" }
                         if (acceptedVinculos.isEmpty()) {
                             SocialEmptyState(Icons.Default.People, "Aún no tienes contactos", "Conecta con cuidadores o familias para que aparezcan aquí.")
@@ -117,19 +119,19 @@ fun SocialManagementScreen(
                             }
                         }
                     }
-                    1 -> { // Favoritos
+                    1 -> {
                         val users = managedUsers.filter { favoritos.contains(it.uid) }
                         SocialUserList(users, Icons.Default.Star, "Sin favoritos", "Marca perfiles con una estrella para tenerlos siempre a mano.", onUserClick, favoritosViewModel)
                     }
-                    2 -> { // Guardados
+                    2 -> {
                         val users = managedUsers.filter { guardados.contains(it.uid) }
                         SocialUserList(users, Icons.Default.Bookmark, "Nada guardado", "Guarda perfiles que te interesen para revisarlos después.", onUserClick, favoritosViewModel)
                     }
-                    3 -> { // No deseados
+                    3 -> {
                         val users = managedUsers.filter { noDeseados.contains(it.uid) }
                         SocialUserList(users, Icons.Default.VisibilityOff, "Lista limpia", "Aquí aparecerán los perfiles que decidiste no volver a ver.", onUserClick, favoritosViewModel)
                     }
-                    4 -> { // Bloqueados
+                    4 -> {
                         val users = managedUsers.filter { bloqueados.contains(it.uid) }
                         SocialUserList(users, Icons.Default.Block, "Sin bloqueos", "Usuarios bloqueados no podrán contactarte ni ver tu perfil.", onUserClick, favoritosViewModel)
                     }
