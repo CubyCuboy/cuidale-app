@@ -56,6 +56,7 @@ sealed class MenuNavigation {
     data class ServiceReport(val informe: com.example.cuidaleapp.models.InformeTurno) : MenuNavigation()
     object History : MenuNavigation()
     object SocialManagement : MenuNavigation()
+    object MapaCuidadores : MenuNavigation()
     data class OtherFicha(val uid: String, val returnTo: MenuNavigation = Main) : MenuNavigation()
     data class Chat(val chatId: String, val otherUid: String, val otherUser: UserData? = null, val returnTo: MenuNavigation = Chats, val initialMessage: String? = null) : MenuNavigation()
 }
@@ -189,6 +190,7 @@ class MenuActivity : ComponentActivity() {
                     Notifications -> "NOTIFICATIONS"
                     SocialManagement -> "SOCIAL"
                     History -> "HISTORY"
+                    MapaCuidadores -> "MAPA_CUIDADORES"
                     is OtherFicha -> "OTHER_FICHA"
                     is Chat -> "CHAT"
                     Requests -> "REQUESTS"
@@ -240,6 +242,7 @@ class MenuActivity : ComponentActivity() {
                     is Chat -> cs.returnTo
                     is OtherFicha -> cs.returnTo
                     SocialManagement -> Profile
+                    MapaCuidadores -> Main
                     Main -> Main
                 }
             }
@@ -313,6 +316,10 @@ class MenuActivity : ComponentActivity() {
                                                 onSocialClick = {
                                                     scope.launch { drawerState.close() }
                                                     currentScreen = SocialManagement
+                                                },
+                                                onMapClick = {
+                                                    scope.launch { drawerState.close() }
+                                                    currentScreen = MapaCuidadores
                                                 },
                                                 onSettingsClick = {
                                                     scope.launch { drawerState.close() }
@@ -427,7 +434,14 @@ class MenuActivity : ComponentActivity() {
                                                                 searchViewModel = searchViewModel,
                                                                 fichaState = fichaState,
                                                                 onViewFicha = { currentScreen = Ficha(startInEditMode = false, returnTo = Main) },
-                                                                onUserClick = { uid -> currentScreen = OtherFicha(uid, returnTo = Main) }
+                                                                onUserClick = { uid -> currentScreen = OtherFicha(uid, returnTo = Main) },
+                                                                onMapClick = { currentScreen = MapaCuidadores }
+                                                            )
+                                                        }
+                                                        MapaCuidadores -> {
+                                                            MapaCuidadoresScreen(
+                                                                onNavigateBack = { currentScreen = Main },
+                                                                onUserClick = { uid -> currentScreen = OtherFicha(uid, returnTo = MapaCuidadores) }
                                                             )
                                                         }
                                                         Profile -> {

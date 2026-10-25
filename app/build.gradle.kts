@@ -90,6 +90,11 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
 
+    // Mapas y Ubicación (Mapbox v11 y Play Services Location)
+    implementation("com.mapbox.maps:android:11.10.0")
+    implementation("com.mapbox.extension:maps-compose:11.10.0")
+    implementation("com.google.android.gms:play-services-location:21.3.0")
+
     // Media3
     implementation("androidx.media3:media3-exoplayer:1.5.1")
     implementation("androidx.media3:media3-ui:1.5.1")
