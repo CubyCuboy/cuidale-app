@@ -454,7 +454,22 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             _otherProfileState.value = RemoteState.Loading
             _otherFichaState.value = FichaState.Loading
-            
+
+            // Escucha de estado en tiempo real: se registra de inmediato para que el perfil
+            // muestre el estado real aunque la ficha tarde en cargar.
+            statusListener = object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    _otherUserStatus.value = snapshot.child("estado").getValue(String::class.java) ?: "desconectado"
+                }
+                override fun onCancelled(error: DatabaseError) {}
+            }
+            rtdb.child("status").child(targetUid).addValueEventListener(statusListener!!)
+            // Valor inicial rápido (one-shot) en caso de que el listener tarde en entregar datos.
+            runCatching {
+                val snap = rtdb.child("status").child(targetUid).get().await()
+                _otherUserStatus.value = snap.child("estado").getValue(String::class.java) ?: "desconectado"
+            }
+
             otherProfileListener = db.collection("usuarios").whereEqualTo("uid", targetUid)
                 .addSnapshotListener { snapshot, e ->
                     if (e != null) {
@@ -493,14 +508,6 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 } else {
                     _otherFichaState.value = FichaState.NotFound
                 }
-
-                statusListener = object : ValueEventListener {
-                    override fun onDataChange(snapshot: DataSnapshot) {
-                        _otherUserStatus.value = snapshot.child("estado").getValue(String::class.java) ?: "desconectado"
-                    }
-                    override fun onCancelled(error: DatabaseError) {}
-                }
-                rtdb.child("status").child(targetUid).addValueEventListener(statusListener!!)
             } catch (e: Exception) {
                 _otherFichaState.value = FichaState.Error("Error")
             }

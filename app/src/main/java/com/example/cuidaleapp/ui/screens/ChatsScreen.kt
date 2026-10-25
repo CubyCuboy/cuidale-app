@@ -31,6 +31,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
+import androidx.compose.ui.graphics.graphicsLayer
 import coil3.compose.AsyncImage
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
@@ -206,7 +210,7 @@ fun ChatsScreen(
                         showChatMenu = false
                     }) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.DoneAll, null)
+                            Icon(Icons.Default.MarkEmailUnread, null)
                             Spacer(Modifier.width(12.dp))
                             Text("Marcar como leído")
                         }
@@ -372,10 +376,38 @@ fun ChatCard(
                         isBlocked -> "Usuario bloqueado"
                         isTyping -> "escribiendo..."
                         chat.lastMessage?.deleted == true -> "Mensaje eliminado"
-                        chat.lastMessage?.imageUrl != null -> "📷 Foto"
-                        chat.lastMessage?.videoUrl != null -> "🎬 Video"
-                        chat.lastMessage?.fileUrl != null -> "📄 ${chat.lastMessage.fileName ?: "Documento"}"
-                        else -> chat.lastMessage?.text ?: "Inicia un chat"
+                        else -> {
+                            val lastMsg = chat.lastMessage
+                            val batchItems = runCatching {
+                                com.example.cuidaleapp.ui.components.parseMediaBatch(lastMsg?.metadata ?: emptyMap())
+                            }.getOrDefault(emptyList())
+                            val isMultiBatch = lastMsg?.type == "media_group" || batchItems.size > 1
+                            val content = when {
+                                isMultiBatch && batchItems.isNotEmpty() ->
+                                    "Envió múltiples elementos · ${batchItems.size}"
+                                else -> {
+                                    val icon = when {
+                                        lastMsg?.videoUrl != null -> "🎬 Video"
+                                        lastMsg?.imageUrl != null -> "📷 Foto"
+                                        lastMsg?.fileUrl != null -> "📄 ${lastMsg.fileName ?: "Documento"}"
+                                        else -> ""
+                                    }
+                                    val text = lastMsg?.text?.takeIf { it.isNotBlank() } ?: ""
+                                    when {
+                                        text.isNotBlank() && icon.isNotBlank() -> "$text · $icon"
+                                        icon.isNotBlank() -> icon
+                                        else -> text.ifBlank { "Inicia un chat" }
+                                    }
+                                }
+                            }
+                            val fromMe = lastMsg != null && lastMsg.senderId != chat.otherUser.uid && lastMsg.senderId != "system"
+                            when {
+                                lastMsg == null -> content
+                                lastMsg.senderId == "system" -> content
+                                fromMe -> "Tú: $content"
+                                else -> "${chat.otherUser.nombre}: $content"
+                            }
+                        }
                     }
                     val textColor = if (isTyping) MaterialTheme.colorScheme.primary else Color.Gray
                     
@@ -389,16 +421,23 @@ fun ChatCard(
                     )
                     
                     if (chat.unreadCount > 0 && !isBlocked) {
+                        val badgeScale by animateFloatAsState(
+                            targetValue = if (chat.unreadCount > 0) 1f else 0.7f,
+                            animationSpec = spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMediumLow),
+                            label = "unreadBadge"
+                        )
                         Box(
-                            modifier = Modifier.size(20.dp).background(MaterialTheme.colorScheme.primary, CircleShape),
+                            modifier = Modifier.size(20.dp)
+                                .graphicsLayer { scaleX = badgeScale; scaleY = badgeScale }
+                                .background(MaterialTheme.colorScheme.primary, CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(chat.unreadCount.toString(), color = Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                         }
                         IconButton(onClick = { onMarkRead(chat.chatId) }) {
                             Icon(
-                                Icons.Default.DoneAll,
-                                contentDescription = "Marcar como leído",
+                                Icons.Default.MarkEmailUnread,
+                                contentDescription = "Tienes mensajes sin leer",
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }

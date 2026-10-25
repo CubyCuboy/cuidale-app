@@ -22,7 +22,7 @@ sealed class LoginUiState {
     data class Transition(val userData: UserData) : LoginUiState()
     object Success : LoginUiState()
     data class Unverified(val email: String) : LoginUiState()
-    data class ExternalRegistrationNeeded(val email: String, val uid: String, val providerId: String, val displayName: String? = null) : LoginUiState()
+    data class ExternalRegistrationNeeded(val email: String, val uid: String, val providerId: String, val displayName: String? = null, val photoUrl: String? = null) : LoginUiState()
     data class Error(val message: String) : LoginUiState()
 }
 
@@ -97,37 +97,30 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     val result = pendingTask.await()
                     val firebaseUser = result.user
                     if (firebaseUser != null) {
-                        val providerId = firebaseUser.providerData.firstOrNull { it.providerId != "firebase" }?.providerId ?: "microsoft.com"
+                        val providerId = firebaseUser.providerData.firstOrNull { it.providerId != com.example.cuidaleapp.utils.AccountUtils.PROVIDER_FIREBASE }?.providerId ?: com.example.cuidaleapp.utils.AccountUtils.PROVIDER_MICROSOFT
                         val email = extractEmailFromAuthResult(firebaseUser, result)
                         val uid = firebaseUser.uid
-                        
-                        var query = db.collection("usuarios").whereEqualTo("uid", uid).get().await()
-                        if (query.isEmpty && email.isNotBlank()) {
-                            query = db.collection("usuarios").whereEqualTo("correo", email).get().await()
-                        }
-                        
-                        if (!query.isEmpty) {
-                            val doc = query.documents[0]
+
+                        // Resolver la cuenta por correo preferentemente (evita duplicados).
+                        val doc = com.example.cuidaleapp.utils.AccountUtils.findCanonicalUserDocument(db, email, uid)
+
+                        if (doc != null) {
                             val userData = parseDocumentToUserData(doc, uid)
                             if (userData != null && userData.completado) {
-                                val now = System.currentTimeMillis()
-                                doc.reference.update(
-                                    "uid", uid,
-                                    "linkedAccounts" to com.example.cuidaleapp.utils.AccountUtils.mergeLinkedAccount(
-                                        userData.linkedAccounts,
-                                        providerId,
-                                        "",
-                                        email,
-                                        verificado = true,
-                                        timestamp = now
-                                    )
-                                )
-                                val updatedUserData = userData.copy(uid = uid)
-                                userSession.saveUser(updatedUserData)
+                                // Linkear el proveedor nuevo y sincronizar uid con la cuenta existente.
+                                val merged = com.example.cuidaleapp.utils.AccountUtils.attachProviderToExistingAccount(
+                                    doc = doc,
+                                    providerId = providerId,
+                                    accountName = email ?: "",
+                                    verified = true,
+                                    newUid = uid
+                                ) ?: userData
+                                com.example.cuidaleapp.utils.AccountUtils.cleanupDuplicateGhostDocs(db, doc.reference, doc.id, email, uid)
+                                userSession.saveUser(merged.copy(uid = uid))
                                 _uiState.value = LoginUiState.Success
                             } else {
                                 _uiState.value = LoginUiState.ExternalRegistrationNeeded(
-                                    email = email,
+                                    email = email ?: "",
                                     uid = uid,
                                     providerId = providerId,
                                     displayName = firebaseUser.displayName
@@ -135,7 +128,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                             }
                         } else {
                             _uiState.value = LoginUiState.ExternalRegistrationNeeded(
-                                email = email,
+                                email = email ?: "",
                                 uid = uid,
                                 providerId = providerId,
                                 displayName = firebaseUser.displayName
@@ -153,6 +146,17 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
             userSession.clear()
             _uiState.value = LoginUiState.Idle
         } else if (currentUser != null) {
+            // Fast-path: si ya hay un usuario completo en caché local, entrar de inmediato
+            // (aunque no haya red). La actualización desde Firestore ocurre en segundo plano.
+            val initialCached = userSession.getUser()
+            val initialCacheValid = initialCached.completado && initialCached.rut.isNotBlank() &&
+                initialCached.rol.isNotBlank() &&
+                (initialCached.uid.isBlank() || initialCached.uid == currentUser.uid ||
+                    (!currentUser.email.isNullOrBlank() && initialCached.correo == currentUser.email))
+            if (initialCacheValid) {
+                _uiState.value = LoginUiState.Success
+            }
+
             viewModelScope.launch {
                 try {
                     val cachedUser = userSession.getUser()
@@ -163,34 +167,21 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     }
 
                     var loadedUser: UserData? = null
+                    var canonicalDoc: com.google.firebase.firestore.DocumentSnapshot? = null
 
-                    kotlinx.coroutines.withTimeoutOrNull(5000L) {
-                        val query = db.collection("usuarios")
-                            .whereEqualTo("uid", currentUser.uid)
-                            .get()
-                            .await()
-                        
-                        if (!query.isEmpty) {
-                            val userData = parseDocumentToUserData(query.documents[0], currentUser.uid)
+                    kotlinx.coroutines.withTimeoutOrNull(7000L) {
+                        // Resolver identidad por correo preferentemente (anti-duplicación).
+                        val resolved = com.example.cuidaleapp.utils.AccountUtils.findCanonicalUserDocument(
+                            db = db,
+                            email = currentUser.email,
+                            uid = currentUser.uid
+                        )
+                        if (resolved != null) {
+                            canonicalDoc = resolved
+                            val userData = parseDocumentToUserData(resolved, currentUser.uid)
                             if (userData != null) {
                                 loadedUser = userData
                                 return@withTimeoutOrNull
-                            }
-                        }
-
-                        val email = currentUser.email ?: ""
-                        if (email.isNotBlank()) {
-                            val queryEmail = db.collection("usuarios")
-                                .whereEqualTo("correo", email)
-                                .get()
-                                .await()
-                            
-                            if (!queryEmail.isEmpty) {
-                                val userData = parseDocumentToUserData(queryEmail.documents[0], currentUser.uid)
-                                if (userData != null) {
-                                    loadedUser = userData
-                                    return@withTimeoutOrNull
-                                }
                             }
                         }
 
@@ -199,6 +190,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                             val hashedRut = HashUtils.hashRut(freshCachedUser.rut)
                             val doc = db.collection("usuarios").document(hashedRut).get().await()
                             if (doc.exists()) {
+                                canonicalDoc = doc
                                 val userData = parseDocumentToUserData(doc, currentUser.uid)
                                 if (userData != null) {
                                     loadedUser = userData
@@ -209,33 +201,74 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     }
 
                     val user = loadedUser ?: userSession.getUser()
+                    val cacheValid = user != null && user.completado && user.rut.isNotBlank() &&
+                        user.rol.isNotBlank() &&
+                        (user.uid.isBlank() || user.uid == currentUser.uid ||
+                            (!currentUser.email.isNullOrBlank() && user.correo == currentUser.email))
 
                     if (user != null && user.completado && user.rut.isNotBlank() && user.rol.isNotBlank() && (user.uid.isBlank() || user.uid == currentUser.uid)) {
                         userSession.saveUser(user)
                         _uiState.value = LoginUiState.Success
-                    } else {
-                        val providerId = currentUser.providerData.firstOrNull { it.providerId != "firebase" }?.providerId ?: "google.com"
-                        val email = currentUser.email ?: user?.correo ?: currentUser.providerData.firstOrNull { !it.email.isNullOrBlank() }?.email ?: ""
-                        
-                        if (email.isNotBlank()) {
-                            _uiState.value = LoginUiState.ExternalRegistrationNeeded(
-                                email = email,
-                                uid = currentUser.uid,
+                    } else if (cacheValid) {
+                        // Al reconectar con un proveedor externo, linkear y sincronizar uid.
+                        if (canonicalDoc != null && com.example.cuidaleapp.utils.ConnectivityObserver.isOnline.value) {
+                            val providerId = currentUser.providerData.firstOrNull { it.providerId != com.example.cuidaleapp.utils.AccountUtils.PROVIDER_FIREBASE }?.providerId ?: com.example.cuidaleapp.utils.AccountUtils.PROVIDER_GOOGLE
+                            val merged = com.example.cuidaleapp.utils.AccountUtils.attachProviderToExistingAccount(
+                                doc = canonicalDoc!!,
                                 providerId = providerId,
-                                displayName = currentUser.displayName
-                            )
+                                accountName = currentUser.email ?: user.correo,
+                                verified = true,
+                                newUid = currentUser.uid
+                            ) ?: user
+                            com.example.cuidaleapp.utils.AccountUtils.cleanupDuplicateGhostDocs(db, canonicalDoc!!.reference, canonicalDoc!!.id, currentUser.email, currentUser.uid)
+                            userSession.saveUser(merged.copy(uid = currentUser.uid))
                         } else {
-                            auth.signOut()
-                            userSession.clear()
-                            _uiState.value = LoginUiState.Idle
+                            userSession.saveUser(user)
+                        }
+                        _uiState.value = LoginUiState.Success
+                    } else {
+                        val providerId = currentUser.providerData.firstOrNull { it.providerId != com.example.cuidaleapp.utils.AccountUtils.PROVIDER_FIREBASE }?.providerId ?: com.example.cuidaleapp.utils.AccountUtils.PROVIDER_GOOGLE
+                        val email = currentUser.email ?: user?.correo ?: currentUser.providerData.firstOrNull { !it.email.isNullOrBlank() }?.email ?: ""
+
+                        if (email.isNotBlank()) {
+                            if (com.example.cuidaleapp.utils.ConnectivityObserver.isOnline.value) {
+                                _uiState.value = LoginUiState.ExternalRegistrationNeeded(
+                                    email = email,
+                                    uid = currentUser.uid,
+                                    providerId = providerId,
+                                    displayName = currentUser.displayName
+                                )
+                            } else if (initialCacheValid) {
+                                _uiState.value = LoginUiState.Success
+                            } else {
+                                _uiState.value = LoginUiState.ExternalRegistrationNeeded(
+                                    email = email,
+                                    uid = currentUser.uid,
+                                    providerId = providerId,
+                                    displayName = currentUser.displayName
+                                )
+                            }
+                        } else {
+                            if (!com.example.cuidaleapp.utils.ConnectivityObserver.isOnline.value && initialCacheValid) {
+                                _uiState.value = LoginUiState.Success
+                            } else {
+                                auth.signOut()
+                                userSession.clear()
+                                _uiState.value = LoginUiState.Idle
+                            }
                         }
                     }
                 } catch (e: Exception) {
                     val cachedUser = userSession.getUser()
-                    if (cachedUser.completado && cachedUser.rut.isNotBlank() && cachedUser.rol.isNotBlank() && cachedUser.uid == currentUser.uid) {
+                    val fallbackValid = cachedUser.completado && cachedUser.rut.isNotBlank() &&
+                        cachedUser.rol.isNotBlank() &&
+                        (cachedUser.uid.isBlank() || cachedUser.uid == currentUser.uid ||
+                            (!currentUser.email.isNullOrBlank() && cachedUser.correo == currentUser.email))
+                    if (fallbackValid) {
+                        userSession.saveUser(cachedUser)
                         _uiState.value = LoginUiState.Success
-                    } else {
-                        val providerId = currentUser.providerData.firstOrNull { it.providerId != "firebase" }?.providerId ?: "google.com"
+                    } else if (com.example.cuidaleapp.utils.ConnectivityObserver.isOnline.value) {
+                        val providerId = currentUser.providerData.firstOrNull { it.providerId != com.example.cuidaleapp.utils.AccountUtils.PROVIDER_FIREBASE }?.providerId ?: com.example.cuidaleapp.utils.AccountUtils.PROVIDER_GOOGLE
                         val email = currentUser.email ?: cachedUser.correo
                         if (email.isNotBlank()) {
                             _uiState.value = LoginUiState.ExternalRegistrationNeeded(
@@ -249,6 +282,8 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                             userSession.clear()
                             _uiState.value = LoginUiState.Idle
                         }
+                    } else {
+                        _uiState.value = LoginUiState.Idle
                     }
                 }
             }
@@ -431,37 +466,25 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                 val firebaseUser = authResult.user ?: throw Exception("Error al autenticar con Google")
                 val uid = firebaseUser.uid
 
-                var query = db.collection("usuarios").whereEqualTo("uid", uid).get().await()
-                if (query.isEmpty && email.isNotBlank()) {
-                    query = db.collection("usuarios").whereEqualTo("correo", email).get().await()
-                }
+                // Anti-duplicación: resolver por correo preferentemente.
+                val doc = com.example.cuidaleapp.utils.AccountUtils.findCanonicalUserDocument(db, email, uid)
 
-                if (!query.isEmpty) {
-                    val doc = query.documents[0]
+                if (doc != null) {
                     val userData = parseDocumentToUserData(doc, uid)
                     if (userData != null && userData.completado) {
-                        val now = System.currentTimeMillis()
-                        val updatedLinked = com.example.cuidaleapp.utils.AccountUtils.mergeLinkedAccount(
-                            userData.linkedAccounts,
-                            "google.com",
-                            "Google",
-                            email,
-                            verificado = true,
-                            timestamp = now
-                        )
-                        doc.reference.set(
-                            mapOf(
-                                "uid" to uid,
-                                "correo" to email,
-                                "linkedAccounts" to updatedLinked
-                            ),
-                            com.google.firebase.firestore.SetOptions.merge()
-                        )
-                        val updatedUserData = userData.copy(uid = uid, correo = email, linkedAccounts = updatedLinked)
-                        userSession.saveUser(updatedUserData)
+                        val merged = com.example.cuidaleapp.utils.AccountUtils.attachProviderToExistingAccount(
+                            doc = doc,
+                            providerId = com.example.cuidaleapp.utils.AccountUtils.PROVIDER_GOOGLE,
+                            accountName = email,
+                            verified = true,
+                            newUid = uid
+                        ) ?: userData
+                        com.example.cuidaleapp.utils.AccountUtils.cleanupDuplicateGhostDocs(db, doc.reference, doc.id, email, uid)
+                        userSession.saveUser(merged.copy(uid = uid, correo = email))
                         _uiState.value = LoginUiState.Success
                     } else {
-                        _uiState.value = LoginUiState.ExternalRegistrationNeeded(email, uid, "google.com", displayName)
+                        val photo = (firebaseUser.photoUrl?.toString() ?: "")
+                        _uiState.value = LoginUiState.ExternalRegistrationNeeded(email, uid, com.example.cuidaleapp.utils.AccountUtils.PROVIDER_GOOGLE, displayName, photo.ifBlank { null })
                     }
                 } else {
                     val nameParts = (displayName ?: firebaseUser.displayName ?: "").trim().split(Regex("\\s+"))
@@ -473,12 +496,13 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     val now = System.currentTimeMillis()
                     val initialLinked = com.example.cuidaleapp.utils.AccountUtils.mergeLinkedAccount(
                         emptyList(),
-                        "google.com",
-                        "Google",
+                        com.example.cuidaleapp.utils.AccountUtils.PROVIDER_GOOGLE,
+                        com.example.cuidaleapp.utils.AccountUtils.PROVIDER_DISPLAY_GOOGLE,
                         email,
                         verificado = true,
                         timestamp = now
                     )
+                    val providerPhoto = firebaseUser.photoUrl?.toString() ?: ""
                     val ghostData = hashMapOf(
                         "uid" to uid,
                         "correo" to email,
@@ -490,9 +514,11 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                         "completado" to false,
                         "linkedAccounts" to initialLinked,
                         "createdAt" to com.google.firebase.Timestamp(now / 1000, 0)
-                    )
+                    ).apply {
+                        if (providerPhoto.isNotBlank()) put("fotoUrl", providerPhoto)
+                    }
                     db.collection("usuarios").document(uid).set(ghostData).await()
-                    _uiState.value = LoginUiState.ExternalRegistrationNeeded(email, uid, "google.com", displayName)
+                    _uiState.value = LoginUiState.ExternalRegistrationNeeded(email, uid, com.example.cuidaleapp.utils.AccountUtils.PROVIDER_GOOGLE, displayName, providerPhoto.ifBlank { null })
                 }
             } catch (e: Exception) {
                 _uiState.value = LoginUiState.Error(parseLoginErrorMessage(e))
@@ -546,7 +572,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.value = LoginUiState.Loading
             try {
                 val provider = com.google.firebase.auth.OAuthProvider.newBuilder(providerId)
-                if (providerId == "microsoft.com") {
+                if (providerId == com.example.cuidaleapp.utils.AccountUtils.PROVIDER_MICROSOFT) {
                     provider.addCustomParameter("prompt", "select_account")
                     provider.scopes = listOf("openid", "email", "profile", "User.Read")
                 }
@@ -571,38 +597,30 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     ?: (result.additionalUserInfo?.profile?.get("name") as? String)
                     ?: ""
 
-                var query = db.collection("usuarios").whereEqualTo("uid", uid).get().await()
-                if (query.isEmpty && email.isNotBlank()) {
-                    query = db.collection("usuarios").whereEqualTo("correo", email).get().await()
-                }
+                // Anti-duplicación: resolver por correo preferentemente.
+                val doc = com.example.cuidaleapp.utils.AccountUtils.findCanonicalUserDocument(db, email, uid)
 
-                if (!query.isEmpty) {
-                    val doc = query.documents[0]
+                if (doc != null) {
                     val userData = parseDocumentToUserData(doc, uid)
                     if (userData != null && userData.completado) {
-                        val now = System.currentTimeMillis()
-                        val updatedLinked = com.example.cuidaleapp.utils.AccountUtils.mergeLinkedAccount(
-                            userData.linkedAccounts,
-                            providerId,
-                            "",
-                            email,
-                            verificado = true,
-                            timestamp = now
-                        )
-                        doc.reference.update(
-                            "uid", uid,
-                            "correo", email,
-                            "linkedAccounts" to updatedLinked
-                        )
-                        val updatedUserData = userData.copy(uid = uid, correo = email, linkedAccounts = updatedLinked)
-                        userSession.saveUser(updatedUserData)
+                        val merged = com.example.cuidaleapp.utils.AccountUtils.attachProviderToExistingAccount(
+                            doc = doc,
+                            providerId = providerId,
+                            accountName = email,
+                            verified = true,
+                            newUid = uid
+                        ) ?: userData
+                        com.example.cuidaleapp.utils.AccountUtils.cleanupDuplicateGhostDocs(db, doc.reference, doc.id, email, uid)
+                        userSession.saveUser(merged.copy(uid = uid, correo = email))
                         _uiState.value = LoginUiState.Success
                     } else {
+                        val photo = (firebaseUser.photoUrl?.toString() ?: "")
                         _uiState.value = LoginUiState.ExternalRegistrationNeeded(
                             email = email,
                             uid = uid,
                             providerId = providerId,
-                            displayName = displayName.ifBlank { null }
+                            displayName = displayName.ifBlank { null },
+                            photoUrl = photo.ifBlank { null }
                         )
                     }
                 } else {
@@ -621,6 +639,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                         verificado = true,
                         timestamp = now
                     )
+                    val providerPhoto = firebaseUser.photoUrl?.toString() ?: ""
                     val ghostData = hashMapOf(
                         "uid" to uid,
                         "correo" to email,
@@ -632,13 +651,16 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                         "completado" to false,
                         "linkedAccounts" to initialLinked,
                         "createdAt" to com.google.firebase.Timestamp(now / 1000, 0)
-                    )
+                    ).apply {
+                        if (providerPhoto.isNotBlank()) put("fotoUrl", providerPhoto)
+                    }
                     db.collection("usuarios").document(uid).set(ghostData).await()
                     _uiState.value = LoginUiState.ExternalRegistrationNeeded(
                         email = email,
                         uid = uid,
                         providerId = providerId,
-                        displayName = displayName.ifBlank { null }
+                        displayName = displayName.ifBlank { null },
+                        photoUrl = providerPhoto.ifBlank { null }
                     )
                 }
             } catch (e: Exception) {

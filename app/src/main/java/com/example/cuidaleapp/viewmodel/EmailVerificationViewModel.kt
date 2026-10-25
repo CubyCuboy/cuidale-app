@@ -225,19 +225,9 @@ class EmailVerificationViewModel(application: Application) : AndroidViewModel(ap
                         android.util.Log.e("EmailVerificationViewModel", "Error limpiando documento temporal: ${e.message}")
                     }
 
-                    val notifRef = userDocRef?.collection("notificaciones")?.document()
-                    if (notifRef != null) {
-                        val notif = mapOf(
-                            "id" to notifRef.id,
-                            "tipo" to "configuracion_cuenta",
-                            "emisor" to uid,
-                            "receptor" to uid,
-                            "timestamp" to System.currentTimeMillis(),
-                            "leida" to false,
-                            "data" to mapOf("title" to "Verificación de Correo", "text" to "Tu correo electrónico ha sido verificado con éxito.")
-                        )
-                        notifRef.set(notif).await()
-                    }
+                    // Ya no se crea notificación automática de "Verificación de Correo":
+                    // es redundante y molesta al primer inicio de sesión interno.
+                    // (Se conserva la actualización silenciosa de verificado/linkedAccounts).
                 }
 
                 clearSavedState()

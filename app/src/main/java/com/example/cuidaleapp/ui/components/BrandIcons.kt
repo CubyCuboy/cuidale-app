@@ -119,9 +119,10 @@ fun ProviderBrandIcon(
     size: Dp = 18.dp,
     tint: Color = MaterialTheme.colorScheme.primary
 ) {
-    val vector = when (providerId.trim().lowercase()) {
-        "google.com", "google" -> BrandIcons.GoogleG
-        "microsoft.com", "microsoft" -> BrandIcons.MicrosoftLogo
+    val cleanId = com.example.cuidaleapp.utils.AccountUtils.normalizeProviderId(providerId)
+    val vector = when (cleanId) {
+        com.example.cuidaleapp.utils.AccountUtils.PROVIDER_GOOGLE -> BrandIcons.GoogleG
+        com.example.cuidaleapp.utils.AccountUtils.PROVIDER_MICROSOFT -> BrandIcons.MicrosoftLogo
         else -> Icons.Default.Email
     }
     Box(modifier = modifier) {

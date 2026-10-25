@@ -12,7 +12,6 @@ import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
-import com.google.firebase.firestore.Query
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -154,10 +153,6 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                 db.collection("postulaciones").document(postulacionId).delete().await()
             } catch (e: Exception) { }
         }
-    }
-
-    fun eliminarPostulacionEspecifica(solicitudId: String) {
-        cancelarPostulacion(solicitudId)
     }
 
     private fun listenToPostulaciones(solicitudIds: List<String>) {

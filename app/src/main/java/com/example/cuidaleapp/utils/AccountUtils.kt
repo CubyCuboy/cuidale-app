@@ -2,8 +2,20 @@ package com.example.cuidaleapp.utils
 
 import android.util.Patterns
 import com.example.cuidaleapp.models.LinkedAccountDetail
+import kotlinx.coroutines.tasks.await
 
 object AccountUtils {
+
+    // ── Proveedores canónicos (evita hardcodeo) ──
+    const val PROVIDER_GOOGLE = "google.com"
+    const val PROVIDER_MICROSOFT = "microsoft.com"
+    const val PROVIDER_EMAIL = "email"
+    const val PROVIDER_FIREBASE = "firebase"
+    const val PROVIDER_DISPLAY_GOOGLE = "Google"
+    const val PROVIDER_DISPLAY_MICROSOFT = "Microsoft"
+    const val PROVIDER_DISPLAY_EMAIL = "Correo y Contraseña"
+
+    fun normalizeEmail(email: String): String = email.trim().lowercase()
 
     fun validateEmail(email: String): Boolean {
         val trimmed = email.trim()
@@ -88,18 +100,18 @@ object AccountUtils {
 
     fun normalizeProviderId(providerId: String): String {
         return when (providerId.trim().lowercase()) {
-            "google.com", "google" -> "google.com"
-            "microsoft.com", "microsoft" -> "microsoft.com"
-            "password", "email" -> "email"
+            "google.com", "google" -> PROVIDER_GOOGLE
+            "microsoft.com", "microsoft" -> PROVIDER_MICROSOFT
+            "password", "email" -> PROVIDER_EMAIL
             else -> providerId.trim()
         }
     }
 
     fun providerDisplayName(providerId: String): String {
         return when (normalizeProviderId(providerId)) {
-            "google.com" -> "Google"
-            "microsoft.com" -> "Microsoft"
-            "email" -> "Correo y Contraseña"
+            PROVIDER_GOOGLE -> PROVIDER_DISPLAY_GOOGLE
+            PROVIDER_MICROSOFT -> PROVIDER_DISPLAY_MICROSOFT
+            PROVIDER_EMAIL -> PROVIDER_DISPLAY_EMAIL
             else -> providerId
         }
     }
@@ -144,19 +156,119 @@ object AccountUtils {
             .sortedBy { it.value }
             .forEach { (key, ts) ->
                 val providerId = when (key.trim().lowercase()) {
-                    "google", "google.com" -> "google.com"
-                    "microsoft", "microsoft.com" -> "microsoft.com"
-                    "password", "email" -> "email"
+                    "google", "google.com" -> PROVIDER_GOOGLE
+                    "microsoft", "microsoft.com" -> PROVIDER_MICROSOFT
+                    "password", "email" -> PROVIDER_EMAIL
                     else -> key.replace("_", ".")
                 }
                 if (result.none { it.providerId == providerId }) {
                     val verified = when (providerId) {
-                        "google.com", "microsoft.com" -> true
+                        PROVIDER_GOOGLE, PROVIDER_MICROSOFT -> true
                         else -> defaultVerified
                     }
                     result = mergeLinkedAccount(result, providerId, "", fallbackEmail, verified, ts)
                 }
             }
         return result.sortedBy { it.linkedAt }
+    }
+
+    // ── Resolución de identidad (anti-duplicación) ──
+
+    /**
+     * Busca el documento canónico de un usuario (prefiriendo el que está
+     * completado con RUT y correo), primero por correo normalizado y luego
+     * por uid. Devuelve la referencia más confiable o [null] si no existe.
+     */
+    suspend fun findCanonicalUserDocument(
+        db: com.google.firebase.firestore.FirebaseFirestore,
+        email: String?,
+        uid: String?
+    ): com.google.firebase.firestore.DocumentSnapshot? {
+        val e = email?.let { normalizeEmail(it) }?.ifBlank { null }
+        if (e != null) {
+            val byEmail = db.collection("usuarios")
+                .whereEqualTo("correo", e)
+                .limit(30)
+                .get()
+                .await()
+            val canonical = byEmail.documents.firstOrNull { snap ->
+                snap.getBoolean("completado") == true && !snap.getString("rut").isNullOrBlank()
+            } ?: byEmail.documents.firstOrNull()
+            if (canonical != null) return canonical
+        }
+        if (uid != null && uid.isNotBlank()) {
+            val byUid = db.collection("usuarios")
+                .whereEqualTo("uid", uid)
+                .limit(30)
+                .get()
+                .await()
+            return byUid.documents.firstOrNull { snap ->
+                snap.getBoolean("completado") == true && !snap.getString("rut").isNullOrBlank()
+            } ?: byUid.documents.firstOrNull()
+        }
+        return null
+    }
+
+    /**
+     * Fusiona un proveedor recién autenticado en el documento existente y
+     * sincroniza el uid de auth. Devuelve los datos actualizados del usuario.
+     */
+    suspend fun attachProviderToExistingAccount(
+        doc: com.google.firebase.firestore.DocumentSnapshot,
+        providerId: String,
+        accountName: String,
+        verified: Boolean,
+        newUid: String? = null
+    ): com.example.cuidaleapp.models.UserData? {
+        val existing = doc.toObject(com.example.cuidaleapp.models.UserData::class.java) ?: return null
+        val now = System.currentTimeMillis()
+        val merged = mergeLinkedAccount(existing.linkedAccounts, providerId, "", accountName, verified, now)
+        val updates = mutableMapOf<String, Any>(
+            "linkedAccounts" to merged,
+            "updatedAt" to com.google.firebase.Timestamp(now / 1000, 0)
+        )
+        if (!newUid.isNullOrBlank() && existing.uid != newUid) {
+            updates["uid"] = newUid
+        }
+        doc.reference.update(updates).await()
+        return existing.copy(uid = newUid ?: existing.uid, linkedAccounts = merged)
+    }
+
+    /**
+     * Elimina documentos fantasma duplicados (ghost por uid/correo) que no
+     * sean el canónico, moviendo sus restos a basura y borrándolos. Evita
+     * que queden cuentas espejo cuando se inicia sesión con otro proveedor.
+     */
+    suspend fun cleanupDuplicateGhostDocs(
+        db: com.google.firebase.firestore.FirebaseFirestore,
+        canonicalRef: com.google.firebase.firestore.DocumentReference,
+        canonicalId: String,
+        email: String?,
+        uid: String?
+    ) {
+        val e = email?.let { normalizeEmail(it) }?.ifBlank { null }
+        val targets = mutableListOf<String>()
+        if (uid != null && uid.isNotBlank()) targets.add(uid)
+        if (e != null) targets.add(e)
+        if (targets.isEmpty()) return
+
+        for (id in targets.distinct()) {
+            if (id == canonicalId) continue
+            runCatching {
+                val ref = db.collection("usuarios").document(id)
+                val snap = ref.get().await()
+                if (snap.exists()) {
+                    // Solo borrar si es un ghost (incompleto) o apunta al mismo uid/correo.
+                    val uidField = snap.getString("uid")
+                    val correoField = snap.getString("correo")
+                    val esGhost = snap.getBoolean("completado") != true ||
+                        (uid != null && uidField == uid && id != canonicalId) ||
+                        (e != null && correoField == e && id != canonicalId)
+                    if (esGhost) {
+                        ref.delete().await()
+                    }
+                }
+            }
+        }
     }
 }

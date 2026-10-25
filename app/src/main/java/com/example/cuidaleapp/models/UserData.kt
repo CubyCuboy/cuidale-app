@@ -36,12 +36,7 @@ data class UserData(
     val rateLimits: List<RateLimitEntry> = emptyList()
 ) {
     fun findLinkedAccount(providerId: String): LinkedAccountDetail? {
-        val cleanId = when (providerId.trim().lowercase()) {
-            "google.com", "google" -> "google.com"
-            "microsoft.com", "microsoft" -> "microsoft.com"
-            "password", "email" -> "email"
-            else -> providerId.trim()
-        }
+        val cleanId = com.example.cuidaleapp.utils.AccountUtils.normalizeProviderId(providerId)
         return linkedAccounts.firstOrNull { it.providerId == cleanId }
     }
     fun hasLinkedAccount(providerId: String): Boolean = findLinkedAccount(providerId) != null

@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -28,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
+import com.example.cuidaleapp.R
 import com.example.cuidaleapp.models.Notification
 import com.example.cuidaleapp.models.UserData
 import com.example.cuidaleapp.ui.components.ConnectivityBanner
@@ -56,7 +58,7 @@ fun NotificationsScreen(
 
 
         Text(
-            text = "Notificaciones",
+            text = "Bandeja de notificaciones",
             style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black),
             color = Color.White,
             modifier = Modifier.padding(24.dp)
@@ -76,7 +78,7 @@ fun NotificationsScreen(
                     )
                     Spacer(Modifier.height(16.dp))
                     Text(
-                        "No tienes notificaciones",
+                        "No tienes notificaciones en tu bandeja",
                         color = Color.White.copy(alpha = 0.7f),
                         style = MaterialTheme.typography.bodyLarge
                     )
@@ -293,20 +295,20 @@ fun NotificationItem(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = when (notification.tipo) {
-                            "solicitud_vinculo" -> "Nueva solicitud de chat"
-                            "vinculo_aceptado" -> "¡Solicitud aceptada!"
-                            "postulacion_recibida" -> notification.data["titulo"] ?: "Nueva postulación recibida"
-                            "postulacion_aceptada" -> notification.data["titulo"] ?: "¡Postulación aceptada!"
-                            "servicio_finalizado" -> notification.data["titulo"] ?: "Servicio finalizado"
-                            "nuevo_mensaje" -> "Mensaje de ${sender?.nombre ?: "Usuario"}"
-                            "nuevo_usuario", "nuevo_usuario_zona" -> "¡Nuevo ${if(userRole == "cuidador") "paciente" else "cuidador"} en tu zona!"
-                            "recordatorio_tarea" -> notification.data["titulo"] ?: "Recordatorio de Tarea"
-                            "tarea_atrasada" -> notification.data["titulo"] ?: "Tarea Atrasada"
-                            "tarea_finalizada" -> notification.data["titulo"] ?: "Tarea Realizada"
-                            "tarea_postergada" -> notification.data["titulo"] ?: "Tarea Postergada"
-                            "turno_finalizado" -> notification.data["titulo"] ?: "Turno Finalizado"
-                            "configuracion_cuenta" -> notification.data["title"] ?: notification.data["titulo"] ?: "Gestión de Cuenta"
-                            else -> notification.data["titulo"] ?: notification.data["title"] ?: "Notificación"
+                            "solicitud_vinculo" -> stringResource(R.string.notif_title_request)
+                            "vinculo_aceptado" -> stringResource(R.string.notif_title_accept)
+                            "postulacion_recibida" -> notification.data["titulo"] ?: stringResource(R.string.notif_title_postulacion)
+                            "postulacion_aceptada" -> notification.data["titulo"] ?: stringResource(R.string.notif_title_postulacion_accept)
+                            "servicio_finalizado" -> notification.data["titulo"] ?: stringResource(R.string.notif_title_service_end)
+                            "nuevo_mensaje" -> stringResource(R.string.notif_title_chat, sender?.nombre ?: stringResource(R.string.notification_chat_default_sender))
+                            "nuevo_usuario", "nuevo_usuario_zona" -> stringResource(R.string.notif_title_new_user, if (userRole == "cuidador") stringResource(R.string.notif_paciente) else stringResource(R.string.notif_cuidador))
+                            "recordatorio_tarea" -> notification.data["titulo"] ?: stringResource(R.string.notif_title_task)
+                            "tarea_atrasada" -> notification.data["titulo"] ?: stringResource(R.string.notif_title_task_late)
+                            "tarea_finalizada" -> notification.data["titulo"] ?: stringResource(R.string.notif_title_task_done)
+                            "tarea_postergada" -> notification.data["titulo"] ?: stringResource(R.string.notif_title_task_postponed)
+                            "turno_finalizado" -> notification.data["titulo"] ?: stringResource(R.string.notif_title_shift)
+                            "configuracion_cuenta" -> notification.data["title"] ?: notification.data["titulo"] ?: stringResource(R.string.notif_title_account)
+                            else -> notification.data["titulo"] ?: notification.data["title"] ?: stringResource(R.string.notif_title_generic)
                         },
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
@@ -314,16 +316,16 @@ fun NotificationItem(
                     )
                     Text(
                         text = when (notification.tipo) {
-                            "solicitud_vinculo" -> "${sender?.nombre ?: "Alguien"} quiere conectar contigo."
-                            "vinculo_aceptado" -> "${sender?.nombre ?: "Un usuario"} aceptó tu solicitud. ¡Ya pueden hablar!"
-                            "postulacion_recibida" -> "${sender?.nombre ?: "Un cuidador"} se ha postulado a tu solicitud de cuidado."
-                            "postulacion_aceptada" -> "Tu postulación ha sido aceptada. ¡Revisa la solicitud de servicio!"
-                            "servicio_finalizado" -> "El servicio de cuidado ha finalizado exitosamente."
-                            "nuevo_mensaje" -> notification.data["text"] ?: notification.data["body"] ?: "Toca para ver el mensaje."
-                            "nuevo_usuario", "nuevo_usuario_zona" -> "${sender?.nombre ?: "Alguien"} acaba de unirse a Cuidale. ¡Conócelo!"
+                            "solicitud_vinculo" -> stringResource(R.string.notif_body_request, sender?.nombre ?: stringResource(R.string.notif_sender_fallback))
+                            "vinculo_aceptado" -> stringResource(R.string.notif_body_accept, sender?.nombre ?: stringResource(R.string.notif_user_fallback))
+                            "postulacion_recibida" -> stringResource(R.string.notif_body_postulacion, sender?.nombre ?: stringResource(R.string.notif_user_fallback))
+                            "postulacion_aceptada" -> stringResource(R.string.notif_body_postulacion_accept)
+                            "servicio_finalizado" -> stringResource(R.string.notif_body_service_end)
+                            "nuevo_mensaje" -> notification.data["text"] ?: notification.data["body"] ?: stringResource(R.string.notif_body_chat)
+                            "nuevo_usuario", "nuevo_usuario_zona" -> stringResource(R.string.notif_body_new_user, sender?.nombre ?: stringResource(R.string.notif_sender_fallback))
                             "recordatorio_tarea", "tarea_atrasada", "tarea_finalizada", "tarea_postergada", "turno_finalizado" -> notification.data["body"] ?: notification.data["text"] ?: notification.data["texto"] ?: ""
-                            "configuracion_cuenta" -> notification.data["text"] ?: notification.data["body"] ?: "Actualización de cuenta realizada."
-                            else -> notification.data["body"] ?: notification.data["text"] ?: notification.data["texto"] ?: "Tienes un nuevo aviso."
+                            "configuracion_cuenta" -> notification.data["text"] ?: notification.data["body"] ?: stringResource(R.string.notif_body_account)
+                            else -> notification.data["body"] ?: notification.data["text"] ?: notification.data["texto"] ?: stringResource(R.string.notif_body_generic)
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = if (isDark) Color.LightGray else Color.DarkGray,
@@ -356,7 +358,7 @@ fun NotificationItem(
 
                 if (!notification.leida) {
                     TextButton(onClick = onMarkRead) {
-                        Text("LEÍDO", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text(stringResource(R.string.notif_mark_read), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.White)
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                 }
@@ -369,13 +371,13 @@ fun NotificationItem(
                     colors = ButtonDefaults.buttonColors(containerColor = itemAccent)
                 ) {
                     val btnText = when(notification.tipo) {
-                        "nuevo_mensaje" -> "IR AL CHAT"
-                        "solicitud_vinculo", "nuevo_usuario", "nuevo_usuario_zona" -> "VER PERFIL"
-                        "postulacion_recibida", "postulacion_aceptada", "servicio_finalizado" -> "VER SOLICITUD"
-                        "recordatorio_tarea", "tarea_atrasada", "tarea_finalizada", "tarea_postergada" -> "VER TAREA"
-                        "turno_finalizado" -> "VER INFORME"
-                        "configuracion_cuenta" -> "VER HISTORIAL"
-                        else -> "VER DETALLES"
+                        "nuevo_mensaje" -> stringResource(R.string.notif_btn_chat)
+                        "solicitud_vinculo", "nuevo_usuario", "nuevo_usuario_zona" -> stringResource(R.string.notif_btn_profile)
+                        "postulacion_recibida", "postulacion_aceptada", "servicio_finalizado" -> stringResource(R.string.notif_btn_request)
+                        "recordatorio_tarea", "tarea_atrasada", "tarea_finalizada", "tarea_postergada" -> stringResource(R.string.notif_btn_task)
+                        "turno_finalizado" -> stringResource(R.string.notif_btn_report)
+                        "configuracion_cuenta" -> stringResource(R.string.notif_btn_history)
+                        else -> stringResource(R.string.notif_btn_details)
                     }
                     Text(btnText, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = Color.White)
                 }

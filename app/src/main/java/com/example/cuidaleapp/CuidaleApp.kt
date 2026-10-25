@@ -10,6 +10,7 @@ import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
 import coil3.request.crossfade
 import com.example.cuidaleapp.utils.AppNavigationState
+import com.example.cuidaleapp.utils.ChatCacheStore
 import com.example.cuidaleapp.utils.ConnectivityObserver
 import okio.Path.Companion.toPath
 
@@ -18,6 +19,7 @@ class CuidaleApp : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         ConnectivityObserver.initialize(this)
+        ChatCacheStore.init(this)
         registerActivityLifecycleCallbacks(VisibilityTracker())
     }
 

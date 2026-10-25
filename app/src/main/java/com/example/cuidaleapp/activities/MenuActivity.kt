@@ -22,7 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -65,6 +65,7 @@ class MenuActivity : ComponentActivity() {
         super.onResume()
         val chatViewModel = androidx.lifecycle.ViewModelProvider(this)[ChatViewModel::class.java]
         chatViewModel.setUserStatus(true)
+        chatViewModel.reportActivity()
         android.util.Log.d("MenuActivity", "presence: online on resume")
     }
 
@@ -119,6 +120,9 @@ class MenuActivity : ComponentActivity() {
             LaunchedEffect(Unit) {
                 AppNavigationState.isAppVisible.collect { visible ->
                     chatViewModel.setUserStatus(visible)
+                    if (visible) {
+                        chatViewModel.reportActivity()
+                    }
                 }
             }
             LaunchedEffect(Unit) {
@@ -143,8 +147,11 @@ class MenuActivity : ComponentActivity() {
             LaunchedEffect(userData, isLoggedOut) {
                 val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
                 if (isLoggedOut || currentUser == null || (userData.uid.isNotBlank() && currentUser.uid != userData.uid)) {
+                    val loggedUid = currentUser?.uid ?: userData.uid
                     com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
                     com.example.cuidaleapp.utils.AppCacheManager.clearAllExceptTheme(applicationContext)
+                    if (loggedUid.isNotBlank()) com.example.cuidaleapp.utils.ChatCacheStore.clearForUser(loggedUid)
+                    else com.example.cuidaleapp.utils.ChatCacheStore.clearAll()
                     val intent = Intent(this@MenuActivity, LoginActivity::class.java)
                     intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
                     startActivity(intent)
@@ -203,17 +210,24 @@ class MenuActivity : ComponentActivity() {
 
             LaunchedEffect(intentTrigger) {
                 val target = intent.getStringExtra("TARGET_SCREEN")
-                val uid = intent.getStringExtra("USER_UID")
-                val chatId = intent.getStringExtra("chatId")
+                val uid = intent.getStringExtra("USER_UID") ?: intent.getStringExtra("emisor") ?: ""
+                val chatId = intent.getStringExtra("chatId") ?: ""
 
                 when (target) {
-                    "OTHER_FICHA" -> if (uid != null) currentScreen = OtherFicha(uid, returnTo = SocialManagement)
+                    "OTHER_FICHA" -> if (uid.isNotBlank() && target != null) currentScreen = OtherFicha(uid, returnTo = SocialManagement)
                     "CHATS" -> currentScreen = Chats
                     "NOTIFICATIONS" -> currentScreen = Notifications
                     "SOLICITUDES" -> currentScreen = Requests
                     "CHAT_DETAIL" -> {
-                        if (chatId != null && uid != null) {
-                            currentScreen = Chat(chatId, uid, returnTo = Chats)
+                        var targetUid = uid
+                        if (targetUid.isBlank() && chatId.isNotBlank()) {
+                            val myUid = userData.uid
+                            if (myUid.isNotBlank()) {
+                                targetUid = chatId.split("_").firstOrNull { it.isNotBlank() && it != myUid } ?: ""
+                            }
+                        }
+                        if (!chatId.isNullOrBlank() && !targetUid.isNullOrBlank()) {
+                            currentScreen = Chat(chatId, targetUid, returnTo = Chats)
                         } else {
                             currentScreen = Chats
                         }
@@ -335,6 +349,17 @@ class MenuActivity : ComponentActivity() {
                             ) {
                                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                                     Scaffold(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .pointerInput(Unit) {
+                                                awaitPointerEventScope {
+                                                    while (true) {
+                                                        awaitPointerEvent()
+                                                        // Cualquier interacción cuenta como actividad para la presencia.
+                                                        chatViewModel.reportActivity()
+                                                    }
+                                                }
+                                            },
                                         bottomBar = {
                                             val showBottomBar = currentScreen == Main || currentScreen == Profile || 
                                                               currentScreen == Chats || currentScreen == Notifications || 
@@ -727,16 +752,44 @@ class MenuActivity : ComponentActivity() {
                         com.example.cuidaleapp.ui.components.ConnectivityBanner()
                         InAppNotificationHost(
                             onNotificationClick = { notification ->
-                                currentScreen = when (notification.targetScreen) {
-                                    "CHAT_DETAIL" -> Chats
-                                    "CHATS" -> Chats
-                                    "NOTIFICATIONS" -> Notifications
-                                    "SOLICITUDES" -> Requests
-                                    "OTHER_FICHA" -> OtherFicha(
+                                when (notification.targetScreen) {
+                                    "CHAT_DETAIL" -> {
+                                        val chatId = notification.payload["chatId"] ?: ""
+                                        val otherUid = notification.payload["emisor"] ?: ""
+                                        if (chatId.isNotBlank() && otherUid.isNotBlank()) {
+                                            currentScreen = Chat(chatId, otherUid, returnTo = Chats)
+                                        } else {
+                                            currentScreen = Chats
+                                        }
+                                    }
+                                    "CHATS" -> currentScreen = Chats
+                                    "NOTIFICATIONS" -> currentScreen = Notifications
+                                    "SOLICITUDES" -> currentScreen = Requests
+                                    "OTHER_FICHA" -> currentScreen = OtherFicha(
                                         uid = notification.payload["uid"] ?: notification.payload["emisor"] ?: "",
                                         returnTo = Main
                                     )
-                                    else -> Main
+                                    else -> currentScreen = Main
+                                }
+                            },
+                            // Responder desde la notificación interna: navegar directo al chat,
+                            // sin relanzar MenuActivity (evita la pantalla de carga).
+                            onReply = { notification ->
+                                val chatId = notification.payload["chatId"] ?: ""
+                                val otherUid = notification.payload["emisor"] ?: ""
+                                if (chatId.isNotBlank() && otherUid.isNotBlank()) {
+                                    currentScreen = Chat(chatId, otherUid, returnTo = Chats)
+                                } else {
+                                    currentScreen = Chats
+                                }
+                            },
+                            onMarkRead = { notification ->
+                                val notifId = notification.payload["notifId"] ?: ""
+                                if (notification.tipo == "nuevo_mensaje") {
+                                    val cid = notification.payload["chatId"] ?: ""
+                                    if (cid.isNotBlank()) notificationsViewModel.markChatGroupAsRead(cid)
+                                } else if (notifId.isNotBlank()) {
+                                    notificationsViewModel.markAsRead(notifId)
                                 }
                             }
                         )

@@ -25,6 +25,7 @@ module.exports = {
     "block-spacing": "off",
     "brace-style": "off",
     "operator-linebreak": "off",
+    "linebreak-style": "off",
     "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
   },
   overrides: [

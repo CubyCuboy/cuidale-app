@@ -93,7 +93,8 @@ fun EditProfileScreen(
 
     val isNombreValid = nombre.length >= 2
     val isApellidoPaValid = apellidoPa.length >= 2
-    val isPhoneValid = PhoneUtils.isValidChileanPhone(telefono) && telefono.length == 9
+    // El teléfono es opcional: se puede guardar sin él (o con formato válido si se ingresa).
+    val isPhoneValid = telefono.isEmpty() || (PhoneUtils.isValidChileanPhone(telefono) && telefono.length == 9)
     val isFormValid = isNombreValid && isApellidoPaValid && isPhoneValid && region.isNotEmpty() && comuna.isNotEmpty()
 
     val nombreShake = remember { Animatable(0f) }

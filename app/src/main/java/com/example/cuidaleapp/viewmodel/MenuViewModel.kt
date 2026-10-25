@@ -98,9 +98,12 @@ class MenuViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun logout() {
+        val uid = auth.currentUser?.uid
         auth.signOut()
         userSession.clear()
         AppCacheManager.clearAllExceptTheme(getApplication())
+        if (uid != null) com.example.cuidaleapp.utils.ChatCacheStore.clearForUser(uid)
+        else com.example.cuidaleapp.utils.ChatCacheStore.clearAll()
         _isLoggedOut.value = true
     }
 

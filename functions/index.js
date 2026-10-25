@@ -53,12 +53,6 @@ function mergeLinkedAccount(currentList, providerId, providerName, accountName, 
   return list.filter((it) => it.providerId !== cleanId).concat(entry).sort((a, b) => (a.linkedAt || 0) - (b.linkedAt || 0));
 }
 
-async function findUserDocByEmail(email) {
-  const userQuery = await db.collection("usuarios").where("correo", "==", email).limit(1).get();
-  if (userQuery.empty) return null;
-  return { ref: userQuery.docs[0].ref, data: userQuery.docs[0].data(), id: userQuery.docs[0].id };
-}
-
 async function findUserDocByEmailOrUid(email, uid) {
   if (email) {
     const userQuery = await db.collection("usuarios").where("correo", "==", email).limit(1).get();
@@ -97,6 +91,50 @@ async function moveToTrash(canonicalRef, sourceRef, sourceId, sourceData, reason
     });
   } catch (e) {
     console.error("moveToTrash error:", e);
+  }
+}
+
+/**
+ * Elimina definitivamente una entrada de la subcolección "basura" (después
+ * de que ya se usó el código de verificación, por ejemplo).
+ * @param {Object} canonicalRef Referencia al documento canónico del usuario.
+ * @param {string} sourceId Identificador de la entrada de basura a eliminar.
+ * @return {Promise<void>}
+ */
+async function deleteTrashEntry(canonicalRef, sourceId) {
+  try {
+    await canonicalRef.collection("basura").doc(String(sourceId)).delete();
+  } catch (e) {
+    console.error("deleteTrashEntry error:", e);
+  }
+}
+
+/**
+ * Limpia entradas de basura antiguas (por defecto > 48 h) para que la
+ * subcolección no crezca indefinidamente.
+ * @param {Object} canonicalRef Referencia al documento canónico del usuario.
+ * @param {number} [maxAgeMs] Antigüedad máxima en milisegundos.
+ * @return {Promise<void>}
+ */
+async function cleanupExpiredTrash(canonicalRef, maxAgeMs) {
+  const limit = maxAgeMs || 48 * 60 * 60 * 1000;
+  try {
+    const snap = await canonicalRef.collection("basura").get();
+    const now = Date.now();
+    const batch = admin.firestore().batch();
+    let changes = 0;
+    snap.docs.forEach((doc) => {
+      const data = doc.data() || {};
+      const moved = data.movidaA;
+      const ts = moved && moved.toMillis ? moved.toMillis() : 0;
+      if (!ts || now - ts > limit) {
+        batch.delete(doc.ref);
+        changes++;
+      }
+    });
+    if (changes > 0) await batch.commit();
+  } catch (e) {
+    console.error("cleanupExpiredTrash error:", e);
   }
 }
 
@@ -224,6 +262,9 @@ async function verifyEmailCode(email, code, type, uid) {
   // Mueve el código usado al arreglo temporal "basura" antes de eliminarlo del documento.
   await moveToTrash(user.ref, user.ref, `${prefix}_code`, entry, "codigo_usado");
   await user.ref.update({ codigos: admin.firestore.FieldValue.arrayRemove(entry) }).catch(() => {});
+  // Elimina la entrada de basura recién creada y limpia entradas antiguas.
+  await deleteTrashEntry(user.ref, `${prefix}_code`);
+  await cleanupExpiredTrash(user.ref);
 
   const updateSuccess = { ...cleanupCodeFields(prefix), updatedAt: admin.firestore.FieldValue.serverTimestamp() };
 
@@ -287,8 +328,8 @@ function buildNotificationContent(type, data) {
 
   const cases = {
     nuevo_mensaje: {
-      title: title || "Nuevo Mensaje",
-      body: body || "Has recibido un nuevo mensaje.",
+      title: title || (notifData.emisorNombre ? `Mensaje de ${notifData.emisorNombre}` : "Nuevo Mensaje"),
+      body: body || (notifData.chatNombre ? `${notifData.chatNombre}: Has recibido un nuevo mensaje.` : "Has recibido un nuevo mensaje."),
       target: "CHAT_DETAIL"
     },
     solicitud_vinculo: {
@@ -359,6 +400,40 @@ function buildNotificationContent(type, data) {
   };
 }
 
+/**
+ * Resuelve el token FCM del destinatario intentando localizar el documento
+ * canónico (el que tiene fcmToken / completado) aunque la notificación se
+ * haya escrito bajo un documento fantasma (por uid o correo).
+ * @param {string} userId Identificador del usuario destino.
+ * @return {Promise<{data: Object, ref: Object}|null>} Datos y referencia del
+ *   documento con token FCM, o null si no se encontró.
+ */
+async function resolveRecipientToken(userId) {
+  // 1) Intento directo sobre el documento que contiene las notificaciones.
+  const userDoc = await db.collection("usuarios").doc(userId).get();
+  const directData = userDoc.exists ? userDoc.data() : null;
+  if (directData && directData.fcmToken) return { data: directData, ref: userDoc.ref };
+
+  // 2) Buscar por uid, prefiriendo el documento canónico (completado o con token).
+  const uidQuery = await db.collection("usuarios").where("uid", "==", userId).limit(50).get();
+  let best = null;
+  for (const doc of uidQuery.docs) {
+    const d = doc.data() || {};
+    if (!d.fcmToken) continue;
+    if (!best || (d.completado === true && !best.data.completado)) {
+      best = { data: d, ref: doc.ref };
+    }
+  }
+  if (best) return best;
+
+  // 3) Último recurso: usar el primero aunque no tenga token (se reportará).
+  if (!uidQuery.empty) {
+    const first = uidQuery.docs[0];
+    return { data: first.data() || {}, ref: first.ref };
+  }
+  return null;
+}
+
 exports.sendPushNotification = onDocumentCreated(
   { ...RUN_OPTIONS, document: "usuarios/{userId}/notificaciones/{notifId}" },
   async (event) => {
@@ -367,31 +442,44 @@ exports.sendPushNotification = onDocumentCreated(
     if (!notification) return;
 
     try {
-      let userDoc = await db.collection("usuarios").doc(userId).get();
-      let userData = userDoc.exists ? userDoc.data() : null;
-
-      if (!userData || !userData.fcmToken) {
-        const userQuery = await db.collection("usuarios").where("uid", "==", userId).limit(1).get();
-        if (!userQuery.empty) {
-          userDoc = userQuery.docs[0];
-          userData = userDoc.data();
-        }
+      const resolved = await resolveRecipientToken(userId);
+      if (!resolved || !resolved.data.fcmToken) {
+        console.error("sendPushNotification: sin fcmToken para usuario", userId);
+        return;
       }
-
-      const fcmToken = userData ? userData.fcmToken : null;
-      if (!fcmToken) return;
+      const fcmToken = resolved.data.fcmToken;
 
       const type = notification.tipo || "mensaje";
       const content = buildNotificationContent(type, notification.data || {});
       const receiverUid = String(notification.receptor || userId || "");
+      const notifId = String(event.params.notifId || "");
+
+      // Enriquecer con datos del PERFIL del emisor (no del auth externo).
+      let senderName = (notification.data || {}).emisorNombre || "";
+      let senderPhoto = (notification.data || {}).emisorFoto || "";
+      if (notification.emisor && (!senderName || !senderPhoto)) {
+        try {
+          const senderQuery = await db.collection("usuarios").where("uid", "==", notification.emisor).limit(1).get();
+          if (!senderQuery.empty) {
+            const senderData = senderQuery.docs[0].data() || {};
+            if (!senderName) senderName = senderData.nombre || "";
+            if (!senderPhoto) senderPhoto = senderData.fotoUrl || "";
+          }
+        } catch (e) {
+          console.error("Error enriqueciendo emisor:", e);
+        }
+      }
 
       const dataPayload = {
         tipo: String(type),
         emisor: String(notification.emisor || ""),
         receptor: receiverUid,
         TARGET_SCREEN: content.target,
-        click_action: "FLUTTER_NOTIFICATION_CLICK"
+        click_action: "FLUTTER_NOTIFICATION_CLICK",
+        notifId: notifId
       };
+      if (senderName) dataPayload.emisorNombre = senderName;
+      if (senderPhoto) dataPayload.emisorFoto = senderPhoto;
 
       const notifData = notification.data || {};
       if (typeof notifData === "object") {
@@ -402,16 +490,13 @@ exports.sendPushNotification = onDocumentCreated(
         }
       }
 
+      // Mensaje tipo data-only para que el cliente construya la notificación
+      // (acciones, foto del remitente y preview multimedia) incluso en segundo plano.
       const message = {
         token: fcmToken,
-        notification: { title: content.title, body: content.body },
         data: dataPayload,
         android: {
-          priority: "high",
-          notification: {
-            channelId: type === "nuevo_mensaje" ? "cuidale_chats" : "cuidale_alerts",
-            sound: "default"
-          }
+          priority: "high"
         }
       };
 

@@ -39,6 +39,7 @@ fun HardShadowButton(
     contentColor: Color = MaterialTheme.colorScheme.onPrimary,
     shadowColor: Color = CuidaleThemeExtras.shadows.hardShadowPrimary,
     icon: ImageVector? = null,
+    isLoading: Boolean = false,
     isErrorMode: Boolean = false,
     errorText: String? = null,
     isDark: Boolean = CuidaleThemeExtras.customColors.isDark,
@@ -154,7 +155,14 @@ fun HardShadowButton(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 16.dp)) {
-                    if (icon != null && !isErrorMode) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = animatedContentColor
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    } else if (icon != null && !isErrorMode) {
                         Icon(imageVector = icon, contentDescription = null, tint = animatedContentColor)
                         Spacer(modifier = Modifier.width(8.dp))
                     } else if (isErrorMode) {

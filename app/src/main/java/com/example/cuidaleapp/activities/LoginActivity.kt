@@ -14,6 +14,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.example.cuidaleapp.ui.components.CuidaleAppRoot
+import com.example.cuidaleapp.ui.components.CuidaleWelcomeLoading
 import com.example.cuidaleapp.ui.screens.LoginScreen
 import com.example.cuidaleapp.viewmodel.LoginUiState
 import com.example.cuidaleapp.viewmodel.LoginViewModel
@@ -116,6 +117,7 @@ class LoginActivity : ComponentActivity() {
                             putExtra("EXTERNAL_UID", state.uid)
                             putExtra("EXTERNAL_PROVIDER", state.providerId)
                             putExtra("EXTERNAL_DISPLAY_NAME", state.displayName)
+                            putExtra("EXTERNAL_PHOTO_URL", state.photoUrl ?: "")
                         }
                         startActivity(intent)
                         viewModel.clearError()
@@ -126,7 +128,7 @@ class LoginActivity : ComponentActivity() {
             
             CuidaleAppRoot(darkTheme = isDark) {
                 if (uiState is LoginUiState.CheckingAuth) {
-                    com.example.cuidaleapp.ui.screens.LoginLoadingScreen()
+                    CuidaleWelcomeLoading()
                 } else {
                     LoginScreen(
                         isDark = isDark,

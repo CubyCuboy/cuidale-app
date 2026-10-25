@@ -29,9 +29,10 @@ class RegisterActivity : ComponentActivity() {
         val externalUid = intent.getStringExtra("EXTERNAL_UID") ?: ""
         val externalProvider = intent.getStringExtra("EXTERNAL_PROVIDER") ?: ""
         val externalDisplayName = intent.getStringExtra("EXTERNAL_DISPLAY_NAME") ?: ""
+        val externalPhotoUrl = intent.getStringExtra("EXTERNAL_PHOTO_URL") ?: ""
 
         if (isExternal) {
-            registerViewModel.initExternal(externalEmail, externalUid, externalProvider, externalDisplayName)
+            registerViewModel.initExternal(externalEmail, externalUid, externalProvider, externalDisplayName, externalPhotoUrl)
         }
 
         setContent {

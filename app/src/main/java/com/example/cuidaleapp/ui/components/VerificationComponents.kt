@@ -111,12 +111,11 @@ fun CodeVerificationStep(
 
     val isExpired = timeLeft <= 0L
     val isBlocked = isExpired || attemptsLeft <= 0 || isLoading
-
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         HardShadowPanel(
             backgroundColor = CuidaleThemeExtras.customColors.panelBackground,
             shadowColor = panelShadowColor,
-            isError = error != null || isExpired || attemptsLeft <= 0
+            isError = error != null || attemptsLeft <= 0
         ) {
             Text(
                 text = title,
@@ -189,7 +188,7 @@ fun CodeVerificationStep(
                 otpText = code,
                 onOtpTextChange = onCodeChange,
                 enabled = !isBlocked,
-                isError = error != null || isBlocked
+                isError = error != null || attemptsLeft <= 0
             )
 
             Spacer(modifier = Modifier.height(16.dp))

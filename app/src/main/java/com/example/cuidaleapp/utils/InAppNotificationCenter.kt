@@ -23,34 +23,33 @@ object InAppNotificationCenter {
     val visible = _visible.asStateFlow()
 
     private const val DEDUPE_WINDOW_MS = 12000L
+    private const val SUPPRESS_AFTER_DISMISS_MS = 25000L
     private val recentKeys = linkedMapOf<String, Long>()
     private val recentTypes = linkedMapOf<String, Long>()
+    private val dismissedKeys = linkedMapOf<String, Long>()
 
     fun show(notification: InAppNotification) {
+        // Suprimir notificaciones genéricas de respaldo (tipo "generica").
+        if (notification.tipo == "generica") {
+            return
+        }
+
         val key = buildKey(notification)
         val now = System.currentTimeMillis()
 
         recentKeys.entries.removeAll { now - it.value > DEDUPE_WINDOW_MS }
         recentTypes.entries.removeAll { now - it.value > DEDUPE_WINDOW_MS }
-
-        val isGeneric = notification.tipo == "generica" || NotificationTemplates.isGeneric(notification.title, notification.body)
-
-        // Si llega una genérica y ya hubo (o hay) una específica del mismo tipo, se descarta.
-        if (isGeneric) {
-            val recentSpecificOfSameType = recentTypes[notification.tipo] != null || _events.value.any { it.tipo == notification.tipo }
-            if (recentSpecificOfSameType) return
-        }
+        dismissedKeys.entries.removeAll { now - it.value > SUPPRESS_AFTER_DISMISS_MS }
 
         val alreadyShown = recentKeys.containsKey(key)
         val alreadyVisible = _events.value.any { it.id == notification.id || buildKey(it) == key }
-        if (alreadyShown || alreadyVisible) return
+        if (alreadyShown || alreadyVisible || dismissedKeys.containsKey(key)) return
 
         // Si llega una específica y hay una genérica del mismo tipo en cola, la específica la reemplaza.
-        if (!isGeneric) {
-            val hasPendingGenericOfSameType = _events.value.any { it.tipo == notification.tipo && NotificationTemplates.isGeneric(it.title, it.body) }
-            if (hasPendingGenericOfSameType) {
-                _events.value = _events.value.filterNot { it.tipo == notification.tipo && NotificationTemplates.isGeneric(it.title, it.body) }
-            }
+        val isGeneric = NotificationTemplates.isGeneric(notification.title, notification.body)
+        if (isGeneric) {
+            val recentSpecificOfSameType = recentTypes[notification.tipo] != null || _events.value.any { it.tipo == notification.tipo }
+            if (recentSpecificOfSameType) return
         }
 
         recentKeys[key] = now
@@ -70,6 +69,11 @@ object InAppNotificationCenter {
     }
 
     fun dismiss(id: String) {
+        val ev = _events.value.firstOrNull { it.id == id }
+        if (ev != null) {
+            val key = buildKey(ev)
+            dismissedKeys[key] = System.currentTimeMillis()
+        }
         _events.value = _events.value.filter { it.id != id }
         if (_events.value.isEmpty()) {
             _visible.value = false
@@ -84,8 +88,9 @@ object InAppNotificationCenter {
     }
 
     private fun buildKey(notification: InAppNotification): String {
+        val notifId = notification.payload["notifId"] ?: ""
         val normalizedTitle = notification.title.trim().lowercase()
         val normalizedBody = notification.body.trim().lowercase()
-        return "${notification.tipo}|$normalizedTitle|$normalizedBody"
+        return "${notification.tipo}|$notifId|$normalizedTitle|$normalizedBody"
     }
 }

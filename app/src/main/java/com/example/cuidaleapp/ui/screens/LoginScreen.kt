@@ -114,7 +114,7 @@ fun LoginScreen(
                 )
             }
             "success" -> {
-                LoginLoadingScreen()
+                CuidaleWelcomeLoading()
             }
         }
     }
@@ -309,8 +309,21 @@ fun LoginForm(
 
             val needsVerification = (state as? LoginUiState.Error)?.message?.contains("verificar") == true
 
+            var loadingDots by remember { mutableStateOf("") }
+            LaunchedEffect(isLoading) {
+                while (isLoading) {
+                    loadingDots = when (loadingDots.length) {
+                        0 -> "."
+                        1 -> ".."
+                        else -> "..."
+                    }
+                    delay(450)
+                }
+                loadingDots = ""
+            }
+
             HardShadowButton(
-                text = if (isLoading) stringResource(R.string.login_button_loading)
+                text = if (isLoading) "Ingresando$loadingDots"
                 else if (needsVerification) "Verificar Cuenta"
                 else if (isError) stringResource(R.string.login_button_retry)
                 else stringResource(R.string.login_button_enter),
@@ -318,6 +331,7 @@ fun LoginForm(
                 contentColor = if (isError && !needsVerification) Color.White else colors.onPrimary,
                 shadowColor = loginButtonShadow,
                 icon = if (needsVerification) Icons.Default.Email else if (isError) Icons.Filled.Block else Icons.AutoMirrored.Outlined.Login,
+                isLoading = isLoading,
                 isErrorMode = isError && !needsVerification,
                 isDark = isDark,
                 onClick = {

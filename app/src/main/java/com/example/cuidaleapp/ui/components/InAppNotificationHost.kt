@@ -14,10 +14,12 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -29,13 +31,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.EventNote
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
+import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.TaskAlt
 import androidx.compose.material.icons.filled.VpnKey
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -51,6 +54,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -71,11 +75,23 @@ private const val LIFETIME_MS = 4500L
 @Composable
 fun InAppNotificationHost(
     onNotificationClick: ((InAppNotification) -> Unit)? = null,
+    onMarkRead: ((InAppNotification) -> Unit)? = null,
+    onReply: ((InAppNotification) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val handleClick: (InAppNotification) -> Unit = onNotificationClick ?: { notification ->
         InAppNotificationNavigator.navigate(context, notification)
+    }
+    // Las acciones SIEMPRE cierran la notificación interna (no se reinicia su vida útil)
+    // y luego ejecutan el handler personalizado si existe.
+    val handleMarkRead: (InAppNotification) -> Unit = { notification ->
+        InAppNotificationCenter.dismiss(notification.id)
+        onMarkRead?.invoke(notification)
+    }
+    val handleReply: (InAppNotification) -> Unit = { notification ->
+        InAppNotificationCenter.dismiss(notification.id)
+        onReply?.invoke(notification)
     }
 
     val events by InAppNotificationCenter.events.collectAsState()
@@ -128,10 +144,17 @@ fun InAppNotificationHost(
                             shadowElevation = 10.dp,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            NotificationCardContent(notification, accent, onDismiss = {
-                                dismissedId = notification.id
-                                InAppNotificationCenter.dismiss(notification.id)
-                            }, lifetimeProgress)
+                            NotificationCardContent(
+                                notification = notification,
+                                accent = accent,
+                                onDismiss = {
+                                    dismissedId = notification.id
+                                    InAppNotificationCenter.dismiss(notification.id)
+                                },
+                                onMarkRead = { handleMarkRead(notification) },
+                                onReply = { handleReply(notification) },
+                                lifetimeProgress = lifetimeProgress
+                            )
                         }
                     }
                 } else {
@@ -145,10 +168,17 @@ fun InAppNotificationHost(
                             shape = RoundedCornerShape(0.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            NotificationCardContent(notification, accent, onDismiss = {
-                                dismissedId = notification.id
-                                InAppNotificationCenter.dismiss(notification.id)
-                            }, lifetimeProgress)
+                            NotificationCardContent(
+                                notification = notification,
+                                accent = accent,
+                                onDismiss = {
+                                    dismissedId = notification.id
+                                    InAppNotificationCenter.dismiss(notification.id)
+                                },
+                                onMarkRead = { handleMarkRead(notification) },
+                                onReply = { handleReply(notification) },
+                                lifetimeProgress = lifetimeProgress
+                            )
                         }
                     }
                 }
@@ -162,41 +192,81 @@ private fun NotificationCardContent(
     notification: InAppNotification,
     accent: Color,
     onDismiss: () -> Unit,
+    onMarkRead: () -> Unit,
+    onReply: () -> Unit,
     lifetimeProgress: Animatable<Float, *>
 ) {
     Column {
+        val isChat = notification.tipo == "nuevo_mensaje"
+        val senderName = notification.payload["emisorNombre"] ?: stringResource(R.string.notification_chat_default_sender)
+        val senderPhoto = notification.payload["emisorFoto"] ?: ""
+        val chatName = notification.payload["chatNombre"] ?: ""
+        val messageText = notification.payload["text"]?.take(160) ?: notification.body.take(160)
+        val mediaTipo = notification.payload["mediaTipo"]
+        val mediaUrl = notification.payload["mediaUrl"] ?: ""
+        val time = formatNotifTime(notification.timestamp)
+
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.Top
         ) {
+            // Avatar
             Box(
                 modifier = Modifier
-                    .size(42.dp)
-                    .background(accent.copy(alpha = 0.15f), CircleShape),
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(accent.copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = iconForType(notification.tipo),
-                    contentDescription = null,
-                    tint = accent,
-                    modifier = Modifier.size(22.dp)
-                )
+                if (senderPhoto.isNotBlank() && senderPhoto != "n/a") {
+                    coil3.compose.AsyncImage(
+                        model = senderPhoto,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
+                } else {
+                    Icon(
+                        imageVector = if (isChat) Icons.AutoMirrored.Filled.Chat else iconForType(notification.tipo),
+                        contentDescription = null,
+                        tint = accent,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
             }
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = if (isChat) senderName else notification.title,
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = time,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
+                if (isChat && chatName.isNotBlank()) {
+                    Text(
+                        text = stringResource(R.string.notification_chat_in, chatName),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = accent,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = notification.title,
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = notification.body,
-                    style = MaterialTheme.typography.bodySmall,
+                    text = messageText,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis
                 )
             }
@@ -208,6 +278,80 @@ private fun NotificationCardContent(
                 )
             }
         }
+
+        // Preview multimedia (imagen o primer frame de video)
+        if (mediaTipo != null && mediaUrl.isNotBlank()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .height(160.dp)
+                    .clip(RoundedCornerShape(12.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                when (mediaTipo) {
+                    "image" -> coil3.compose.AsyncImage(
+                        model = mediaUrl,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
+                    "video" -> VideoFirstFrame(
+                        url = mediaUrl,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    else -> {
+                        Surface(color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxSize()) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.AutoMirrored.Filled.InsertDriveFile, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Acciones
+        if (isChat) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Surface(
+                    onClick = onReply,
+                    color = accent.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(50),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.Reply, null, tint = accent, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(stringResource(R.string.notification_chat_reply), style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = accent)
+                    }
+                }
+                Surface(
+                    onClick = onMarkRead,
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    shape = RoundedCornerShape(50),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(stringResource(R.string.notification_chat_mark_read), style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -237,6 +381,14 @@ fun CuidaleAppRoot(
                 InAppNotificationHost(onNotificationClick = onNotificationClick)
             }
         }
+    }
+}
+
+private fun formatNotifTime(timestamp: Long): String {
+    return try {
+        java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(timestamp))
+    } catch (e: Exception) {
+        ""
     }
 }
 

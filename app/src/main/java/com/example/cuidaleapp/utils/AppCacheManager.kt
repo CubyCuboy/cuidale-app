@@ -8,16 +8,43 @@ object AppCacheManager {
     fun clearMultimediaCaches(context: Context) {
         @androidx.media3.common.util.UnstableApi
         runCatching { com.example.cuidaleapp.ui.components.VideoPlayerCache.releaseAll() }
-        runCatching { com.example.cuidaleapp.ui.components.MediaSkeletonCache.clearSeen() }
+        runCatching { com.example.cuidaleapp.ui.components.VideoThumbnailCache.clear(context) }
         runCatching {
             @androidx.media3.common.util.UnstableApi
             com.example.cuidaleapp.ui.components.MultimediaDiskCache.clear(context)
         }
+        // Eliminación directa de carpetas (independiente de la caché lógica).
+        runCatching { File(context.cacheDir, "multimedia_cache").deleteRecursively() }
+        runCatching { File(context.cacheDir, "image_cache").deleteRecursively() }
         runCatching {
             val loader = coil3.SingletonImageLoader.get(context)
             loader.memoryCache?.clear()
             loader.diskCache?.clear()
         }
+        runCatching {
+            @OptIn(coil3.annotation.DelicateCoilApi::class)
+            fun resetCoil() {
+                coil3.SingletonImageLoader.reset()
+            }
+            resetCoil()
+        }
+    }
+
+    fun clearImageCaches(context: Context) {
+        runCatching {
+            val loader = coil3.SingletonImageLoader.get(context)
+            loader.memoryCache?.clear()
+            loader.diskCache?.clear()
+        }
+        runCatching {
+            @OptIn(coil3.annotation.DelicateCoilApi::class)
+            fun resetCoil() {
+                coil3.SingletonImageLoader.reset()
+            }
+            resetCoil()
+        }
+        runCatching { File(context.cacheDir, "image_cache").deleteRecursively() }
+        runCatching { File(context.cacheDir, "video_thumbnails").deleteRecursively() }
     }
 
     /**
@@ -39,6 +66,14 @@ object AppCacheManager {
         val multimedia = File(context.cacheDir, "multimedia_cache")
         val images = File(context.cacheDir, "image_cache")
         return folderSize(multimedia) + folderSize(images)
+    }
+
+    fun mediaSizeBytes(context: Context): Long {
+        return folderSize(File(context.cacheDir, "multimedia_cache"))
+    }
+
+    fun imagesSizeBytes(context: Context): Long {
+        return folderSize(File(context.cacheDir, "image_cache")) + folderSize(File(context.cacheDir, "video_thumbnails"))
     }
 
     private fun folderSize(file: File): Long {

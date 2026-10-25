@@ -201,7 +201,18 @@ fun AccountManagementScreen(
             msg.contains("permission-denied", ignoreCase = true) ||
             msg.contains("Missing or insufficient permissions", ignoreCase = true) ->
                 "Error de permisos en el servidor. Inténtalo nuevamente."
-                
+
+            // Cancelación de la ventana OAuth (p. ej. Microsoft/Google) -> mensaje en español.
+            msg.contains("operation was cancelled", ignoreCase = true) ||
+            msg.contains("cancelled", ignoreCase = true) ||
+            msg.contains("canceled", ignoreCase = true) ||
+            msg.contains("popup closed", ignoreCase = true) ||
+            msg.contains("popup-closed-by-user", ignoreCase = true) ||
+            msg.contains("USER_CANCELLED", ignoreCase = true) ||
+            msg.contains("auth/cancelled", ignoreCase = true) ||
+            msg.contains("auth/signin-cancelled", ignoreCase = true) ->
+                "Vinculación cancelada."
+
             else -> if (msg.isNotBlank()) msg else "Error al vincular la cuenta"
         }
     }
@@ -350,19 +361,11 @@ fun AccountManagementScreen(
 
                         val uid = currentUser?.uid ?: ""
                         if (uid.isNotBlank()) {
-                            val updates = mutableMapOf<String, Any>(
+                            // Solo se actualiza el correo; NO se tocan nombre/apellidos/foto
+                            // (los datos de perfil pertenecen al usuario, no al auth externo).
+                            val updates = mapOf<String, Any>(
                                 "correo" to newEmail
                             )
-                            if (!newDisplayName.isNullOrBlank()) {
-                                val nameParts = newDisplayName.trim().split(Regex("\\s+"))
-                                updates["nombre"] = nameParts.getOrNull(0) ?: ""
-                                if (nameParts.size >= 3) {
-                                    updates["nombre_s"] = nameParts.getOrNull(1) ?: ""
-                                    updates["apellido_pa"] = nameParts.getOrNull(2) ?: ""
-                                } else if (nameParts.size == 2) {
-                                    updates["apellido_pa"] = nameParts[1]
-                                }
-                            }
                             val db = FirebaseFirestore.getInstance()
                             val currentRut = userData.rut
                             if (currentRut.isNotBlank()) {
@@ -468,15 +471,23 @@ fun AccountManagementScreen(
             .addOnSuccessListener {
                 scope.launch {
                     try {
-                        currentUser.reload().await()
-                        syncPrimaryEmailFromAuth(providerId)
-                        val linkedEmail = currentUser.email ?: currentUser.providerData.firstOrNull { it.providerId == providerId }?.email ?: ""
-                        updateProviderTimestampAndHistory(providerId, providerName, "link", linkedEmail)
-                        viewModel.refreshFromFirestore()
-                        refreshProviders()
+                        // Timeout de 25s para la sincronización post-vinculación.
+                        val ok = kotlinx.coroutines.withTimeoutOrNull(25_000L) {
+                            currentUser.reload().await()
+                            syncPrimaryEmailFromAuth(providerId)
+                            val linkedEmail = currentUser.email ?: currentUser.providerData.firstOrNull { it.providerId == providerId }?.email ?: ""
+                            updateProviderTimestampAndHistory(providerId, providerName, "link", linkedEmail)
+                            viewModel.refreshFromFirestore()
+                            refreshProviders()
+                            true
+                        }
                         isLoading = false
-                        successDialogMessage = "Cuenta de $providerName vinculada con éxito"
-                        sendAccountNotification(successDialogMessage!!)
+                        if (ok == true) {
+                            successDialogMessage = "Cuenta de $providerName vinculada con éxito"
+                            sendAccountNotification(successDialogMessage!!)
+                        } else {
+                            errorMessage = "La vinculación está tardando demasiado. Revisa tu conexión e inténtalo de nuevo."
+                        }
                     } catch (e: Exception) {
                         isLoading = false
                         errorMessage = e.localizedMessage ?: "Error al finalizar vinculación"
@@ -566,15 +577,22 @@ fun AccountManagementScreen(
             .addOnSuccessListener {
                 scope.launch {
                     try {
-                        currentUser.reload().await()
-                        syncPrimaryEmailFromAuth(providerId)
-                        val updatedEmail = currentUser.email ?: currentUser.providerData.firstOrNull { it.providerId == providerId }?.email ?: ""
-                        updateProviderTimestampAndHistory(providerId, providerName, "change", updatedEmail)
-                        viewModel.refreshFromFirestore()
-                        refreshProviders()
+                        val ok = kotlinx.coroutines.withTimeoutOrNull(25_000L) {
+                            currentUser.reload().await()
+                            syncPrimaryEmailFromAuth(providerId)
+                            val updatedEmail = currentUser.email ?: currentUser.providerData.firstOrNull { it.providerId == providerId }?.email ?: ""
+                            updateProviderTimestampAndHistory(providerId, providerName, "change", updatedEmail)
+                            viewModel.refreshFromFirestore()
+                            refreshProviders()
+                            true
+                        }
                         isLoading = false
-                        successDialogMessage = "Cuenta actualizada con éxito"
-                        sendAccountNotification(successDialogMessage!!)
+                        if (ok == true) {
+                            successDialogMessage = "Cuenta actualizada con éxito"
+                            sendAccountNotification(successDialogMessage!!)
+                        } else {
+                            errorMessage = "El cambio de cuenta está tardando demasiado. Revisa tu conexión e inténtalo de nuevo."
+                        }
                     } catch (e: Exception) {
                         isLoading = false
                         errorMessage = e.localizedMessage ?: "Error al actualizar cuenta"

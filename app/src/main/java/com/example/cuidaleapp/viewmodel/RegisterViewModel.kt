@@ -35,11 +35,13 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
     var isExternalFlow = false
         private set
     private var externalUid = ""
+    private var _externalPhotoUrl = ""
 
-    fun initExternal(email: String, uid: String, provider: String, displayName: String = "") {
+    fun initExternal(email: String, uid: String, provider: String, displayName: String = "", photoUrl: String = "") {
         isExternalFlow = true
         externalUid = uid
         _email.value = email
+        if (photoUrl.isNotBlank()) _externalPhotoUrl = photoUrl
 
         val prefs = getApplication<Application>().getSharedPreferences("cuidale_prefs", Context.MODE_PRIVATE)
         val cachedEmail = prefs.getString("incomplete_email", "")
@@ -56,6 +58,9 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
             _idRegion.value = prefs.getString("incomplete_id_region", "") ?: ""
             _comuna.value = prefs.getString("incomplete_comuna", "") ?: ""
             _telefono.value = prefs.getString("incomplete_telefono", "") ?: ""
+            if (_externalPhotoUrl.isBlank()) {
+                _externalPhotoUrl = prefs.getString("incomplete_fotoUrl", "") ?: ""
+            }
         } else {
             clearIncompleteCache()
 
@@ -79,6 +84,7 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
                 .putString("incomplete_nombre_s", _nombreS.value)
                 .putString("incomplete_apellido_pa", _apellidoPa.value)
                 .putString("incomplete_apellido_ma", _apellidoMa.value)
+                .putString("incomplete_fotoUrl", _externalPhotoUrl)
                 .apply()
         }
 
@@ -131,6 +137,12 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
             .remove("incomplete_comuna")
             .remove("incomplete_telefono")
             .apply()
+    }
+
+    private fun providerIdFromPrefs(): String {
+        val prefs = getApplication<Application>().getSharedPreferences("cuidale_prefs", Context.MODE_PRIVATE)
+        return prefs.getString("incomplete_provider", "")?.ifBlank { null }
+            ?: com.example.cuidaleapp.utils.AccountUtils.PROVIDER_GOOGLE
     }
 
     private val _uiState = MutableStateFlow<RegisterUiState>(RegisterUiState.Idle)
@@ -445,6 +457,42 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
             try {
                 val formattedRut = formatRutForSaving(_rut.value)
                 val hashedRut = HashUtils.hashRut(formattedRut)
+                val emailNorm = _email.value.trim().lowercase()
+
+                // Anti-duplicación: si ya existe una cuenta canónica con este correo,
+                // se le linkea el proveedor nuevo en lugar de crear una copia.
+                val existingCanonical = com.example.cuidaleapp.utils.AccountUtils.findCanonicalUserDocument(
+                    db = db,
+                    email = emailNorm,
+                    uid = externalUid
+                )
+                val existingUser = existingCanonical?.toObject(UserData::class.java)
+                if (existingCanonical != null && existingUser?.completado == true) {
+                    val providerId = providerIdFromPrefs()
+                    val merged = com.example.cuidaleapp.utils.AccountUtils.attachProviderToExistingAccount(
+                        doc = existingCanonical,
+                        providerId = providerId,
+                        accountName = emailNorm,
+                        verified = true,
+                        newUid = externalUid
+                    ) ?: existingUser
+                    com.example.cuidaleapp.utils.AccountUtils.cleanupDuplicateGhostDocs(
+                        db = db,
+                        canonicalRef = existingCanonical.reference,
+                        canonicalId = existingCanonical.id,
+                        email = emailNorm,
+                        uid = externalUid
+                    )
+                    // Sincronizar foto de perfil externa si el canónico no tiene una.
+                    if (_externalPhotoUrl.isNotBlank() && merged.fotoUrl.isBlank()) {
+                        runCatching { existingCanonical.reference.update("fotoUrl", _externalPhotoUrl).await() }
+                    }
+                    val finalUser = merged.copy(uid = externalUid, fotoUrl = if (merged.fotoUrl.isNotBlank()) merged.fotoUrl else _externalPhotoUrl)
+                    UserSession(getApplication()).saveUser(finalUser)
+                    clearIncompleteCache()
+                    _uiState.value = RegisterUiState.Success
+                    return@launch
+                }
 
                 val docCheck = db.collection("usuarios").document(hashedRut).get().await()
                 if (docCheck.exists()) {
@@ -458,10 +506,10 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
                 val nowTimestamp = com.google.firebase.Timestamp(now / 1000, 0)
                 val entryId = java.util.UUID.randomUUID().toString()
                 val prefs = getApplication<Application>().getSharedPreferences("cuidale_prefs", Context.MODE_PRIVATE)
-                val providerId = prefs.getString("incomplete_provider", "")?.ifBlank { null } ?: "external"
+                val providerId = providerIdFromPrefs()
                 val providerName = when (providerId) {
-                    "microsoft.com" -> "Microsoft"
-                    "google.com" -> "Google"
+                    com.example.cuidaleapp.utils.AccountUtils.PROVIDER_MICROSOFT -> com.example.cuidaleapp.utils.AccountUtils.PROVIDER_DISPLAY_MICROSOFT
+                    com.example.cuidaleapp.utils.AccountUtils.PROVIDER_GOOGLE -> com.example.cuidaleapp.utils.AccountUtils.PROVIDER_DISPLAY_GOOGLE
                     else -> providerId
                 }
 
@@ -474,11 +522,7 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
                 )
                 val initialHistory = listOf(initialEntry)
 
-                val providerIdCanonical = when (providerId.trim().lowercase()) {
-                    "google.com", "google" -> "google.com"
-                    "microsoft.com", "microsoft" -> "microsoft.com"
-                    else -> providerId
-                }
+                val providerIdCanonical = com.example.cuidaleapp.utils.AccountUtils.normalizeProviderId(providerId)
                 val initialLinked = listOf(
                     com.example.cuidaleapp.models.LinkedAccountDetail(
                         providerId = providerIdCanonical,
@@ -508,7 +552,9 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
                     "accountHistory" to initialHistory,
                     "createdAt" to nowTimestamp,
                     "updatedAt" to nowTimestamp
-                )
+                ).apply {
+                    if (_externalPhotoUrl.isNotBlank()) put("fotoUrl", _externalPhotoUrl)
+                }
 
                 val userDocRef = db.collection("usuarios").document(hashedRut)
                 userDocRef.set(userData, com.google.firebase.firestore.SetOptions.merge()).await()
@@ -535,6 +581,7 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
                     region = _region.value,
                     id_region = _idRegion.value,
                     comuna = _comuna.value,
+                    fotoUrl = _externalPhotoUrl,
                     verificado = true,
                     completado = true,
                     createdAt = nowTimestamp,
