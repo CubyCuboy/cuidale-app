@@ -233,7 +233,4 @@
     <string name="notification_accept_body">Tu solicitud fue aceptada. Ya puedes chatear.</string>
     <string name="notification_generic">Notificación de CuidaleApp</string>
     <string name="notification_generic_body">Tienes una nueva actualización en la aplicación.</string>
-
-    <!-- Mapbox Token -->
-    <string name="mapbox_access_token">pk.eyJ1IjoiYnJ1bm9uc2siLCJhIjoiY212bzE4Y25jMHBsdTJ4b3I0M2d1NTBkMiJ9.CB9sb6Ac3TxKQXWbzl_rmw</string>
 </resources>
