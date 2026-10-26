@@ -54,6 +54,14 @@ android {
     buildFeatures {
         compose = true
     }
+
+    packaging {
+        jniLibs {
+            // Mantiene las librerías nativas sin comprimir y alineadas a
+            // 16 KB (AGP 8.5.1+ alinea automáticamente .so no comprimidos).
+            useLegacyPackaging = false
+        }
+    }
 }
 
 dependencies {

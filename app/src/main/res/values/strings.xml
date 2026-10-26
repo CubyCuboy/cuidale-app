@@ -234,6 +234,69 @@
     <string name="notification_generic">Notificación de CuidaleApp</string>
     <string name="notification_generic_body">Tienes una nueva actualización en la aplicación.</string>
 
+    <!-- Canales de notificación -->
+    <string name="notification_channel_chats_name">Chats</string>
+    <string name="notification_channel_chats_desc">Mensajes de los chats</string>
+    <string name="notification_channel_alerts_name">Alertas</string>
+    <string name="notification_channel_alerts_desc">Solicitudes y eventos importantes</string>
+
+    <!-- Notificaciones: chat -->
+    <string name="notification_chat_default_sender">Contacto</string>
+    <string name="notification_chat_room_fallback">Chat</string>
+    <string name="notification_chat_new_message">Nuevo mensaje</string>
+    <string name="notification_chat_in">en %1$s</string>
+    <string name="notification_chat_reply">Responder</string>
+    <string name="notification_chat_mark_read">Marcar leído</string>
+    <string name="notification_unpin">Desfijar</string>
+    <string name="notification_pin">Fijar</string>
+    <string name="notification_tap_outside">Toca fuera para cerrar</string>
+    <string name="notification_media_image">Imagen</string>
+    <string name="notification_media_video">Video</string>
+    <string name="notification_media_file">Archivo</string>
+
+    <!-- Notificaciones: títulos -->
+    <string name="notif_title_request">Nueva solicitud de vínculo</string>
+    <string name="notif_title_accept">Solicitud aceptada</string>
+    <string name="notif_title_postulacion">Nueva postulación</string>
+    <string name="notif_title_postulacion_accept">Postulación aceptada</string>
+    <string name="notif_title_service_end">Servicio finalizado</string>
+    <string name="notif_title_chat">%1$s</string>
+    <string name="notif_title_new_user">Nuevo %1$s en tu zona</string>
+    <string name="notif_paciente">paciente</string>
+    <string name="notif_cuidador">cuidador</string>
+    <string name="notif_title_task">Recordatorio de tarea</string>
+    <string name="notif_title_task_late">Tarea atrasada</string>
+    <string name="notif_title_task_done">Tarea finalizada</string>
+    <string name="notif_title_task_postponed">Tarea postergada</string>
+    <string name="notif_title_shift">Turno finalizado</string>
+    <string name="notif_title_account">Configuración de cuenta</string>
+    <string name="notif_title_generic">Notificación de CuidaleApp</string>
+
+    <!-- Notificaciones: cuerpos -->
+    <string name="notif_body_request">%1$s quiere conectarse contigo para coordinar cuidados.</string>
+    <string name="notif_sender_fallback">Un usuario</string>
+    <string name="notif_body_accept">%1$s aceptó tu solicitud. Ya pueden chatear.</string>
+    <string name="notif_user_fallback">El usuario</string>
+    <string name="notif_body_postulacion">%1$s envió una postulación para el cuidado.</string>
+    <string name="notif_body_postulacion_accept">Tu postulación fue aceptada.</string>
+    <string name="notif_body_service_end">El servicio ha finalizado.</string>
+    <string name="notif_body_chat">Tienes un nuevo mensaje sin leer.</string>
+    <string name="notif_body_new_user">%1$s se unió a la plataforma.</string>
+    <string name="notif_body_account">Se realizaron cambios en tu cuenta.</string>
+    <string name="notif_body_generic">Tienes una nueva actualización.</string>
+    <string name="notif_chat_title">%1$s</string>
+    <string name="notif_chat_detail">%1$s: %2$s · %3$s</string>
+
+    <!-- Notificaciones: acciones -->
+    <string name="notif_mark_read">Marcar leído</string>
+    <string name="notif_btn_chat">Ver chat</string>
+    <string name="notif_btn_profile">Ver perfil</string>
+    <string name="notif_btn_request">Ver solicitud</string>
+    <string name="notif_btn_task">Ver tarea</string>
+    <string name="notif_btn_report">Ver reporte</string>
+    <string name="notif_btn_history">Ver historial</string>
+    <string name="notif_btn_details">Ver detalles</string>
+
     <!-- Mapbox Token -->
     <string name="mapbox_access_token">pk.eyJ1IjoiYnJ1bm9uc2siLCJhIjoiY212bzE4Y25jMHBsdTJ4b3I0M2d1NTBkMiJ9.CB9sb6Ac3TxKQXWbzl_rmw</string>
 </resources>

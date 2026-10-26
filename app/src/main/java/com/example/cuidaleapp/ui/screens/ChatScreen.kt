@@ -1458,10 +1458,10 @@ fun ChatScreen(
                 enter = slideInVertically { it } + fadeIn(),
                 exit = slideOutVertically { it } + fadeOut(),
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
+                    .align(Alignment.BottomCenter)
                     .zIndex(200f)
                     .imePadding()
-                    .padding(end = 16.dp, bottom = 116.dp)
+                    .padding(bottom = 196.dp)
             ) {
                 Surface(
                     onClick = {
@@ -1471,14 +1471,24 @@ fun ChatScreen(
                     color = if (hasNewMessageBelow) MaterialTheme.colorScheme.secondary else primaryColor,
                     shape = CircleShape,
                     shadowElevation = 6.dp,
-                    modifier = Modifier.size(44.dp)
+                    modifier = Modifier.padding(horizontal = 16.dp)
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Icon(
                             imageVector = if (hasNewMessageBelow) Icons.Default.NewReleases else Icons.Default.ArrowDownward,
-                            contentDescription = if (hasNewMessageBelow) "Nuevos mensajes" else "Volver al final",
+                            contentDescription = null,
                             tint = Color.White,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = if (hasNewMessageBelow) "Nuevos mensajes" else "Volver al final",
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
@@ -2311,66 +2321,77 @@ private fun MediaBatchContent(
         }
     }
 
-    // Margen inferior para que el preview no quede tan pegado a la barra
-    // de navegación (evita toques accidentales).
-    Box(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
+    // Grid adaptativo: el número de columnas depende del ancho disponible, así
+    // las miniaturas quedan cuadradas y sin cortes en cualquier resolución.
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
+        val minCell = 92.dp
+        val cols = (maxWidth / minCell).toInt().coerceIn(1, 3)
+        val space = 4.dp
+
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            verticalArrangement = Arrangement.spacedBy(space)
         ) {
             var idx = 0
             while (idx < visible.size) {
                 val remaining = visible.size - idx
-                if (remaining == 1) {
-                    val item = visible[idx]
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(220.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                    ) {
-                        when (item.first) {
-                            "video" -> com.example.cuidaleapp.ui.components.ChatMediaVideoPlayer(
-                                url = item.second,
-                                modifier = Modifier.fillMaxSize(),
-                                fill = true,
-                                onExpand = { onExpandVideo(item.second) },
-                                onLongClick = onLongClick
-                            )
-                            else -> com.example.cuidaleapp.ui.components.ChatMediaImage(
-                                url = item.second,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop,
-                                onClick = { onImageClick(item.second) },
-                                onLongClick = onLongClick
-                            )
-                        }
-                    }
-                    idx++
-                } else {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        listOf(visible[idx], visible[idx + 1]).forEach { item ->
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .aspectRatio(1f)
-                                    .clip(RoundedCornerShape(12.dp))
-                            ) {
-                                when (item.first) {
-                                    "video" -> com.example.cuidaleapp.ui.components.ChatMediaVideoPlayer(
+                val rowCount = minOf(cols, remaining)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(space)
+                ) {
+                    repeat(rowCount) { offset ->
+                        val item = visible[idx + offset]
+                        val isLastSingle = remaining == 1
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .then(
+                                    if (isLastSingle) Modifier.aspectRatio(4f / 3f)
+                                    else Modifier.aspectRatio(1f)
+                                )
+                                .clip(RoundedCornerShape(12.dp))
+                        ) {
+                            when (item.first) {
+                                "video" -> {
+                                    // Preview estático + play (sin crear un ExoPlayer por tile).
+                                    com.example.cuidaleapp.ui.components.VideoFirstFrame(
                                         url = item.second,
-                                        modifier = Modifier.fillMaxSize(),
-                                        fill = true,
-                                        onExpand = { onExpandVideo(item.second) },
-                                        onLongClick = onLongClick
+                                        modifier = Modifier.fillMaxSize()
                                     )
-                                    else -> com.example.cuidaleapp.ui.components.ChatMediaImage(
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.Center)
+                                            .size(if (isLastSingle) 56.dp else 40.dp)
+                                            .background(Color.Black.copy(alpha = 0.45f), CircleShape)
+                                            .combinedClickable(
+                                                interactionSource = remember { MutableInteractionSource() },
+                                                indication = null,
+                                                onClick = { onExpandVideo(item.second) },
+                                                onLongClick = onLongClick
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            Icons.Default.PlayArrow,
+                                            null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(if (isLastSingle) 32.dp else 24.dp)
+                                        )
+                                    }
+                                }
+                                else -> Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color.Black.copy(alpha = 0.04f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    com.example.cuidaleapp.ui.components.ChatMediaImage(
                                         url = item.second,
                                         modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop,
+                                        // Fit muestra la imagen completa sin cortarla; el
+                                        // fondo oscuro suave rellena el espacio sobrante.
+                                        contentScale = ContentScale.Fit,
                                         onClick = { onImageClick(item.second) },
                                         onLongClick = onLongClick
                                     )
@@ -2378,10 +2399,11 @@ private fun MediaBatchContent(
                             }
                         }
                     }
-                    idx += 2
                 }
+                idx += rowCount
             }
         }
+
         // Contador de elementos: elevado y despejado para no superponerse con
         // la barra de navegación ni ocultar la miniatura.
         Surface(

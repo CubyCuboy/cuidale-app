@@ -1,37 +1,55 @@
 package com.example.cuidaleapp.ui.components
 
 import android.content.Context
-import java.io.File
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -49,30 +67,34 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.res.stringResource
-import com.example.cuidaleapp.R
+import androidx.compose.ui.zIndex
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultDataSource
@@ -88,10 +110,10 @@ import coil3.compose.SubcomposeAsyncImage
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.example.cuidaleapp.R
 import com.example.cuidaleapp.models.ChatMessage
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
+import java.io.File
 
 /**
  * Caché (en memoria + disco) del primer frame de videos, para no re-extraerlos.
@@ -104,20 +126,20 @@ object VideoThumbnailCache {
         }
     }
 
-    private fun diskDir(context: android.content.Context): java.io.File {
-        return java.io.File(context.cacheDir, "video_thumbnails").apply {
+    private fun diskDir(context: Context): File {
+        return File(context.cacheDir, "video_thumbnails").apply {
             if (!exists()) mkdirs()
         }
     }
 
-    private fun diskFile(context: android.content.Context, url: String): java.io.File {
+    private fun diskFile(context: Context, url: String): File {
         val name = java.security.MessageDigest.getInstance("MD5")
             .digest(url.toByteArray())
             .joinToString("") { "%02x".format(it) }
-        return java.io.File(diskDir(context), "$name.png")
+        return File(diskDir(context), "$name.png")
     }
 
-    fun get(context: android.content.Context, url: String): android.graphics.Bitmap? {
+    fun get(context: Context, url: String): android.graphics.Bitmap? {
         memory[url]?.let { return it }
         return runCatching {
             val file = diskFile(context, url)
@@ -131,7 +153,7 @@ object VideoThumbnailCache {
         }.getOrNull()
     }
 
-    fun put(context: android.content.Context, url: String, bmp: android.graphics.Bitmap) {
+    fun put(context: Context, url: String, bmp: android.graphics.Bitmap) {
         memory[url] = bmp
         runCatching {
             diskFile(context, url).outputStream().use { out ->
@@ -142,9 +164,9 @@ object VideoThumbnailCache {
 
     /**
      * Obtiene el primer frame (extrayéndolo si es necesario) y lo deja cacheados.
-     * Usado para precargar miniaturas de videos en lotes multimedia.
+     * Usado para precarga miniaturas de videos en lotes multimedia.
      */
-    suspend fun fetch(context: android.content.Context, url: String): android.graphics.Bitmap? {
+    suspend fun fetch(context: Context, url: String): android.graphics.Bitmap? {
         get(context, url)?.let { return it }
         val bmp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             runCatching {
@@ -161,7 +183,7 @@ object VideoThumbnailCache {
         return bmp
     }
 
-    fun clear(context: android.content.Context) {
+    fun clear(context: Context) {
         memory.clear()
         runCatching { diskDir(context).deleteRecursively() }
     }
@@ -177,7 +199,7 @@ fun VideoFirstFrame(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val frame by produceState<android.graphics.Bitmap?>(initialValue = VideoThumbnailCache.get(context, url), url) {
+    val frame by produceState(initialValue = VideoThumbnailCache.get(context, url), url) {
         value = VideoThumbnailCache.fetch(context, url)
     }
 
@@ -357,7 +379,7 @@ fun ChatMediaImage(
             .build()
     }
 
-    // Imagen en alta calidad (reintentable).
+    // Imagen en alta calidad (reintentadle).
     val fullRequest = remember(url, retryKey) {
         ImageRequest.Builder(context)
             .data(url)
@@ -546,7 +568,7 @@ fun FullImageViewer(
             ) {
                 if (onGoToMessage != null) {
                     Surface(color = Color.White.copy(alpha = 0.15f), shape = CircleShape) {
-                        IconButton(onClick = { onGoToMessage?.invoke() }) {
+                        IconButton(onClick = { onGoToMessage.invoke() }) {
                             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Ir al mensaje", tint = Color.White)
                         }
                     }
@@ -623,7 +645,7 @@ fun FullVideoViewer(
             fullscreenPlayer.playWhenReady = true
         }
         onDispose {
-            // Sincronizar la posición de reproducción con el player del chat y pausarlo
+            // sincronizar la posición de reproducción con el player del chat y pausarlo
             // para que al volver se continúe desde donde quedó, con video.
             runCatching {
                 mainPlayer.seekTo(fullscreenPlayer.currentPosition)
@@ -662,7 +684,7 @@ fun FullVideoViewer(
             ) {
                 if (onGoToMessage != null) {
                     Surface(color = Color.White.copy(alpha = 0.15f), shape = CircleShape) {
-                        IconButton(onClick = { onGoToMessage?.invoke() }) {
+                        IconButton(onClick = { onGoToMessage.invoke() }) {
                             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Ir al mensaje", tint = Color.White)
                         }
                     }
@@ -680,7 +702,7 @@ fun FullVideoViewer(
                         IconButton(onClick = { onTogglePin?.invoke() }) {
                             Icon(
                                 Icons.Default.PushPin,
-                                contentDescription = if (isPinned) "Desfijar" else "Fijar",
+                                contentDescription = if (isPinned) "Des fijar" else "Fijar",
                                 tint = if (isPinned) Color(0xFFFF5252) else Color.White
                             )
                         }
@@ -703,7 +725,7 @@ fun FullVideoViewer(
     }
 }
 
-fun replyLabelFor(msg: ChatMessage, context: android.content.Context): String {
+fun replyLabelFor(msg: ChatMessage, context: Context): String {
     return when {
         msg.imageUrl != null -> context.getString(R.string.notification_media_image)
         msg.videoUrl != null -> context.getString(R.string.notification_media_video)
@@ -740,31 +762,36 @@ fun ReplyPreviewBubble(
             ) {
                 val previewType = metadata["replyPreviewType"]
                 val previewUrl = metadata["replyPreviewUrl"].orEmpty()
-                if (previewType == "image" && previewUrl.isNotBlank()) {
-                    ChatMediaImage(
-                        url = previewUrl,
-                        modifier = Modifier.size(44.dp).clip(RoundedCornerShape(6.dp))
-                    )
-                    Spacer(Modifier.width(8.dp))
-                } else if (previewType == "video" && previewUrl.isNotBlank()) {
-                    VideoFirstFrame(
-                        url = previewUrl,
-                        modifier = Modifier.size(44.dp).clip(RoundedCornerShape(6.dp))
-                    )
-                    Spacer(Modifier.width(8.dp))
-                } else if (previewType == "file") {
-                    Box(
-                        modifier = Modifier.size(44.dp).clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.InsertDriveFile,
-                            null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(24.dp)
+                when (previewType) {
+                    "image" if previewUrl.isNotBlank() -> {
+                        ChatMediaImage(
+                            url = previewUrl,
+                            modifier = Modifier.size(44.dp).clip(RoundedCornerShape(6.dp))
                         )
+                        Spacer(Modifier.width(8.dp))
                     }
-                    Spacer(Modifier.width(8.dp))
+                    "video" if previewUrl.isNotBlank() -> {
+                        VideoFirstFrame(
+                            url = previewUrl,
+                            modifier = Modifier.size(44.dp).clip(RoundedCornerShape(6.dp))
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    "file" -> {
+                        Box(
+                            modifier = Modifier.size(44.dp).clip(RoundedCornerShape(6.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.InsertDriveFile,
+                                null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                    }
                 }
                 Column {
                     Text(
@@ -795,6 +822,180 @@ fun parseMediaBatch(metadata: Map<String, String>): List<Triple<String, String, 
     }.getOrDefault(emptyList())
 }
 
+@Composable
+private fun ZoomableImage(
+    url: String,
+    modifier: Modifier = Modifier,
+    onSingleTap: () -> Unit = {},
+    onZoomChanged: (Boolean) -> Unit = {}
+) {
+    var scale by remember(url) { androidx.compose.runtime.mutableFloatStateOf(1f) }
+    var offset by remember(url) { mutableStateOf(Offset.Zero) }
+    val zoomed = scale > 1.01f
+
+    // Notifica al padre cuando cambia el estado de zoom (para ocultar/mostrar
+    // la barra superior y la fila de miniaturas).
+    LaunchedEffect(zoomed) {
+        onZoomChanged(zoomed)
+    }
+
+    Box(
+        modifier = modifier
+            .pointerInput(url) {
+                detectTapGestures(
+                    onTap = { onSingleTap() },
+                    onDoubleTap = {
+                        if (scale <= 1.01f) {
+                            scale = 2.5f
+                            offset = Offset.Zero
+                            onZoomChanged(true)
+                        } else {
+                            scale = 1f
+                            offset = Offset.Zero
+                            onZoomChanged(false)
+                        }
+                    }
+                )
+            }
+            // Pinch siempre activo: con 2+ dedos se hace Zoom y se consumen los
+            // gestos (no se cambia de página por accidente). Con 1 dedo y sin
+            // Zoom, no se consume y el pager puede deslizar.
+            .pointerInput(url) {
+                awaitEachGesture {
+                    awaitFirstDown()
+                    do {
+                        val event = awaitPointerEvent()
+                        val pressed = event.changes.count { it.pressed }
+                        if (pressed >= 2 && scale <= 5f) {
+                            val zoomChange = event.calculateZoom()
+                            val pan = event.calculatePan()
+                            if (zoomChange != 1f || scale > 1.01f) {
+                                scale = (scale * zoomChange).coerceIn(1f, 5f)
+                                offset = (offset + pan)
+                                val limit = 600f * (scale - 1f)
+                                offset = Offset(
+                                    offset.x.coerceIn(-limit, limit),
+                                    offset.y.coerceIn(-limit, limit)
+                                )
+                                if (scale <= 1.01f) {
+                                    offset = Offset.Zero
+                                    onZoomChanged(false)
+                                } else {
+                                    onZoomChanged(true)
+                                }
+                            }
+                            event.changes.forEach { it.consume() }
+                        }
+                    } while (event.changes.any { it.pressed })
+                }
+            }
+            // Cuando ya está con Zoom, permite mover la imagen con 1 dedo.
+            .pointerInput(url, zoomed) {
+                if (zoomed) {
+                    detectTransformGestures { _, pan, zoom, _ ->
+                        scale = (scale * zoom).coerceIn(1f, 5f)
+                        offset = (offset + pan)
+                        val limit = 600f * (scale - 1f)
+                        offset = Offset(
+                            offset.x.coerceIn(-limit, limit),
+                            offset.y.coerceIn(-limit, limit)
+                        )
+                        if (scale <= 1.01f) {
+                            offset = Offset.Zero
+                            onZoomChanged(false)
+                        }
+                    }
+                }
+            }
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    translationX = offset.x
+                    translationY = offset.y
+                }
+        ) {
+            ChatMediaImage(
+                url = url,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit
+            )
+        }
+    }
+}
+
+@Composable
+private fun MediaThumbnailCard(
+    item: Triple<String, String, String>,
+    index: Int,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val shape = RoundedCornerShape(8.dp)
+
+    // Escala, sombra y elevación para que la carta seleccionada "sobresalga"
+    // del mazo como si estuviera levantada.
+    val scale by animateFloatAsState(
+        targetValue = if (selected) 1.18f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "thumbScale"
+    )
+    val elevation by animateDpAsState(
+        targetValue = if (selected) 10.dp else 0.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "thumbElevation"
+    )
+    val lift by animateDpAsState(
+        targetValue = if (selected) (-6).dp else 0.dp,
+        animationSpec = tween(200),
+        label = "thumbLift"
+    )
+
+    // Efecto de "repartir cartas": cada miniatura entra con retardo escalonado.
+    val dealDelay = (index * 45).coerceAtMost(450)
+
+    AnimatedVisibility(
+        visible = true,
+        enter = slideInVertically(tween(320, delayMillis = dealDelay)) { it } +
+            fadeIn(tween(320, delayMillis = dealDelay))
+    ) {
+        Box(
+            modifier = modifier
+                .zIndex(if (selected) 1f else 0f)
+                .size(58.dp)
+                .shadow(elevation, shape, clip = false)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    translationY = lift.toPx()
+                }
+                .clip(shape)
+                .border(2.dp, if (selected) Color.White else Color.Transparent, shape)
+                .clickable(onClick = onClick)
+        ) {
+            when (item.first) {
+                "video" -> VideoFirstFrame(item.second, Modifier.fillMaxSize())
+                else -> AsyncImage(
+                    model = item.second,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+        }
+    }
+}
+
 @androidx.media3.common.util.UnstableApi
 @Composable
 fun MediaBatchGalleryViewer(
@@ -806,6 +1007,11 @@ fun MediaBatchGalleryViewer(
     val initialIndex = items.indexOfFirst { it.second == initialUrl }.coerceAtLeast(0)
     val pagerState = rememberPagerState(pageCount = { items.size }, initialPage = initialIndex)
     val scope = rememberCoroutineScope()
+
+    // UI (barra superior + miniaturas) visible por defecto. Un toque simple la
+    // oculta (para ver la imagen a pantalla completa); el Zoom muestra/oculta
+    // automáticamente según el estado de acercamiento.
+    var chromeVisible by remember { mutableStateOf(true) }
 
     // Al moverte entre páginas, pausa cualquier video que ya no esté visible.
     androidx.compose.runtime.LaunchedEffect(pagerState.currentPage) {
@@ -825,78 +1031,100 @@ fun MediaBatchGalleryViewer(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = true)
     ) {
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black)
         ) {
+            // Barra superior: contador + acciones. Se oculta con un toque simple;
+            // respeta la barra de estado del sistema (edge-to-edge).
+            AnimatedVisibility(
+                visible = chromeVisible,
+                enter = fadeIn(tween(200)) + slideInVertically(tween(220)) { -it },
+                exit = fadeOut(tween(200)) + slideOutVertically(tween(220)) { -it }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(top = 12.dp, bottom = 8.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(color = Color.White.copy(alpha = 0.15f), shape = CircleShape) {
+                        IconButton(onClick = onReply) {
+                            Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = "Responder", tint = Color.White)
+                        }
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        text = "${pagerState.currentPage + 1} / ${items.size}",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Surface(color = Color.White.copy(alpha = 0.15f), shape = CircleShape) {
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = Color.White)
+                        }
+                    }
+                }
+            }
+
+            // Contenido multimedia: ocupa todo el espacio entre la barra superior
+            // y la fila de miniaturas, sin que ninguna se le superponga.
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
             ) { page ->
                 val item = items[page]
                 when (item.first) {
                     "video" -> {
-                        // Reproducción en línea dentro del grupo: no saca al usuario
-                        // del visor colectivo.
                         ChatMediaVideoPlayer(
                             url = item.second,
                             modifier = Modifier.fillMaxSize()
                         )
                     }
                     else -> {
-                        ChatMediaImage(
+                        ZoomableImage(
                             url = item.second,
-                            modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 60.dp)
+                            modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
+                            onSingleTap = { chromeVisible = !chromeVisible },
+                            onZoomChanged = { zoomed -> chromeVisible = !zoomed }
                         )
                     }
                 }
             }
 
-            Row(
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
+            // Fila de miniaturas tipo "baraja": aparece con animación escalonada,
+            // respeta la barra de navegación de Android y la miniatura seleccionada
+            // sobresale como una carta levantada del mazo.
+            AnimatedVisibility(
+                visible = chromeVisible,
+                enter = slideInVertically(tween(250)) { it } + fadeIn(tween(250)) + expandVertically(tween(250)),
+                exit = shrinkVertically(tween(180)) + fadeOut(tween(180))
             ) {
-                Surface(color = Color.White.copy(alpha = 0.15f), shape = CircleShape) {
-                    IconButton(onClick = onReply) {
-                        Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = "Responder", tint = Color.White)
-                    }
-                }
-                Spacer(Modifier.width(12.dp))
-                Text(
-                    text = "${pagerState.currentPage + 1} / ${items.size}",
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Spacer(Modifier.width(12.dp))
-                Surface(color = Color.White.copy(alpha = 0.15f), shape = CircleShape) {
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = Color.White)
-                    }
-                }
-            }
-
-            LazyRow(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .background(Color.Black.copy(alpha = 0.6f)),
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                itemsIndexed(items) { index, item ->
-                    val selected = index == pagerState.currentPage
-                    Box(
-                        modifier = Modifier
-                            .size(58.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .border(2.dp, if (selected) Color.White else Color.Transparent, RoundedCornerShape(8.dp))
-                            .clickable { scope.launch { pagerState.animateScrollToPage(index) } }
-                    ) {
-                        when (item.first) {
-                            "video" -> VideoFirstFrame(item.second, Modifier.fillMaxSize())
-                            else -> AsyncImage(model = item.second, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                        }
+                LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .background(
+                            Color.Black.copy(alpha = 0.65f),
+                            RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                        ),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    itemsIndexed(items) { index, item ->
+                        val selected = index == pagerState.currentPage
+                        MediaThumbnailCard(
+                            item = item,
+                            index = index,
+                            selected = selected,
+                            onClick = { scope.launch { pagerState.animateScrollToPage(index) } }
+                        )
                     }
                 }
             }
