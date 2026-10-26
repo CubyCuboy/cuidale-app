@@ -46,7 +46,8 @@ fun MenuScreen(
     searchViewModel: SearchViewModel,
     fichaState: FichaState,
     onViewFicha: () -> Unit,
-    onUserClick: (String) -> Unit
+    onUserClick: (String) -> Unit,
+    onMapClick: () -> Unit = {}
 ) {
     val isOnline by ConnectivityObserver.isOnline.collectAsState()
     val context = LocalContext.current
@@ -329,16 +330,34 @@ fun MenuScreen(
                     }
                 }
 
-                CuidaleCircularMenuButton(
-                    onClick = { if (isOnline) showSearchSheet = true },
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = "Filtros",
-                            tint = Color.White
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (userData.rol != "cuidador") {
+                        CuidaleCircularMenuButton(
+                            onClick = onMapClick,
+                            icon = {
+                                Icon(
+                                    imageVector = Icons.Default.Map,
+                                    contentDescription = "Mapa de cuidadores",
+                                    tint = Color.White
+                                )
+                            }
                         )
                     }
-                )
+
+                    CuidaleCircularMenuButton(
+                        onClick = { if (isOnline) showSearchSheet = true },
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = "Filtros",
+                                tint = Color.White
+                            )
+                        }
+                    )
+                }
             }
         }
 

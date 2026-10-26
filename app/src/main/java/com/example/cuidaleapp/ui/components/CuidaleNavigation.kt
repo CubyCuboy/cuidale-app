@@ -49,6 +49,7 @@ fun CuidaleDrawerContent(
     onToggleTheme: () -> Unit, 
     onProfileClick: () -> Unit, 
     onFichaClick: () -> Unit, 
+    onMapClick: () -> Unit = {},
     onSettingsClick: () -> Unit,
     onSocialClick: () -> Unit,
     onLogoutClick: () -> Unit, 
@@ -207,6 +208,15 @@ fun CuidaleDrawerContent(
             icon = { Icon(Icons.Default.Group, contentDescription = null) }, 
             colors = NavigationDrawerItemDefaults.colors(unselectedContainerColor = Color.Transparent)
         )
+        if (rol != "cuidador") {
+            NavigationDrawerItem(
+                label = { Text("Mapa de Calor", fontWeight = FontWeight.Bold) }, 
+                selected = false, 
+                onClick = onMapClick, 
+                icon = { Icon(Icons.Default.Map, contentDescription = null) }, 
+                colors = NavigationDrawerItemDefaults.colors(unselectedContainerColor = Color.Transparent)
+            )
+        }
         NavigationDrawerItem(
             label = { Text("Configuración", fontWeight = FontWeight.Bold) }, 
             selected = false, 
