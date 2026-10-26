@@ -163,15 +163,26 @@ object ChatCacheStore {
     private const val PREFS_NAME = "cuidale_prefs"
     private const val KEY_RETENTION_DAYS = "offline_cache_days"
 
+    @Volatile
+    private var retentionDaysInMemory: Int? = null
+
     fun getRetentionDays(): Int {
+        retentionDaysInMemory?.let { return it }
         val ctx = appContext ?: return 3
-        return ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getInt(KEY_RETENTION_DAYS, 3)
+        val value = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getInt(KEY_RETENTION_DAYS, 3)
+        retentionDaysInMemory = value
+        return value
     }
 
     fun setRetentionDays(days: Int) {
+        val clamped = days.coerceIn(1, 30)
+        retentionDaysInMemory = clamped
         val ctx = appContext ?: return
+        // commit() escribe de forma síncrona y garantiza la persistencia inmediata,
+        // evitando que la configuración se pierda si el proceso termina.
         ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit().putInt(KEY_RETENTION_DAYS, days.coerceIn(1, 30)).apply()
+            .edit().putInt(KEY_RETENTION_DAYS, clamped).commit()
     }
 
     private fun retentionMillis(): Long {
@@ -179,18 +190,27 @@ object ChatCacheStore {
     }
 
     /**
-     * Elimina archivos de caché de chats más antiguos que la retención configurada.
+     * Elimina archivos de caché de chats cuyo ÚLTIMO MENSAJE sea más antiguo
+     * que la retención configurada. No borra chats con mensajes recientes,
+     * aunque el archivo lleve tiempo sin escribirse (p.ej. chats no abiertos).
      */
     fun pruneExpired(uid: String) {
         runCatching {
             val dir = userDir(uid)
             val cut = System.currentTimeMillis() - retentionMillis()
-            dir.listFiles { f ->
-                (f.name.startsWith("messages_") || f.name.startsWith("summary_") || f.name.startsWith("outbox_")) &&
-                    f.name.endsWith(".json")
-            }?.forEach { f ->
-                if (f.lastModified() < cut) f.delete()
-            }
+            dir.listFiles { f -> f.name.startsWith("messages_") && f.name.endsWith(".json") }
+                ?.forEach { f ->
+                    val lastTs = runCatching {
+                        val arr = JSONArray(f.readText())
+                        if (arr.length() == 0) 0L else arr.getJSONObject(arr.length() - 1).optLong("timestamp")
+                    }.getOrDefault(f.lastModified())
+                    if (lastTs < cut) {
+                        val hash = f.name.removePrefix("messages_").removeSuffix(".json")
+                        File(dir, "summary_$hash.json").delete()
+                        File(dir, "outbox_$hash.json").delete()
+                        f.delete()
+                    }
+                }
         }
     }
 

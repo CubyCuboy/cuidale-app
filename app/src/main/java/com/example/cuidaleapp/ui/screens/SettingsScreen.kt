@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -40,7 +41,6 @@ import androidx.compose.ui.platform.LocalContext
 import android.content.Intent
 import com.example.cuidaleapp.activities.PhoneVerificationActivity
 import com.example.cuidaleapp.R
-import com.example.cuidaleapp.ui.components.ConnectivityBanner
 import com.example.cuidaleapp.ui.components.HardShadowButton
 import com.example.cuidaleapp.ui.components.HardShadowPanel
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
@@ -432,6 +432,10 @@ private fun CacheSettingsScreen(
     val customColors = CuidaleThemeExtras.customColors
     val shadowPalette = CuidaleThemeExtras.shadows
 
+    // Asegura que el singleton de caché tenga el contexto de la app para
+    // poder leer/guardar la retención de forma confiable.
+    com.example.cuidaleapp.utils.ChatCacheStore.init(context)
+
     val currentUid = userData.uid.ifBlank {
         com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
     }
@@ -447,6 +451,11 @@ private fun CacheSettingsScreen(
         imagesBytes = AppCacheManager.imagesSizeBytes(context)
         chatBytes = com.example.cuidaleapp.utils.ChatCacheStore.sizeForUser(currentUid)
         chatsCached = com.example.cuidaleapp.utils.ChatCacheStore.loadSummaries(currentUid)
+    }
+
+    // Refresca los tamaños al entrar a la pantalla (y al volver a ella).
+    LaunchedEffect(Unit) {
+        refreshSizes()
     }
 
     Box(

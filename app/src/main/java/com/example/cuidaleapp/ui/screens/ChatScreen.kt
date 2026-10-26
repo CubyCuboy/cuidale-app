@@ -1,4 +1,4 @@
-@file:OptIn(androidx.media3.common.util.UnstableApi::class)
+@file:OptIn(androidx.media3.common.util.UnstableApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 package com.example.cuidaleapp.ui.screens
 
 import android.net.Uri
@@ -11,8 +11,10 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,8 +24,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -110,17 +112,24 @@ fun ChatScreen(
     val isBlocked by viewModel.isBlocked.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     var searchMediaFilter by remember { mutableStateOf<String?>(null) }
+    var searchSenderFilter by remember { mutableStateOf<String?>(null) }
 
-    val filteredMessages = remember(messages, searchQuery, searchMediaFilter) {
+    val filteredMessages = remember(messages, searchQuery, searchMediaFilter, searchSenderFilter) {
         val base = if (searchQuery.isBlank()) messages
         else messages.filter { it.text.contains(searchQuery, ignoreCase = true) }
-        when (searchMediaFilter) {
+        val bySender = when (searchSenderFilter) {
             null -> base
-            "media" -> base.filter { it.imageUrl != null || it.videoUrl != null || it.fileUrl != null }
-            "image" -> base.filter { it.imageUrl != null }
-            "video" -> base.filter { it.videoUrl != null }
-            "file" -> base.filter { it.fileUrl != null }
+            "me" -> base.filter { it.senderId == myUid }
+            "other" -> base.filter { it.senderId != myUid && it.senderId != "system" }
             else -> base
+        }
+        when (searchMediaFilter) {
+            null -> bySender
+            "media" -> bySender.filter { it.imageUrl != null || it.videoUrl != null || it.fileUrl != null || messageHasMediaType(it, "media") }
+            "image" -> bySender.filter { messageHasMediaType(it, "image") }
+            "video" -> bySender.filter { messageHasMediaType(it, "video") }
+            "file" -> bySender.filter { messageHasMediaType(it, "file") }
+            else -> bySender
         }
     }
     
@@ -156,6 +165,79 @@ fun ChatScreen(
     var messageToEdit by remember { mutableStateOf<ChatMessage?>(null) }
     var replyingToMessage by remember { mutableStateOf<ChatMessage?>(null) }
     val selectedMessages = remember { mutableStateListOf<ChatMessage>() }
+
+    // Para volver a la búsqueda con el botón de regresar después de haber
+    // navegado a un mensaje desde los resultados.
+    var pendingReturnToSearch by remember { mutableStateOf(false) }
+    var savedSearchQuery by remember { mutableStateOf("") }
+    var savedSearchMediaFilter by remember { mutableStateOf<String?>(null) }
+    var savedSearchSenderFilter by remember { mutableStateOf<String?>(null) }
+
+    // Indicador de recuperación de mensajes al entrar al chat (caché vacía,
+    // conexión lenta o primera carga). Se oculta al llegar mensajes o a los 2.5s.
+    var isRecovering by remember { mutableStateOf(true) }
+    LaunchedEffect(messages) {
+        if (messages.isNotEmpty()) isRecovering = false
+    }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(2500)
+        isRecovering = false
+    }
+
+    // Si venimos de una búsqueda y navegamos a un mensaje, el botón de
+    // regresar del sistema vuelve a la búsqueda (con sus filtros) en lugar de
+    // salir del chat.
+    androidx.activity.compose.BackHandler(enabled = (isSearchActive || pendingReturnToSearch) && selectedMessages.isEmpty()) {
+        when {
+            isSearchActive -> {
+                // En el menú de búsqueda, volver regresa al chat normal.
+                viewModel.setSearchQuery("")
+                searchMediaFilter = null
+                searchSenderFilter = null
+                isSearchActive = false
+                pendingReturnToSearch = false
+            }
+            pendingReturnToSearch -> {
+                // Después de navegar a un mensaje, volver restaura la búsqueda.
+                isSearchActive = true
+                viewModel.setSearchQuery(savedSearchQuery)
+                searchMediaFilter = savedSearchMediaFilter
+                searchSenderFilter = savedSearchSenderFilter
+                pendingReturnToSearch = false
+            }
+        }
+    }
+
+    // Precarga el multimedia de los mensajes recientes a la caché local
+    // (imágenes vía Coil, primer frame de videos vía VideoThumbnailCache).
+    // Así, al entrar al chat, lo ya visto no se vuelve a descargar visiblemente.
+    LaunchedEffect(messages) {
+        val urls = buildList {
+            messages.takeLast(30).forEach { m ->
+                if (m.imageUrl != null) add(Triple("image", m.imageUrl, ""))
+                if (m.videoUrl != null) add(Triple("video", m.videoUrl, ""))
+                if (m.type == "media_group") {
+                    runCatching { com.example.cuidaleapp.ui.components.parseMediaBatch(m.metadata) }
+                        .getOrDefault(emptyList())
+                        .forEach { (kind, url, _) -> add(Triple(kind, url, "")) }
+                }
+            }
+        }
+        urls.forEach { (kind, url, _) ->
+            when (kind) {
+                "image" -> runCatching {
+                    coil3.SingletonImageLoader.get(context).enqueue(
+                        coil3.request.ImageRequest.Builder(context)
+                            .data(url)
+                            .memoryCachePolicy(coil3.request.CachePolicy.ENABLED)
+                            .diskCachePolicy(coil3.request.CachePolicy.ENABLED)
+                            .build()
+                    )
+                }
+                "video" -> com.example.cuidaleapp.ui.components.VideoThumbnailCache.fetch(context, url)
+            }
+        }
+    }
 
     // ── Flujo de multimedia: primero se agregan a una cola local para
     //    previsualizar y poder borrar antes de enviar. ──
@@ -350,6 +432,22 @@ fun ChatScreen(
                 if (uploaded.isNotEmpty()) {
                     viewModel.sendMediaBatch(chatId, uploaded)
                     replyingToMessage = null
+                    // Pre-cachea el lote recién enviado para que quede disponible
+                    // offline sin volver a descargarlo.
+                    uploaded.forEach { (kind, url, _) ->
+                        when (kind) {
+                            "image" -> runCatching {
+                                coil3.SingletonImageLoader.get(context).enqueue(
+                                    coil3.request.ImageRequest.Builder(context)
+                                        .data(url)
+                                        .memoryCachePolicy(coil3.request.CachePolicy.ENABLED)
+                                        .diskCachePolicy(coil3.request.CachePolicy.ENABLED)
+                                        .build()
+                                )
+                            }
+                            "video" -> com.example.cuidaleapp.ui.components.VideoThumbnailCache.fetch(context, url)
+                        }
+                    }
                 }
                 // Eliminar de golpe los que sí se subieron (no uno a uno).
                 val removed = items.filterIndexed { index, _ -> index in succeededIdx }.toSet()
@@ -439,6 +537,41 @@ fun ChatScreen(
     var fullVideoUrl by remember { mutableStateOf<String?>(null) }
     var galleryMessage by remember { mutableStateOf<ChatMessage?>(null) }
     var galleryStartUrl by remember { mutableStateOf<String?>(null) }
+
+    /**
+     * Navega al mensaje de origen (haciendo scroll y resaltándolo) recordando
+     * la búsqueda actual para que el botón de regresar vuelva a ella.
+     */
+    fun goToMessage(msg: ChatMessage) {
+        savedSearchQuery = searchQuery
+        savedSearchMediaFilter = searchMediaFilter
+        savedSearchSenderFilter = searchSenderFilter
+        pendingReturnToSearch = true
+
+        isSearchActive = false
+        viewModel.setSearchQuery("")
+        searchMediaFilter = null
+        searchSenderFilter = null
+
+        // +1 por el item de cabecera ("escribiendo...") en el LazyColumn.
+        val index = messages.reversed().indexOfFirst { it.id == msg.id }
+        if (index != -1) {
+            scope.launch {
+                val targetIndex = index + 1
+                // Si el mensaje está lejos, salta directo (más fluido); si está
+                // cerca, anima el desplazamiento.
+                val current = listState.firstVisibleItemIndex
+                if (kotlin.math.abs(targetIndex - current) > 20) {
+                    listState.scrollToItem(targetIndex)
+                } else {
+                    listState.animateScrollToItem(targetIndex)
+                }
+                highlightedMessageId = msg.id
+                kotlinx.coroutines.delay(2000)
+                highlightedMessageId = null
+            }
+        }
+    }
     
     val isFavorite = favs.contains(otherUser.uid)
     val iHaveBlocked = bloqueados.contains(otherUser.uid)
@@ -541,38 +674,30 @@ fun ChatScreen(
                                 )
                             }
                         } else if (isSearchActive) {
-                            Column {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.Search, null, tint = Color.Gray)
+                                Spacer(Modifier.width(8.dp))
                                 TextField(
                                     value = searchQuery,
-                                    onValueChange = { viewModel.setSearchQuery(it) },
-                                    placeholder = { Text(if (isOnline) "Buscar..." else "Sin conexión", color = Color.Gray) },
-                                    modifier = Modifier.fillMaxWidth(),
+                                    onValueChange = { viewModel.setSearchQuery(it); pendingReturnToSearch = false },
+                                    placeholder = { Text(if (isOnline) "Buscar mensajes..." else "Sin conexión", color = Color.Gray, fontSize = 14.sp) },
+                                    modifier = Modifier.weight(1f),
                                     singleLine = true,
                                     enabled = isOnline,
                                     colors = TextFieldDefaults.colors(
                                         unfocusedContainerColor = Color.Transparent,
-                                        focusedContainerColor = Color.Transparent
+                                        focusedContainerColor = Color.Transparent,
+                                        focusedIndicatorColor = Color.Transparent,
+                                        unfocusedIndicatorColor = Color.Transparent,
+                                        disabledIndicatorColor = Color.Transparent
                                     )
                                 )
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    val filters = listOf(
-                                        null to "Todos",
-                                        "media" to "Multimedia",
-                                        "image" to "Fotos",
-                                        "video" to "Videos",
-                                        "file" to "Documentos"
-                                    )
-                                    filters.forEach { (value, label) ->
-                                        FilterChip(
-                                            selected = searchMediaFilter == value,
-                                            onClick = { searchMediaFilter = value },
-                                            label = { Text(label, fontSize = 13.sp) },
-                                            modifier = Modifier.weight(1f),
-                                            enabled = isOnline
-                                        )
+                                if (searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { viewModel.setSearchQuery(""); searchMediaFilter = null }) {
+                                        Icon(Icons.Default.Close, null, tint = Color.Gray)
                                     }
                                 }
                             }
@@ -648,8 +773,27 @@ fun ChatScreen(
                         }
                     },
                     navigationIcon = {
-                        IconButton(onClick = { if (selectedMessages.isNotEmpty()) selectedMessages.clear() else onNavigateBack() }) {
-                            Icon(if (selectedMessages.isNotEmpty()) Icons.Default.Close else Icons.AutoMirrored.Filled.ArrowBack, null)
+                        IconButton(onClick = {
+                            when {
+                                selectedMessages.isNotEmpty() -> selectedMessages.clear()
+                                isSearchActive -> {
+                                    // El botón de regresar cierra la búsqueda.
+                                    viewModel.setSearchQuery("")
+                                    searchMediaFilter = null
+                                    searchSenderFilter = null
+                                    isSearchActive = false
+                                }
+                                else -> onNavigateBack()
+                            }
+                        }) {
+                            Icon(
+                                when {
+                                    selectedMessages.isNotEmpty() -> Icons.Default.Close
+                                    isSearchActive -> Icons.Default.Close
+                                    else -> Icons.AutoMirrored.Filled.ArrowBack
+                                },
+                                null
+                            )
                         }
                     },
                     actions = {
@@ -682,6 +826,7 @@ fun ChatScreen(
                                 if (isSearchActive) {
                                     viewModel.setSearchQuery("")
                                     searchMediaFilter = null
+                                    searchSenderFilter = null
                                 }
                                 isSearchActive = !isSearchActive
                             }) { Icon(Icons.Default.Search, null) }
@@ -710,7 +855,7 @@ fun ChatScreen(
                     .fillMaxSize()
                     .background(if (isDark) Color(0xFF0D1B2A) else Color(0xFFF1F4F9))
             ) {
-                if (pinnedMessages.isNotEmpty()) {
+                if (!isSearchActive && pinnedMessages.isNotEmpty()) {
                     Surface(
                         modifier = Modifier.fillMaxWidth().clickable { showPinnedMessages = true },
                         color = primaryColor.copy(alpha = 0.05f),
@@ -725,89 +870,216 @@ fun ChatScreen(
                     }
                 }
 
-                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                    if (!isOnline && filteredMessages.isEmpty()) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(Icons.Default.CloudOff, null, modifier = Modifier.size(64.dp), tint = Color.Gray.copy(alpha = 0.5f))
-                                Spacer(Modifier.height(16.dp))
-                                Text("Sin conexión a internet", fontWeight = FontWeight.Bold, color = Color.Gray)
-                                Text("No se pueden cargar los mensajes", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                if (isSearchActive) {
+                    Surface(
+                        color = if (isDark) Color(0xFF141F2E) else Color(0xFFE8EDF4),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            val senderFilters = listOf(
+                                null to "Todos",
+                                "me" to "Yo",
+                                "other" to otherUser.nombre
+                            )
+                            val filters = listOf(
+                                null to Pair(Icons.Default.Search, "Todos"),
+                                "media" to Pair(Icons.AutoMirrored.Filled.InsertDriveFile, "Multimedia"),
+                                "image" to Pair(Icons.Default.Image, "Fotos"),
+                                "video" to Pair(Icons.Default.VideoLibrary, "Videos"),
+                                "file" to Pair(Icons.Default.Description, "Docs")
+                            )
+                            Text(
+                                text = "DE",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Bold
+                            )
+                            // Fila horizontal con scroll: nunca se comprime en pantallas angostas.
+                            LazyRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                contentPadding = PaddingValues(end = 8.dp)
+                            ) {
+                                items(senderFilters) { (value, label) ->
+                                    FilterChip(
+                                        selected = searchSenderFilter == value,
+                                        onClick = { searchSenderFilter = value },
+                                        label = { Text(label, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                        enabled = isOnline
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "TIPO",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                            LazyRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                contentPadding = PaddingValues(end = 8.dp)
+                            ) {
+                                items(filters) { (value, info) ->
+                                    FilterChip(
+                                        selected = searchMediaFilter == value,
+                                        onClick = { searchMediaFilter = value },
+                                        label = { Text(info.second, fontSize = 12.sp) },
+                                        leadingIcon = { Icon(info.first, null, modifier = Modifier.size(16.dp)) },
+                                        enabled = isOnline
+                                    )
+                                }
                             }
                         }
-                    } else if (isSearchActive && searchMediaFilter != null && filteredMessages.isNotEmpty()) {
-                        SearchMediaGallery(
-                            items = filteredMessages,
-                            onImageClick = { fullImageUrl = it },
-                            onVideoClick = { fullVideoUrl = it }
+                    }
+                    if (searchQuery.isNotBlank() || searchMediaFilter != null || searchSenderFilter != null) {
+                        Text(
+                            text = "${filteredMessages.size} ${if (filteredMessages.size == 1) "resultado" else "resultados"}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
                         )
-                    } else {
-                        val reversedMessages = remember(filteredMessages) { filteredMessages.reversed() }
-                        LazyColumn(
-                            state = listState,
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(16.dp, 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                            reverseLayout = true
-                        ) {
-                            item {
-                                Column {
-                                    androidx.compose.animation.AnimatedVisibility(visible = isOtherTyping && isOnline, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-                                        Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            Text("${otherUser.nombre} está escribiendo...", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
-                                        }
-                                    }
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        // En modo búsqueda no hay barra de escritura, así que
+                        // evitamos que los resultados queden bajo la navegación.
+                        .then(if (isSearchActive) Modifier.navigationBarsPadding() else Modifier)
+                ) {
+                    when {
+                        !isOnline && filteredMessages.isEmpty() -> {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(Icons.Default.CloudOff, null, modifier = Modifier.size(64.dp), tint = Color.Gray.copy(alpha = 0.5f))
+                                    Spacer(Modifier.height(16.dp))
+                                    Text("Sin conexión a internet", fontWeight = FontWeight.Bold, color = Color.Gray)
+                                    Text("No se pueden cargar los mensajes", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                                 }
                             }
-                            items(items = reversedMessages, key = { it.id }) { msg ->
-                                val index = reversedMessages.indexOf(msg)
-
-                                if (index < reversedMessages.size - 1) {
-                                    val nextMsg = reversedMessages[index + 1]
-                                    if (!isSameDay(msg.timestamp, nextMsg.timestamp)) {
-                                        DayDivider(msg.timestamp)
-                                    }
-                                } else if (index == reversedMessages.size - 1) {
-                                    DayDivider(msg.timestamp)
+                        }
+                        isSearchActive && (searchQuery.isNotBlank() || searchMediaFilter != null || searchSenderFilter != null) && filteredMessages.isEmpty() -> {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(Icons.Default.SearchOff, null, modifier = Modifier.size(56.dp), tint = Color.Gray.copy(alpha = 0.5f))
+                                    Spacer(Modifier.height(12.dp))
+                                    Text("Sin resultados", fontWeight = FontWeight.Bold, color = Color.Gray)
+                                    Text("No se encontraron mensajes para tu búsqueda.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                                 }
-
-                                androidx.compose.animation.AnimatedVisibility(
-                                    visible = true,
-                                    enter = fadeIn(tween(250)) + scaleIn(initialScale = 0.92f, animationSpec = tween(250)),
-                                    modifier = Modifier.animateItem()
+                            }
+                        }
+                        isSearchActive && searchMediaFilter != null -> {
+                            SearchMediaGallery(
+                                items = filteredMessages,
+                                kindFilter = searchMediaFilter,
+                                onImageClick = { fullImageUrl = it },
+                                onVideoClick = { fullVideoUrl = it },
+                                onOpenBatch = { msg, url ->
+                                    galleryMessage = msg
+                                    galleryStartUrl = url
+                                },
+                                onGoToMessage = { msg -> goToMessage(msg) }
+                            )
+                        }
+                        isSearchActive -> {
+                            SearchResultsList(
+                                messages = filteredMessages,
+                                myUid = myUid,
+                                isDark = isDark,
+                                onImageClick = { fullImageUrl = it },
+                                onVideoClick = { fullVideoUrl = it },
+                                onOpenBatch = { msg, url ->
+                                    galleryMessage = msg
+                                    galleryStartUrl = url
+                                },
+                                onGoToMessage = { msg -> goToMessage(msg) }
+                            )
+                        }
+                        else -> {
+                            if (isOnline && messages.isEmpty() && isRecovering) {
+                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        CircularProgressIndicator(modifier = Modifier.size(32.dp), strokeWidth = 3.dp)
+                                        Spacer(Modifier.height(12.dp))
+                                        Text("Recuperando datos del chat...", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
+                                    }
+                                }
+                            } else {
+                                val reversedMessages = remember(filteredMessages) { filteredMessages.reversed() }
+                                LazyColumn(
+                                    state = listState,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentPadding = PaddingValues(16.dp, 8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                    reverseLayout = true
                                 ) {
-                                    if (msg.senderId == "system") {
-                                        SystemMessage(msg.text)
-                                    } else {
-                                        val isHighlighted = highlightedMessageId == msg.id
-                                        ChatBubble(
-                                            msg = msg,
-                                            isMe = msg.senderId == myUid,
-                                            isDark = isDark,
-                                            isSelected = selectedMessages.any { it.id == msg.id },
-                                            isHighlighted = isHighlighted,
-                                            onClick = {
-                                                if (selectedMessages.isNotEmpty()) {
-                                                    if (selectedMessages.any { it.id == msg.id }) selectedMessages.removeAll { it.id == msg.id }
-                                                    else selectedMessages.add(msg)
-                                                }
-                                            },
-                                            onLongClick = { if (selectedMessages.isEmpty()) selectedMessages.add(msg) },
-                                            onSwipeRight = { if (!isBlocked && !iHaveBlocked && isOnline) replyingToMessage = msg },
-                                            onImageClick = { fullImageUrl = msg.imageUrl },
-                                            onExpandVideo = { fullVideoUrl = it },
-                                            onOpenBatchImage = { url ->
-                                                galleryMessage = msg
-                                                galleryStartUrl = url
-                                            },
-                                            onViewPostulacion = { solId -> onViewRequest?.invoke(solId) ?: onRedirectToRequests() },
-                                            onDoubleClick = {
-                                                if (msg.senderId == myUid && !msg.deleted && isOnline) {
-                                                    messageToEdit = msg
-                                                    inputText = msg.text
+                                    item {
+                                        Column {
+                                            androidx.compose.animation.AnimatedVisibility(visible = isOtherTyping && isOnline, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                                                Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                    Text("${otherUser.nombre} está escribiendo...", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
                                                 }
                                             }
-                                        )
+                                        }
+                                    }
+                                    items(items = reversedMessages, key = { it.id }) { msg ->
+                                        val index = reversedMessages.indexOf(msg)
+
+                                        if (index < reversedMessages.size - 1) {
+                                            val nextMsg = reversedMessages[index + 1]
+                                            if (!isSameDay(msg.timestamp, nextMsg.timestamp)) {
+                                                DayDivider(msg.timestamp)
+                                            }
+                                        } else if (index == reversedMessages.size - 1) {
+                                            DayDivider(msg.timestamp)
+                                        }
+
+                                        androidx.compose.animation.AnimatedVisibility(
+                                            visible = true,
+                                            enter = fadeIn(tween(250)) + scaleIn(initialScale = 0.92f, animationSpec = tween(250)),
+                                            modifier = Modifier.animateItem()
+                                        ) {
+                                            if (msg.senderId == "system") {
+                                                SystemMessage(msg.text)
+                                            } else {
+                                                val isHighlighted = highlightedMessageId == msg.id
+                                                ChatBubble(
+                                                    msg = msg,
+                                                    isMe = msg.senderId == myUid,
+                                                    isDark = isDark,
+                                                    isSelected = selectedMessages.any { it.id == msg.id },
+                                                    isHighlighted = isHighlighted,
+                                                    onClick = {
+                                                        if (selectedMessages.isNotEmpty()) {
+                                                            if (selectedMessages.any { it.id == msg.id }) selectedMessages.removeAll { it.id == msg.id }
+                                                            else selectedMessages.add(msg)
+                                                        }
+                                                    },
+                                                    onLongClick = { if (selectedMessages.isEmpty()) selectedMessages.add(msg) },
+                                                    onSwipeRight = { if (!isBlocked && !iHaveBlocked && isOnline) replyingToMessage = msg },
+                                                    onImageClick = { fullImageUrl = msg.imageUrl },
+                                                    onExpandVideo = { fullVideoUrl = it },
+                                                    onOpenBatchImage = { url ->
+                                                        galleryMessage = msg
+                                                        galleryStartUrl = url
+                                                    },
+                                                    onViewPostulacion = { solId -> onViewRequest?.invoke(solId) ?: onRedirectToRequests() },
+                                                    onDoubleClick = {
+                                                        if (msg.senderId == myUid && !msg.deleted && isOnline) {
+                                                            messageToEdit = msg
+                                                            inputText = msg.text
+                                                        }
+                                                    }
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -815,6 +1087,7 @@ fun ChatScreen(
                     }
                 }
 
+                if (!isSearchActive) {
                 Surface(
                     tonalElevation = 8.dp,
                     color = if (isDark) Color(0xFF1B263B) else Color.White,
@@ -1146,6 +1419,7 @@ fun ChatScreen(
                         }
                     }
                 }
+                }
             }
 
             androidx.compose.animation.AnimatedVisibility(
@@ -1180,30 +1454,31 @@ fun ChatScreen(
             }
 
             androidx.compose.animation.AnimatedVisibility(
-                visible = isScrolledUp,
+                visible = isScrolledUp && !isSearchActive,
                 enter = slideInVertically { it } + fadeIn(),
                 exit = slideOutVertically { it } + fadeOut(),
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 100.dp)
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .zIndex(200f)
+                    .imePadding()
+                    .padding(end = 16.dp, bottom = 116.dp)
             ) {
                 Surface(
+                    onClick = {
+                        pendingReturnToSearch = false
+                        scope.launch { listState.animateScrollToItem(0) }
+                    },
                     color = if (hasNewMessageBelow) MaterialTheme.colorScheme.secondary else primaryColor,
                     shape = CircleShape,
                     shadowElevation = 6.dp,
-                    modifier = Modifier.clickable { scope.launch { listState.animateScrollToItem(0) } }
+                    modifier = Modifier.size(44.dp)
                 ) {
-                    Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(contentAlignment = Alignment.Center) {
                         Icon(
-                            imageVector = if (hasNewMessageBelow) Icons.Default.NewReleases else Icons.Default.ArrowDownward, 
-                            contentDescription = null, 
-                            tint = Color.White, 
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = if (hasNewMessageBelow) "Nuevos mensajes" else "Volver al final", 
-                            color = Color.White, 
-                            style = MaterialTheme.typography.labelMedium, 
-                            fontWeight = FontWeight.Bold
+                            imageVector = if (hasNewMessageBelow) Icons.Default.NewReleases else Icons.Default.ArrowDownward,
+                            contentDescription = if (hasNewMessageBelow) "Nuevos mensajes" else "Volver al final",
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                 }
@@ -1578,6 +1853,7 @@ fun ChatScreen(
     }
 
     fullImageUrl?.let { url ->
+        pendingReturnToSearch = false
         val target = messages.find { it.imageUrl == url } ?: filteredMessages.find { it.imageUrl == url }
         com.example.cuidaleapp.ui.components.FullImageViewer(
             url = url,
@@ -1590,11 +1866,16 @@ fun ChatScreen(
             isPinned = target?.pinned == true,
             onTogglePin = {
                 if (target != null) viewModel.togglePin(chatId, target.id, target.pinned, myName)
+            },
+            onGoToMessage = {
+                fullImageUrl = null
+                target?.let { goToMessage(it) }
             }
         )
     }
 
     fullVideoUrl?.let { url ->
+        pendingReturnToSearch = false
         val target = messages.find { it.videoUrl == url } ?: filteredMessages.find { it.videoUrl == url }
         com.example.cuidaleapp.ui.components.FullVideoViewer(
             url = url,
@@ -1607,11 +1888,16 @@ fun ChatScreen(
             isPinned = target?.pinned == true,
             onTogglePin = {
                 if (target != null) viewModel.togglePin(chatId, target.id, target.pinned, myName)
+            },
+            onGoToMessage = {
+                fullVideoUrl = null
+                target?.let { goToMessage(it) }
             }
         )
     }
 
     galleryMessage?.let { msg ->
+        pendingReturnToSearch = false
         val items = com.example.cuidaleapp.ui.components.parseMediaBatch(msg.metadata)
         if (items.isNotEmpty()) {
             com.example.cuidaleapp.ui.components.MediaBatchGalleryViewer(
@@ -1899,12 +2185,33 @@ fun ChatBubble(
                             Spacer(Modifier.height(4.dp))
                         }
                         if (msg.videoUrl != null) {
-                            com.example.cuidaleapp.ui.components.ChatMediaVideoPlayer(
-                                url = msg.videoUrl,
-                                modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp),
-                                onExpand = { onExpandVideo(msg.videoUrl) },
-                                onLongClick = onLongClick
-                            )
+                            // Preview estático (primer frame desde caché) + play que
+                            // abre el reproductor a pantalla completa. Evita crear
+                            // reproductores para cada video visible (menos lag al
+                            // hacer scroll rápido por el chat).
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 320.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .combinedClickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null,
+                                        onClick = { onExpandVideo(msg.videoUrl) },
+                                        onLongClick = onLongClick
+                                    )
+                            ) {
+                                com.example.cuidaleapp.ui.components.VideoFirstFrame(url = msg.videoUrl, modifier = Modifier.fillMaxSize())
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.Center)
+                                        .size(52.dp)
+                                        .background(Color.Black.copy(alpha = 0.45f), CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.PlayArrow, null, tint = Color.White, modifier = Modifier.size(30.dp))
+                                }
+                            }
                             Spacer(Modifier.height(4.dp))
                         }
                         if (msg.fileUrl != null) {
@@ -1947,7 +2254,15 @@ fun ChatBubble(
             }
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
                 Text(formatMessageDate(msg.timestamp), style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                if (isMe) {
+                if (msg.metadata["pending_send"] == "true") {
+                    Spacer(Modifier.width(4.dp))
+                    // Mensaje pendiente de envío (outbox): muestra el indicador de carga.
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(12.dp),
+                        strokeWidth = 1.5.dp,
+                        color = Color.Gray
+                    )
+                } else if (isMe) {
                     Spacer(Modifier.width(4.dp))
                     val isRead = msg.readBy.size > 1
                     Icon(imageVector = if (isRead) Icons.Default.Visibility else Icons.AutoMirrored.Filled.Send, contentDescription = null, modifier = Modifier.size(12.dp), tint = if (isRead) Color(0xFF00B4D8) else Color.Gray)
@@ -1974,6 +2289,27 @@ private fun MediaBatchContent(
 
     val total = items.size
     val visible = items.take(6)
+
+    // Precarga el lote completo a la caché local: imágenes completas (Coil)
+    // y primer frame de cada video, para que todo el conjunto quede cacheados
+    // y no haya que descargarlo de nuevo al revisarlo o verlo offline.
+    val context = LocalContext.current
+    LaunchedEffect(items) {
+        items.forEach { item ->
+            when (item.first) {
+                "image" -> runCatching {
+                    coil3.SingletonImageLoader.get(context).enqueue(
+                        coil3.request.ImageRequest.Builder(context)
+                            .data(item.second)
+                            .memoryCachePolicy(coil3.request.CachePolicy.ENABLED)
+                            .diskCachePolicy(coil3.request.CachePolicy.ENABLED)
+                            .build()
+                    )
+                }
+                "video" -> com.example.cuidaleapp.ui.components.VideoThumbnailCache.fetch(context, item.second)
+            }
+        }
+    }
 
     // Margen inferior para que el preview no quede tan pegado a la barra
     // de navegación (evita toques accidentales).
@@ -2107,62 +2443,393 @@ private fun MediaAttachOption(
     }
 }
 
+/**
+ * Determina si un mensaje contiene multimedia del tipo indicado, considerando
+ * tanto los campos directos (imageUrl/videoUrl/fileUrl) como los lotes
+ * (media_group) incrustados en metadata["mediaBatch"].
+ */
+private fun messageHasMediaType(msg: ChatMessage, type: String): Boolean {
+    when (type) {
+        "image" -> if (msg.imageUrl != null) return true
+        "video" -> if (msg.videoUrl != null) return true
+        "file" -> if (msg.fileUrl != null) return true
+    }
+    val batchItems = runCatching { com.example.cuidaleapp.ui.components.parseMediaBatch(msg.metadata) }.getOrDefault(emptyList())
+    return when (type) {
+        "image" -> batchItems.any { it.first == "image" }
+        "video" -> batchItems.any { it.first == "video" }
+        "file" -> batchItems.any { it.first == "file" }
+        "media" -> batchItems.isNotEmpty()
+        else -> false
+    }
+}
+
+private data class MediaSearchItem(
+    val message: ChatMessage,
+    val kind: String,
+    val url: String
+)
+
+/**
+ * Convierte los mensajes multimedia en una lista plana estilo galería:
+ * cada imagen/video/documento (directo o de un lote) se muestra por separado.
+ */
+private fun flattenMediaSearchItems(messages: List<ChatMessage>): List<MediaSearchItem> {
+    val result = mutableListOf<MediaSearchItem>()
+    messages.forEach { msg ->
+        if (msg.type == "media_group") {
+            val batchItems = runCatching { com.example.cuidaleapp.ui.components.parseMediaBatch(msg.metadata) }.getOrDefault(emptyList())
+            batchItems.forEach { (kind, url, _) ->
+                result.add(MediaSearchItem(msg, kind, url))
+            }
+        } else {
+            if (msg.imageUrl != null) result.add(MediaSearchItem(msg, "image", msg.imageUrl))
+            if (msg.videoUrl != null) result.add(MediaSearchItem(msg, "video", msg.videoUrl))
+            if (msg.fileUrl != null) result.add(MediaSearchItem(msg, "file", msg.fileUrl))
+        }
+    }
+    return result
+}
+
 @Composable
 private fun SearchMediaGallery(
     items: List<ChatMessage>,
+    kindFilter: String?,
     onImageClick: (String) -> Unit,
-    onVideoClick: (String) -> Unit
+    onVideoClick: (String) -> Unit,
+    onOpenBatch: (ChatMessage, String) -> Unit,
+    onGoToMessage: (ChatMessage) -> Unit
 ) {
-    val mediaItems = items.filter { it.imageUrl != null || it.videoUrl != null || it.fileUrl != null }
-    if (mediaItems.isEmpty()) return
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(3),
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(12.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+    val hasMedia = { m: ChatMessage ->
+        m.imageUrl != null || m.videoUrl != null || m.fileUrl != null || m.type == "media_group"
+    }
+    // En Fotos/Videos/Docs se desarman los lotes (galería plana). En Multimedia
+    // y Todos se mantienen agrupados (cada lote es un tile con su contador).
+    val flatMode = kindFilter == "image" || kindFilter == "video" || kindFilter == "file"
+
+    if (flatMode) {
+        val flatItems = remember(items, kindFilter) {
+            flattenMediaSearchItems(items.filter(hasMedia)).filter { it.kind == kindFilter }
+        }
+        if (flatItems.isEmpty()) return
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 108.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            itemsIndexed(flatItems) { index, item ->
+                key(item.message.id + "_" + item.url + "_" + index) {
+                    MediaFlatTile(
+                        item = item,
+                        onImageClick = onImageClick,
+                        onVideoClick = onVideoClick,
+                        onGoToMessage = onGoToMessage
+                    )
+                }
+            }
+        }
+    } else {
+        val grouped = remember(items) { items.filter(hasMedia) }
+        if (grouped.isEmpty()) return
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 108.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(grouped, key = { it.id }) { msg ->
+                MediaGroupTile(
+                    msg = msg,
+                    onImageClick = onImageClick,
+                    onVideoClick = onVideoClick,
+                    onOpenBatch = onOpenBatch,
+                    onGoToMessage = onGoToMessage
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MediaFlatTile(
+    item: MediaSearchItem,
+    onImageClick: (String) -> Unit,
+    onVideoClick: (String) -> Unit,
+    onGoToMessage: (ChatMessage) -> Unit
+) {
+    val isVideo = item.kind == "video"
+    Box(
+        modifier = Modifier
+            .aspectRatio(1f)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable {
+                when (item.kind) {
+                    "video" -> onVideoClick(item.url)
+                    "image" -> onImageClick(item.url)
+                }
+            }
     ) {
-        mediaItems.forEach { msg ->
-            item(key = msg.id) {
-                Box(
-                    modifier = Modifier
-                        .aspectRatio(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable {
-                            when {
-                                msg.imageUrl != null -> onImageClick(msg.imageUrl)
-                                msg.videoUrl != null -> onVideoClick(msg.videoUrl)
+        when (item.kind) {
+            "video" -> com.example.cuidaleapp.ui.components.VideoFirstFrame(item.url, Modifier.fillMaxSize())
+            "image" -> AsyncImage(
+                model = coil3.request.ImageRequest.Builder(LocalContext.current)
+                    .data(item.url)
+                    .memoryCachePolicy(coil3.request.CachePolicy.ENABLED)
+                    .diskCachePolicy(coil3.request.CachePolicy.ENABLED)
+                    .build(),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            else -> Box(
+                modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.AutoMirrored.Filled.InsertDriveFile, null, tint = Color.Gray)
+            }
+        }
+
+        if (isVideo) {
+            IconButton(
+                onClick = { onVideoClick(item.url) },
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(40.dp)
+                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+            ) {
+                Icon(Icons.Default.PlayArrow, null, tint = Color.White, modifier = Modifier.size(24.dp))
+            }
+        }
+
+        // Siempre disponible: ir al mensaje de origen.
+        IconButton(
+            onClick = { onGoToMessage(item.message) },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(4.dp)
+                .size(28.dp)
+                .background(Color.Black.copy(alpha = 0.55f), CircleShape)
+        ) {
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                "Ir al mensaje",
+                tint = Color.White,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun MediaGroupTile(
+    msg: ChatMessage,
+    onImageClick: (String) -> Unit,
+    onVideoClick: (String) -> Unit,
+    onOpenBatch: (ChatMessage, String) -> Unit,
+    onGoToMessage: (ChatMessage) -> Unit
+) {
+    val batchItems = runCatching { com.example.cuidaleapp.ui.components.parseMediaBatch(msg.metadata) }.getOrDefault(emptyList())
+    val isBatch = msg.type == "media_group" && batchItems.isNotEmpty()
+    val batchVideo = if (isBatch) batchItems.firstOrNull { it.first == "video" }?.second else null
+    val batchImage = if (isBatch) batchItems.firstOrNull { it.first == "image" }?.second else null
+    val videoUrl = msg.videoUrl ?: batchVideo
+    val imageUrl = msg.imageUrl ?: batchImage
+    val isVideo = videoUrl != null
+
+    Box(
+        modifier = Modifier
+            .aspectRatio(1f)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable {
+                when {
+                    isBatch -> onOpenBatch(msg, batchItems.first().second)
+                    isVideo -> onVideoClick(videoUrl)
+                    msg.imageUrl != null -> onImageClick(msg.imageUrl)
+                }
+            }
+    ) {
+        when {
+            isVideo -> com.example.cuidaleapp.ui.components.VideoFirstFrame(videoUrl, Modifier.fillMaxSize())
+            imageUrl != null -> AsyncImage(
+                model = imageUrl,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            isBatch -> Box(
+                modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.PhotoLibrary, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+            }
+            else -> Box(
+                modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.AutoMirrored.Filled.InsertDriveFile, null, tint = Color.Gray)
+            }
+        }
+
+        if (isVideo) {
+            IconButton(
+                onClick = { onVideoClick(videoUrl) },
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(40.dp)
+                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+            ) {
+                Icon(Icons.Default.PlayArrow, null, tint = Color.White, modifier = Modifier.size(24.dp))
+            }
+        }
+
+        if (isBatch) {
+            Surface(
+                color = Color.Black.copy(alpha = 0.6f),
+                shape = CircleShape,
+                modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(22.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(batchItems.size.toString(), color = Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        // Siempre disponible: ir al mensaje de origen.
+        IconButton(
+            onClick = { onGoToMessage(msg) },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(4.dp)
+                .size(28.dp)
+                .background(Color.Black.copy(alpha = 0.55f), CircleShape)
+        ) {
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                "Ir al mensaje",
+                tint = Color.White,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun SearchResultsList(
+    messages: List<ChatMessage>,
+    myUid: String,
+    isDark: Boolean,
+    onImageClick: (String) -> Unit,
+    onVideoClick: (String) -> Unit,
+    onOpenBatch: (ChatMessage, String) -> Unit,
+    onGoToMessage: (ChatMessage) -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        items(messages.reversed(), key = { it.id }) { msg ->
+            val batchItems = runCatching { com.example.cuidaleapp.ui.components.parseMediaBatch(msg.metadata) }.getOrDefault(emptyList())
+            val isBatch = msg.type == "media_group" && batchItems.isNotEmpty()
+            val batchVideo = if (isBatch) batchItems.firstOrNull { it.first == "video" }?.second else null
+            val batchImage = if (isBatch) batchItems.firstOrNull { it.first == "image" }?.second else null
+            val videoUrl = msg.videoUrl ?: batchVideo
+            val imageUrl = msg.imageUrl ?: batchImage
+            val isVideo = videoUrl != null
+            val containerColor = if (isDark) Color(0xFF1B263B) else Color.White
+            Surface(
+                onClick = {
+                    when {
+                        isVideo -> onVideoClick(videoUrl)
+                        msg.imageUrl != null -> onImageClick(msg.imageUrl)
+                        isBatch -> onOpenBatch(msg, batchItems.first().second)
+                    }
+                },
+                shape = RoundedCornerShape(14.dp),
+                color = containerColor,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Icono / miniatura
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        when {
+                            isVideo -> com.example.cuidaleapp.ui.components.VideoFirstFrame(videoUrl, Modifier.fillMaxSize())
+                            imageUrl != null -> AsyncImage(model = imageUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                            isBatch -> Icon(Icons.Default.PhotoLibrary, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(26.dp))
+                            msg.fileUrl != null -> Icon(Icons.AutoMirrored.Filled.InsertDriveFile, null, tint = Color.Gray, modifier = Modifier.size(26.dp))
+                            else -> Icon(Icons.Default.Forum, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(26.dp))
+                        }
+                        if (isVideo) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.Center)
+                                    .size(22.dp)
+                                    .background(Color.Black.copy(alpha = 0.5f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.PlayArrow, null, tint = Color.White, modifier = Modifier.size(13.dp))
                             }
                         }
-                ) {
-                    when {
-                        msg.videoUrl != null -> com.example.cuidaleapp.ui.components.VideoFirstFrame(
-                            msg.videoUrl,
-                            Modifier.fillMaxSize()
-                        )
-                        msg.imageUrl != null -> AsyncImage(
-                            model = msg.imageUrl,
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                        else -> Box(
-                            modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.AutoMirrored.Filled.InsertDriveFile, null, tint = Color.Gray)
-                        }
                     }
-                    if (msg.videoUrl != null) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.Center)
-                                .size(36.dp)
-                                .background(Color.Black.copy(alpha = 0.45f), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.PlayArrow, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val title = when {
+                                msg.senderId == "system" -> "Mensaje del sistema"
+                                msg.senderId == myUid -> "Tú"
+                                else -> "Contacto"
+                            }
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = formatMessageDate(msg.timestamp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.Gray
+                            )
                         }
+                        Spacer(Modifier.height(2.dp))
+                        val snippet = when {
+                            isBatch -> "📷 ${batchItems.size} elementos · Lote multimedia"
+                            msg.imageUrl != null -> "📷 Foto"
+                            msg.videoUrl != null -> "🎬 Video"
+                            msg.fileUrl != null -> "📄 ${msg.fileName ?: "Documento"}"
+                            else -> msg.text
+                        }
+                        Text(
+                            text = snippet,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (isDark) Color.White else Color.Black,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    IconButton(
+                        onClick = { onGoToMessage(msg) },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            "Ir al mensaje",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
             }

@@ -34,6 +34,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Fullscreen
@@ -83,7 +84,6 @@ import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import coil3.compose.AsyncImage
-import coil3.compose.AsyncImagePainter
 import coil3.compose.SubcomposeAsyncImage
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
@@ -140,6 +140,27 @@ object VideoThumbnailCache {
         }
     }
 
+    /**
+     * Obtiene el primer frame (extrayéndolo si es necesario) y lo deja cacheados.
+     * Usado para precargar miniaturas de videos en lotes multimedia.
+     */
+    suspend fun fetch(context: android.content.Context, url: String): android.graphics.Bitmap? {
+        get(context, url)?.let { return it }
+        val bmp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                val retriever = android.media.MediaMetadataRetriever()
+                try {
+                    retriever.setDataSource(url)
+                    retriever.getFrameAtTime(0, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                } finally {
+                    runCatching { retriever.release() }
+                }
+            }.getOrNull()
+        }
+        if (bmp != null) put(context, url, bmp)
+        return bmp
+    }
+
     fun clear(context: android.content.Context) {
         memory.clear()
         runCatching { diskDir(context).deleteRecursively() }
@@ -157,17 +178,7 @@ fun VideoFirstFrame(
 ) {
     val context = LocalContext.current
     val frame by produceState<android.graphics.Bitmap?>(initialValue = VideoThumbnailCache.get(context, url), url) {
-        value = VideoThumbnailCache.get(context, url) ?: withContext(Dispatchers.IO) {
-            runCatching {
-                val retriever = android.media.MediaMetadataRetriever()
-                try {
-                    retriever.setDataSource(url)
-                    retriever.getFrameAtTime(0, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                } finally {
-                    runCatching { retriever.release() }
-                }
-            }.getOrNull()?.also { VideoThumbnailCache.put(context, url, it) }
-        }
+        value = VideoThumbnailCache.fetch(context, url)
     }
 
     if (frame != null) {
@@ -225,25 +236,36 @@ object MultimediaDiskCache {
 
 @androidx.media3.common.util.UnstableApi
 object VideoPlayerCache {
-    private val players = mutableMapOf<String, ExoPlayer>()
+    // Limita la cantidad de reproductores vivos para no degradar el scroll
+    // cuando hay muchos videos en el chat (LRU: se libera el más viejo).
+    private const val MAX_PLAYERS = 8
+    private val players = java.util.LinkedHashMap<String, ExoPlayer>()
     private val readyUrls = mutableSetOf<String>()
 
     fun get(context: Context, url: String): ExoPlayer {
-        return players.getOrPut(url) {
-            ExoPlayer.Builder(context).build().apply {
-                val mediaSource = ProgressiveMediaSource.Factory(MultimediaDiskCache.dataSourceFactory(context))
-                    .createMediaSource(MediaItem.fromUri(url))
-                setMediaSource(mediaSource)
-                prepare()
-                addListener(object : Player.Listener {
-                    override fun onPlaybackStateChanged(playbackState: Int) {
-                        if (playbackState == Player.STATE_READY || playbackState == Player.STATE_ENDED) {
-                            readyUrls.add(url)
-                        }
-                    }
-                })
+        players[url]?.let { return it }
+        if (players.size >= MAX_PLAYERS) {
+            val oldestKey = players.keys.firstOrNull()
+            if (oldestKey != null) {
+                runCatching { players[oldestKey]?.release() }
+                players.remove(oldestKey)
             }
         }
+        val player = ExoPlayer.Builder(context).build().apply {
+            val mediaSource = ProgressiveMediaSource.Factory(MultimediaDiskCache.dataSourceFactory(context))
+                .createMediaSource(MediaItem.fromUri(url))
+            setMediaSource(mediaSource)
+            prepare()
+            addListener(object : Player.Listener {
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState == Player.STATE_READY || playbackState == Player.STATE_ENDED) {
+                        readyUrls.add(url)
+                    }
+                }
+            })
+        }
+        players[url] = player
+        return player
     }
 
     fun isReady(url: String): Boolean = url in readyUrls
@@ -496,7 +518,8 @@ fun FullImageViewer(
     onReply: () -> Unit,
     canPin: Boolean = false,
     isPinned: Boolean = false,
-    onTogglePin: (() -> Unit)? = null
+    onTogglePin: (() -> Unit)? = null,
+    onGoToMessage: (() -> Unit)? = null
 ) {
     Dialog(
         onDismissRequest = onDismiss,
@@ -521,6 +544,14 @@ fun FullImageViewer(
             Row(
                 modifier = Modifier.align(Alignment.TopCenter).padding(top = 12.dp)
             ) {
+                if (onGoToMessage != null) {
+                    Surface(color = Color.White.copy(alpha = 0.15f), shape = CircleShape) {
+                        IconButton(onClick = { onGoToMessage?.invoke() }) {
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Ir al mensaje", tint = Color.White)
+                        }
+                    }
+                    Spacer(Modifier.width(12.dp))
+                }
                 Surface(color = Color.White.copy(alpha = 0.15f), shape = CircleShape) {
                     IconButton(onClick = onReply) {
                         Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = stringResource(R.string.notification_chat_reply), tint = Color.White)
@@ -564,7 +595,8 @@ fun FullVideoViewer(
     onReply: () -> Unit,
     canPin: Boolean = false,
     isPinned: Boolean = false,
-    onTogglePin: (() -> Unit)? = null
+    onTogglePin: (() -> Unit)? = null,
+    onGoToMessage: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
 
@@ -628,6 +660,14 @@ fun FullVideoViewer(
             Row(
                 modifier = Modifier.align(Alignment.TopCenter).padding(top = 12.dp)
             ) {
+                if (onGoToMessage != null) {
+                    Surface(color = Color.White.copy(alpha = 0.15f), shape = CircleShape) {
+                        IconButton(onClick = { onGoToMessage?.invoke() }) {
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Ir al mensaje", tint = Color.White)
+                        }
+                    }
+                    Spacer(Modifier.width(12.dp))
+                }
                 Surface(color = Color.White.copy(alpha = 0.15f), shape = CircleShape) {
                     IconButton(onClick = onReply) {
                         Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = stringResource(R.string.notification_chat_reply), tint = Color.White)

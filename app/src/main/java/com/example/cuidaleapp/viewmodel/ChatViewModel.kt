@@ -104,10 +104,11 @@ class ChatViewModel : ViewModel() {
 
     init {
         // Cuando se pierde la conexión, poblar la UI con la caché local del chat.
+        // Cuando se recupera, reenviar automáticamente los mensajes pendientes (outbox).
         viewModelScope.launch {
             ConnectivityObserver.isOnline.collect { online ->
+                val uid = auth.currentUser?.uid ?: return@collect
                 if (!online) {
-                    val uid = auth.currentUser?.uid ?: return@collect
                     val cachedChats = chatCache.loadSummaries(uid)
                     if (cachedChats.isNotEmpty()) {
                         _chatList.value = cachedChats.map { s ->
@@ -123,6 +124,12 @@ class ChatViewModel : ViewModel() {
                             _messages.value = msgs
                             _pinnedMessages.value = msgs.filter { it.pinned && !it.deleted }
                         }
+                    }
+                } else {
+                    // Al volver la conexión, reenviar los mensajes pendientes.
+                    val pending = _outbox.value.toList()
+                    if (pending.isNotEmpty()) {
+                        pending.forEach { sendOutboxMessage(it) }
                     }
                 }
             }
@@ -337,15 +344,15 @@ class ChatViewModel : ViewModel() {
         val myUid = auth.currentUser?.uid ?: return
         if (chatsListener != null) return
 
-        if (!ConnectivityObserver.isOnline.value) {
-            val cached = chatCache.loadSummaries(myUid)
-            if (cached.isNotEmpty()) {
-                _chatList.value = cached.map { s ->
-                    val user = s.otherUser ?: UserData(uid = s.otherUid, nombre = "Cargando...")
-                    ChatPreview(user, s.lastMessage, s.unread, s.chatId)
-                }.sortedByDescending { it.lastMessage?.timestamp ?: 0L }
-                _totalUnreadCount.value = _chatList.value.sumOf { it.unreadCount }
-            }
+        // Precargar la caché local (si existe) como estado inicial inmediato,
+        // tanto online como offline. Se sobreescribirá al llegar datos frescos.
+        val cachedInit = chatCache.loadSummaries(myUid)
+        if (cachedInit.isNotEmpty()) {
+            _chatList.value = cachedInit.map { s ->
+                val user = s.otherUser ?: UserData(uid = s.otherUid, nombre = "Cargando...")
+                ChatPreview(user, s.lastMessage, s.unread, s.chatId)
+            }.sortedByDescending { it.lastMessage?.timestamp ?: 0L }
+            _totalUnreadCount.value = _chatList.value.sumOf { it.unreadCount }
         }
 
         chatsListener = db.collection("vinculos")
@@ -370,8 +377,19 @@ class ChatViewModel : ViewModel() {
                 }
 
                 if (userIds.isEmpty()) {
-                    _chatList.value = emptyList()
-                    _totalUnreadCount.value = 0
+                    // Si Firestore no devuelve vínculos (red o filtro) pero tenemos
+                    // caché local, mantenerla visible en lugar de vaciar la lista.
+                    val cached = chatCache.loadSummaries(myUid)
+                    if (cached.isNotEmpty()) {
+                        _chatList.value = cached.map { s ->
+                            val user = s.otherUser ?: UserData(uid = s.otherUid, nombre = "Cargando...")
+                            ChatPreview(user, s.lastMessage, s.unread, s.chatId)
+                        }.sortedByDescending { it.lastMessage?.timestamp ?: 0L }
+                        _totalUnreadCount.value = _chatList.value.sumOf { it.unreadCount }
+                    } else {
+                        _chatList.value = emptyList()
+                        _totalUnreadCount.value = 0
+                    }
                     return@addSnapshotListener
                 }
 
@@ -490,7 +508,8 @@ class ChatViewModel : ViewModel() {
         replyToName: String? = null,
         type: String = "text",
         metadata: Map<String, String> = emptyMap(),
-        isSystem: Boolean = false
+        isSystem: Boolean = false,
+        timestampOverride: Long? = null
     ) {
         val myUid = auth.currentUser?.uid ?: return
         val msgRef = database.child("messages").child(chatId).push()
@@ -500,7 +519,7 @@ class ChatViewModel : ViewModel() {
             id = msgId,
             senderId = if (isSystem) "system" else myUid,
             text = text,
-            timestamp = System.currentTimeMillis(),
+            timestamp = timestampOverride ?: System.currentTimeMillis(),
             imageUrl = imageUrl,
             videoUrl = videoUrl,
             fileUrl = fileUrl,
@@ -723,8 +742,13 @@ class ChatViewModel : ViewModel() {
             replyToName = msg.replyToName,
             type = msg.type,
             metadata = msg.metadata,
-            isSystem = false
+            isSystem = false,
+            // Conserva el timestamp original (momento en que se escribió) para
+            // no alterar el orden ni el día en el historial.
+            timestampOverride = msg.timestamp
         )
+        // Elimina la copia local pendiente para evitar duplicados visuales.
+        _messages.value = _messages.value.filterNot { it.id == msg.id }
         _outbox.value = _outbox.value.filterNot { it.id == msg.id }
         chatCache.saveOutbox(myUid, msg.chatId, _outbox.value.filter { it.chatId == msg.chatId })
     }

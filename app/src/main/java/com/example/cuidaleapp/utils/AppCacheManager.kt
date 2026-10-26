@@ -88,8 +88,8 @@ object AppCacheManager {
         val kb = 1024.0
         val mb = kb * 1024
         return when {
-            bytes >= mb -> String.format(java.util.Locale.getDefault(), "%.1f MB", bytes / mb)
-            bytes >= kb -> String.format(java.util.Locale.getDefault(), "%.0f KB", bytes / kb)
+            bytes >= mb -> String.format(java.util.Locale.US, "%.1f MB", bytes / mb)
+            bytes >= kb -> String.format(java.util.Locale.US, "%.0f KB", bytes / kb)
             else -> "$bytes B"
         }
     }
