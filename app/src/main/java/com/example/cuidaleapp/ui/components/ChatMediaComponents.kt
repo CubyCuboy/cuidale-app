@@ -115,9 +115,6 @@ import com.example.cuidaleapp.models.ChatMessage
 import kotlinx.coroutines.launch
 import java.io.File
 
-/**
- * Caché (en memoria + disco) del primer frame de videos, para no re-extraerlos.
- */
 object VideoThumbnailCache {
     private const val MAX_MEMORY_ENTRIES = 64
     private val memory = object : LinkedHashMap<String, android.graphics.Bitmap>(MAX_MEMORY_ENTRIES, 0.75f, true) {
@@ -162,10 +159,6 @@ object VideoThumbnailCache {
         }
     }
 
-    /**
-     * Obtiene el primer frame (extrayéndolo si es necesario) y lo deja cacheados.
-     * Usado para precarga miniaturas de videos en lotes multimedia.
-     */
     suspend fun fetch(context: Context, url: String): android.graphics.Bitmap? {
         get(context, url)?.let { return it }
         val bmp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -189,10 +182,6 @@ object VideoThumbnailCache {
     }
 }
 
-/**
- * Obtiene el primer frame de un video remoto (para usar como preview en respuestas).
- * Con caché de thumbnails para evitar re-extraer el mismo video.
- */
 @Composable
 fun VideoFirstFrame(
     url: String,
@@ -220,10 +209,6 @@ fun VideoFirstFrame(
     }
 }
 
-/**
- * Caché en disco compartida para todo el multimedia (videos/imágenes).
- * Usa SimpleCache (Media3) con evicción LRU para limitar el espacio usado.
- */
 @androidx.media3.common.util.UnstableApi
 object MultimediaDiskCache {
     private const val MAX_CACHE_BYTES = 512L * 1024 * 1024 // 512 MB
@@ -258,8 +243,7 @@ object MultimediaDiskCache {
 
 @androidx.media3.common.util.UnstableApi
 object VideoPlayerCache {
-    // Limita la cantidad de reproductores vivos para no degradar el scroll
-    // cuando hay muchos videos en el chat (LRU: se libera el más viejo).
+
     private const val MAX_PLAYERS = 8
     private val players = java.util.LinkedHashMap<String, ExoPlayer>()
     private val readyUrls = mutableSetOf<String>()
@@ -321,7 +305,6 @@ fun ChatSkeletonBox(
         label = "shimmerProgress"
     )
 
-    // Barrido diagonal elegante del reflejo sobre la base.
     val brush = Brush.linearGradient(
         colors = listOf(baseColor, highlightColor, baseColor),
         start = Offset(progress * 800f, 0f),
@@ -368,8 +351,6 @@ fun ChatMediaImage(
     var fullFailed by remember(url) { mutableStateOf(false) }
     var retryKey by remember(url) { mutableIntStateOf(0) }
 
-    // Miniatura en baja resolución: se muestra borrosa mientras la imagen
-    // completa se descarga (y como respaldo si la alta calidad falla).
     val thumbRequest = remember(url) {
         ImageRequest.Builder(context)
             .data(url)
@@ -379,7 +360,6 @@ fun ChatMediaImage(
             .build()
     }
 
-    // Imagen en alta calidad (reintentadle).
     val fullRequest = remember(url, retryKey) {
         ImageRequest.Builder(context)
             .data(url)
@@ -390,9 +370,6 @@ fun ChatMediaImage(
     }
 
     Box(modifier = mediaModifier) {
-        // Capa de baja calidad con blur mientras no esté la imagen completa.
-        // Si la alta calidad falla (p.ej. sin conexión y sin caché), esta
-        // miniatura borrosa queda visible como respaldo.
         if (!fullLoaded) {
             SubcomposeAsyncImage(
                 model = thumbRequest,
@@ -413,7 +390,6 @@ fun ChatMediaImage(
             )
         }
 
-        // Capa de alta calidad.
         SubcomposeAsyncImage(
             model = fullRequest,
             contentDescription = null,
@@ -440,11 +416,9 @@ fun ChatMediaImage(
                 }
             },
             error = {
-                // Debajo queda visible la miniatura borrosa.
             }
         )
 
-        // Botón para reintentar la descarga en alta calidad.
         if (fullFailed) {
             Surface(
                 onClick = {
@@ -621,9 +595,6 @@ fun FullVideoViewer(
     onGoToMessage: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
-
-    // Player independiente para el visor a pantalla completa: no roza el player del chat
-    // y permite transferir la posición al volver.
     val fullscreenPlayer = remember {
         ExoPlayer.Builder(context).build().apply {
             val mediaSource = ProgressiveMediaSource.Factory(MultimediaDiskCache.dataSourceFactory(context))
@@ -636,8 +607,6 @@ fun FullVideoViewer(
     val mainPlayer = remember { VideoPlayerCache.get(context, url) }
 
     DisposableEffect(url) {
-        // Al abrir la pantalla completa, pausar el player del chat para evitar audio doble
-        // y arrancar el visor desde la posición actual.
         runCatching {
             val startPos = mainPlayer.currentPosition
             mainPlayer.pause()
@@ -645,8 +614,6 @@ fun FullVideoViewer(
             fullscreenPlayer.playWhenReady = true
         }
         onDispose {
-            // sincronizar la posición de reproducción con el player del chat y pausarlo
-            // para que al volver se continúe desde donde quedó, con video.
             runCatching {
                 mainPlayer.seekTo(fullscreenPlayer.currentPosition)
                 mainPlayer.pause()
@@ -833,8 +800,6 @@ private fun ZoomableImage(
     var offset by remember(url) { mutableStateOf(Offset.Zero) }
     val zoomed = scale > 1.01f
 
-    // Notifica al padre cuando cambia el estado de zoom (para ocultar/mostrar
-    // la barra superior y la fila de miniaturas).
     LaunchedEffect(zoomed) {
         onZoomChanged(zoomed)
     }
@@ -857,9 +822,7 @@ private fun ZoomableImage(
                     }
                 )
             }
-            // Pinch siempre activo: con 2+ dedos se hace Zoom y se consumen los
-            // gestos (no se cambia de página por accidente). Con 1 dedo y sin
-            // Zoom, no se consume y el pager puede deslizar.
+
             .pointerInput(url) {
                 awaitEachGesture {
                     awaitFirstDown()
@@ -889,7 +852,6 @@ private fun ZoomableImage(
                     } while (event.changes.any { it.pressed })
                 }
             }
-            // Cuando ya está con Zoom, permite mover la imagen con 1 dedo.
             .pointerInput(url, zoomed) {
                 if (zoomed) {
                     detectTransformGestures { _, pan, zoom, _ ->
@@ -937,8 +899,6 @@ private fun MediaThumbnailCard(
 ) {
     val shape = RoundedCornerShape(8.dp)
 
-    // Escala, sombra y elevación para que la carta seleccionada "sobresalga"
-    // del mazo como si estuviera levantada.
     val scale by animateFloatAsState(
         targetValue = if (selected) 1.18f else 1f,
         animationSpec = spring(
@@ -961,7 +921,6 @@ private fun MediaThumbnailCard(
         label = "thumbLift"
     )
 
-    // Efecto de "repartir cartas": cada miniatura entra con retardo escalonado.
     val dealDelay = (index * 45).coerceAtMost(450)
 
     AnimatedVisibility(
@@ -1008,19 +967,14 @@ fun MediaBatchGalleryViewer(
     val pagerState = rememberPagerState(pageCount = { items.size }, initialPage = initialIndex)
     val scope = rememberCoroutineScope()
 
-    // UI (barra superior + miniaturas) visible por defecto. Un toque simple la
-    // oculta (para ver la imagen a pantalla completa); el Zoom muestra/oculta
-    // automáticamente según el estado de acercamiento.
     var chromeVisible by remember { mutableStateOf(true) }
 
-    // Al moverte entre páginas, pausa cualquier video que ya no esté visible.
     androidx.compose.runtime.LaunchedEffect(pagerState.currentPage) {
         val currentItem = items.getOrNull(pagerState.currentPage)
         val currentUrl = if (currentItem?.first == "video") currentItem.second else null
         VideoPlayerCache.pauseExcept(currentUrl)
     }
 
-    // Al cerrar el visor, detén todos los videos para que no sigan sonando.
     DisposableEffect(Unit) {
         onDispose {
             VideoPlayerCache.pauseAll()
@@ -1036,8 +990,7 @@ fun MediaBatchGalleryViewer(
                 .fillMaxSize()
                 .background(Color.Black)
         ) {
-            // Barra superior: contador + acciones. Se oculta con un toque simple;
-            // respeta la barra de estado del sistema (edge-to-edge).
+
             AnimatedVisibility(
                 visible = chromeVisible,
                 enter = fadeIn(tween(200)) + slideInVertically(tween(220)) { -it },
@@ -1071,8 +1024,6 @@ fun MediaBatchGalleryViewer(
                 }
             }
 
-            // Contenido multimedia: ocupa todo el espacio entre la barra superior
-            // y la fila de miniaturas, sin que ninguna se le superponga.
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier
@@ -1098,9 +1049,6 @@ fun MediaBatchGalleryViewer(
                 }
             }
 
-            // Fila de miniaturas tipo "baraja": aparece con animación escalonada,
-            // respeta la barra de navegación de Android y la miniatura seleccionada
-            // sobresale como una carta levantada del mazo.
             AnimatedVisibility(
                 visible = chromeVisible,
                 enter = slideInVertically(tween(250)) { it } + fadeIn(tween(250)) + expandVertically(tween(250)),

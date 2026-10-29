@@ -23,8 +23,8 @@ android {
         applicationId = "com.example.cuidaleapp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 136
+        versionName = "1.3.6"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         resValue("string", "mapbox_access_token", mapboxToken)
@@ -57,8 +57,6 @@ android {
 
     packaging {
         jniLibs {
-            // Mantiene las librerías nativas sin comprimir y alineadas a
-            // 16 KB (AGP 8.5.1+ alinea automáticamente .so no comprimidos).
             useLegacyPackaging = false
         }
     }
