@@ -441,7 +441,8 @@ class MenuActivity : ComponentActivity() {
                                                         MapaCuidadores -> {
                                                             MapaCuidadoresScreen(
                                                                 onNavigateBack = { currentScreen = Main },
-                                                                onUserClick = { uid -> currentScreen = OtherFicha(uid, returnTo = MapaCuidadores) }
+                                                                onUserClick = { uid -> currentScreen = OtherFicha(uid, returnTo = MapaCuidadores) },
+                                                                onNavigateToFicha = { currentScreen = Ficha(startInEditMode = true, returnTo = MapaCuidadores) }
                                                             )
                                                         }
                                                         Profile -> {
