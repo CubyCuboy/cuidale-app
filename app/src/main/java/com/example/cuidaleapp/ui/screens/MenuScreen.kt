@@ -24,11 +24,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.example.cuidaleapp.R
 import com.example.cuidaleapp.models.UserData
 import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
@@ -102,7 +104,7 @@ fun MenuScreen(
                 .padding(horizontal = 24.dp)
         ) {
 
-            val listTitle = if (userData.rol == "cuidador") "Pacientes" else "Cuidadores"
+            val listTitle = if (userData.rol == "cuidador") stringResource(R.string.menu_title_patients) else stringResource(R.string.menu_title_caregivers)
 
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp),
@@ -132,20 +134,20 @@ fun MenuScreen(
                         )
                         Spacer(modifier = Modifier.height(24.dp))
                         Text(
-                            text = "Sin conexión a internet",
+                            text = stringResource(R.string.connectivity_offline),
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                             color = Color.White
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Conéctate para descubrir nuevos ${listTitle.lowercase()}.",
+                            text = stringResource(R.string.menu_connect_discover, listTitle.lowercase()),
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color.White.copy(alpha = 0.7f),
                             textAlign = TextAlign.Center
                         )
                         Spacer(modifier = Modifier.height(32.dp))
                         HardShadowButton(
-                            text = "REINTENTAR",
+                            text = stringResource(R.string.action_retry),
                             onClick = { searchViewModel.refresh() },
                             containerColor = Color.White.copy(alpha = 0.1f),
                             contentColor = Color.White,
@@ -188,9 +190,9 @@ fun MenuScreen(
                                     if (resultsList.isEmpty()) {
                                         EmptySearchResults(
                                             title = if (selectedRegion.isNotEmpty() || selectedCommunes.isNotEmpty())
-                                                "Sin resultados para estos filtros"
-                                            else "No hay $listTitle disponibles",
-                                            subtitle = "Prueba cambiando la ubicación o los filtros de búsqueda.",
+                                                stringResource(R.string.search_no_results_filters)
+                                            else stringResource(R.string.menu_no_available, listTitle),
+                                            subtitle = stringResource(R.string.search_try_changing_location),
                                             onClearFilters = { searchViewModel.clearFilters() },
                                             showClearButton = selectedRegion.isNotEmpty() || selectedCommunes.isNotEmpty()
                                         )
@@ -236,7 +238,7 @@ fun MenuScreen(
                                                             contentAlignment = Alignment.Center
                                                         ) {
                                                             HardShadowButton(
-                                                                text = "CARGAR MÁS ${listTitle.uppercase()}",
+                                                                text = stringResource(R.string.menu_load_more, listTitle.uppercase()),
                                                                 onClick = { searchViewModel.loadMore() },
                                                                 containerColor = Color.White.copy(alpha = 0.15f),
                                                                 contentColor = Color.White,
@@ -263,13 +265,13 @@ fun MenuScreen(
                                                             )
                                                             Spacer(modifier = Modifier.height(16.dp))
                                                             Text(
-                                                                "Parece que no hay más ${listTitle.lowercase()} por ahora.",
+                                                                stringResource(R.string.menu_no_more, listTitle.lowercase()),
                                                                 color = Color.White.copy(alpha = 0.6f),
                                                                 textAlign = TextAlign.Center,
                                                                 style = MaterialTheme.typography.bodyMedium
                                                             )
                                                             Text(
-                                                                "Prueba con otra configuración para encontrar más perfiles.",
+                                                                stringResource(R.string.menu_try_other_config),
                                                                 color = Color.White.copy(alpha = 0.4f),
                                                                 textAlign = TextAlign.Center,
                                                                 style = MaterialTheme.typography.bodySmall
@@ -340,7 +342,7 @@ fun MenuScreen(
                             icon = {
                                 Icon(
                                     imageVector = Icons.Default.Map,
-                                    contentDescription = "Mapa de cuidadores",
+                                    contentDescription = stringResource(R.string.cd_map_caregivers),
                                     tint = Color.White
                                 )
                             }
@@ -352,7 +354,7 @@ fun MenuScreen(
                         icon = {
                             Icon(
                                 imageVector = Icons.Default.Search,
-                                contentDescription = "Filtros",
+                                contentDescription = stringResource(R.string.cd_filters),
                                 tint = Color.White
                             )
                         }
@@ -365,13 +367,13 @@ fun MenuScreen(
             AlertDialog(
                 onDismissRequest = { showFichaReminder = false },
                 icon = { Icon(Icons.Default.Warning, null, tint = Color.Yellow) },
-                title = { Text("Ficha incompleta") },
+                title = { Text(stringResource(R.string.menu_ficha_incomplete_title)) },
                 text = {
                     Text(
                         if (userData.rol == "cuidador")
-                            "Aún no tienes una ficha creada. Recuerda que no puedes ofrecer tus servicios ni aparecer en búsquedas sin ella."
+                            stringResource(R.string.menu_ficha_incomplete_caregiver)
                         else
-                            "Aún no conocemos nada de el familiar que debe ser cuidado. Debes hacer una ficha para poder buscar cuidadores."
+                            stringResource(R.string.menu_ficha_incomplete_rep)
                     )
                 },
                 confirmButton = {
@@ -379,12 +381,12 @@ fun MenuScreen(
                         showFichaReminder = false
                         onViewFicha()
                     }) {
-                        Text("CREAR FICHA AHORA")
+                        Text(stringResource(R.string.menu_create_ficha_now))
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { showFichaReminder = false }) {
-                        Text("MÁS TARDE")
+                        Text(stringResource(R.string.menu_later))
                     }
                 }
             )
@@ -496,7 +498,7 @@ fun EmptySearchResults(
             if (showClearButton) {
                 Spacer(modifier = Modifier.height(32.dp))
                 HardShadowButton(
-                    text = "LIMPIAR FILTROS",
+                    text = stringResource(R.string.menu_clear_filters),
                     onClick = onClearFilters,
                     containerColor = Color.White.copy(alpha = 0.1f),
                     contentColor = Color.White,
@@ -532,25 +534,25 @@ fun FichaPlaceholder(
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = if (rol == "cuidador") 
-                    "¡Completa tu ficha para empezar!" 
+                    stringResource(R.string.menu_ficha_placeholder_title_caregiver)
                 else 
-                    "Crea la ficha de tu familiar",
+                    stringResource(R.string.menu_ficha_placeholder_title_rep),
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = if (rol == "cuidador")
-                    "Necesitas una ficha técnica para que las familias puedan encontrarte y confiar en tu experiencia."
+                    stringResource(R.string.menu_ficha_placeholder_desc_caregiver)
                 else
-                    "Para buscar cuidadores, primero necesitamos saber un poco más sobre la persona que recibirá el cuidado.",
+                    stringResource(R.string.menu_ficha_placeholder_desc_rep),
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(32.dp))
             HardShadowButton(
-                text = "CREAR FICHA TÉCNICA",
+                text = stringResource(R.string.menu_create_ficha_technical),
                 onClick = onClick,
                 containerColor = accentColor,
                 contentColor = Color.White,

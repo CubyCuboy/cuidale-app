@@ -5,7 +5,6 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.*
 import androidx.compose.runtime.collectAsState
@@ -18,66 +17,95 @@ import com.example.cuidaleapp.ui.components.CuidaleWelcomeLoading
 import com.example.cuidaleapp.ui.screens.LoginScreen
 import com.example.cuidaleapp.viewmodel.LoginUiState
 import com.example.cuidaleapp.viewmodel.LoginViewModel
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.android.gms.common.api.ApiException
+import android.content.MutableContextWrapper
+import android.util.Base64
+import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.GetCredentialResponse
+import androidx.lifecycle.lifecycleScope
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
+import kotlinx.coroutines.launch
+import org.json.JSONObject
+import java.security.SecureRandom
 
 class LoginActivity : ComponentActivity() {
     private val viewModel: LoginViewModel by viewModels()
 
-    private val googleSignInLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == RESULT_CANCELED) {
-            viewModel.clearError()
-            return@registerForActivityResult
-        }
-        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
-        try {
-            val account = task.getResult(ApiException::class.java)
-            val idToken = account?.idToken
-            val email = account?.email
-            if (!idToken.isNullOrBlank() && !email.isNullOrBlank()) {
-                viewModel.loginWithGoogle(idToken, email, account.displayName)
-            } else if (!email.isNullOrBlank()) {
-                viewModel.setError("No se pudo obtener el token de autenticación de Google.")
-            } else {
-                viewModel.setError("No se pudo obtener la información de la cuenta de Google.")
+    private val credentialManager = CredentialManager.create(this)
+
+    private fun handleGoogleCredential(response: GetCredentialResponse) {
+        val credential = response.credential
+        if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+            try {
+                val googleCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                val idToken = googleCredential.idToken
+                val payload = decodeJwtPayload(idToken)
+                val email = payload?.optString("email")?.takeIf { it.isNotBlank() }
+                val displayName = payload?.optString("name")?.takeIf { it.isNotBlank() }
+                if (!idToken.isNullOrBlank() && !email.isNullOrBlank()) {
+                    viewModel.loginWithGoogle(idToken, email, displayName)
+                } else if (!email.isNullOrBlank()) {
+                    viewModel.setError("No se pudo obtener el token de autenticación de Google.")
+                } else {
+                    viewModel.setError("No se pudo obtener la información de la cuenta de Google.")
+                }
+            } catch (e: GoogleIdTokenParsingException) {
+                viewModel.setError("Error en Google Sign-In")
             }
-        } catch (e: ApiException) {
-            if (e.statusCode != 12501 && e.statusCode != 16) {
-                viewModel.setError("Error en Google Sign-In: ${e.message}")
-            } else {
-                viewModel.clearError()
-            }
+        } else {
+            viewModel.setError("Error en Google Sign-In")
         }
+    }
+
+    private fun generateSecureRandomNonce(byteLength: Int = 32): String {
+        val randomBytes = ByteArray(byteLength)
+        SecureRandom().nextBytes(randomBytes)
+        return Base64.encodeToString(randomBytes, Base64.NO_WRAP or Base64.URL_SAFE or Base64.NO_PADDING)
+    }
+
+    private fun decodeJwtPayload(token: String?): JSONObject? {
+        if (token.isNullOrBlank()) return null
+        return try {
+            val parts = token.split('.')
+            if (parts.size < 2) null else {
+                val normalized = parts[1].replace('-', '+').replace('_', '/')
+                val padding = (4 - normalized.length % 4) % 4
+                val bytes = Base64.decode(normalized + "=".repeat(padding), Base64.DEFAULT)
+                JSONObject(String(bytes, Charsets.UTF_8))
+            }
+        } catch (e: Exception) { null }
     }
 
     private fun startGoogleSignIn() {
         viewModel.clearError()
-        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken("397845476517-4uhbn38sqf9lhu5b8r075r3ns3glfful.apps.googleusercontent.com")
-            .requestEmail()
-            .requestProfile()
+        val request = GetCredentialRequest.Builder()
+            .addCredentialOption(
+                GetSignInWithGoogleOption.Builder(getString(com.example.cuidaleapp.R.string.google_client_id))
+                    .setNonce(generateSecureRandomNonce())
+                    .build()
+            )
             .build()
-        val googleSignInClient = GoogleSignIn.getClient(this, gso)
-        try {
-            googleSignInClient.signOut().addOnCompleteListener {
-                val signInIntent = googleSignInClient.signInIntent
-                googleSignInLauncher.launch(signInIntent)
+        lifecycleScope.launch {
+            try {
+                val response = credentialManager.getCredential(MutableContextWrapper(this@LoginActivity), request)
+                handleGoogleCredential(response)
+            } catch (e: GetCredentialException) {
+                if (e !is GetCredentialCancellationException) {
+                    viewModel.setError("No se pudo iniciar sesión con Google.")
+                }
             }
-        } catch (_: Exception) {
-            val signInIntent = googleSignInClient.signInIntent
-            googleSignInLauncher.launch(signInIntent)
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        // Login en modo inmersivo: oculta la barra de navegación del sistema
-        // (se muestra de forma transitoria al deslizar el borde).
+        
         val insetsController = WindowCompat.getInsetsController(window, window.decorView)
         insetsController.systemBarsBehavior =
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE

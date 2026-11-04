@@ -85,7 +85,7 @@ fun PhoneVerificationScreen(
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Volver",
+                        contentDescription = stringResource(R.string.cd_back),
                         tint = onGradientText
                     )
                 }
@@ -190,14 +190,14 @@ fun Step1PhoneContent(
             isError = error != null
         ) {
             Text(
-                text = "Ingresa tu número de teléfono para recibir un código de verificación vía SMS.",
+                text = stringResource(R.string.phone_verification_enter),
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center
             )
             
             Spacer(modifier = Modifier.height(24.dp))
 
-            InputFieldLabel("Número de teléfono")
+            InputFieldLabel(stringResource(R.string.phone_number_label))
             
             if (error != null) {
                 Text(
@@ -212,13 +212,13 @@ fun Step1PhoneContent(
             CuidaleTextField(
                 value = phone,
                 onValueChange = onPhoneChange,
-                placeholder = "9 1234 5678",
+                placeholder = stringResource(R.string.phone_placeholder),
                 containerColor = CuidaleThemeExtras.customColors.inputBackground,
                 keyboardType = KeyboardType.Phone,
                 enabled = !isLoading,
                 isError = error != null,
                 leadingIcon = {
-                    Text("+56 ", modifier = Modifier.padding(start = 12.dp), fontWeight = FontWeight.Bold, color = colors.onSurfaceVariant)
+                    Text(stringResource(R.string.phone_country_prefix), modifier = Modifier.padding(start = 12.dp), fontWeight = FontWeight.Bold, color = colors.onSurfaceVariant)
                 }
             )
         }
@@ -226,7 +226,7 @@ fun Step1PhoneContent(
         Spacer(modifier = Modifier.height(32.dp))
 
         HardShadowButton(
-            text = "Enviar SMS",
+            text = stringResource(R.string.phone_send_sms),
             containerColor = colors.primary,
             contentColor = colors.onPrimary,
             shadowColor = panelShadowColor,
@@ -253,8 +253,8 @@ fun Step2CodeContent(
     error: String? = null
 ) {
     CodeVerificationStep(
-        title = "Código de SMS",
-        targetLabel = "Hemos enviado un código al +56 ",
+        title = stringResource(R.string.verification_phone_code_title),
+        targetLabel = stringResource(R.string.verification_code_sent_phone),
         targetValue = phone,
         code = code,
         onCodeChange = onCodeChange,
@@ -263,8 +263,8 @@ fun Step2CodeContent(
         onResend = onResend,
         onVerify = onVerify,
         onBack = onBack,
-        verifyLabel = "Verificar Número",
-        backLabel = "Cambiar número de teléfono",
+        verifyLabel = stringResource(R.string.verification_verify_phone_button),
+        backLabel = stringResource(R.string.verification_change_phone_button),
         isDark = isDark,
         isLoading = isLoading,
         error = error

@@ -92,7 +92,7 @@ fun RecoveryPasswordScreen(
         RecoveryStep.SUCCESS -> 3
     }
 
-    val backButtonLabel = if (fromProfile) "Volver al Perfil" else stringResource(R.string.forgot_password_cancel_button)
+    val backButtonLabel = if (fromProfile) stringResource(R.string.recovery_back_to_profile) else stringResource(R.string.forgot_password_cancel_button)
 
     Box(
         modifier = Modifier

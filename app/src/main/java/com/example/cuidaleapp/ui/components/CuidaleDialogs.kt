@@ -8,9 +8,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.example.cuidaleapp.R
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 
 @Composable
@@ -30,7 +32,7 @@ fun CuidaleTimePickerDialog(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "Seleccionar hora",
+                    text = stringResource(R.string.cuidale_time_picker_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Black,
                     color = MaterialTheme.colorScheme.primary,
@@ -60,7 +62,7 @@ fun CuidaleTimePickerDialog(
                         onClick = onDismiss,
                         modifier = Modifier.weight(1f)
                     ) { 
-                        Text("CANCELAR", fontWeight = FontWeight.Bold, color = Color.Gray) 
+                        Text(stringResource(R.string.action_cancel), fontWeight = FontWeight.Bold, color = Color.Gray) 
                     }
                     
                     Button(
@@ -68,7 +70,7 @@ fun CuidaleTimePickerDialog(
                         modifier = Modifier.weight(1.2f),
                         shape = RoundedCornerShape(12.dp)
                     ) { 
-                        Text("ACEPTAR", fontWeight = FontWeight.Black) 
+                        Text(stringResource(R.string.action_accept), fontWeight = FontWeight.Black) 
                     }
                 }
             }

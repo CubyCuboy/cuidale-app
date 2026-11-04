@@ -19,6 +19,7 @@
     <string name="login_register_here"> Regístrate aquí </string>
     <string name="login_welcome_back">¡Bienvenido!</string>
     <string name="app_version">1.3.5</string>
+    <string name="google_client_id">397845476517-4uhbn38sqf9lhu5b8r075r3ns3glfful.apps.googleusercontent.com</string>
     <string name="common_loading">Cargando…</string>
 
     <!-- Menu Screen -->
@@ -296,6 +297,470 @@
     <string name="notif_btn_report">Ver reporte</string>
     <string name="notif_btn_history">Ver historial</string>
     <string name="notif_btn_details">Ver detalles</string>
+
+    <!-- Autenticación: común -->
+    <string name="cd_back">Volver</string>
+    <string name="cd_error">Error</string>
+    <string name="cd_toggle_theme">Cambiar modo</string>
+    <string name="provider_google">Google</string>
+    <string name="provider_microsoft">Microsoft</string>
+    <string name="common_loading_short">Cargando</string>
+
+    <!-- Login -->
+    <string name="login_logging_in">Ingresando</string>
+    <string name="login_verify_account">Verificar Cuenta</string>
+
+    <!-- Recuperación de contraseña -->
+    <string name="recovery_back_to_profile">Volver al Perfil</string>
+
+    <!-- Verificación (email / teléfono) -->
+    <string name="email_generic_placeholder">ejemplo@correo.com</string>
+    <string name="phone_verification_enter">Ingresa tu número de teléfono para recibir un código de verificación vía SMS.</string>
+    <string name="phone_number_label">Número de teléfono</string>
+    <string name="phone_placeholder">9 1234 5678</string>
+    <string name="phone_country_prefix">+56 </string>
+    <string name="phone_send_sms">Enviar SMS</string>
+
+    <!-- Registro -->
+    <string name="register_first_name">Primer Nombre</string>
+    <string name="register_first_name_placeholder">Ej: Juan</string>
+    <string name="register_second_name">Segundo Nombre (Opcional)</string>
+    <string name="register_second_name_placeholder">Ej: Antonio</string>
+    <string name="register_last_name_paternal">Apellido Paterno</string>
+    <string name="register_last_name_paternal_placeholder">Ej: Pérez</string>
+    <string name="register_last_name_maternal">Apellido Materno (Opcional)</string>
+    <string name="register_last_name_maternal_placeholder">Ej: González</string>
+    <string name="register_phone_label">Teléfono (9 dígitos)</string>
+    <string name="register_phone_placeholder">Ej: 9 8765 4321</string>
+    <string name="register_phone_invalid_hint">Debe tener 9 dígitos y empezar con 9 o 2</string>
+    <string name="register_rut_invalid_hint">RUT inválido (ej: 12.345.678-9)</string>
+    <string name="register_login_link">Ingresa aquí</string>
+    <string name="register_select_region_hint">Selecciona tu Región</string>
+    <string name="register_region_selected">Región seleccionada</string>
+    <string name="register_select_comuna_hint">Ahora elige tu Comuna</string>
+    <string name="register_commune_selected">Comuna</string>
+    <string name="register_success_title">¡Registro Exitoso!</string>
+    <string name="register_success_message">Tu cuenta ha sido creada correctamente. Ingresa con tu correo y contraseña para comenzar.</string>
+    <string name="register_success_message_external">Tu cuenta ha sido creada correctamente. Ya puedes comenzar a usar Cuidale.</string>
+    <string name="register_start_button">Comenzar</string>
+    <string name="register_go_login_button">Ir a Iniciar Sesión</string>
+
+    <!-- Errores de email -->
+    <string name="email_error_no_at">Falta el \'@\'</string>
+    <string name="email_error_no_domain">Falta el dominio (ej: .com)</string>
+    <string name="email_error_domain_short">Dominio incompleto</string>
+
+    <!-- Comunes: acciones y etiquetas -->
+    <string name="action_retry">REINTENTAR</string>
+    <string name="action_next">SIGUIENTE</string>
+    <string name="action_back">VOLVER</string>
+    <string name="action_finish">FINALIZAR</string>
+    <string name="common_cancel">Cancelar</string>
+    <string name="common_other">Otro</string>
+    <string name="common_not_specified">No especificado</string>
+    <string name="common_chat">Chat</string>
+    <string name="cd_profile">Profile</string>
+    <string name="cd_settings">Ajustes</string>
+    <string name="cd_map_caregivers">Mapa de cuidadores</string>
+    <string name="cd_filters">Filtros</string>
+
+    <!-- Menú principal -->
+    <string name="menu_title_patients">Pacientes</string>
+    <string name="menu_title_caregivers">Cuidadores</string>
+    <string name="menu_connect_discover">Conéctate para descubrir nuevos %1$s.</string>
+    <string name="search_no_results_filters">Sin resultados para estos filtros</string>
+    <string name="menu_no_available">No hay %1$s disponibles</string>
+    <string name="search_try_changing_location">Prueba cambiando la ubicación o los filtros de búsqueda.</string>
+    <string name="menu_load_more">CARGAR MÁS %1$s</string>
+    <string name="menu_no_more">Parece que no hay más %1$s por ahora.</string>
+    <string name="menu_try_other_config">Prueba con otra configuración para encontrar más perfiles.</string>
+    <string name="menu_clear_filters">LIMPIAR FILTROS</string>
+    <string name="menu_ficha_incomplete_title">Ficha incompleta</string>
+    <string name="menu_ficha_incomplete_caregiver">Aún no tienes una ficha creada. Recuerda que no puedes ofrecer tus servicios ni aparecer en búsquedas sin ella.</string>
+    <string name="menu_ficha_incomplete_rep">Aún no conocemos nada de el familiar que debe ser cuidado. Debes hacer una ficha para poder buscar cuidadores.</string>
+    <string name="menu_create_ficha_now">CREAR FICHA AHORA</string>
+    <string name="menu_later">MÁS TARDE</string>
+    <string name="menu_ficha_placeholder_title_caregiver">¡Completa tu ficha para empezar!</string>
+    <string name="menu_ficha_placeholder_title_rep">Crea la ficha de tu familiar</string>
+    <string name="menu_ficha_placeholder_desc_caregiver">Necesitas una ficha técnica para que las familias puedan encontrarte y confiar en tu experiencia.</string>
+    <string name="menu_ficha_placeholder_desc_rep">Para buscar cuidadores, primero necesitamos saber un poco más sobre la persona que recibirá el cuidado.</string>
+    <string name="menu_create_ficha_technical">CREAR FICHA TÉCNICA</string>
+
+    <!-- Perfil -->
+    <string name="profile_my_profile_upper">MI PERFIL</string>
+    <string name="profile_verify_now">Verificar ahora</string>
+    <string name="profile_edit_button_upper">EDITAR PERFIL</string>
+    <string name="info_rut">RUT</string>
+    <string name="info_phone">TELÉFONO</string>
+    <string name="info_location">UBICACIÓN</string>
+    <string name="info_role">ROL</string>
+    <string name="profile_not_verified">NO VERIFICADO</string>
+    <string name="profile_my_ficha_technical">MI FICHA TÉCNICA</string>
+    <string name="profile_familiar_ficha">FICHA DEL FAMILIAR</string>
+    <string name="profile_ficha_placeholder_title_caregiver">Parece ser que aún no sabemos mucho de ti</string>
+    <string name="profile_ficha_placeholder_title_rep">Aún no tenemos información de tu familiar</string>
+    <string name="profile_ficha_placeholder_desc_caregiver">Ingresa tus datos en la ficha técnica para que las familias puedan conocer tu experiencia.</string>
+    <string name="profile_ficha_placeholder_desc_rep">Ingresa sus datos en la ficha técnica para que podamos ayudarte mejor a encontrar el cuidado ideal.</string>
+    <string name="profile_create_ficha">CREAR FICHA</string>
+
+    <!-- Editar perfil -->
+    <string name="edit_profile_confirm_photo">Confirmar foto</string>
+    <string name="edit_profile_confirm_photo_question">¿Deseas usar esta imagen como vista previa?</string>
+    <string name="edit_profile_use_this">Usar esta</string>
+    <string name="edit_profile_change_photo_title">Cambiar foto de perfil</string>
+    <string name="source_camera">Cámara</string>
+    <string name="source_gallery">Galería</string>
+    <string name="edit_profile_remove_photo">Quitar foto</string>
+    <string name="edit_profile_offline">Estás offline. No puedes guardar cambios.</string>
+    <string name="edit_profile_section_personal">Información Personal</string>
+    <string name="edit_profile_error_min_2">Mínimo 2 caracteres</string>
+    <string name="edit_profile_placeholder_name">Tu nombre</string>
+    <string name="edit_profile_placeholder_second_name">Segundo nombre</string>
+    <string name="edit_profile_error_min_2_short">Mínimo 2</string>
+    <string name="edit_profile_placeholder_paternal">Paterno</string>
+    <string name="edit_profile_placeholder_maternal">Materno</string>
+    <string name="edit_profile_section_contact">Contacto y Ubicación</string>
+    <string name="edit_profile_phone_label">Teléfono</string>
+    <string name="edit_profile_error_phone">Formato inválido (9 dígitos)</string>
+    <string name="edit_profile_region_label">Región</string>
+    <string name="edit_profile_commune_label">Comuna</string>
+    <string name="edit_profile_section_about">Sobre mí</string>
+    <string name="edit_profile_placeholder_about">Cuéntanos un poco sobre ti y tu experiencia...</string>
+    <string name="edit_profile_saving">GUARDANDO...</string>
+    <string name="edit_profile_save_upper">GUARDAR CAMBIOS</string>
+
+    <!-- Ficha técnica -->
+    <string name="ficha_title_caregiver">FICHA DE CUIDADOR</string>
+    <string name="ficha_title_patient">FICHA DEL PACIENTE</string>
+    <string name="ficha_offline_mode">MODO OFFLINE</string>
+    <string name="ficha_completing_info">Completando información</string>
+    <string name="ficha_info_saved">Información registrada</string>
+    <string name="ficha_offline_msg">Sin conexión. No puedes editar ni actualizar datos.</string>
+    <string name="ficha_rut">RUT: %1$s</string>
+    <string name="ficha_tel">TEL: %1$s</string>
+    <string name="ficha_formation_area">FORMACIÓN Y ÁREA</string>
+    <string name="ficha_specialty">ESPECIALIZACIÓN</string>
+    <string name="ficha_specialty_nurse">Enfermero/a</string>
+    <string name="ficha_specialty_technician">Técnico en Enfermería</string>
+    <string name="ficha_specialty_elderly">Cuidador de Adulto Mayor</string>
+    <string name="ficha_specialty_children">Cuidador de Niños</string>
+    <string name="ficha_experience">EXPERIENCIA</string>
+    <string name="ficha_experience_placeholder">Años de experiencia, lugares...</string>
+    <string name="ficha_personal_presentation">PRESENTACIÓN PERSONAL</string>
+    <string name="ficha_about_you">SOBRE TI</string>
+    <string name="ficha_vocation_placeholder">Cuéntanos más sobre tu vocación...</string>
+    <string name="ficha_confirm_photo_question">¿Deseas usar esta imagen para el paciente?</string>
+    <string name="ficha_patient_photo">Foto del paciente</string>
+    <string name="ficha_patient_data">DATOS DEL PACIENTE</string>
+    <string name="ficha_patient_name">NOMBRE DEL PACIENTE</string>
+    <string name="ficha_patient_name_placeholder">Nombre Completo</string>
+    <string name="ficha_age">EDAD</string>
+    <string name="ficha_age_placeholder">Ej: 70</string>
+    <string name="ficha_gender">GÉNERO</string>
+    <string name="ficha_gender_male">Masculino</string>
+    <string name="ficha_gender_female">Femenino</string>
+    <string name="ficha_location">UBICACIÓN</string>
+    <string name="ficha_lives_with_you">¿VIVE CONTIGO?</string>
+    <string name="ficha_region">REGIÓN</string>
+    <string name="ficha_commune">COMUNA</string>
+    <string name="ficha_uses_current_address">Se usará tu dirección actual: %1$s, %2$s</string>
+    <string name="ficha_patient_address">DIRECCIÓN DEL PACIENTE</string>
+    <string name="ficha_street_placeholder">Calle / Pasaje</string>
+    <string name="ficha_number_placeholder">N°</string>
+    <string name="ficha_dept_placeholder">Depto/Block (Opcional)</string>
+    <string name="ficha_health_status">ESTADO DE SALUD</string>
+    <string name="ficha_dependency">DEPENDENCIA</string>
+    <string name="ficha_dependency_independent">Independiente</string>
+    <string name="ficha_dependency_mild">Leve</string>
+    <string name="ficha_dependency_moderate">Moderada</string>
+    <string name="ficha_dependency_severe">Severa</string>
+    <string name="ficha_mobility">MOVILIDAD</string>
+    <string name="ficha_mobility_normal">Normal</string>
+    <string name="ficha_mobility_reduced">Reducida</string>
+    <string name="ficha_mobility_wheelchair">Silla de Ruedas</string>
+    <string name="ficha_mobility_bedridden">Postrado</string>
+    <string name="ficha_disabilities">DISCAPACIDADES</string>
+    <string name="ficha_disability_visual">Visual</string>
+    <string name="ficha_disability_hearing">Auditiva</string>
+    <string name="ficha_disability_motor">Motriz</string>
+    <string name="ficha_disability_intellectual">Intelectual</string>
+    <string name="ficha_disability_psychic">Psíquica</string>
+    <string name="ficha_disabilities_placeholder">Seleccionar discapacidades...</string>
+    <string name="ficha_disability_other_placeholder">Especifique discapacidad...</string>
+    <string name="ficha_chronic_diseases">ENFERMEDADES CRÓNICAS</string>
+    <string name="ficha_disease_diabetes">Diabetes</string>
+    <string name="ficha_disease_hypertension">Hipertensión</string>
+    <string name="ficha_disease_alzheimer">Alzheimer</string>
+    <string name="ficha_disease_parkinson">Parkinson</string>
+    <string name="ficha_disease_arthrosis">Artrosis</string>
+    <string name="ficha_diseases_placeholder">Seleccionar enfermedades...</string>
+    <string name="ficha_disease_other_placeholder">Especifique enfermedades...</string>
+    <string name="ficha_observations_photo">OBSERVACIONES Y FOTO</string>
+    <string name="ficha_extra_observations">OBSERVACIONES ADICIONALES</string>
+    <string name="ficha_conditions_placeholder">Indique cualquier otra condición o cuidado especial...</string>
+    <string name="ficha_patient_photo_label">FOTO DEL PACIENTE</string>
+    <string name="ficha_photo_will_delete">Se eliminará la foto</string>
+    <string name="ficha_no_photo">Sin foto</string>
+    <string name="ficha_manage_photo">GESTIONAR FOTO</string>
+
+    <!-- Configuración -->
+    <string name="settings_verify_phone_title">Verifica tu número</string>
+    <string name="settings_verify_phone_body">Tu número %1$s aún no está verificado.</string>
+    <string name="settings_verify_now_upper">VERIFICAR AHORA</string>
+    <string name="settings_verify_email_title">Verifica tu correo</string>
+    <string name="settings_verify_email_body">Tu correo %1$s aún no está verificado.</string>
+    <string name="settings_verify_email_now_upper">VERIFICAR CORREO AHORA</string>
+    <string name="settings_account_security">Cuenta y Seguridad</string>
+    <string name="settings_account_management">Gestión de Cuenta</string>
+    <string name="settings_session">Sesión</string>
+    <string name="settings_version_footer">v%1$s - %2$s</string>
+    <string name="settings_storage_cache">Almacenamiento y Caché</string>
+    <string name="settings_local_cache">Caché local</string>
+    <string name="settings_cache_summary">%1$s multimedia/imágenes · %2$s chats</string>
+    <string name="settings_manage_cache">Administrar caché</string>
+    <string name="settings_cache_description">Abre un menú dedicado para borrar multimedia, imágenes, chats y configurar cuántos días se guardan para el modo offline.</string>
+    <string name="settings_connection_status">Estado de conexión</string>
+    <string name="settings_online">Conectado</string>
+    <string name="settings_offline">Desconectado</string>
+    <string name="settings_do_not_disturb">No molestar</string>
+    <string name="settings_inactivity_hint">Inactivo se activa automáticamente tras 5 minutos sin actividad.</string>
+    <string name="settings_cache_title">Caché y almacenamiento</string>
+    <string name="settings_used_locally">Usado localmente</string>
+    <string name="settings_sizes_summary">Multimedia: %1$s · Imágenes: %2$s · Chats: %3$s</string>
+    <string name="settings_delete_media_title">Borrar multimedia (videos e imágenes de chats)</string>
+    <string name="settings_delete_media_subtitle">Se vuelven a descargar al abrirlos.</string>
+    <string name="settings_delete_images_title">Borrar imágenes de perfil / descargadas</string>
+    <string name="settings_delete_images_subtitle">Fotos de perfil y miniaturas.</string>
+    <string name="settings_delete_chats_title">Borrar caché de TODOS los chats</string>
+    <string name="settings_delete_chats_subtitle">Mensajes guardados para modo offline.</string>
+    <string name="settings_deleting">Borrando...</string>
+    <string name="settings_delete">Borrar</string>
+    <string name="settings_delete_all">Borrar todo</string>
+    <string name="settings_cache_per_chat">Caché por chat</string>
+    <string name="settings_no_cached_chats">No hay chats cacheados localmente.</string>
+    <string name="settings_no_messages">Sin mensajes</string>
+    <string name="settings_offline_retention">Modo offline — retención</string>
+    <string name="settings_retention_desc">Los mensajes se guardan localmente hasta este número de días. Pasado ese tiempo se borran solos.</string>
+    <string name="settings_retention_1day">1 día</string>
+    <string name="settings_retention_days">%1$d días</string>
+
+    <!-- Componentes compartidos: diálogos -->
+    <string name="cuidale_time_picker_title">Seleccionar hora</string>
+    <string name="action_cancel">CANCELAR</string>
+    <string name="action_accept">ACEPTAR</string>
+    <string name="action_got_it">ENTENDIDO</string>
+
+    <!-- Estado de conectividad -->
+    <string name="connectivity_offline">Sin conexión a internet</string>
+    <string name="connectivity_offline_short">Sin conexión</string>
+    <string name="connectivity_restored">Conexión restablecida</string>
+    <string name="connectivity_unstable">Conexión inestable</string>
+
+    <!-- Navegación / menú lateral -->
+    <string name="cd_close">Cerrar</string>
+    <string name="common_default_user">Usuario Cuidale</string>
+    <string name="nav_my_account">Mi Cuenta</string>
+    <string name="nav_my_profile">Mi Perfil</string>
+    <string name="nav_ficha">Ficha Técnica</string>
+    <string name="nav_management">Gestión</string>
+    <string name="nav_social">Red de Contactos</string>
+    <string name="nav_heatmap">Mapa de Calor</string>
+    <string name="nav_settings">Configuración</string>
+    <string name="nav_logout">CERRAR SESIÓN</string>
+    <string name="app_version_footer">v%1$s • %2$s</string>
+
+    <!-- Búsqueda (filtros) -->
+    <string name="search_clear_filters">Limpiar Filtros</string>
+    <string name="search_use_profile_prefs">Usar preferencias de mi ficha</string>
+    <string name="search_use_profile_prefs_sub">Aplica automáticamente tu región y comunas</string>
+    <string name="search_filter_region">Filtrar por región</string>
+    <string name="search_select_region">Seleccionar región...</string>
+    <string name="search_select_region_first">Selecciona una región primero</string>
+
+    <!-- Tarjetas de usuario -->
+    <string name="badge_new">NUEVO</string>
+    <string name="user_card_dependency">Dependencia: %1$s</string>
+    <string name="user_card_schedule">Horario: %1$s</string>
+    <string name="age_years_suffix"> años</string>
+
+    <!-- Tareas (diálogo de creación/edición) -->
+    <string name="task_duplicate_title">Tarea Duplicada</string>
+    <string name="task_duplicate_message">Ya existe una tarea llamada \'%1$s\'. ¿Deseas usar otro nombre o editar la existente?</string>
+    <string name="task_new_title">NUEVA TAREA</string>
+    <string name="task_edit_title">EDITAR TAREA</string>
+    <string name="task_category">CATEGORÍA</string>
+    <string name="task_title">TÍTULO</string>
+    <string name="task_schedule">HORARIO</string>
+    <string name="task_frequency">FRECUENCIA</string>
+    <string name="task_repeat_days">REPETIR LOS DÍAS</string>
+    <string name="task_months">MESES DE EJECUCIÓN</string>
+    <string name="task_day_of_month">DÍA DEL MES</string>
+    <string name="task_day_placeholder">Ej: 15</string>
+    <string name="task_notes">INDICACIONES ADICIONALES</string>
+    <string name="task_save">GUARDAR TAREA</string>
+    <string name="task_ph_medication_title">Nombre del medicamento</string>
+    <string name="task_ph_food_title">Ej: Almuerzo / Merienda</string>
+    <string name="task_ph_hygiene_title">Ej: Baño / Aseo Bucal</string>
+    <string name="task_ph_activity_title">Ej: Ejercicios / Paseo</string>
+    <string name="task_ph_other_title">Ej: Control de Signos</string>
+    <string name="task_ph_medication_desc">Ej: 500mg, vía oral después de comida</string>
+    <string name="task_ph_food_desc">Ej: Sin sal, bajo en grasas</string>
+    <string name="task_ph_hygiene_desc">Ej: Usar jabón neutro, secar bien pliegues</string>
+    <string name="task_ph_activity_desc">Ej: 15 minutos en el jardín, usar andador</string>
+    <string name="task_ph_other_desc">Ej: Ventilar habitación, cambiar sábanas</string>
+
+    <!-- Chat y mensajería -->
+    <!-- ChatScreen -->
+    <string name="chat_me_short">Tú</string>
+    <string name="chat_user_fallback">Usuario</string>
+    <string name="chat_document">Documento</string>
+    <string name="chat_file_fallback">Archivo</string>
+    <string name="chat_unblock">Desbloquear</string>
+    <string name="chat_block">Bloquear</string>
+    <string name="chat_message_deleted">Mensaje eliminado</string>
+    <string name="chat_media_photo">📷 Foto</string>
+    <string name="chat_media_video">🎬 Video</string>
+    <string name="chat_media_file">📄 %1$s</string>
+    <string name="chat_filename_document">documento</string>
+    <string name="chat_filename_video">video.mp4</string>
+    <string name="chat_filename_image">imagen.jpg</string>
+    <string name="chat_filename_file">archivo</string>
+    <string name="chat_error_compress_image">No se pudo comprimir la imagen</string>
+    <string name="chat_error_read_file">No se pudo leer el archivo</string>
+    <string name="chat_error_send_media">Error al enviar multimedia</string>
+    <string name="chat_media_limit_reached">Has alcanzado el límite máximo. Elimina adjuntos para poder agregar más.</string>
+    <string name="chat_error_photo_size">La foto supera el límite individual de 25 MB (pesa %1$s).</string>
+    <string name="chat_error_photo_limit">No se pudo agregar la foto: límite de adjuntos alcanzado (%1$d/10).</string>
+    <string name="chat_error_photo_capture">No se pudo capturar la foto</string>
+    <string name="chat_error_no_camera">Este dispositivo no tiene cámara disponible</string>
+    <string name="chat_error_open_camera">Error al abrir la cámara</string>
+    <string name="chat_error_media_size_overall">El archivo supera el límite individual de 25 MB: %1$s. Adjuntos: %2$d/10.</string>
+    <string name="chat_error_media_total_limit">Se superó el límite total de 25 MB. Adjuntos: %1$d/10. Elimina adjuntos para agregar más.</string>
+    <string name="chat_error_media_count_limit">Máximo 10 elementos por envío. Adjuntos: %1$d/10. Elimina adjuntos para agregar más.</string>
+    <string name="chat_error_media_add_failed">No se pudieron agregar los archivos seleccionados.</string>
+    <string name="chat_error_doc_size">El archivo \'%1$s\' supera el límite individual de 25 MB (pesa %2$s). Adjuntos: %3$d/10.</string>
+    <string name="chat_selected_count">%1$d seleccionados</string>
+    <string name="chat_selected_all_from_me">Puedes eliminar o fijar estos mensajes</string>
+    <string name="chat_selected_only_pin">Solo puedes fijar estos mensajes</string>
+    <string name="chat_search_placeholder">Buscar mensajes...</string>
+    <string name="chat_status_offline">OFFLINE</string>
+    <string name="chat_status_blocked">Cerrado</string>
+    <string name="chat_menu_view_profile">Ver Perfil</string>
+    <string name="chat_menu_remove_fav">Quitar de Favoritos</string>
+    <string name="chat_menu_add_fav">Añadir a Favoritos</string>
+    <string name="chat_menu_show_in_search">Mostrar en búsquedas</string>
+    <string name="chat_menu_hide_from_search">Ocultar de búsquedas</string>
+    <string name="chat_filter_all">Todos</string>
+    <string name="chat_filter_me">Yo</string>
+    <string name="chat_filter_media">Multimedia</string>
+    <string name="chat_filter_photos">Fotos</string>
+    <string name="chat_filter_videos">Videos</string>
+    <string name="chat_filter_docs">Docs</string>
+    <string name="chat_filter_messages">Mensajes</string>
+    <string name="chat_filter_from">DE</string>
+    <string name="chat_filter_type">TIPO</string>
+    <string name="chat_results_count">%1$d %2$s</string>
+    <string name="chat_result_one">resultado</string>
+    <string name="chat_results_many">resultados</string>
+    <string name="chat_error_load_messages">No se pueden cargar los mensajes</string>
+    <string name="chat_search_no_results">Sin resultados</string>
+    <string name="chat_search_no_results_desc">No se encontraron mensajes para tu búsqueda.</string>
+    <string name="chat_recovering">Recuperando datos del chat...</string>
+    <string name="chat_typing">%1$s está escribiendo...</string>
+    <string name="chat_readonly_mode">MODO SOLO LECTURA</string>
+    <string name="chat_readonly_desc">Conéctate a internet para enviar mensajes.</string>
+    <string name="chat_blocked_by_me">Has bloqueado a %1$s.</string>
+    <string name="chat_blocked_cannot_send">No puedes enviar mensajes a este usuario.</string>
+    <string name="chat_blocked_by_me_desc">No podrás recibir mensajes de este usuario y no aparecerá en tus búsquedas. Puedes desbloquearlo para retomar el contacto.</string>
+    <string name="chat_blocked_cannot_send_desc">Este usuario ha restringido quién puede enviarle mensajes. No puedes contactar con él por ahora.</string>
+    <string name="chat_pending_outbox">Mensajes pendientes de envío</string>
+    <string name="chat_attachments">Adjuntos (%1$d/10)</string>
+    <string name="chat_clear_all">Borrar todo</string>
+    <string name="chat_attachments_summary">Imágenes: %1$d · Videos: %2$d · Documentos: %3$d · Total: %4$s MB</string>
+    <string name="chat_editing">Editando...</string>
+    <string name="chat_input_placeholder">Escribe un mensaje...</string>
+    <string name="chat_reconnecting">Reconectando… espera para sincronizar los mensajes</string>
+    <string name="chat_new_messages">Nuevos mensajes</string>
+    <string name="chat_back_to_bottom">Volver al final</string>
+    <string name="chat_delete_title">¿Eliminar mensajes?</string>
+    <string name="chat_delete_desc">Esta acción borrará permanentemente los mensajes seleccionados para todos los participantes.</string>
+    <string name="chat_delete_for_all">ELIMINAR PARA TODOS</string>
+    <string name="chat_unpin_title">¿Desfijar mensajes?</string>
+    <string name="chat_pin_title">¿Fijar mensajes?</string>
+    <string name="chat_unpin_desc">Los mensajes seleccionados ya no aparecerán en la lista de mensajes destacados.</string>
+    <string name="chat_pin_desc">Los mensajes seleccionados se guardarán en la lista de fijados para que todos puedan verlos fácilmente.</string>
+    <string name="chat_pin_action">FIJAR</string>
+    <string name="chat_share_request_title">Compartir solicitud</string>
+    <string name="chat_no_open_requests">No tienes solicitudes abiertas</string>
+    <string name="chat_share_request_message">Revisa mi solicitud para %1$s</string>
+    <string name="chat_share_task_title">Compartir tarea</string>
+    <string name="chat_share_task_desc">Selecciona una tarea para compartir su estado actual.</string>
+    <string name="chat_no_tasks_today">No hay tareas registradas hoy</string>
+    <string name="chat_task_pending">PENDIENTES</string>
+    <string name="chat_task_completed">COMPLETADAS</string>
+    <string name="chat_task_postponed">POSPUESTAS</string>
+    <string name="chat_task_share_pending">Sobre: %1$s (%2$s) - ESTADO: PENDIENTE</string>
+    <string name="chat_task_share_completed">Sobre: %1$s (%2$s) - ESTADO: COMPLETADA</string>
+    <string name="chat_task_share_postponed">Sobre: %1$s (%2$s) - ESTADO: POSPUESTA</string>
+    <string name="chat_no_tasks">Sin tareas</string>
+    <string name="chat_send_media_title">Enviar multimedia</string>
+    <string name="chat_media_limit_info">%1$d/10 elementos · %2$d MB / 25 MB — Máx 25 MB por archivo. Las imágenes se comprimen conservando calidad.</string>
+    <string name="chat_attachments_selected">Adjuntos seleccionados</string>
+    <string name="chat_attach_docs">Documentos</string>
+    <string name="chat_media_warning_title">Aviso sobre el contenido</string>
+    <string name="chat_media_warning_body">Al enviar imágenes, videos o documentos aceptas que el contenido que subes es de tu responsabilidad. Cuidale App no se hace responsable por su uso, difusión ni sensibilidad. Evita compartir información sensible, privada o que pueda vulnerar la intimidad de otras personas.</string>
+    <string name="chat_got_it">Entendido</string>
+    <string name="chat_pinned_title">Mensajes fijados</string>
+    <string name="chat_go_to_message">IR AL MENSAJE</string>
+    <string name="chat_unpin_action">DESFIJAR</string>
+    <string name="chat_go_to_message_cd">Ir al mensaje</string>
+    <string name="chat_edited_suffix"> (editado)</string>
+    <string name="chat_search_system">Mensaje del sistema</string>
+    <string name="chat_search_contact">Contacto</string>
+    <string name="chat_search_batch">📷 %1$d elementos · Lote multimedia</string>
+    <string name="chat_status_available">DISPONIBLE</string>
+    <string name="chat_status_taken">YA TOMADA</string>
+    <string name="chat_view_details">VER DETALLES</string>
+    <string name="chat_task_report">REPORTE DE TAREA</string>
+    <string name="chat_today">HOY</string>
+    <string name="chat_yesterday">AYER</string>
+    <string name="chat_yesterday_prefix">Ayer </string>
+
+    <!-- ChatsScreen -->
+    <string name="chats_title">MENSAJES</string>
+    <string name="chats_tab_chats">CHATS</string>
+    <string name="chats_tab_requests">SOLICITUDES</string>
+    <string name="chats_tab_blocked">BLOQUEADOS</string>
+    <string name="chats_search_placeholder">Buscar conversación...</string>
+    <string name="chats_mark_read">Marcar como leído</string>
+    <string name="chats_remove_favorite">Quitar de favoritos</string>
+    <string name="chats_add_favorite">Añadir a favoritos</string>
+    <string name="chats_view_profile">Ver perfil</string>
+    <string name="chats_empty">No tienes mensajes aún</string>
+    <string name="chats_user_blocked">Usuario bloqueado</string>
+    <string name="chats_typing">escribiendo...</string>
+    <string name="chats_sent_multiple">Envió múltiples elementos · %1$d</string>
+    <string name="chats_start_chat">Inicia un chat</string>
+    <string name="chats_from_me">Tú: %1$s</string>
+    <string name="chats_from_user">%1$s: %2$s</string>
+    <string name="chats_unread_cd">Tienes mensajes sin leer</string>
+    <string name="chats_no_requests">No hay solicitudes</string>
+    <string name="chats_wants_connect">Quiere conectar contigo</string>
+    <string name="chats_no_blocked">Sin usuarios bloqueados</string>
+    <string name="chats_unblock_upper">DESBLOQUEAR</string>
+    <string name="chats_chat_upper">CHAT</string>
+    <string name="chats_profile_upper">PERFIL</string>
+
+    <!-- NotificationsScreen -->
+    <string name="notif_tray_title">Bandeja de notificaciones</string>
+    <string name="notif_empty">No tienes notificaciones en tu bandeja</string>
+    <string name="notif_pending_msgs_header">MENSAJES PENDIENTES</string>
+    <string name="notif_you_have">Tienes </string>
+    <string name="notif_messages">%1$d mensajes</string>
+    <string name="notif_from"> de </string>
+    <string name="notif_mark_read_short">Leído</string>
+    <string name="notif_go_chat">Ir al Chat</string>
+    <string name="notif_alerts_header">ALERTAS Y SOLICITUDES</string>
 
     <!-- Mapbox Token -->
     <string name="mapbox_access_token">pk.eyJ1IjoiYnJ1bm9uc2siLCJhIjoiY212bzE4Y25jMHBsdTJ4b3I0M2d1NTBkMiJ9.CB9sb6Ac3TxKQXWbzl_rmw</string>

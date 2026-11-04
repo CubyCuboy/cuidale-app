@@ -17,7 +17,7 @@ val mapboxToken: String = localProperties.getProperty("MAPBOX_PUBLIC_TOKEN") ?: 
 
 android {
     namespace = "com.example.cuidaleapp"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.example.cuidaleapp"
@@ -65,7 +65,7 @@ android {
 dependencies {
     // BOMs
     implementation(platform(libs.androidx.compose.bom))
-    implementation(platform("com.google.firebase:firebase-bom:34.12.0"))
+    implementation(platform("com.google.firebase:firebase-bom:35.1.0"))
 
     // Core y UI base
     implementation(libs.androidx.core.ktx)
@@ -98,8 +98,11 @@ dependencies {
     implementation("com.google.firebase:firebase-database")
     implementation("com.google.firebase:firebase-storage")
     implementation("com.google.firebase:firebase-functions")
-    implementation("com.google.android.gms:play-services-auth:21.3.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
+    implementation("com.google.android.gms:play-services-auth:22.0.0")
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.googleid)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.11.0")
 
     // Utilidades
     implementation(libs.okhttp)
@@ -111,17 +114,17 @@ dependencies {
     // Mapas y Ubicación (Mapbox v11 y Play Services Location)
     implementation("com.mapbox.maps:android:11.10.0")
     implementation("com.mapbox.extension:maps-compose:11.10.0")
-    implementation("com.google.android.gms:play-services-location:21.3.0")
+    implementation("com.google.android.gms:play-services-location:21.4.0")
 
     // Media3
-    implementation("androidx.media3:media3-exoplayer:1.5.1")
-    implementation("androidx.media3:media3-ui:1.5.1")
+    implementation("androidx.media3:media3-exoplayer:1.11.1")
+    implementation("androidx.media3:media3-ui:1.11.1")
 
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.mockito.core)
     testImplementation(libs.mockito.kotlin)
-    testImplementation("org.json:json:20240303")
+    testImplementation("org.json:json:20260814")
 
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

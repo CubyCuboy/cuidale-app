@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -39,6 +40,7 @@ import coil3.compose.AsyncImage
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.example.cuidaleapp.R
 import com.example.cuidaleapp.ui.components.fadingEdge
 import com.example.cuidaleapp.models.UserData
 import com.example.cuidaleapp.ui.components.CuidaleCircularMenuButton
@@ -96,7 +98,7 @@ fun ChatsScreen(
 
 
         CenterAlignedTopAppBar(
-            title = { Text("MENSAJES", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = Color.White) },
+            title = { Text(stringResource(R.string.chats_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = Color.White) },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
         )
 
@@ -115,7 +117,7 @@ fun ChatsScreen(
                 )
             }
         ) {
-            val tabs = listOf("CHATS", "SOLICITUDES", "BLOQUEADOS")
+            val tabs = listOf(stringResource(R.string.chats_tab_chats), stringResource(R.string.chats_tab_requests), stringResource(R.string.chats_tab_blocked))
             tabs.forEachIndexed { index, title ->
                 val badgeCount = if (index == 1) {
                     misVinculos.count { it.estado == "pendiente" && it.solicitante != userData.uid }
@@ -146,7 +148,7 @@ fun ChatsScreen(
             OutlinedTextField(
                 value = chatSearchQuery,
                 onValueChange = { chatSearchQuery = it },
-                placeholder = { Text("Buscar conversación...") },
+                placeholder = { Text(stringResource(R.string.chats_search_placeholder)) },
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
                 shape = RoundedCornerShape(16.dp),
                 leadingIcon = { Icon(Icons.Default.Search, null) },
@@ -212,7 +214,7 @@ fun ChatsScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.MarkEmailUnread, null)
                             Spacer(Modifier.width(12.dp))
-                            Text("Marcar como leído")
+                            Text(stringResource(R.string.chats_mark_read))
                         }
                     }
                     TextButton(onClick = {
@@ -222,7 +224,7 @@ fun ChatsScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(if (isFav) Icons.Default.StarOutline else Icons.Default.Star, null, tint = if (isFav) Color.Unspecified else Color.Yellow)
                             Spacer(Modifier.width(12.dp))
-                            Text(if (isFav) "Quitar de favoritos" else "Añadir a favoritos")
+                            Text(if (isFav) stringResource(R.string.chats_remove_favorite) else stringResource(R.string.chats_add_favorite))
                         }
                     }
                     TextButton(onClick = {
@@ -232,7 +234,7 @@ fun ChatsScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Person, null)
                             Spacer(Modifier.width(12.dp))
-                            Text("Ver perfil")
+                            Text(stringResource(R.string.chats_view_profile))
                         }
                     }
                     TextButton(onClick = {
@@ -242,7 +244,7 @@ fun ChatsScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(if (isBlocked) Icons.Default.CheckCircle else Icons.Default.Block, null, tint = if (isBlocked) Color.Green else Color.Red)
                             Spacer(Modifier.width(12.dp))
-                            Text(if (isBlocked) "Desbloquear" else "Bloquear", color = if (isBlocked) Color.Unspecified else Color.Red)
+                            Text(if (isBlocked) stringResource(R.string.chat_unblock) else stringResource(R.string.chat_block), color = if (isBlocked) Color.Unspecified else Color.Red)
                         }
                     }
                 }
@@ -263,7 +265,7 @@ fun ChatListSection(
     onMarkRead: (String) -> Unit
 ) {
     if (chatList.isEmpty()) {
-        EmptyState("No tienes mensajes aún", Icons.Default.ChatBubbleOutline)
+        EmptyState(stringResource(R.string.chats_empty), Icons.Default.ChatBubbleOutline)
     } else {
         LazyColumn(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 100.dp),
@@ -373,9 +375,9 @@ fun ChatCard(
                 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val lastMsgText = when {
-                        isBlocked -> "Usuario bloqueado"
-                        isTyping -> "escribiendo..."
-                        chat.lastMessage?.deleted == true -> "Mensaje eliminado"
+                        isBlocked -> stringResource(R.string.chats_user_blocked)
+                        isTyping -> stringResource(R.string.chats_typing)
+                        chat.lastMessage?.deleted == true -> stringResource(R.string.chat_message_deleted)
                         else -> {
                             val lastMsg = chat.lastMessage
                             val batchItems = runCatching {
@@ -384,19 +386,19 @@ fun ChatCard(
                             val isMultiBatch = lastMsg?.type == "media_group" || batchItems.size > 1
                             val content = when {
                                 isMultiBatch && batchItems.isNotEmpty() ->
-                                    "Envió múltiples elementos · ${batchItems.size}"
+                                    stringResource(R.string.chats_sent_multiple, batchItems.size)
                                 else -> {
                                     val icon = when {
-                                        lastMsg?.videoUrl != null -> "🎬 Video"
-                                        lastMsg?.imageUrl != null -> "📷 Foto"
-                                        lastMsg?.fileUrl != null -> "📄 ${lastMsg.fileName ?: "Documento"}"
+                                        lastMsg?.videoUrl != null -> stringResource(R.string.chat_media_video)
+                                        lastMsg?.imageUrl != null -> stringResource(R.string.chat_media_photo)
+                                        lastMsg?.fileUrl != null -> stringResource(R.string.chat_media_file, lastMsg.fileName ?: stringResource(R.string.chat_document))
                                         else -> ""
                                     }
                                     val text = lastMsg?.text?.takeIf { it.isNotBlank() } ?: ""
                                     when {
                                         text.isNotBlank() && icon.isNotBlank() -> "$text · $icon"
                                         icon.isNotBlank() -> icon
-                                        else -> text.ifBlank { "Inicia un chat" }
+                                        else -> text.ifBlank { stringResource(R.string.chats_start_chat) }
                                     }
                                 }
                             }
@@ -404,8 +406,8 @@ fun ChatCard(
                             when {
                                 lastMsg == null -> content
                                 lastMsg.senderId == "system" -> content
-                                fromMe -> "Tú: $content"
-                                else -> "${chat.otherUser.nombre}: $content"
+                                fromMe -> stringResource(R.string.chats_from_me, content)
+                                else -> stringResource(R.string.chats_from_user, chat.otherUser.nombre, content)
                             }
                         }
                     }
@@ -437,7 +439,7 @@ fun ChatCard(
                         IconButton(onClick = { onMarkRead(chat.chatId) }) {
                             Icon(
                                 Icons.Default.MarkEmailUnread,
-                                contentDescription = "Tienes mensajes sin leer",
+                                contentDescription = stringResource(R.string.chats_unread_cd),
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }
@@ -459,7 +461,7 @@ fun RequestListSection(
 ) {
     val requests = vinculos.filter { it.estado == "pendiente" && it.solicitante != myUid }
     if (requests.isEmpty()) {
-        EmptyState("No hay solicitudes", Icons.Default.GroupAdd)
+        EmptyState(stringResource(R.string.chats_no_requests), Icons.Default.GroupAdd)
     } else {
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             items(requests) { vinculo ->
@@ -505,13 +507,13 @@ fun ChatCardLikeRequest(user: UserData?, isDark: Boolean, onAccept: () -> Unit, 
             Column(Modifier.weight(1f)) {
                 val fullName = listOf(user?.nombre, user?.apellido_pa).filter { it?.isNotBlank() == true && it != "n/a" }.joinToString(" ")
                 Text(
-                    text = if (fullName.isBlank()) "Usuario" else fullName, 
+                    text = if (fullName.isBlank()) stringResource(R.string.chat_user_fallback) else fullName, 
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.fadingEdge(Brush.horizontalGradient(0.85f to Color.Black, 1f to Color.Transparent))
                 )
-                Text("Quiere conectar contigo", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                Text(stringResource(R.string.chats_wants_connect), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
             }
             IconButton(onClick = onAccept) { Icon(Icons.Default.Check, null, tint = Color(0xFF4CAF50)) }
             IconButton(onClick = onDecline) { Icon(Icons.Default.Close, null, tint = Color.Red) }
@@ -523,7 +525,7 @@ fun ChatCardLikeRequest(user: UserData?, isDark: Boolean, onAccept: () -> Unit, 
 fun BlockedListSection(bloqueados: List<String>, managedUsers: List<UserData>, isDark: Boolean, onRemove: (String) -> Unit, onChatClick: (String, UserData) -> Unit, onUserClick: (String) -> Unit) {
     val users = managedUsers.filter { bloqueados.contains(it.uid) }
     if (users.isEmpty()) {
-        EmptyState("Sin usuarios bloqueados", Icons.Default.Block)
+        EmptyState(stringResource(R.string.chats_no_blocked), Icons.Default.Block)
     } else {
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             items(users) { user ->
@@ -555,7 +557,7 @@ fun BlockedListSection(bloqueados: List<String>, managedUsers: List<UserData>, i
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            TextButton(onClick = { onRemove(user.uid) }) { Text("DESBLOQUEAR", color = Color.Red, fontWeight = FontWeight.Black) }
+                            TextButton(onClick = { onRemove(user.uid) }) { Text(stringResource(R.string.chats_unblock_upper), color = Color.Red, fontWeight = FontWeight.Black) }
                         }
                         Spacer(Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -570,7 +572,7 @@ fun BlockedListSection(bloqueados: List<String>, managedUsers: List<UserData>, i
                             ) {
                                 Icon(Icons.AutoMirrored.Filled.Chat, null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(4.dp))
-                                Text("CHAT", fontSize = 10.sp)
+                                Text(stringResource(R.string.chats_chat_upper), fontSize = 10.sp)
                             }
                             OutlinedButton(
                                 onClick = { onUserClick(user.uid) },
@@ -579,7 +581,7 @@ fun BlockedListSection(bloqueados: List<String>, managedUsers: List<UserData>, i
                             ) {
                                 Icon(Icons.Default.Person, null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(4.dp))
-                                Text("PERFIL", fontSize = 10.sp)
+                                Text(stringResource(R.string.chats_profile_upper), fontSize = 10.sp)
                             }
                         }
                     }

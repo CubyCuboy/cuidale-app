@@ -10,6 +10,15 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    // ¿El documento de usuario (por hashedRut) pertenece al solicitante?
+    function esDuenoDeUsuario(hashedRut) {
+      let userDoc = get(/databases/$(database)/documents/usuarios/$(hashedRut)).data;
+      return userDoc != null && (
+        userDoc.uid == request.auth.uid ||
+        userDoc.correo == request.auth.email
+      );
+    }
+
     function esParteDeSolicitud(solId) {
       let sol = get(/databases/$(database)/documents/solicitudes/$(solId)).data;
       return isAuthenticated() && (request.auth.uid == sol.representanteUid || request.auth.uid == sol.cuidadorUid);
@@ -18,37 +27,41 @@ service cloud.firestore {
     // --- USUARIOS ---
 
     match /usuarios/{hashedRut} {
-      allow read: if true;
+      // Solo usuarios autenticados (bloquea enumeración anónima de RUTs).
+      allow read: if isAuthenticated();
 
-      allow create: if isAuthenticated();
+      // Solo se puede crear si el documento declara mi propio UID.
+      allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
 
       allow update, delete: if isAuthenticated() && (
-        resource == null ||
-        !('uid' in resource.data) ||
-        resource.data.uid == "" ||
-        resource.data.uid == request.auth.uid ||
-        resource.data.correo == request.auth.email ||
-        (request.resource != null && request.resource.data.uid == request.auth.uid)
+        ('uid' in resource.data && resource.data.uid == request.auth.uid) ||
+        ('correo' in resource.data && resource.data.correo == request.auth.email) ||
+        (!('uid' in resource.data) && request.resource != null && request.resource.data.uid == request.auth.uid)
       );
 
       match /notificaciones/{notifId} {
-        allow read, update, delete: if isAuthenticated();
+        // Se permite crear notificaciones para OTROS usuarios (flujo push actual).
         allow create: if isAuthenticated();
+        // Leer/marcar/eliminar: solo el destinatario o el dueño del documento.
+        allow read, update, delete: if (
+          resource.data.receptor == request.auth.uid ||
+          esDuenoDeUsuario(hashedRut)
+        );
       }
 
       match /historial_cuenta/{entryId} {
-        allow read, write: if isAuthenticated();
+        allow read, write: if esDuenoDeUsuario(hashedRut);
       }
     }
 
     // --- FICHAS TÉCNICAS ---
     match /fichas/{userId} {
       allow read: if isAuthenticated();
-      allow write: if isOwner(userId) || isAuthenticated();
+      allow write: if isOwner(userId);
 
       match /{allSubcollections=**} {
         allow read: if isAuthenticated();
-        allow write: if isOwner(userId) || isAuthenticated();
+        allow write: if isOwner(userId);
       }
     }
 
@@ -74,10 +87,7 @@ service cloud.firestore {
 
     // --- VÍNCULOS Y MENSAJES ---
     match /vinculos/{vinculoId} {
-      allow read: if isAuthenticated() && (
-        request.auth.uid in resource.data.uids ||
-        vinculoId.matches(".*" + request.auth.uid + ".*")
-      );
+      allow read: if isAuthenticated() && request.auth.uid in resource.data.uids;
       allow create: if isAuthenticated() && request.auth.uid in request.resource.data.uids;
       allow update, delete: if isAuthenticated() && request.auth.uid in resource.data.uids;
 
@@ -90,7 +100,7 @@ service cloud.firestore {
     // --- POSTULACIONES ---
     match /postulaciones/{postulacionId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.cuidadorUid == request.auth.uid;
       allow update, delete: if isAuthenticated() && (
         request.auth.uid == resource.data.cuidadorUid ||
         request.auth.uid == resource.data.representanteUid
@@ -116,7 +126,7 @@ service cloud.firestore {
         resource.data.representanteUid == request.auth.uid ||
         resource.data.cuidadorUid == request.auth.uid
       );
-      allow create: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.cuidadorUid == request.auth.uid;
     }
   }
 }

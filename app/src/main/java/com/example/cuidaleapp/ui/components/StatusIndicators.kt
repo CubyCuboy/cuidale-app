@@ -18,10 +18,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.zIndex
+import com.example.cuidaleapp.R
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.utils.ConnectivityObserver
 import kotlinx.coroutines.delay
@@ -112,9 +114,9 @@ fun ConnectivityBanner(
         if (target == BannerForm.HIDDEN) return@AnimatedContent
 
         val (text, color, icon) = when (state) {
-            ConnectivityState.OFF -> Triple("Sin conexión a internet", Color(0xFFD32F2F), Icons.Default.WifiOff)
-            ConnectivityState.RESTORED -> Triple("Conexión restablecida", Color(0xFF4CAF50), Icons.Default.CloudDone)
-            ConnectivityState.UNSTABLE -> Triple("Conexión inestable", Color(0xFFFB8C00), Icons.Default.Warning)
+            ConnectivityState.OFF -> Triple(stringResource(R.string.connectivity_offline), Color(0xFFD32F2F), Icons.Default.WifiOff)
+            ConnectivityState.RESTORED -> Triple(stringResource(R.string.connectivity_restored), Color(0xFF4CAF50), Icons.Default.CloudDone)
+            ConnectivityState.UNSTABLE -> Triple(stringResource(R.string.connectivity_unstable), Color(0xFFFB8C00), Icons.Default.Warning)
             else -> Triple("", Color.Transparent, Icons.Default.WifiOff)
         }
 
@@ -182,7 +184,7 @@ fun ConnectivityBanner(
                         ) {
                             Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Sin conexión", color = Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.connectivity_offline_short), color = Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

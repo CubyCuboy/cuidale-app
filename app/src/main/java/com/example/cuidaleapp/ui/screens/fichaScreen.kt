@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import com.example.cuidaleapp.data.ChileData
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
@@ -41,6 +42,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import com.example.cuidaleapp.R
 import com.example.cuidaleapp.models.*
 import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
@@ -124,17 +126,17 @@ fun FichaScreen(
                                 },
                                 modifier = Modifier.background(Color.Black.copy(alpha = 0.3f), CircleShape)
                             ) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = Color.White)
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back), tint = Color.White)
                             }
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text(
-                                    text = if (role == "cuidador") "FICHA DE CUIDADOR" else "FICHA DEL PACIENTE",
+                                    text = if (role == "cuidador") stringResource(R.string.ficha_title_caregiver) else stringResource(R.string.ficha_title_patient),
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                     color = Color.White
                                 )
                                 Text(
-                                    text = if (!isOnline) "MODO OFFLINE" else if (state is FichaState.Editing || (state is FichaState.NotFound)) "Completando información" else "Información registrada",
+                                    text = if (!isOnline) stringResource(R.string.ficha_offline_mode) else if (state is FichaState.Editing || (state is FichaState.NotFound)) stringResource(R.string.ficha_completing_info) else stringResource(R.string.ficha_info_saved),
                                     style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
                                     color = Color.White.copy(alpha = 0.9f)
                                 )
@@ -152,7 +154,7 @@ fun FichaScreen(
                         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.WifiOff, null, tint = Color.Red, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("Sin conexión. No puedes editar ni actualizar datos.", color = Color.Red, style = MaterialTheme.typography.bodySmall)
+                            Text(stringResource(R.string.ficha_offline_msg), color = Color.Red, style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
@@ -337,12 +339,12 @@ fun ModernPersonalDataCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Badge, null, modifier = Modifier.size(12.dp), tint = secondaryText.copy(alpha = 0.6f))
                     Spacer(Modifier.width(4.dp))
-                    Text(text = "RUT: $rut", style = MaterialTheme.typography.bodySmall, color = secondaryText)
+                    Text(text = stringResource(R.string.ficha_rut, rut), style = MaterialTheme.typography.bodySmall, color = secondaryText)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Phone, null, modifier = Modifier.size(12.dp), tint = secondaryText.copy(alpha = 0.6f))
                     Spacer(Modifier.width(4.dp))
-                    Text(text = "TEL: $telefono", style = MaterialTheme.typography.bodySmall, color = secondaryText)
+                    Text(text = stringResource(R.string.ficha_tel, telefono), style = MaterialTheme.typography.bodySmall, color = secondaryText)
                 }
             }
         }
@@ -361,7 +363,7 @@ fun ModernErrorState(message: String, cardColor: Color, accentColor: Color, onRe
             Text(text = message, textAlign = TextAlign.Center, color = textColor)
             Spacer(modifier = Modifier.height(24.dp))
             HardShadowButton(
-                text = "REINTENTAR",
+                text = stringResource(R.string.action_retry),
                 onClick = onRetry,
                 containerColor = accentColor,
                 contentColor = Color.White,
@@ -406,28 +408,34 @@ fun CaregiverEditFlow(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.School, null, tint = accentColor, modifier = Modifier.size(24.dp))
                         Spacer(modifier = Modifier.width(12.dp))
-                        Text("FORMACIÓN Y ÁREA", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = textColor)
+                        Text(stringResource(R.string.ficha_formation_area), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = textColor)
                     }
                     Spacer(modifier = Modifier.height(20.dp))
                     
                     CuidaleExposedDropdown(
-                        label = "ESPECIALIZACIÓN",
-                        options = listOf("Enfermero/a", "Técnico en Enfermería", "Cuidador de Adulto Mayor", "Cuidador de Niños", "Otro"),
+                        label = stringResource(R.string.ficha_specialty),
+                        options = listOf(
+                            stringResource(R.string.ficha_specialty_nurse),
+                            stringResource(R.string.ficha_specialty_technician),
+                            stringResource(R.string.ficha_specialty_elderly),
+                            stringResource(R.string.ficha_specialty_children),
+                            stringResource(R.string.common_other)
+                        ),
                         selectedOption = especializacion,
                         onOptionSelected = { especializacion = it }
                     )
                     Spacer(modifier = Modifier.height(20.dp))
-                    InputFieldLabel(text = "EXPERIENCIA", color = textColor)
+                    InputFieldLabel(text = stringResource(R.string.ficha_experience), color = textColor)
                     CuidaleTextField(
                         value = experiencia, onValueChange = { experiencia = it },
-                        placeholder = "Años de experiencia, lugares...",
+                        placeholder = stringResource(R.string.ficha_experience_placeholder),
                         singleLine = false, modifier = Modifier.height(100.dp),
                         containerColor = customColors.inputBackground,
                         textColor = textColor
                     )
                     Spacer(modifier = Modifier.height(32.dp))
                         HardShadowButton(
-                            text = "SIGUIENTE", onClick = { step = 2 },
+                            text = stringResource(R.string.action_next), onClick = { step = 2 },
                             containerColor = accentColor,
                             contentColor = Color.White,
                             shadowColor = shadowPalette.hardShadowPrimary,
@@ -446,14 +454,14 @@ fun CaregiverEditFlow(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.EditNote, null, tint = accentColor, modifier = Modifier.size(24.dp))
                         Spacer(modifier = Modifier.width(12.dp))
-                        Text("PRESENTACIÓN PERSONAL", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = textColor)
+                        Text(stringResource(R.string.ficha_personal_presentation), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = textColor)
                     }
                     Spacer(modifier = Modifier.height(20.dp))
                     
-                    InputFieldLabel(text = "SOBRE TI", color = textColor)
+                    InputFieldLabel(text = stringResource(R.string.ficha_about_you), color = textColor)
                     CuidaleTextField(
                         value = descripcion, onValueChange = { if(it.length <= 300) descripcion = it },
-                        placeholder = "Cuéntanos más sobre tu vocación...",
+                        placeholder = stringResource(R.string.ficha_vocation_placeholder),
                         singleLine = false, modifier = Modifier.height(150.dp),
                         containerColor = customColors.inputBackground,
                         textColor = textColor
@@ -463,7 +471,7 @@ fun CaregiverEditFlow(
                     Spacer(modifier = Modifier.height(32.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         HardShadowButton(
-                            text = "VOLVER",
+                            text = stringResource(R.string.action_back),
                             onClick = { step = 1 },
                             modifier = Modifier.weight(1f).height(58.dp),
                             containerColor = if (isDark) Color.White.copy(alpha = 0.1f) else Color(0xFFF5F5F5),
@@ -472,7 +480,7 @@ fun CaregiverEditFlow(
                             isDark = isDark
                         )
                         HardShadowButton(
-                            text = "FINALIZAR",
+                            text = stringResource(R.string.action_finish),
                             onClick = {
                                 viewModel.createCaregiverFicha(
                                     especializacion, 
@@ -585,7 +593,7 @@ fun FamilyEditFlow(
                 showConfirmPhotoDialog = false
                 photoToConfirm = null
             },
-            title = { Text("Confirmar foto", fontWeight = FontWeight.Bold) },
+            title = { Text(stringResource(R.string.edit_profile_confirm_photo), fontWeight = FontWeight.Bold) },
             text = {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     AsyncImage(
@@ -597,7 +605,7 @@ fun FamilyEditFlow(
                         contentScale = ContentScale.Crop
                     )
                     Spacer(Modifier.height(12.dp))
-                    Text("¿Deseas usar esta imagen para el paciente?", textAlign = TextAlign.Center)
+                    Text(stringResource(R.string.ficha_confirm_photo_question), textAlign = TextAlign.Center)
                 }
             },
             confirmButton = {
@@ -607,7 +615,7 @@ fun FamilyEditFlow(
                     showConfirmPhotoDialog = false
                     photoToConfirm = null
                 }) {
-                    Text("Usar esta")
+                    Text(stringResource(R.string.edit_profile_use_this))
                 }
             },
             dismissButton = {
@@ -615,7 +623,7 @@ fun FamilyEditFlow(
                     showConfirmPhotoDialog = false
                     photoToConfirm = null
                 }) {
-                    Text("Cancelar")
+                    Text(stringResource(R.string.common_cancel))
                 }
             }
         )
@@ -624,7 +632,7 @@ fun FamilyEditFlow(
     if (showImageSourceDialog) {
         AlertDialog(
             onDismissRequest = { showImageSourceDialog = false },
-            title = { Text("Foto del paciente", fontWeight = FontWeight.Bold) },
+            title = { Text(stringResource(R.string.ficha_patient_photo), fontWeight = FontWeight.Bold) },
             text = {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -649,7 +657,7 @@ fun FamilyEditFlow(
                     ) {
                         Icon(Icons.Default.CameraAlt, null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Cámara")
+                        Text(stringResource(R.string.source_camera))
                     }
 
                     Button(
@@ -662,7 +670,7 @@ fun FamilyEditFlow(
                     ) {
                         Icon(Icons.Default.Collections, null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Galería")
+                        Text(stringResource(R.string.source_gallery))
                     }
 
                     val currentPhoto = initialData?.get("fotoUrl")?.toString() ?: ""
@@ -683,7 +691,7 @@ fun FamilyEditFlow(
                         ) {
                             Icon(Icons.Default.Delete, null)
                             Spacer(Modifier.width(8.dp))
-                            Text("Quitar foto")
+                            Text(stringResource(R.string.edit_profile_remove_photo))
                         }
                     }
                 }
@@ -691,7 +699,7 @@ fun FamilyEditFlow(
             confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { showImageSourceDialog = false }) {
-                    Text("Cancelar")
+                    Text(stringResource(R.string.common_cancel))
                 }
             }
         )
@@ -723,28 +731,28 @@ fun FamilyEditFlow(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Person, null, tint = accentColor, modifier = Modifier.size(24.dp))
                             Spacer(modifier = Modifier.width(12.dp))
-                            Text("DATOS DEL PACIENTE", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = textColor)
+                            Text(stringResource(R.string.ficha_patient_data), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = textColor)
                         }
                         Spacer(modifier = Modifier.height(20.dp))
 
-                        InputFieldLabel(text = "NOMBRE DEL PACIENTE", color = textColor)
+                        InputFieldLabel(text = stringResource(R.string.ficha_patient_name), color = textColor)
                         CuidaleTextField(
                             value = nombreCompleto,
                             onValueChange = { input -> 
                                 nombreCompleto = input.lowercase().split(" ").joinToString(" ") { it.replaceFirstChar { char -> if (char.isLowerCase()) char.titlecase() else char.toString() } }
                             },
-                            placeholder = "Nombre Completo",
+                            placeholder = stringResource(R.string.ficha_patient_name_placeholder),
                             containerColor = customColors.inputBackground,
                             textColor = textColor
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                             Column(modifier = Modifier.weight(1f)) {
-                                InputFieldLabel(text = "EDAD", color = textColor)
+                                InputFieldLabel(text = stringResource(R.string.ficha_age), color = textColor)
                                 CuidaleTextField(
                                     value = edad,
                                     onValueChange = { if ((it.isEmpty() || it.all { char -> char.isDigit() }) && it.length <= 3) edad = it },
-                                    placeholder = "Ej: 70",
+                                    placeholder = stringResource(R.string.ficha_age_placeholder),
                                     containerColor = customColors.inputBackground,
                                     keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
                                     textColor = textColor,
@@ -752,7 +760,7 @@ fun FamilyEditFlow(
                                 )
                             }
                             Column(modifier = Modifier.weight(1.5f)) {
-                                CuidaleExposedDropdown(label = "GÉNERO", options = listOf("Masculino", "Femenino", "Otro"), selectedOption = genero, onOptionSelected = { genero = it })
+                                CuidaleExposedDropdown(label = stringResource(R.string.ficha_gender), options = listOf(stringResource(R.string.ficha_gender_male), stringResource(R.string.ficha_gender_female), stringResource(R.string.common_other)), selectedOption = genero, onOptionSelected = { genero = it })
                             }
                         }
                         Spacer(modifier = Modifier.height(20.dp))
@@ -762,9 +770,9 @@ fun FamilyEditFlow(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Home, null, tint = accentColor, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(12.dp))
-                            Text("UBICACIÓN", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = textColor)
+                            Text(stringResource(R.string.ficha_location), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = textColor)
                             Spacer(modifier = Modifier.weight(1f))
-                            Text("¿VIVE CONTIGO?", style = MaterialTheme.typography.labelSmall, color = textColor.copy(alpha = 0.6f))
+                            Text(stringResource(R.string.ficha_lives_with_you), style = MaterialTheme.typography.labelSmall, color = textColor.copy(alpha = 0.6f))
                             Spacer(modifier = Modifier.width(8.dp))
                             Switch(
                                 checked = vivesConFamiliar, 
@@ -775,9 +783,9 @@ fun FamilyEditFlow(
                         
                         if (!vivesConFamiliar) {
                             Spacer(modifier = Modifier.height(16.dp))
-                            CuidaleExposedDropdown(label = "REGIÓN", options = regionsList, selectedOption = region, onOptionSelected = { region = it })
+                            CuidaleExposedDropdown(label = stringResource(R.string.ficha_region), options = regionsList, selectedOption = region, onOptionSelected = { region = it })
                             Spacer(modifier = Modifier.height(12.dp))
-                            CuidaleExposedDropdown(label = "COMUNA", options = communesForRegion, selectedOption = comuna, onOptionSelected = { comuna = it }, enabled = region.isNotBlank())
+                            CuidaleExposedDropdown(label = stringResource(R.string.ficha_commune), options = communesForRegion, selectedOption = comuna, onOptionSelected = { comuna = it }, enabled = region.isNotBlank())
                         } else {
                             Spacer(modifier = Modifier.height(12.dp))
                             Surface(
@@ -789,7 +797,7 @@ fun FamilyEditFlow(
                                     Icon(Icons.Default.Info, null, tint = accentColor, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Text(
-                                        "Se usará tu dirección actual: ${currentUserData.comuna}, ${currentUserData.region}",
+                                        stringResource(R.string.ficha_uses_current_address, currentUserData.comuna, currentUserData.region),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = textColor.copy(alpha = 0.8f)
                                     )
@@ -798,13 +806,13 @@ fun FamilyEditFlow(
                         }
 
                         Spacer(modifier = Modifier.height(16.dp))
-                        InputFieldLabel(text = "DIRECCIÓN DEL PACIENTE", color = textColor)
+                        InputFieldLabel(text = stringResource(R.string.ficha_patient_address), color = textColor)
                         CuidaleTextField(
                             value = calle,
                             onValueChange = { input -> 
                                 calle = input.lowercase().split(" ").joinToString(" ") { it.replaceFirstChar { char -> char.uppercase() } }
                             },
-                            placeholder = "Calle / Pasaje",
+                            placeholder = stringResource(R.string.ficha_street_placeholder),
                             containerColor = customColors.inputBackground,
                             textColor = textColor
                         )
@@ -813,7 +821,7 @@ fun FamilyEditFlow(
                             CuidaleTextField(
                                 value = numero,
                                 onValueChange = { if (it.all { char -> char.isDigit() } && it.length <= 6) numero = it },
-                                placeholder = "N°",
+                                placeholder = stringResource(R.string.ficha_number_placeholder),
                                 modifier = Modifier.weight(1f),
                                 containerColor = customColors.inputBackground,
                                 textColor = textColor,
@@ -824,7 +832,7 @@ fun FamilyEditFlow(
                                 onValueChange = { input ->
                                     depto = input.uppercase()
                                 },
-                                placeholder = "Depto/Block (Opcional)",
+                                placeholder = stringResource(R.string.ficha_dept_placeholder),
                                 modifier = Modifier.weight(1f),
                                 containerColor = customColors.inputBackground,
                                 textColor = textColor
@@ -833,7 +841,7 @@ fun FamilyEditFlow(
 
                         Spacer(modifier = Modifier.height(32.dp))
                         HardShadowButton(
-                            text = "SIGUIENTE",
+                            text = stringResource(R.string.action_next),
                             onClick = { step = 2 },
                             enabled = isStep1Valid,
                             containerColor = accentColor,
@@ -855,50 +863,50 @@ fun FamilyEditFlow(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.HealthAndSafety, null, tint = accentColor, modifier = Modifier.size(24.dp))
                             Spacer(modifier = Modifier.width(12.dp))
-                            Text("ESTADO DE SALUD", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = textColor)
+                            Text(stringResource(R.string.ficha_health_status), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = textColor)
                         }
                         Spacer(modifier = Modifier.height(20.dp))
 
-                        CuidaleExposedDropdown(label = "DEPENDENCIA", options = listOf("Independiente", "Leve", "Moderada", "Severa"), selectedOption = nivelDependencia, onOptionSelected = { nivelDependencia = it })
+                        CuidaleExposedDropdown(label = stringResource(R.string.ficha_dependency), options = listOf(stringResource(R.string.ficha_dependency_independent), stringResource(R.string.ficha_dependency_mild), stringResource(R.string.ficha_dependency_moderate), stringResource(R.string.ficha_dependency_severe)), selectedOption = nivelDependencia, onOptionSelected = { nivelDependencia = it })
                         Spacer(modifier = Modifier.height(16.dp))
-                        CuidaleExposedDropdown(label = "MOVILIDAD", options = listOf("Normal", "Reducida", "Silla de Ruedas", "Postrado"), selectedOption = movilidad, onOptionSelected = { movilidad = it })
+                        CuidaleExposedDropdown(label = stringResource(R.string.ficha_mobility), options = listOf(stringResource(R.string.ficha_mobility_normal), stringResource(R.string.ficha_mobility_reduced), stringResource(R.string.ficha_mobility_wheelchair), stringResource(R.string.ficha_mobility_bedridden)), selectedOption = movilidad, onOptionSelected = { movilidad = it })
                         Spacer(modifier = Modifier.height(20.dp))
 
                         CuidaleMultiSelectDropdown(
-                            label = "DISCAPACIDADES",
-                            options = listOf("Visual", "Auditiva", "Motriz", "Intelectual", "Psíquica", "Otro"),
+                            label = stringResource(R.string.ficha_disabilities),
+                            options = listOf(stringResource(R.string.ficha_disability_visual), stringResource(R.string.ficha_disability_hearing), stringResource(R.string.ficha_disability_motor), stringResource(R.string.ficha_disability_intellectual), stringResource(R.string.ficha_disability_psychic), stringResource(R.string.common_other)),
                             selectedOptions = discapacidades,
                             onOptionToggled = {
                                 if (discapacidades.contains(it)) discapacidades -= it
                                 else discapacidades += it
                             },
-                            placeholder = "Seleccionar discapacidades..."
+                            placeholder = stringResource(R.string.ficha_disabilities_placeholder)
                         )
                         if (discapacidades.contains("Otro")) {
                             Spacer(modifier = Modifier.height(8.dp))
-                            CuidaleTextField(value = discapacidadOtro, onValueChange = { discapacidadOtro = it }, placeholder = "Especifique discapacidad...", containerColor = customColors.inputBackground, textColor = textColor)
+                            CuidaleTextField(value = discapacidadOtro, onValueChange = { discapacidadOtro = it }, placeholder = stringResource(R.string.ficha_disability_other_placeholder), containerColor = customColors.inputBackground, textColor = textColor)
                         }
                         Spacer(modifier = Modifier.height(20.dp))
                         
                         CuidaleMultiSelectDropdown(
-                            label = "ENFERMEDADES CRÓNICAS",
-                            options = listOf("Diabetes", "Hipertensión", "Alzheimer", "Parkinson", "Artrosis", "Otro"),
+                            label = stringResource(R.string.ficha_chronic_diseases),
+                            options = listOf(stringResource(R.string.ficha_disease_diabetes), stringResource(R.string.ficha_disease_hypertension), stringResource(R.string.ficha_disease_alzheimer), stringResource(R.string.ficha_disease_parkinson), stringResource(R.string.ficha_disease_arthrosis), stringResource(R.string.common_other)),
                             selectedOptions = enfermedades,
                             onOptionToggled = {
                                 if (enfermedades.contains(it)) enfermedades -= it
                                 else enfermedades += it
                             },
-                            placeholder = "Seleccionar enfermedades..."
+                            placeholder = stringResource(R.string.ficha_diseases_placeholder)
                         )
                         if (enfermedades.contains("Otro")) {
                             Spacer(modifier = Modifier.height(8.dp))
-                            CuidaleTextField(value = enfermedadOtro, onValueChange = { enfermedadOtro = it }, placeholder = "Especifique enfermedades...", containerColor = customColors.inputBackground, textColor = textColor)
+                            CuidaleTextField(value = enfermedadOtro, onValueChange = { enfermedadOtro = it }, placeholder = stringResource(R.string.ficha_disease_other_placeholder), containerColor = customColors.inputBackground, textColor = textColor)
                         }
                         
                         Spacer(modifier = Modifier.height(32.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                             HardShadowButton(
-                                text = "VOLVER",
+                                text = stringResource(R.string.action_back),
                                 onClick = { step = 1 },
                                 modifier = Modifier.weight(1f).height(58.dp),
                                 containerColor = if (isDark) Color.White.copy(alpha = 0.1f) else Color(0xFFF5F5F5),
@@ -907,7 +915,7 @@ fun FamilyEditFlow(
                                 isDark = isDark
                             )
                             HardShadowButton(
-                                text = "SIGUIENTE",
+                                text = stringResource(R.string.action_next),
                                 onClick = { step = 3 },
                                 modifier = Modifier.weight(1f).height(58.dp),
                                 containerColor = accentColor,
@@ -931,15 +939,15 @@ fun FamilyEditFlow(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.Info, null, tint = accentColor, modifier = Modifier.size(24.dp))
                                 Spacer(modifier = Modifier.width(12.dp))
-                                Text("OBSERVACIONES Y FOTO", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = textColor)
+                                Text(stringResource(R.string.ficha_observations_photo), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = textColor)
                             }
                             Spacer(modifier = Modifier.height(20.dp))
                             
-                            InputFieldLabel(text = "OBSERVACIONES ADICIONALES", color = textColor)
+                            InputFieldLabel(text = stringResource(R.string.ficha_extra_observations), color = textColor)
                             CuidaleTextField(
                                 value = condicionesExtra,
                                 onValueChange = { condicionesExtra = it },
-                                placeholder = "Indique cualquier otra condición o cuidado especial...",
+                                placeholder = stringResource(R.string.ficha_conditions_placeholder),
                                 singleLine = false,
                                 modifier = Modifier.height(100.dp),
                                 containerColor = customColors.inputBackground,
@@ -950,7 +958,7 @@ fun FamilyEditFlow(
                             HorizontalDivider(color = textColor.copy(alpha = 0.1f))
                             Spacer(modifier = Modifier.height(24.dp))
                             
-                            InputFieldLabel(text = "FOTO DEL PACIENTE", color = textColor)
+                            InputFieldLabel(text = stringResource(R.string.ficha_patient_photo_label), color = textColor)
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
@@ -986,7 +994,7 @@ fun FamilyEditFlow(
                                 Spacer(modifier = Modifier.width(16.dp))
                                 Column {
                                     Text(
-                                        text = if (pendingDeletePhoto) "Se eliminará la foto" else if (pendingPhoto != null || (initialData?.get("fotoUrl")?.toString()?.isNotEmpty() == true)) "Foto del paciente" else "Sin foto",
+                                        text = if (pendingDeletePhoto) stringResource(R.string.ficha_photo_will_delete) else if (pendingPhoto != null || (initialData?.get("fotoUrl")?.toString()?.isNotEmpty() == true)) stringResource(R.string.ficha_patient_photo) else stringResource(R.string.ficha_no_photo),
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = textColor
@@ -995,7 +1003,7 @@ fun FamilyEditFlow(
                                         onClick = { showImageSourceDialog = true },
                                         contentPadding = PaddingValues(0.dp)
                                     ) {
-                                        Text("GESTIONAR FOTO", color = accentColor, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black)
+                                        Text(stringResource(R.string.ficha_manage_photo), color = accentColor, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black)
                                     }
                                 }
                             }
@@ -1007,7 +1015,7 @@ fun FamilyEditFlow(
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         HardShadowButton(
-                            text = "VOLVER",
+                            text = stringResource(R.string.action_back),
                             onClick = { step = 2 },
                             modifier = Modifier.weight(1f).height(58.dp),
                             containerColor = if (isDark) Color.White.copy(alpha = 0.1f) else Color(0xFFF5F5F5),
@@ -1016,7 +1024,7 @@ fun FamilyEditFlow(
                             isDark = isDark
                         )
                         HardShadowButton(
-                            text = "FINALIZAR",
+                            text = stringResource(R.string.action_finish),
                             onClick = {
                                 viewModel.createFamilyFicha(
                                     nombreCompleto, edad, genero, vivesConFamiliar, 

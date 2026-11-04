@@ -103,12 +103,12 @@ fun SettingsScreen(
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Volver",
+                        contentDescription = stringResource(R.string.cd_back),
                         tint = Color.White
                     )
                 }
                 Text(
-                    text = "Configuración",
+                    text = stringResource(R.string.nav_settings),
                     style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
                     color = Color.White,
                     modifier = Modifier.padding(start = 16.dp)
@@ -139,12 +139,12 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.width(16.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "Verifica tu número",
+                                stringResource(R.string.settings_verify_phone_title),
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                 color = customColors.warning
                             )
                             Text(
-                                "Tu número ${userData.telefono} aún no está verificado.",
+                                stringResource(R.string.settings_verify_phone_body, userData.telefono),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = customColors.warning.copy(alpha = 0.8f)
                             )
@@ -158,7 +158,7 @@ fun SettingsScreen(
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("VERIFICAR AHORA", fontWeight = FontWeight.Black, color = Color.White)
+                            Text(stringResource(R.string.settings_verify_now_upper), fontWeight = FontWeight.Black, color = Color.White)
                         }
                     }
                 }
@@ -188,12 +188,12 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.width(16.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "Verifica tu correo",
+                                stringResource(R.string.settings_verify_email_title),
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                 color = customColors.warning
                             )
                             Text(
-                                "Tu correo $emailToCheck aún no está verificado.",
+                                stringResource(R.string.settings_verify_email_body, emailToCheck),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = customColors.warning.copy(alpha = 0.8f)
                             )
@@ -212,7 +212,7 @@ fun SettingsScreen(
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("VERIFICAR CORREO AHORA", fontWeight = FontWeight.Black, color = Color.White)
+                            Text(stringResource(R.string.settings_verify_email_now_upper), fontWeight = FontWeight.Black, color = Color.White)
                         }
                     }
                 }
@@ -231,7 +231,7 @@ fun SettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Text(
-                        text = "Cuenta y Seguridad",
+                        text = stringResource(R.string.settings_account_security),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(horizontal = 4.dp)
@@ -255,7 +255,7 @@ fun SettingsScreen(
                     }
 
                     HardShadowButton(
-                        text = "Gestión de Cuenta",
+                        text = stringResource(R.string.settings_account_management),
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = Color.White,
                         shadowColor = MaterialTheme.colorScheme.primaryContainer,
@@ -271,7 +271,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "Sesión",
+                        text = stringResource(R.string.settings_session),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(horizontal = 4.dp)
@@ -293,7 +293,7 @@ fun SettingsScreen(
 
                     Spacer(modifier = Modifier.height(24.dp))
                     Text(
-                        text = "v${stringResource(R.string.app_version)} - Cuidale App",
+                        text = stringResource(R.string.settings_version_footer, stringResource(R.string.app_version), stringResource(R.string.app_name)),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                         modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -315,7 +315,7 @@ fun SettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Text(
-                        text = "Almacenamiento y Caché",
+                        text = stringResource(R.string.settings_storage_cache),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(horizontal = 4.dp)
@@ -334,13 +334,13 @@ fun SettingsScreen(
                         Spacer(Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Caché local",
+                                text = stringResource(R.string.settings_local_cache),
                                 style = MaterialTheme.typography.bodyLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "${AppCacheManager.formatBytes(AppCacheManager.cacheSizeBytes(context))} multimedia/imágenes · ${AppCacheManager.formatBytes(com.example.cuidaleapp.utils.ChatCacheStore.sizeForUser(currentUid))} chats",
+                                text = stringResource(R.string.settings_cache_summary, AppCacheManager.formatBytes(AppCacheManager.cacheSizeBytes(context)), AppCacheManager.formatBytes(com.example.cuidaleapp.utils.ChatCacheStore.sizeForUser(currentUid))),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -348,7 +348,7 @@ fun SettingsScreen(
                     }
 
                     HardShadowButton(
-                        text = "Administrar caché",
+                        text = stringResource(R.string.settings_manage_cache),
                         containerColor = MaterialTheme.colorScheme.tertiary,
                         contentColor = Color.White,
                         shadowColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f),
@@ -357,7 +357,7 @@ fun SettingsScreen(
                         onClick = { showCacheMenu = true }
                     )
                     Text(
-                        text = "Abre un menú dedicado para borrar multimedia, imágenes, chats y configurar cuántos días se guardan para el modo offline.",
+                        text = stringResource(R.string.settings_cache_description),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
@@ -380,7 +380,7 @@ fun SettingsScreen(
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         Text(
-                            text = "Estado de conexión",
+                            text = stringResource(R.string.settings_connection_status),
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(horizontal = 4.dp)
@@ -393,22 +393,22 @@ fun SettingsScreen(
                             FilterChip(
                                 selected = manualStatus == null,
                                 onClick = { chatViewModel.setManualStatus(null) },
-                                label = { Text("Conectado") }
+                                label = { Text(stringResource(R.string.settings_online)) }
                             )
                             FilterChip(
                                 selected = manualStatus == "desconectado",
                                 onClick = { chatViewModel.setManualStatus("desconectado") },
-                                label = { Text("Desconectado") }
+                                label = { Text(stringResource(R.string.settings_offline)) }
                             )
                             FilterChip(
                                 selected = manualStatus == "no_molestar",
                                 onClick = { chatViewModel.setManualStatus("no_molestar") },
-                                label = { Text("No molestar") }
+                                label = { Text(stringResource(R.string.settings_do_not_disturb)) }
                             )
                         }
 
                         Text(
-                            text = "Inactivo se activa automáticamente tras 5 minutos sin actividad.",
+                            text = stringResource(R.string.settings_inactivity_hint),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                         )
@@ -480,10 +480,10 @@ private fun CacheSettingsScreen(
                     onClick = onBack,
                     modifier = Modifier.background(Color.Black.copy(alpha = 0.15f), CircleShape)
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = Color.White)
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back), tint = Color.White)
                 }
                 Text(
-                    text = "Caché y almacenamiento",
+                    text = stringResource(R.string.settings_cache_title),
                     style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
                     color = Color.White,
                     modifier = Modifier.padding(start = 16.dp)
@@ -509,13 +509,13 @@ private fun CacheSettingsScreen(
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
-                                "Usado localmente",
+                                stringResource(R.string.settings_used_locally),
                                 style = MaterialTheme.typography.bodyLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                "Multimedia: ${AppCacheManager.formatBytes(mediaBytes)} · Imágenes: ${AppCacheManager.formatBytes(imagesBytes)} · Chats: ${AppCacheManager.formatBytes(chatBytes)}",
+                                stringResource(R.string.settings_sizes_summary, AppCacheManager.formatBytes(mediaBytes), AppCacheManager.formatBytes(imagesBytes), AppCacheManager.formatBytes(chatBytes)),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -524,10 +524,10 @@ private fun CacheSettingsScreen(
 
                     CacheActionRow(
                         icon = Icons.Default.VideoLibrary,
-                        title = "Borrar multimedia (videos e imágenes de chats)",
-                        subtitle = "Se vuelven a descargar al abrirlos.",
+                        title = stringResource(R.string.settings_delete_media_title),
+                        subtitle = stringResource(R.string.settings_delete_media_subtitle),
                         destructive = false,
-                        buttonText = if (busyAction == "media") "Borrando..." else "Borrar",
+                        buttonText = if (busyAction == "media") stringResource(R.string.settings_deleting) else stringResource(R.string.settings_delete),
                         enabled = busyAction == null,
                         onAction = {
                             busyAction = "media"
@@ -541,10 +541,10 @@ private fun CacheSettingsScreen(
 
                     CacheActionRow(
                         icon = Icons.Default.Person,
-                        title = "Borrar imágenes de perfil / descargadas",
-                        subtitle = "Fotos de perfil y miniaturas.",
+                        title = stringResource(R.string.settings_delete_images_title),
+                        subtitle = stringResource(R.string.settings_delete_images_subtitle),
                         destructive = false,
-                        buttonText = if (busyAction == "images") "Borrando..." else "Borrar",
+                        buttonText = if (busyAction == "images") stringResource(R.string.settings_deleting) else stringResource(R.string.settings_delete),
                         enabled = busyAction == null,
                         onAction = {
                             busyAction = "images"
@@ -558,10 +558,10 @@ private fun CacheSettingsScreen(
 
                     CacheActionRow(
                         icon = Icons.AutoMirrored.Filled.Chat,
-                        title = "Borrar caché de TODOS los chats",
-                        subtitle = "Mensajes guardados para modo offline.",
+                        title = stringResource(R.string.settings_delete_chats_title),
+                        subtitle = stringResource(R.string.settings_delete_chats_subtitle),
                         destructive = true,
-                        buttonText = if (busyAction == "chats") "Borrando..." else "Borrar todo",
+                        buttonText = if (busyAction == "chats") stringResource(R.string.settings_deleting) else stringResource(R.string.settings_delete_all),
                         enabled = busyAction == null,
                         onAction = {
                             busyAction = "chats"
@@ -587,13 +587,13 @@ private fun CacheSettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Text(
-                        "Caché por chat",
+                        stringResource(R.string.settings_cache_per_chat),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     if (chatsCached.isEmpty()) {
                         Text(
-                            "No hay chats cacheados localmente.",
+                            stringResource(R.string.settings_no_cached_chats),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -609,13 +609,13 @@ private fun CacheSettingsScreen(
                                 Spacer(Modifier.width(10.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(
-                                        summary.otherUser?.nombre?.ifBlank { "Chat" } ?: "Chat",
+                                        summary.otherUser?.nombre?.ifBlank { stringResource(R.string.common_chat) } ?: stringResource(R.string.common_chat),
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
-                                        summary.lastMessage?.text?.take(36) ?: "Sin mensajes",
+                                        summary.lastMessage?.text?.take(36) ?: stringResource(R.string.settings_no_messages),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 1
@@ -630,7 +630,7 @@ private fun CacheSettingsScreen(
                                     },
                                     enabled = busyAction == null
                                 ) {
-                                    Text("Borrar", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                                    Text(stringResource(R.string.settings_delete), color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
                                 }
                             }
                         }
@@ -656,13 +656,13 @@ private fun CacheSettingsScreen(
                         )
                         Spacer(Modifier.width(10.dp))
                         Text(
-                            "Modo offline — retención",
+                            stringResource(R.string.settings_offline_retention),
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                     Text(
-                        "Los mensajes se guardan localmente hasta este número de días. Pasado ese tiempo se borran solos.",
+                        stringResource(R.string.settings_retention_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -674,7 +674,7 @@ private fun CacheSettingsScreen(
                                     retentionDays = days
                                     com.example.cuidaleapp.utils.ChatCacheStore.setRetentionDays(days)
                                 },
-                                label = { Text(if (days == 1) "1 día" else "$days días", fontSize = 12.sp) }
+                                label = { Text(if (days == 1) stringResource(R.string.settings_retention_1day) else stringResource(R.string.settings_retention_days, days), fontSize = 12.sp) }
                             )
                         }
                     }

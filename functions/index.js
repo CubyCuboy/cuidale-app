@@ -1,6 +1,7 @@
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onDocumentCreated, onDocumentWritten } = require("firebase-functions/v2/firestore");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const nodemailer = require("nodemailer");
@@ -11,6 +12,7 @@ admin.initializeApp();
 
 const GMAIL_EMAIL = defineSecret("GMAIL_EMAIL");
 const GMAIL_PASS = defineSecret("GMAIL_APP_PASSWORD");
+const RUT_HMAC_SECRET = defineSecret("RUT_HMAC_SECRET");
 const db = admin.firestore();
 const auth = admin.auth();
 
@@ -19,7 +21,34 @@ const VERIFICATION_TTL_MS = 30 * 60 * 1000;
 const RECOVERY_TTL_MS = 5 * 60 * 1000;
 const RUN_OPTIONS = { memory: "512MiB", timeoutSeconds: 120 };
 
+const RATE_LIMIT_MIN_INTERVAL_MS = 60 * 1000;
+const RATE_LIMIT_HOURLY_CAP = 8;
+const TRASH_TTL_MS = 48 * 60 * 60 * 1000;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const RUT_RE = /^\d{7,8}[0-9K]$/;
+
+async function enforceRateLimit(key, label) {
+  const ref = db.collection("rate_limits").doc(key);
+  const snap = await ref.get();
+  const now = Date.now();
+  let timestamps = snap.exists ? (snap.data().timestamps || []) : [];
+  timestamps = timestamps.filter((t) => now - t < 60 * 60 * 1000);
+  const last = timestamps.length ? Math.max(...timestamps) : 0;
+  if (now - last < RATE_LIMIT_MIN_INTERVAL_MS) {
+    throw new HttpsError("resource-exhausted", `Debes esperar un momento antes de realizar otra ${label}.`);
+  }
+  if (timestamps.length >= RATE_LIMIT_HOURLY_CAP) {
+    throw new HttpsError("resource-exhausted", `Has alcanzado el límite de ${label} por hora. Intenta más tarde.`);
+  }
+  timestamps.push(now);
+  await ref.set({ timestamps });
+}
+
 const hash = (value) => crypto.createHash("sha256").update(String(value)).digest("hex");
+const rutKey = (rut) => {
+  const clean = String(rut || "").replace(/\./g, "").replace(/-/g, "").trim().toUpperCase();
+  return crypto.createHmac("sha256", RUT_HMAC_SECRET.value()).update(clean).digest("hex");
+};
 const transporter = (email, pass) => nodemailer.createTransport({ host: "smtp.gmail.com", port: 465, secure: true, auth: { user: email, pass: pass } });
 
 const normalizeProviderId = (providerId) => {
@@ -79,8 +108,6 @@ async function findUserDocByEmailOrUid(email, uid) {
 }
 
 async function moveToTrash(canonicalRef, sourceRef, sourceId, sourceData, reason) {
-  // Mueve campos/documentos basura a una subcolección temporal "basura"
-  // (similar a notificaciones) antes de eliminarlos definitivamente.
   try {
     const trashRef = canonicalRef.collection("basura").doc(sourceId);
     await trashRef.set({
@@ -94,13 +121,6 @@ async function moveToTrash(canonicalRef, sourceRef, sourceId, sourceData, reason
   }
 }
 
-/**
- * Elimina definitivamente una entrada de la subcolección "basura" (después
- * de que ya se usó el código de verificación, por ejemplo).
- * @param {Object} canonicalRef Referencia al documento canónico del usuario.
- * @param {string} sourceId Identificador de la entrada de basura a eliminar.
- * @return {Promise<void>}
- */
 async function deleteTrashEntry(canonicalRef, sourceId) {
   try {
     await canonicalRef.collection("basura").doc(String(sourceId)).delete();
@@ -109,15 +129,8 @@ async function deleteTrashEntry(canonicalRef, sourceId) {
   }
 }
 
-/**
- * Limpia entradas de basura antiguas (por defecto > 48 h) para que la
- * subcolección no crezca indefinidamente.
- * @param {Object} canonicalRef Referencia al documento canónico del usuario.
- * @param {number} [maxAgeMs] Antigüedad máxima en milisegundos.
- * @return {Promise<void>}
- */
 async function cleanupExpiredTrash(canonicalRef, maxAgeMs) {
-  const limit = maxAgeMs || 48 * 60 * 60 * 1000;
+  const limit = maxAgeMs || TRASH_TTL_MS;
   try {
     const snap = await canonicalRef.collection("basura").get();
     const now = Date.now();
@@ -209,6 +222,11 @@ function cleanupCodeFields(prefix) {
 
 async function sendEmailCode(email, type, uid) {
   const isRecovery = type === "recovery";
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  if (!EMAIL_RE.test(normalizedEmail)) {
+    throw new HttpsError("invalid-argument", "Correo electrónico no válido.");
+  }
+  await enforceRateLimit("code_" + normalizedEmail, "solicitud");
   const ttl = isRecovery ? RECOVERY_TTL_MS : VERIFICATION_TTL_MS;
   const prefix = isRecovery ? "recovery" : "verification";
   const subject = isRecovery ? "Código de recuperación" : "Código de verificación";
@@ -219,14 +237,12 @@ async function sendEmailCode(email, type, uid) {
   const now = Date.now();
   const entry = buildCodeEntry(prefix, code, now, ttl);
 
-  // Reemplaza cualquier código previo del mismo tipo dentro del arreglo temporal.
   const previous = getCode(user.data, prefix);
   if (previous) {
     await user.ref.update({ codigos: admin.firestore.FieldValue.arrayRemove(previous) });
   }
   await user.ref.update({ codigos: admin.firestore.FieldValue.arrayUnion(entry) });
 
-  // Migración: limpia los campos planos legacy si existieran.
   await user.ref.update(cleanupCodeFields(prefix)).catch(() => {});
 
   await transporter(GMAIL_EMAIL.value(), GMAIL_PASS.value()).sendMail({
@@ -241,6 +257,9 @@ async function sendEmailCode(email, type, uid) {
 
 async function verifyEmailCode(email, code, type, uid) {
   const prefix = type === "recovery" ? "recovery" : "verification";
+  if (!/^\d{6}$/.test(String(code || ""))) {
+    throw new HttpsError("invalid-argument", "El código debe tener 6 dígitos.");
+  }
   const user = await findUserDocByEmailOrUid(email, uid);
   if (!user) throw new HttpsError("not-found", "Usuario no encontrado");
   const data = user.data;
@@ -259,10 +278,8 @@ async function verifyEmailCode(email, code, type, uid) {
   }
 
   const now = Date.now();
-  // Mueve el código usado al arreglo temporal "basura" antes de eliminarlo del documento.
   await moveToTrash(user.ref, user.ref, `${prefix}_code`, entry, "codigo_usado");
   await user.ref.update({ codigos: admin.firestore.FieldValue.arrayRemove(entry) }).catch(() => {});
-  // Elimina la entrada de basura recién creada y limpia entradas antiguas.
   await deleteTrashEntry(user.ref, `${prefix}_code`);
   await cleanupExpiredTrash(user.ref);
 
@@ -298,6 +315,10 @@ exports.verifyVerificationCode = onCall(RUN_OPTIONS, async (req) => {
 
 exports.confirmPasswordReset = onCall(RUN_OPTIONS, async (req) => {
   const { email, newPassword } = req.data;
+  if (typeof newPassword !== "string" || newPassword.length < 8 ||
+      !/[A-Z]/.test(newPassword) || !/[^A-Za-z0-9]/.test(newPassword)) {
+    throw new HttpsError("invalid-argument", "La contraseña debe tener al menos 8 caracteres, una mayúscula y un carácter especial.");
+  }
   const uid = String((req.data && req.data.uid) || "");
   const user = await findUserDocByEmailOrUid(email, uid);
   if (!user) throw new HttpsError("not-found", "Usuario no encontrado");
@@ -306,7 +327,6 @@ exports.confirmPasswordReset = onCall(RUN_OPTIONS, async (req) => {
   const userAuth = await auth.getUserByEmail(email);
   await auth.updateUser(userAuth.uid, { password: newPassword });
 
-  // Limpia cualquier código recovery que quede en el arreglo temporal.
   const leftover = getCode(user.data, "recovery");
   if (leftover) {
     await user.ref.update({ codigos: admin.firestore.FieldValue.arrayRemove(leftover) }).catch(() => {});
@@ -320,6 +340,61 @@ exports.confirmPasswordReset = onCall(RUN_OPTIONS, async (req) => {
   await cleanupUserDocuments(user.ref, user.id, email, user.data.uid || null);
   return { success: true };
 });
+
+exports.resolveAccountByRut = onCall(
+  { ...RUN_OPTIONS, secrets: [RUT_HMAC_SECRET] },
+  async (req) => {
+    const rut = String((req.data && req.data.rut) || "");
+    const clean = rut.replace(/\./g, "").replace(/-/g, "").trim().toUpperCase();
+    if (!RUT_RE.test(clean)) {
+      throw new HttpsError("invalid-argument", "RUT no válido.");
+    }
+    await enforceRateLimit("rut_" + clean, "consulta");
+
+    const key = rutKey(clean);
+    const query = await db.collection("usuarios").where("rut_key", "==", key).limit(1).get();
+    let doc = query.empty ? null : query.docs[0];
+
+    if (!doc) {
+      const legacy = crypto.createHash("sha256").update(clean).digest("hex");
+      const legacySnap = await db.collection("usuarios").doc(legacy).get();
+      if (legacySnap.exists) {
+        doc = legacySnap;
+        await doc.ref.update({ rut_key: key }).catch(() => {});
+      }
+    }
+
+    if (!doc) throw new HttpsError("not-found", "RUT no encontrado.");
+
+    const data = doc.data() || {};
+    const email = String(data.correo || "");
+    if (!email) throw new HttpsError("not-found", "La cuenta no tiene un correo asociado.");
+    const hasPassword = Array.isArray(data.linkedAccounts)
+      ? data.linkedAccounts.some((a) => a.providerId === "email")
+      : false;
+
+    return {
+      ok: true,
+      email,
+      hasPassword,
+      verified: data.verificado === true,
+      rutKey: key
+    };
+  }
+);
+
+exports.maintainRutKey = onDocumentWritten(
+  { document: "usuarios/{userId}" },
+  async (event) => {
+    const after = event.data.after.exists ? event.data.after.data() : null;
+    if (!after) return;
+    const rut = String(after.rut || "");
+    if (!rut || after.rut_key) return;
+    await event.data.after.ref.update({ rut_key: rutKey(rut) }).catch(() => {});
+  }
+);
+
+const LOCAL_NOTIFICATION_TYPES = ["recordatorio_tarea", "tarea_atrasada"];
 
 function buildNotificationContent(type, data) {
   const notifData = data || {};
@@ -357,16 +432,6 @@ function buildNotificationContent(type, data) {
       body: body || "El servicio de cuidado ha sido finalizado.",
       target: "SOLICITUDES"
     },
-    recordatorio_tarea: {
-      title: title || "Recordatorio de Tarea",
-      body: body || "Tienes una tarea próxima a realizar.",
-      target: "TAREAS"
-    },
-    tarea_atrasada: {
-      title: title || "Tarea Atrasada",
-      body: body || "Una tarea del servicio está atrasada.",
-      target: "SOLICITUDES"
-    },
     tarea_finalizada: {
       title: title || "Tarea Finalizada",
       body: body || "Se ha completado una tarea del servicio.",
@@ -400,21 +465,11 @@ function buildNotificationContent(type, data) {
   };
 }
 
-/**
- * Resuelve el token FCM del destinatario intentando localizar el documento
- * canónico (el que tiene fcmToken / completado) aunque la notificación se
- * haya escrito bajo un documento fantasma (por uid o correo).
- * @param {string} userId Identificador del usuario destino.
- * @return {Promise<{data: Object, ref: Object}|null>} Datos y referencia del
- *   documento con token FCM, o null si no se encontró.
- */
 async function resolveRecipientToken(userId) {
-  // 1) Intento directo sobre el documento que contiene las notificaciones.
   const userDoc = await db.collection("usuarios").doc(userId).get();
   const directData = userDoc.exists ? userDoc.data() : null;
   if (directData && directData.fcmToken) return { data: directData, ref: userDoc.ref };
 
-  // 2) Buscar por uid, prefiriendo el documento canónico (completado o con token).
   const uidQuery = await db.collection("usuarios").where("uid", "==", userId).limit(50).get();
   let best = null;
   for (const doc of uidQuery.docs) {
@@ -426,7 +481,6 @@ async function resolveRecipientToken(userId) {
   }
   if (best) return best;
 
-  // 3) Último recurso: usar el primero aunque no tenga token (se reportará).
   if (!uidQuery.empty) {
     const first = uidQuery.docs[0];
     return { data: first.data() || {}, ref: first.ref };
@@ -450,11 +504,15 @@ exports.sendPushNotification = onDocumentCreated(
       const fcmToken = resolved.data.fcmToken;
 
       const type = notification.tipo || "mensaje";
+      const emitter = String(notification.emisor || "");
+      const receiver = String(notification.receptor || userId || "");
+      if (LOCAL_NOTIFICATION_TYPES.includes(type) && (!receiver || !emitter || receiver === emitter)) {
+        return;
+      }
       const content = buildNotificationContent(type, notification.data || {});
       const receiverUid = String(notification.receptor || userId || "");
       const notifId = String(event.params.notifId || "");
 
-      // Enriquecer con datos del PERFIL del emisor (no del auth externo).
       let senderName = (notification.data || {}).emisorNombre || "";
       let senderPhoto = (notification.data || {}).emisorFoto || "";
       if (notification.emisor && (!senderName || !senderPhoto)) {
@@ -490,8 +548,7 @@ exports.sendPushNotification = onDocumentCreated(
         }
       }
 
-      // Mensaje tipo data-only para que el cliente construya la notificación
-      // (acciones, foto del remitente y preview multimedia) incluso en segundo plano.
+
       const message = {
         token: fcmToken,
         data: dataPayload,
@@ -573,5 +630,25 @@ exports.notifyMatchingUsers = onDocumentCreated(
     } catch (error) {
       console.error("Error notifyMatchingUsers:", error);
     }
+  }
+);
+
+exports.cleanupTrashScheduler = onSchedule(
+  { schedule: "every 12 hours", timeZone: "America/Santiago" },
+  async () => {
+    const now = Date.now();
+    const snap = await db.collectionGroup("basura").get();
+    const batch = admin.firestore().batch();
+    let changes = 0;
+    snap.docs.forEach((doc) => {
+      const data = doc.data() || {};
+      const moved = data.movidaA;
+      const ts = moved && moved.toMillis ? moved.toMillis() : 0;
+      if (!ts || now - ts > TRASH_TTL_MS) {
+        batch.delete(doc.ref);
+        changes++;
+      }
+    });
+    if (changes > 0) await batch.commit();
   }
 );

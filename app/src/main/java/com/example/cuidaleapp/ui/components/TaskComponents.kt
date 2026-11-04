@@ -22,9 +22,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.cuidaleapp.R
 import com.example.cuidaleapp.models.FrecuenciaTarea
 import com.example.cuidaleapp.models.Tarea
 import com.example.cuidaleapp.models.TipoTarea
@@ -184,28 +186,28 @@ fun TaskCreationDialog(
     val isDark = customColors.isDark
 
     val titlePlaceholder = when (tipo) {
-        TipoTarea.MEDICACION -> "Nombre del medicamento"
-        TipoTarea.COMIDA -> "Ej: Almuerzo / Merienda"
-        TipoTarea.HIGIENE -> "Ej: Baño / Aseo Bucal"
-        TipoTarea.ACTIVIDAD -> "Ej: Ejercicios / Paseo"
-        TipoTarea.OTRO -> "Ej: Control de Signos"
+        TipoTarea.MEDICACION -> stringResource(R.string.task_ph_medication_title)
+        TipoTarea.COMIDA -> stringResource(R.string.task_ph_food_title)
+        TipoTarea.HIGIENE -> stringResource(R.string.task_ph_hygiene_title)
+        TipoTarea.ACTIVIDAD -> stringResource(R.string.task_ph_activity_title)
+        TipoTarea.OTRO -> stringResource(R.string.task_ph_other_title)
     }
 
     val dynamicPlaceholder = when (tipo) {
-        TipoTarea.MEDICACION -> "Ej: 500mg, vía oral después de comida"
-        TipoTarea.COMIDA -> "Ej: Sin sal, bajo en grasas"
-        TipoTarea.HIGIENE -> "Ej: Usar jabón neutro, secar bien pliegues"
-        TipoTarea.ACTIVIDAD -> "Ej: 15 minutos en el jardín, usar andador"
-        TipoTarea.OTRO -> "Ej: Ventilar habitación, cambiar sábanas"
+        TipoTarea.MEDICACION -> stringResource(R.string.task_ph_medication_desc)
+        TipoTarea.COMIDA -> stringResource(R.string.task_ph_food_desc)
+        TipoTarea.HIGIENE -> stringResource(R.string.task_ph_hygiene_desc)
+        TipoTarea.ACTIVIDAD -> stringResource(R.string.task_ph_activity_desc)
+        TipoTarea.OTRO -> stringResource(R.string.task_ph_other_desc)
     }
 
     if (showDuplicateAlert) {
         AlertDialog(
             onDismissRequest = { showDuplicateAlert = false },
-            title = { Text("Tarea Duplicada") },
-            text = { Text("Ya existe una tarea llamada '$titulo'. ¿Deseas usar otro nombre o editar la existente?") },
+            title = { Text(stringResource(R.string.task_duplicate_title)) },
+            text = { Text(stringResource(R.string.task_duplicate_message, titulo)) },
             confirmButton = {
-                TextButton(onClick = { showDuplicateAlert = false }) { Text("ENTENDIDO") }
+                TextButton(onClick = { showDuplicateAlert = false }) { Text(stringResource(R.string.action_got_it)) }
             }
         )
     }
@@ -254,7 +256,7 @@ fun TaskCreationDialog(
                         }
                         Spacer(Modifier.width(12.dp))
                         Text(
-                            if (initialTarea == null) "NUEVA TAREA" else "EDITAR TAREA",
+                            if (initialTarea == null) stringResource(R.string.task_new_title) else stringResource(R.string.task_edit_title),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Black,
                             color = if (isDark) Color.White else Color.Black
@@ -263,7 +265,7 @@ fun TaskCreationDialog(
 
                     Spacer(Modifier.height(20.dp))
 
-                    InputFieldLabel(text = "CATEGORÍA")
+                    InputFieldLabel(text = stringResource(R.string.task_category))
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.padding(vertical = 4.dp)
@@ -300,7 +302,7 @@ fun TaskCreationDialog(
 
                     Spacer(Modifier.height(16.dp))
 
-                    InputFieldLabel(text = "TÍTULO")
+                    InputFieldLabel(text = stringResource(R.string.task_title))
                     CuidaleTextField(
                         value = titulo, 
                         onValueChange = { titulo = it }, 
@@ -316,7 +318,7 @@ fun TaskCreationDialog(
                         verticalAlignment = Alignment.Bottom
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            InputFieldLabel(text = "HORARIO")
+                            InputFieldLabel(text = stringResource(R.string.task_schedule))
                             Surface(
                                 onClick = { showTimePicker = true },
                                 color = if (isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFF5F7F9),
@@ -336,7 +338,7 @@ fun TaskCreationDialog(
                             }
                         }
                         Column(modifier = Modifier.weight(1.2f)) {
-                            InputFieldLabel(text = "FRECUENCIA")
+                            InputFieldLabel(text = stringResource(R.string.task_frequency))
                             CuidaleExposedDropdown(
                                 label = "",
                                 options = FrecuenciaTarea.entries.map { it.name.replace("_", " ") },
@@ -351,7 +353,7 @@ fun TaskCreationDialog(
 
                     if (frecuencia == FrecuenciaTarea.SEMANAL) {
                         Spacer(Modifier.height(16.dp))
-                        InputFieldLabel(text = "REPETIR LOS DÍAS")
+                        InputFieldLabel(text = stringResource(R.string.task_repeat_days))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -382,7 +384,7 @@ fun TaskCreationDialog(
 
                     if (frecuencia == FrecuenciaTarea.MENSUAL) {
                         Spacer(Modifier.height(16.dp))
-                        InputFieldLabel(text = "MESES DE EJECUCIÓN")
+                        InputFieldLabel(text = stringResource(R.string.task_months))
                         val allMonths = (1..12).toList()
                         Column {
                             allMonths.chunked(4).forEach { rowMonths ->
@@ -415,7 +417,7 @@ fun TaskCreationDialog(
                             }
                             
                             Spacer(Modifier.height(8.dp))
-                            InputFieldLabel(text = "DÍA DEL MES")
+                            InputFieldLabel(text = stringResource(R.string.task_day_of_month))
                             CuidaleTextField(
                                 value = diasSeleccionados.firstOrNull()?.toString() ?: "",
                                 onValueChange = { 
@@ -426,7 +428,7 @@ fun TaskCreationDialog(
                                         diasSeleccionados = emptyList()
                                     }
                                 },
-                                placeholder = "Ej: 15",
+                                placeholder = stringResource(R.string.task_day_placeholder),
                                 containerColor = if (isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFF5F7F9)
                             )
                         }
@@ -434,7 +436,7 @@ fun TaskCreationDialog(
 
                     Spacer(Modifier.height(20.dp))
                     
-                    InputFieldLabel(text = "INDICACIONES ADICIONALES")
+                    InputFieldLabel(text = stringResource(R.string.task_notes))
                     CuidaleTextField(
                         value = descripcion,
                         onValueChange = { descripcion = it },
@@ -450,10 +452,10 @@ fun TaskCreationDialog(
                         TextButton(
                             onClick = onDismiss,
                             modifier = Modifier.weight(1f).height(50.dp)
-                        ) { Text("CANCELAR", color = Color.Gray, fontWeight = FontWeight.Bold) }
+                        ) { Text(stringResource(R.string.action_cancel), color = Color.Gray, fontWeight = FontWeight.Bold) }
                         
                         HardShadowButton(
-                            text = "GUARDAR TAREA",
+                            text = stringResource(R.string.task_save),
                             onClick = {
                                 val isDuplicate = existingTasks.any { 
                                     it.titulo.equals(titulo, ignoreCase = true) && it.id != initialTarea?.id 

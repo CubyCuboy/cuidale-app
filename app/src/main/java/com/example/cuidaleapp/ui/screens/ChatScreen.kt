@@ -45,6 +45,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -66,6 +67,7 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.example.cuidaleapp.R
 import com.example.cuidaleapp.ui.components.fadingEdge
 import com.example.cuidaleapp.utils.AppNavigationState
 import com.example.cuidaleapp.models.ChatMessage
@@ -243,7 +245,7 @@ fun ChatScreen(
     //    previsualizar y poder borrar antes de enviar. ──
     fun requestMediaLaunch(action: () -> Unit) {
         if (mediaLimitReached) {
-            mediaError = "Has alcanzado el límite máximo. Elimina adjuntos para poder agregar más."
+            mediaError = context.getString(R.string.chat_media_limit_reached)
             return
         }
         val prefs = context.getSharedPreferences("cuidale_prefs", android.content.Context.MODE_PRIVATE)
@@ -264,41 +266,30 @@ fun ChatScreen(
         } catch (e: Exception) { null }
     }
 
-    fun addPendingMedia(uri: Uri, kind: String): Boolean {
+    fun addPendingMedia(uri: Uri, kind: String): AddMediaResult {
         val resolvedKind = when (kind) {
             "image", "video", "file" -> kind
             else -> "file"
         }
         // Evita duplicados exactos del mismo archivo/URI.
-        if (pendingMediaItems.any { it.uri == uri }) return true
+        if (pendingMediaItems.any { it.uri == uri }) return AddMediaResult.DUPLICATE
 
         val size = runCatching { MediaCompressor.getSize(context, uri) }.getOrDefault(0L)
         val currentCount = pendingMediaItems.size
         val currentBytes = runCatching { pendingMediaItems.sumOf { it.sizeBytes } }.getOrDefault(0L)
 
-        if (currentCount >= 10) {
-            mediaError = "Máximo 10 elementos por envío. Elimina adjuntos para agregar más."
-            showMediaSheet = true
-            return false
-        }
-        if (size > MediaCompressor.MAX_MEDIA_BYTES) {
-            mediaError = "El archivo supera los 25 MB individuales"
-            showMediaSheet = true
-            return false
-        }
-        if (currentBytes + size > MediaCompressor.MAX_MEDIA_BYTES) {
-            mediaError = "Se superó el límite total de 25 MB. Elimina adjuntos para agregar más."
-            showMediaSheet = true
-            return false
-        }
+        if (currentCount >= 10) return AddMediaResult.COUNT_LIMIT
+        if (size > MediaCompressor.MAX_MEDIA_BYTES) return AddMediaResult.SIZE_LIMIT
+        if (currentBytes + size > MediaCompressor.MAX_MEDIA_BYTES) return AddMediaResult.TOTAL_LIMIT
+
         val name = when (resolvedKind) {
-            "file" -> queryDisplayName(uri) ?: "documento"
-            "video" -> queryDisplayName(uri) ?: "video.mp4"
-            else -> queryDisplayName(uri) ?: "imagen.jpg"
+            "file" -> queryDisplayName(uri) ?: context.getString(R.string.chat_filename_document)
+            "video" -> queryDisplayName(uri) ?: context.getString(R.string.chat_filename_video)
+            else -> queryDisplayName(uri) ?: context.getString(R.string.chat_filename_image)
         }
         pendingMediaItems.add(PendingMediaItem(uri = uri, kind = resolvedKind, name = name, sizeBytes = size))
         mediaError = null
-        return true
+        return AddMediaResult.ADDED
     }
 
     suspend fun uploadSingleMedia(item: PendingMediaItem, replyMsg: ChatMessage?) {
@@ -315,7 +306,7 @@ fun ChatScreen(
         val downloadUrl: String
         when (item.kind) {
             "image" -> {
-                val compressed = MediaCompressor.compressImage(context, item.uri) ?: throw Exception("No se pudo comprimir la imagen")
+                val compressed = MediaCompressor.compressImage(context, item.uri) ?: throw Exception(context.getString(R.string.chat_error_compress_image))
                 storageRef.putBytes(compressed).await()
                 downloadUrl = storageRef.downloadUrl.await().toString()
                 viewModel.sendMessage(
@@ -325,12 +316,12 @@ fun ChatScreen(
                     type = "image",
                     replyToId = replyMsg?.id,
                     replyToText = replyMsg?.let { com.example.cuidaleapp.ui.components.replyLabelFor(it, context) },
-                    replyToName = if (replyMsg?.senderId == myUid) "Tú" else otherUser.nombre,
+                    replyToName = if (replyMsg?.senderId == myUid) context.getString(R.string.chat_me_short) else otherUser.nombre,
                     metadata = replyMsg?.let { com.example.cuidaleapp.ui.components.replyPreviewMetadataFor(it) } ?: emptyMap()
                 )
             }
             "video" -> {
-                val input = context.contentResolver.openInputStream(item.uri) ?: throw Exception("No se pudo leer el archivo")
+                val input = context.contentResolver.openInputStream(item.uri) ?: throw Exception(context.getString(R.string.chat_error_read_file))
                 input.use { stream -> storageRef.putStream(stream).await() }
                 downloadUrl = storageRef.downloadUrl.await().toString()
                 viewModel.sendMessage(
@@ -340,12 +331,12 @@ fun ChatScreen(
                     type = "video",
                     replyToId = replyMsg?.id,
                     replyToText = replyMsg?.let { com.example.cuidaleapp.ui.components.replyLabelFor(it, context) },
-                    replyToName = if (replyMsg?.senderId == myUid) "Tú" else otherUser.nombre,
+                    replyToName = if (replyMsg?.senderId == myUid) context.getString(R.string.chat_me_short) else otherUser.nombre,
                     metadata = replyMsg?.let { com.example.cuidaleapp.ui.components.replyPreviewMetadataFor(it) } ?: emptyMap()
                 )
             }
             else -> {
-                val input = context.contentResolver.openInputStream(item.uri) ?: throw Exception("No se pudo leer el archivo")
+                val input = context.contentResolver.openInputStream(item.uri) ?: throw Exception(context.getString(R.string.chat_error_read_file))
                 input.use { stream -> storageRef.putStream(stream).await() }
                 downloadUrl = storageRef.downloadUrl.await().toString()
                 viewModel.sendMessage(
@@ -356,7 +347,7 @@ fun ChatScreen(
                     type = "file",
                     replyToId = replyMsg?.id,
                     replyToText = replyMsg?.let { com.example.cuidaleapp.ui.components.replyLabelFor(it, context) },
-                    replyToName = if (replyMsg?.senderId == myUid) "Tú" else otherUser.nombre,
+                    replyToName = if (replyMsg?.senderId == myUid) context.getString(R.string.chat_me_short) else otherUser.nombre,
                     metadata = replyMsg?.let { com.example.cuidaleapp.ui.components.replyPreviewMetadataFor(it) } ?: emptyMap()
                 )
             }
@@ -380,17 +371,17 @@ fun ChatScreen(
         val downloadUrl: String
         when (item.kind) {
             "image" -> {
-                val compressed = MediaCompressor.compressImage(context, item.uri) ?: throw Exception("No se pudo comprimir la imagen")
+                val compressed = MediaCompressor.compressImage(context, item.uri) ?: throw Exception(context.getString(R.string.chat_error_compress_image))
                 storageRef.putBytes(compressed).await()
                 downloadUrl = storageRef.downloadUrl.await().toString()
             }
             "video" -> {
-                val input = context.contentResolver.openInputStream(item.uri) ?: throw Exception("No se pudo leer el archivo")
+                val input = context.contentResolver.openInputStream(item.uri) ?: throw Exception(context.getString(R.string.chat_error_read_file))
                 input.use { stream -> storageRef.putStream(stream).await() }
                 downloadUrl = storageRef.downloadUrl.await().toString()
             }
             else -> {
-                val input = context.contentResolver.openInputStream(item.uri) ?: throw Exception("No se pudo leer el archivo")
+                val input = context.contentResolver.openInputStream(item.uri) ?: throw Exception(context.getString(R.string.chat_error_read_file))
                 input.use { stream -> storageRef.putStream(stream).await() }
                 downloadUrl = storageRef.downloadUrl.await().toString()
             }
@@ -412,7 +403,7 @@ fun ChatScreen(
                 if (item in pendingMediaItems) {
                     runCatching { uploadSingleMedia(item, replyMsg) }
                         .onSuccess { pendingMediaItems.remove(item); replyingToMessage = null }
-                        .onFailure { firstError = it.message ?: "Error al enviar multimedia" }
+                        .onFailure { firstError = it.message ?: context.getString(R.string.chat_error_send_media) }
                 }
             } else if (items.size > 1) {
                 // Varios elementos: se suben todos y se agrupan en UN mensaje.
@@ -426,7 +417,7 @@ fun ChatScreen(
                             succeededIdx.add(index)
                         }
                         .onFailure { e ->
-                            firstError = firstError ?: (e.message ?: "Error al enviar multimedia")
+                            firstError = firstError ?: (e.message ?: context.getString(R.string.chat_error_send_media))
                         }
                 }
                 if (uploaded.isNotEmpty()) {
@@ -464,9 +455,18 @@ fun ChatScreen(
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         val uri = cameraUri
         if (success && uri != null) {
-            addPendingMedia(uri, "image")
+            when (addPendingMedia(uri, "image")) {
+                AddMediaResult.SIZE_LIMIT -> {
+                    val size = runCatching { MediaCompressor.getSize(context, uri) }.getOrDefault(0L)
+                    mediaError = context.getString(R.string.chat_error_photo_size, com.example.cuidaleapp.utils.AppCacheManager.formatBytes(size))
+                }
+                AddMediaResult.COUNT_LIMIT, AddMediaResult.TOTAL_LIMIT -> {
+                    mediaError = context.getString(R.string.chat_error_photo_limit, pendingMediaItems.size)
+                }
+                else -> {}
+            }
         } else if (uri != null) {
-            mediaError = "No se pudo capturar la foto"
+            mediaError = context.getString(R.string.chat_error_photo_capture)
         }
         cameraUri = null
     }
@@ -475,7 +475,7 @@ fun ChatScreen(
         try {
             val pm = context.packageManager
             if (!pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_CAMERA_ANY)) {
-                mediaError = "Este dispositivo no tiene cámara disponible"
+                mediaError = context.getString(R.string.chat_error_no_camera)
             } else {
                 val file = File(context.cacheDir, "cam_chat_${System.currentTimeMillis()}.jpg")
                 val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
@@ -483,7 +483,7 @@ fun ChatScreen(
                 cameraLauncher.launch(uri)
             }
         } catch (e: Exception) {
-            mediaError = e.message ?: "Error al abrir la cámara"
+            mediaError = e.message ?: context.getString(R.string.chat_error_open_camera)
         }
     }
 
@@ -508,26 +508,57 @@ fun ChatScreen(
             ActivityResultContracts.PickMultipleVisualMedia(maxItems = (10 - pendingMediaItems.size).coerceAtLeast(1))
         ) { uris ->
             var added = 0
+            var countLimit = false
+            var sizeLimit = false
+            var totalLimit = false
+            val overSized = mutableListOf<Pair<String, String>>() // (nombre, peso legible)
             uris.forEach { uri ->
-                if (pendingMediaItems.size >= 10) return@forEach
+                if (pendingMediaItems.size >= 10) { countLimit = true; return@forEach }
                 val kind = if (MediaCompressor.isVideo(context, uri)) "video" else "image"
-                if (addPendingMedia(uri, kind)) added++
+                when (addPendingMedia(uri, kind)) {
+                    AddMediaResult.ADDED -> added++
+                    AddMediaResult.COUNT_LIMIT -> countLimit = true
+                    AddMediaResult.SIZE_LIMIT -> {
+                        sizeLimit = true
+                        val size = runCatching { MediaCompressor.getSize(context, uri) }.getOrDefault(0L)
+                        val nombreArchivo = queryDisplayName(uri) ?: context.getString(R.string.chat_filename_file)
+                        overSized.add(nombreArchivo to com.example.cuidaleapp.utils.AppCacheManager.formatBytes(size))
+                    }
+                    AddMediaResult.TOTAL_LIMIT -> totalLimit = true
+                    else -> {}
+                }
             }
-            if (added == 0 && uris.isNotEmpty()) {
-                mediaError = "Ya llegaste al límite de 10 elementos. Elimina adjuntos para agregar más."
-            } else if (added < uris.size) {
-                mediaError = "Algunos elementos no se pudieron agregar (límite de 10 o 25 MB)."
+            val totalAdjuntos = pendingMediaItems.size
+            mediaError = when {
+                sizeLimit -> {
+                    val detalle = overSized.joinToString("; ") { (n, s) -> "$n ($s)" }
+                    context.getString(R.string.chat_error_media_size_overall, detalle, totalAdjuntos)
+                }
+                totalLimit -> context.getString(R.string.chat_error_media_total_limit, totalAdjuntos)
+                countLimit -> context.getString(R.string.chat_error_media_count_limit, totalAdjuntos)
+                added == 0 && uris.isNotEmpty() -> context.getString(R.string.chat_error_media_add_failed)
+                else -> null
             }
         }
     }
 
     val documentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
-            if (pendingMediaItems.size >= 10) {
-                mediaError = "Máximo 10 elementos por envío. No se puede enviar más."
-                showMediaSheet = true
-            } else {
-                addPendingMedia(uri, "file")
+            when (addPendingMedia(uri, "file")) {
+                AddMediaResult.COUNT_LIMIT -> {
+                    mediaError = context.getString(R.string.chat_error_media_count_limit, pendingMediaItems.size)
+                    showMediaSheet = true
+                }
+                AddMediaResult.SIZE_LIMIT -> {
+                    val size = runCatching { MediaCompressor.getSize(context, uri) }.getOrDefault(0L)
+                    mediaError = context.getString(R.string.chat_error_doc_size, queryDisplayName(uri) ?: context.getString(R.string.chat_filename_document), com.example.cuidaleapp.utils.AppCacheManager.formatBytes(size), pendingMediaItems.size)
+                    showMediaSheet = true
+                }
+                AddMediaResult.TOTAL_LIMIT -> {
+                    mediaError = context.getString(R.string.chat_error_media_total_limit, pendingMediaItems.size)
+                    showMediaSheet = true
+                }
+                else -> {}
             }
         }
     }
@@ -666,9 +697,9 @@ fun ChatScreen(
                         if (selectedMessages.isNotEmpty()) {
                             val allFromMe = selectedMessages.all { it.senderId == myUid }
                             Column {
-                                Text("${selectedMessages.size} seleccionados", fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.chat_selected_count, selectedMessages.size), fontWeight = FontWeight.Bold)
                                 Text(
-                                    text = if (allFromMe) "Puedes eliminar o fijar estos mensajes" else "Solo puedes fijar estos mensajes",
+                                    text = if (allFromMe) stringResource(R.string.chat_selected_all_from_me) else stringResource(R.string.chat_selected_only_pin),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = Color.Gray
                                 )
@@ -683,7 +714,7 @@ fun ChatScreen(
                                 TextField(
                                     value = searchQuery,
                                     onValueChange = { viewModel.setSearchQuery(it); pendingReturnToSearch = false },
-                                    placeholder = { Text(if (isOnline) "Buscar mensajes..." else "Sin conexión", color = Color.Gray, fontSize = 14.sp) },
+                                    placeholder = { Text(if (isOnline) stringResource(R.string.chat_search_placeholder) else stringResource(R.string.connectivity_offline_short), color = Color.Gray, fontSize = 14.sp) },
                                     modifier = Modifier.weight(1f),
                                     singleLine = true,
                                     enabled = isOnline,
@@ -764,7 +795,7 @@ fun ChatScreen(
                                         else -> Color.Gray
                                     }
                                     Text(
-                                        text = if (!isOnline) "OFFLINE" else if (isBlocked) "Cerrado" else otherStatus,
+                                        text = if (!isOnline) stringResource(R.string.chat_status_offline) else if (isBlocked) stringResource(R.string.chat_status_blocked) else otherStatus,
                                         style = MaterialTheme.typography.labelSmall,
                                         color = statusTextColor,
                                     )
@@ -838,10 +869,10 @@ fun ChatScreen(
                             var showTopMenu by remember { mutableStateOf(false) }
                             IconButton(onClick = { showTopMenu = true }) { Icon(Icons.Default.MoreVert, null) }
                             DropdownMenu(expanded = showTopMenu, onDismissRequest = { showTopMenu = false }) {
-                                DropdownMenuItem(text = { Text("Ver Perfil") }, onClick = { showTopMenu = false; onViewOtherProfile(otherUser.uid) }, leadingIcon = { Icon(Icons.Default.Person, null) })
-                                DropdownMenuItem(text = { Text(if (isFavorite) "Quitar de Favoritos" else "Añadir a Favoritos") }, onClick = { showTopMenu = false; favoritosViewModel?.toggleFavorito(otherUser.uid) }, enabled = isOnline, leadingIcon = { Icon(Icons.Default.Star, null, tint = if (isFavorite) Color.Yellow else Color.Gray) })
-                                DropdownMenuItem(text = { Text(if (iHaveBlocked) "Desbloquear" else "Bloquear", color = if (iHaveBlocked) Color.Unspecified else Color.Red) }, onClick = { showTopMenu = false; favoritosViewModel?.toggleBloqueo(otherUser.uid) }, enabled = isOnline, leadingIcon = { Icon(if (iHaveBlocked) Icons.Default.CheckCircle else Icons.Default.Block, null, tint = if (iHaveBlocked) Color(0xFF4CAF50) else Color.Red) })
-                                DropdownMenuItem(text = { Text(if (iHaveUnwanted) "Mostrar en búsquedas" else "Ocultar de búsquedas") }, onClick = { showTopMenu = false; favoritosViewModel?.toggleNoDeseado(otherUser.uid) }, enabled = isOnline, leadingIcon = { Icon(if (iHaveUnwanted) Icons.Default.Visibility else Icons.Default.VisibilityOff, null) })
+                                DropdownMenuItem(text = { Text(stringResource(R.string.chat_menu_view_profile)) }, onClick = { showTopMenu = false; onViewOtherProfile(otherUser.uid) }, leadingIcon = { Icon(Icons.Default.Person, null) })
+                                DropdownMenuItem(text = { Text(if (isFavorite) stringResource(R.string.chat_menu_remove_fav) else stringResource(R.string.chat_menu_add_fav)) }, onClick = { showTopMenu = false; favoritosViewModel?.toggleFavorito(otherUser.uid) }, enabled = isOnline, leadingIcon = { Icon(Icons.Default.Star, null, tint = if (isFavorite) Color.Yellow else Color.Gray) })
+                                DropdownMenuItem(text = { Text(if (iHaveBlocked) stringResource(R.string.chat_unblock) else stringResource(R.string.chat_block), color = if (iHaveBlocked) Color.Unspecified else Color.Red) }, onClick = { showTopMenu = false; favoritosViewModel?.toggleBloqueo(otherUser.uid) }, enabled = isOnline, leadingIcon = { Icon(if (iHaveBlocked) Icons.Default.CheckCircle else Icons.Default.Block, null, tint = if (iHaveBlocked) Color(0xFF4CAF50) else Color.Red) })
+                                DropdownMenuItem(text = { Text(if (iHaveUnwanted) stringResource(R.string.chat_menu_show_in_search) else stringResource(R.string.chat_menu_hide_from_search)) }, onClick = { showTopMenu = false; favoritosViewModel?.toggleNoDeseado(otherUser.uid) }, enabled = isOnline, leadingIcon = { Icon(if (iHaveUnwanted) Icons.Default.Visibility else Icons.Default.VisibilityOff, null) })
                             }
                         }
                     }
@@ -880,19 +911,19 @@ fun ChatScreen(
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             val senderFilters = listOf(
-                                null to "Todos",
-                                "me" to "Yo",
+                                null to stringResource(R.string.chat_filter_all),
+                                "me" to stringResource(R.string.chat_filter_me),
                                 "other" to otherUser.nombre
                             )
                             val filters = listOf(
-                                null to Pair(Icons.Default.Search, "Todos"),
-                                "media" to Pair(Icons.AutoMirrored.Filled.InsertDriveFile, "Multimedia"),
-                                "image" to Pair(Icons.Default.Image, "Fotos"),
-                                "video" to Pair(Icons.Default.VideoLibrary, "Videos"),
-                                "file" to Pair(Icons.Default.Description, "Docs")
+                                null to Pair(Icons.Default.Search, stringResource(R.string.chat_filter_all)),
+                                "media" to Pair(Icons.AutoMirrored.Filled.InsertDriveFile, stringResource(R.string.chat_filter_media)),
+                                "image" to Pair(Icons.Default.Image, stringResource(R.string.chat_filter_photos)),
+                                "video" to Pair(Icons.Default.VideoLibrary, stringResource(R.string.chat_filter_videos)),
+                                "file" to Pair(Icons.Default.Description, stringResource(R.string.chat_filter_docs))
                             )
                             Text(
-                                text = "DE",
+                                text = stringResource(R.string.chat_filter_from),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.Bold
@@ -913,7 +944,7 @@ fun ChatScreen(
                                 }
                             }
                             Text(
-                                text = "TIPO",
+                                text = stringResource(R.string.chat_filter_type),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.Bold,
@@ -938,7 +969,7 @@ fun ChatScreen(
                     }
                     if (searchQuery.isNotBlank() || searchMediaFilter != null || searchSenderFilter != null) {
                         Text(
-                            text = "${filteredMessages.size} ${if (filteredMessages.size == 1) "resultado" else "resultados"}",
+                            text = stringResource(R.string.chat_results_count, filteredMessages.size, if (filteredMessages.size == 1) stringResource(R.string.chat_result_one) else stringResource(R.string.chat_results_many)),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
@@ -960,8 +991,8 @@ fun ChatScreen(
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Icon(Icons.Default.CloudOff, null, modifier = Modifier.size(64.dp), tint = Color.Gray.copy(alpha = 0.5f))
                                     Spacer(Modifier.height(16.dp))
-                                    Text("Sin conexión a internet", fontWeight = FontWeight.Bold, color = Color.Gray)
-                                    Text("No se pueden cargar los mensajes", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                    Text(stringResource(R.string.connectivity_offline), fontWeight = FontWeight.Bold, color = Color.Gray)
+                                    Text(stringResource(R.string.chat_error_load_messages), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                                 }
                             }
                         }
@@ -970,8 +1001,8 @@ fun ChatScreen(
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Icon(Icons.Default.SearchOff, null, modifier = Modifier.size(56.dp), tint = Color.Gray.copy(alpha = 0.5f))
                                     Spacer(Modifier.height(12.dp))
-                                    Text("Sin resultados", fontWeight = FontWeight.Bold, color = Color.Gray)
-                                    Text("No se encontraron mensajes para tu búsqueda.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                    Text(stringResource(R.string.chat_search_no_results), fontWeight = FontWeight.Bold, color = Color.Gray)
+                                    Text(stringResource(R.string.chat_search_no_results_desc), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                                 }
                             }
                         }
@@ -1008,7 +1039,7 @@ fun ChatScreen(
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         CircularProgressIndicator(modifier = Modifier.size(32.dp), strokeWidth = 3.dp)
                                         Spacer(Modifier.height(12.dp))
-                                        Text("Recuperando datos del chat...", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
+                                        Text(stringResource(R.string.chat_recovering), style = MaterialTheme.typography.labelMedium, color = Color.Gray)
                                     }
                                 }
                             } else {
@@ -1024,7 +1055,7 @@ fun ChatScreen(
                                         Column {
                                             androidx.compose.animation.AnimatedVisibility(visible = isOtherTyping && isOnline, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                                                 Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                                    Text("${otherUser.nombre} está escribiendo...", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
+                                                    Text(stringResource(R.string.chat_typing, otherUser.nombre), style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
                                                 }
                                             }
                                         }
@@ -1110,7 +1141,7 @@ fun ChatScreen(
                                     Icon(Icons.Default.WifiOff, null, tint = Color.Gray, modifier = Modifier.size(20.dp))
                                     Spacer(Modifier.width(12.dp))
                                     Text(
-                                        "MODO SOLO LECTURA", 
+                                        stringResource(R.string.chat_readonly_mode), 
                                         color = Color.Gray, 
                                         style = MaterialTheme.typography.labelLarge, 
                                         fontWeight = FontWeight.Black
@@ -1118,7 +1149,7 @@ fun ChatScreen(
                                 }
                                 Spacer(Modifier.height(4.dp))
                                 Text(
-                                    "Conéctate a internet para enviar mensajes.", 
+                                    stringResource(R.string.chat_readonly_desc), 
                                     color = Color.Gray.copy(alpha = 0.7f), 
                                     style = MaterialTheme.typography.bodySmall
                                 )
@@ -1141,8 +1172,8 @@ fun ChatScreen(
                                 )
                                 Spacer(Modifier.height(12.dp))
                                 Text(
-                                    text = if (iHaveBlocked) "Has bloqueado a ${otherUser.nombre}." 
-                                          else "No puedes enviar mensajes a este usuario.",
+                                    text = if (iHaveBlocked) stringResource(R.string.chat_blocked_by_me, otherUser.nombre) 
+                                          else stringResource(R.string.chat_blocked_cannot_send),
                                     style = MaterialTheme.typography.bodyLarge,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = if (isDark) Color.White else Color.Black
@@ -1150,8 +1181,8 @@ fun ChatScreen(
                                 Spacer(Modifier.height(8.dp))
                                 Text(
                                     text = if (iHaveBlocked) 
-                                        "No podrás recibir mensajes de este usuario y no aparecerá en tus búsquedas. Puedes desbloquearlo para retomar el contacto."
-                                        else "Este usuario ha restringido quién puede enviarle mensajes. No puedes contactar con él por ahora.",
+                                        stringResource(R.string.chat_blocked_by_me_desc)
+                                        else stringResource(R.string.chat_blocked_cannot_send_desc),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = Color.Gray,
                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -1164,7 +1195,7 @@ fun ChatScreen(
                                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5865F2)),
                                         shape = RoundedCornerShape(4.dp)
                                     ) {
-                                        Text("Desbloquear")
+                                        Text(stringResource(R.string.chat_unblock))
                                     }
                                 }
                             }
@@ -1173,7 +1204,7 @@ fun ChatScreen(
                         Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp)) {
                             if (replyingToMessage != null) {
                                 val replyMsg = replyingToMessage!!
-                                val replyName = if (replyMsg.senderId == myUid) "Tú" else otherUser.nombre
+                                val replyName = if (replyMsg.senderId == myUid) stringResource(R.string.chat_me_short) else otherUser.nombre
                                 val replyMeta = com.example.cuidaleapp.ui.components.replyPreviewMetadataFor(replyMsg)
                                 val replyLabel = com.example.cuidaleapp.ui.components.replyLabelFor(replyMsg, context)
                                 Surface(
@@ -1238,7 +1269,7 @@ fun ChatScreen(
                                             Icon(Icons.Default.CloudOff, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
                                             Spacer(Modifier.width(6.dp))
                                             Text(
-                                                "Mensajes pendientes de envío",
+                                                stringResource(R.string.chat_pending_outbox),
                                                 style = MaterialTheme.typography.labelMedium,
                                                 fontWeight = FontWeight.Bold,
                                                 color = MaterialTheme.colorScheme.error,
@@ -1284,13 +1315,13 @@ fun ChatScreen(
                                     Column(Modifier.padding(10.dp)) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(
-                                                "Adjuntos (${pendingMediaItems.size}/10)",
+                                                stringResource(R.string.chat_attachments, pendingMediaItems.size),
                                                 style = MaterialTheme.typography.labelMedium,
                                                 fontWeight = FontWeight.Bold,
                                                 modifier = Modifier.weight(1f)
                                             )
                                             TextButton(onClick = { pendingMediaItems.clear(); mediaError = null }) {
-                                                Text("Borrar todo", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                                                Text(stringResource(R.string.chat_clear_all), color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
                                             }
                                         }
                                         val imageCount = pendingMediaItems.count { it.kind == "image" }
@@ -1298,7 +1329,7 @@ fun ChatScreen(
                                         val fileCount = pendingMediaItems.count { it.kind == "file" }
                                         val totalMb = pendingMediaItems.sumOf { it.sizeBytes } / (1024.0 * 1024.0)
                                         Text(
-                                            "Imágenes: $imageCount · Videos: $videoCount · Documentos: $fileCount · Total: ${String.format(java.util.Locale.getDefault(), "%.1f", totalMb)} MB",
+                                            stringResource(R.string.chat_attachments_summary, imageCount, videoCount, fileCount, String.format(java.util.Locale.getDefault(), "%.1f", totalMb)),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = Color.Gray
                                         )
@@ -1367,7 +1398,7 @@ fun ChatScreen(
                                 TextField(
                                     value = inputText,
                                     onValueChange = { inputText = it; viewModel.setTyping(chatId, it.isNotEmpty()) },
-                                    placeholder = { Text(if (messageToEdit != null) "Editando..." else "Escribe un mensaje...") },
+                                    placeholder = { Text(if (messageToEdit != null) stringResource(R.string.chat_editing) else stringResource(R.string.chat_input_placeholder)) },
                                     modifier = Modifier.weight(1f),
                                     maxLines = 4,
                                     colors = TextFieldDefaults.colors(
@@ -1399,7 +1430,7 @@ fun ChatScreen(
                                                     text = inputText,
                                                     replyToId = replyingToMessage?.id,
                                                     replyToText = replyingToMessage?.let { com.example.cuidaleapp.ui.components.replyLabelFor(it, context) },
-                                                    replyToName = if (replyingToMessage?.senderId == myUid) "Tú" else otherUser.nombre,
+                                                    replyToName = if (replyingToMessage?.senderId == myUid) context.getString(R.string.chat_me_short) else otherUser.nombre,
                                                     metadata = replyingToMessage?.let { com.example.cuidaleapp.ui.components.replyPreviewMetadataFor(it) } ?: emptyMap()
                                                 )
                                                 replyingToMessage = null
@@ -1444,7 +1475,7 @@ fun ChatScreen(
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            text = "Reconectando… espera para sincronizar los mensajes",
+                            text = stringResource(R.string.chat_reconnecting),
                             color = Color.White,
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold
@@ -1485,7 +1516,7 @@ fun ChatScreen(
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            text = if (hasNewMessageBelow) "Nuevos mensajes" else "Volver al final",
+                            text = if (hasNewMessageBelow) stringResource(R.string.chat_new_messages) else stringResource(R.string.chat_back_to_bottom),
                             color = Color.White,
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold
@@ -1505,10 +1536,10 @@ fun ChatScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Delete, null, tint = Color.Red, modifier = Modifier.size(24.dp))
                         Spacer(Modifier.width(12.dp))
-                        Text("¿Eliminar mensajes?", fontWeight = FontWeight.Black)
+                        Text(stringResource(R.string.chat_delete_title), fontWeight = FontWeight.Black)
                     }
                     Text(
-                        "Esta acción borrará permanentemente los mensajes seleccionados para todos los participantes.",
+                        stringResource(R.string.chat_delete_desc),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.Gray,
                         modifier = Modifier.padding(top = 4.dp)
@@ -1549,10 +1580,10 @@ fun ChatScreen(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
                     shape = RoundedCornerShape(8.dp)
-                ) { Text("ELIMINAR PARA TODOS", fontWeight = FontWeight.Bold) }
+                ) { Text(stringResource(R.string.chat_delete_for_all), fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteConfirmDialog = false }) { Text("CANCELAR") }
+                TextButton(onClick = { showDeleteConfirmDialog = false }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
@@ -1567,11 +1598,11 @@ fun ChatScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.PushPin, null, tint = primaryColor, modifier = Modifier.size(24.dp))
                         Spacer(Modifier.width(12.dp))
-                        Text(if (allPinned) "¿Desfijar mensajes?" else "¿Fijar mensajes?", fontWeight = FontWeight.Black)
+                        Text(if (allPinned) stringResource(R.string.chat_unpin_title) else stringResource(R.string.chat_pin_title), fontWeight = FontWeight.Black)
                     }
                     Text(
-                        if (allPinned) "Los mensajes seleccionados ya no aparecerán en la lista de mensajes destacados."
-                        else "Los mensajes seleccionados se guardarán en la lista de fijados para que todos puedan verlos fácilmente.",
+                        if (allPinned) stringResource(R.string.chat_unpin_desc)
+                        else stringResource(R.string.chat_pin_desc),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.Gray,
                         modifier = Modifier.padding(top = 4.dp)
@@ -1612,10 +1643,10 @@ fun ChatScreen(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
                     shape = RoundedCornerShape(8.dp)
-                ) { Text(if (allPinned) "ACEPTAR" else "FIJAR", fontWeight = FontWeight.Bold) }
+                ) { Text(if (allPinned) stringResource(R.string.action_accept) else stringResource(R.string.chat_pin_action), fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
-                TextButton(onClick = { showPinConfirmDialog = false }) { Text("CANCELAR") }
+                TextButton(onClick = { showPinConfirmDialog = false }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
@@ -1623,15 +1654,15 @@ fun ChatScreen(
     if (showShareRequests) {
         ModalBottomSheet(onDismissRequest = { showShareRequests = false }) {
             Column(Modifier.padding(16.dp).fillMaxWidth()) {
-                Text("Compartir solicitud", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.chat_share_request_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(16.dp))
                 if (myRequests.isEmpty()) {
-                    Text("No tienes solicitudes abiertas", color = Color.Gray)
+                    Text(stringResource(R.string.chat_no_open_requests), color = Color.Gray)
                 } else {
                     myRequests.forEach { sol ->
                         Card(
                             onClick = {
-                                viewModel.sendMessage(chatId, "Revisa mi solicitud para ${sol.nombrePaciente}", type = "solicitud_compartida", metadata = mapOf("solicitudId" to sol.id))
+                                viewModel.sendMessage(chatId, context.getString(R.string.chat_share_request_message, sol.nombrePaciente), type = "solicitud_compartida", metadata = mapOf("solicitudId" to sol.id))
                                 showShareRequests = false
                             },
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
@@ -1652,8 +1683,8 @@ fun ChatScreen(
     if (showShareTasks) {
         ModalBottomSheet(onDismissRequest = { showShareTasks = false }) {
             Column(Modifier.padding(16.dp).fillMaxWidth().fillMaxHeight(0.7f)) {
-                Text("Compartir tarea", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
-                Text("Selecciona una tarea para compartir su estado actual.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                Text(stringResource(R.string.chat_share_task_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
+                Text(stringResource(R.string.chat_share_task_desc), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                 Spacer(Modifier.height(24.dp))
                 
                 if (activeTasks.isEmpty()) {
@@ -1661,7 +1692,7 @@ fun ChatScreen(
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(Icons.Default.AssignmentLate, null, modifier = Modifier.size(48.dp), tint = Color.Gray.copy(alpha = 0.3f))
                             Spacer(Modifier.height(12.dp))
-                            Text("No hay tareas registradas hoy", color = Color.Gray)
+                            Text(stringResource(R.string.chat_no_tasks_today), color = Color.Gray)
                         }
                     }
                 } else {
@@ -1672,33 +1703,33 @@ fun ChatScreen(
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         item {
                             TaskShareSection(
-                                title = "PENDIENTES",
+                                title = stringResource(R.string.chat_task_pending),
                                 tasks = pendientes,
                                 color = MaterialTheme.colorScheme.primary,
                                 onTaskClick = { reg: com.example.cuidaleapp.models.RegistroTarea ->
-                                    viewModel.sendMessage(chatId, "Sobre: ${reg.titulo} (${reg.horarioPrevisto}) - ESTADO: PENDIENTE", type = "tarea_compartida", metadata = mapOf("tareaId" to reg.id, "solicitudId" to reg.solicitudId))
+                                    viewModel.sendMessage(chatId, context.getString(R.string.chat_task_share_pending, reg.titulo, reg.horarioPrevisto), type = "tarea_compartida", metadata = mapOf("tareaId" to reg.id, "solicitudId" to reg.solicitudId))
                                     showShareTasks = false
                                 }
                             )
                         }
                         item {
                             TaskShareSection(
-                                title = "COMPLETADAS",
+                                title = stringResource(R.string.chat_task_completed),
                                 tasks = completadas,
                                 color = Color(0xFF4CAF50),
                                 onTaskClick = { reg: com.example.cuidaleapp.models.RegistroTarea ->
-                                    viewModel.sendMessage(chatId, "Sobre: ${reg.titulo} (${reg.horarioPrevisto}) - ESTADO: COMPLETADA", type = "tarea_compartida", metadata = mapOf("tareaId" to reg.id, "solicitudId" to reg.solicitudId))
+                                    viewModel.sendMessage(chatId, context.getString(R.string.chat_task_share_completed, reg.titulo, reg.horarioPrevisto), type = "tarea_compartida", metadata = mapOf("tareaId" to reg.id, "solicitudId" to reg.solicitudId))
                                     showShareTasks = false
                                 }
                             )
                         }
                         item {
                             TaskShareSection(
-                                title = "POSPUESTAS",
+                                title = stringResource(R.string.chat_task_postponed),
                                 tasks = pospuestas,
                                 color = Color.Red,
                                 onTaskClick = { reg: com.example.cuidaleapp.models.RegistroTarea ->
-                                    viewModel.sendMessage(chatId, "Sobre: ${reg.titulo} (${reg.horarioPrevisto}) - ESTADO: POSPUESTA", type = "tarea_compartida", metadata = mapOf("tareaId" to reg.id, "solicitudId" to reg.solicitudId))
+                                    viewModel.sendMessage(chatId, context.getString(R.string.chat_task_share_postponed, reg.titulo, reg.horarioPrevisto), type = "tarea_compartida", metadata = mapOf("tareaId" to reg.id, "solicitudId" to reg.solicitudId))
                                     showShareTasks = false
                                 }
                             )
@@ -1716,11 +1747,11 @@ fun ChatScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.AttachFile, null, tint = primaryColor)
                     Spacer(Modifier.width(12.dp))
-                    Text("Enviar multimedia", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.chat_send_media_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 }
                 val limitReached = mediaLimitReached
                 Text(
-                    "${pendingMediaItems.size}/10 elementos · ${pendingMediaItems.sumOf { it.sizeBytes } / (1024 * 1024)} MB / 25 MB — Máx 25 MB por archivo. Las imágenes se comprimen conservando calidad.",
+                    stringResource(R.string.chat_media_limit_info, pendingMediaItems.size, pendingMediaItems.sumOf { it.sizeBytes } / (1024 * 1024)),
                     style = MaterialTheme.typography.bodySmall,
                     color = if (limitReached) MaterialTheme.colorScheme.error else Color.Gray,
                     fontWeight = if (limitReached) FontWeight.Bold else FontWeight.Normal
@@ -1736,7 +1767,7 @@ fun ChatScreen(
                             Icon(Icons.Default.Lock, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(6.dp))
                             Text(
-                                "Has alcanzado el límite máximo. Elimina adjuntos para poder agregar más.",
+                                stringResource(R.string.chat_media_limit_reached),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onErrorContainer,
                                 fontWeight = FontWeight.Bold
@@ -1762,7 +1793,7 @@ fun ChatScreen(
 
                 if (pendingMediaItems.isNotEmpty()) {
                     Text(
-                        "Adjuntos seleccionados",
+                        stringResource(R.string.chat_attachments_selected),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                         color = Color.Gray,
@@ -1810,21 +1841,21 @@ fun ChatScreen(
                 ) {
                     MediaAttachOption(
                         icon = Icons.Default.PhotoCamera,
-                        label = "Cámara",
+                        label = stringResource(R.string.source_camera),
                         enabled = !isUploadingMedia && !limitReached,
                         modifier = Modifier.weight(1f),
                         onClick = { requestMediaLaunch { showMediaSheet = false; launchCamera() } }
                     )
                     MediaAttachOption(
                         icon = Icons.Default.PhotoLibrary,
-                        label = "Galería",
+                        label = stringResource(R.string.source_gallery),
                         enabled = !isUploadingMedia && !limitReached,
                         modifier = Modifier.weight(1f),
                         onClick = { requestMediaLaunch { showMediaSheet = false; mediaPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) } }
                     )
                     MediaAttachOption(
                         icon = Icons.Default.Description,
-                        label = "Documentos",
+                        label = stringResource(R.string.chat_attach_docs),
                         enabled = !isUploadingMedia && !limitReached,
                         modifier = Modifier.weight(1f),
                         onClick = { requestMediaLaunch { showMediaSheet = false; documentLauncher.launch(arrayOf("application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) } }
@@ -1839,12 +1870,10 @@ fun ChatScreen(
         AlertDialog(
             onDismissRequest = { showMediaWarning = false; pendingMediaAction = null },
             containerColor = if (isDark) Color(0xFF1B263B) else Color.White,
-            title = { Text("Aviso sobre el contenido", fontWeight = FontWeight.Bold) },
+            title = { Text(stringResource(R.string.chat_media_warning_title), fontWeight = FontWeight.Bold) },
             text = {
                 Text(
-                    "Al enviar imágenes, videos o documentos aceptas que el contenido que subes es de tu responsabilidad. " +
-                    "Cuidale App no se hace responsable por su uso, difusión ni sensibilidad. " +
-                    "Evita compartir información sensible, privada o que pueda vulnerar la intimidad de otras personas."
+                    stringResource(R.string.chat_media_warning_body)
                 )
             },
             confirmButton = {
@@ -1854,10 +1883,10 @@ fun ChatScreen(
                     showMediaWarning = false
                     pendingMediaAction?.invoke()
                     pendingMediaAction = null
-                }) { Text("Entendido", fontWeight = FontWeight.Bold) }
+                }) { Text(stringResource(R.string.chat_got_it), fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
-                TextButton(onClick = { showMediaWarning = false; pendingMediaAction = null }) { Text("Cancelar") }
+                TextButton(onClick = { showMediaWarning = false; pendingMediaAction = null }) { Text(stringResource(R.string.common_cancel)) }
             }
         )
     }
@@ -1940,11 +1969,11 @@ fun ChatScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.PushPin, null, tint = primaryColor)
                     Spacer(Modifier.width(12.dp))
-                    Text("Mensajes fijados", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.chat_pinned_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    val filters = listOf(null to "Todos", "text" to "Mensajes", "media" to "Multimedia")
+                    val filters = listOf(null to stringResource(R.string.chat_filter_all), "text" to stringResource(R.string.chat_filter_messages), "media" to stringResource(R.string.chat_filter_media))
                     filters.forEach { (value, label) ->
                         FilterChip(
                             selected = pinnedFilter == value,
@@ -1973,7 +2002,7 @@ fun ChatScreen(
                                         modifier = Modifier.fillMaxWidth().heightIn(max = 200.dp).clip(RoundedCornerShape(8.dp)),
                                         onExpand = { fullVideoUrl = msg.videoUrl }
                                     )
-                                    msg.fileUrl != null -> FileBubble(msg.fileName ?: "Archivo", msg.fileUrl)
+                                    msg.fileUrl != null -> FileBubble(msg.fileName ?: stringResource(R.string.chat_file_fallback), msg.fileUrl)
                                     else -> Text(msg.text, style = MaterialTheme.typography.bodyMedium, maxLines = 3)
                                 }
                                 Spacer(Modifier.height(8.dp))
@@ -1996,7 +2025,7 @@ fun ChatScreen(
                                     ) {
                                         Icon(Icons.Default.OpenInNew, null, modifier = Modifier.size(16.dp))
                                         Spacer(Modifier.width(4.dp))
-                                        Text("IR AL MENSAJE", fontSize = 10.sp)
+                                        Text(stringResource(R.string.chat_go_to_message), fontSize = 10.sp)
                                     }
                                     OutlinedButton(
                                         onClick = { viewModel.togglePin(chatId, msg.id, true, myName) },
@@ -2005,7 +2034,7 @@ fun ChatScreen(
                                     ) {
                                         Icon(Icons.Default.PushPin, null, tint = Color.Red, modifier = Modifier.size(16.dp))
                                         Spacer(Modifier.width(4.dp))
-                                        Text("DESFIJAR", fontSize = 10.sp)
+                                        Text(stringResource(R.string.chat_unpin_action), fontSize = 10.sp)
                                     }
                                 }
                             }
@@ -2045,7 +2074,7 @@ fun TaskShareSection(
         androidx.compose.animation.AnimatedVisibility(visible = expanded) {
             Column(Modifier.padding(start = 8.dp, top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (tasks.isEmpty()) {
-                    Text("Sin tareas", style = MaterialTheme.typography.labelSmall, color = Color.Gray, modifier = Modifier.padding(12.dp))
+                    Text(stringResource(R.string.chat_no_tasks), style = MaterialTheme.typography.labelSmall, color = Color.Gray, modifier = Modifier.padding(12.dp))
                 } else {
                     tasks.forEach { reg ->
                         Card(
@@ -2173,7 +2202,7 @@ fun ChatBubble(
                         com.example.cuidaleapp.ui.components.ReplyPreviewBubble(
                             metadata = msg.metadata,
                             fallbackText = msg.replyToText ?: "",
-                            fallbackName = msg.replyToName ?: "Usuario",
+                            fallbackName = msg.replyToName ?: stringResource(R.string.chat_user_fallback),
                             textColor = textColor
                         )
                     }
@@ -2182,7 +2211,7 @@ fun ChatBubble(
                          Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Block, null, modifier = Modifier.size(14.dp), tint = Color.White.copy(alpha = 0.7f))
                             Spacer(Modifier.width(4.dp))
-                            Text("Mensaje eliminado", style = MaterialTheme.typography.bodyMedium.copy(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic), color = Color.White.copy(alpha = 0.9f))
+                            Text(stringResource(R.string.chat_message_deleted), style = MaterialTheme.typography.bodyMedium.copy(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic), color = Color.White.copy(alpha = 0.9f))
                         }
                     } else {
                         if (msg.imageUrl != null) {
@@ -2225,7 +2254,7 @@ fun ChatBubble(
                             Spacer(Modifier.height(4.dp))
                         }
                         if (msg.fileUrl != null) {
-                            FileBubble(msg.fileName ?: "Archivo", msg.fileUrl)
+                            FileBubble(msg.fileName ?: stringResource(R.string.chat_file_fallback), msg.fileUrl)
                             Spacer(Modifier.height(4.dp))
                         }
                         
@@ -2250,7 +2279,7 @@ fun ChatBubble(
                                         append(msg.text)
                                         if (msg.edited) {
                                             withStyle(SpanStyle(fontSize = 10.sp, color = textColor.copy(alpha = 0.5f))) {
-                                                append(" (editado)")
+                                                append(stringResource(R.string.chat_edited_suffix))
                                             }
                                         }
                                     },
@@ -2263,7 +2292,7 @@ fun ChatBubble(
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
-                Text(formatMessageDate(msg.timestamp), style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                Text(formatMessageDate(msg.timestamp, LocalContext.current), style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                 if (msg.metadata["pending_send"] == "true") {
                     Spacer(Modifier.width(4.dp))
                     // Mensaje pendiente de envío (outbox): muestra el indicador de carga.
@@ -2637,7 +2666,7 @@ private fun MediaFlatTile(
         ) {
             Icon(
                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                "Ir al mensaje",
+                stringResource(R.string.chat_go_to_message_cd),
                 tint = Color.White,
                 modifier = Modifier.size(16.dp)
             )
@@ -2730,7 +2759,7 @@ private fun MediaGroupTile(
         ) {
             Icon(
                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                "Ir al mensaje",
+                stringResource(R.string.chat_go_to_message_cd),
                 tint = Color.White,
                 modifier = Modifier.size(16.dp)
             )
@@ -2809,9 +2838,9 @@ private fun SearchResultsList(
                     Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             val title = when {
-                                msg.senderId == "system" -> "Mensaje del sistema"
-                                msg.senderId == myUid -> "Tú"
-                                else -> "Contacto"
+                                msg.senderId == "system" -> stringResource(R.string.chat_search_system)
+                                msg.senderId == myUid -> stringResource(R.string.chat_me_short)
+                                else -> stringResource(R.string.chat_search_contact)
                             }
                             Text(
                                 text = title,
@@ -2822,17 +2851,17 @@ private fun SearchResultsList(
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                text = formatMessageDate(msg.timestamp),
+                                text = formatMessageDate(msg.timestamp, LocalContext.current),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color.Gray
                             )
                         }
                         Spacer(Modifier.height(2.dp))
                         val snippet = when {
-                            isBatch -> "📷 ${batchItems.size} elementos · Lote multimedia"
-                            msg.imageUrl != null -> "📷 Foto"
-                            msg.videoUrl != null -> "🎬 Video"
-                            msg.fileUrl != null -> "📄 ${msg.fileName ?: "Documento"}"
+                            isBatch -> stringResource(R.string.chat_search_batch, batchItems.size)
+                            msg.imageUrl != null -> stringResource(R.string.chat_media_photo)
+                            msg.videoUrl != null -> stringResource(R.string.chat_media_video)
+                            msg.fileUrl != null -> stringResource(R.string.chat_media_file, msg.fileName ?: stringResource(R.string.chat_document))
                             else -> msg.text
                         }
                         Text(
@@ -2849,7 +2878,7 @@ private fun SearchResultsList(
                     ) {
                         Icon(
                             Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                            "Ir al mensaje",
+                            stringResource(R.string.chat_go_to_message_cd),
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
@@ -2874,8 +2903,8 @@ fun RequestAlertBubble(msg: ChatMessage, onViewClick: () -> Unit) {
     }
 
     val statusText = when(status) {
-        "abierta" -> "DISPONIBLE"
-        "cerrada" -> "YA TOMADA"
+        "abierta" -> stringResource(R.string.chat_status_available)
+        "cerrada" -> stringResource(R.string.chat_status_taken)
         else -> "..."
     }
 
@@ -2889,7 +2918,7 @@ fun RequestAlertBubble(msg: ChatMessage, onViewClick: () -> Unit) {
             }
             Spacer(Modifier.height(8.dp))
             Button(onClick = onViewClick, modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(0.dp)) {
-                Text("VER DETALLES", fontSize = 10.sp)
+                Text(stringResource(R.string.chat_view_details), fontSize = 10.sp)
             }
         }
     }
@@ -2919,7 +2948,7 @@ fun TaskSharedBubble(text: String, isMe: Boolean) {
                 }
                 Spacer(Modifier.width(12.dp))
                 Text(
-                    "REPORTE DE TAREA",
+                    stringResource(R.string.chat_task_report),
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Black,
                     color = accentColor
@@ -2968,7 +2997,7 @@ fun DayDivider(timestamp: Long) {
     ) {
         HorizontalDivider(modifier = Modifier.weight(1f), color = Color.Gray.copy(alpha = 0.2f))
         Text(
-            text = formatDividerDate(timestamp),
+            text = formatDividerDate(timestamp, LocalContext.current),
             modifier = Modifier.padding(horizontal = 16.dp),
             style = MaterialTheme.typography.labelSmall,
             color = Color.Gray,
@@ -2985,22 +3014,22 @@ private fun isSameDay(t1: Long, t2: Long): Boolean {
            c1.get(Calendar.DAY_OF_YEAR) == c2.get(Calendar.DAY_OF_YEAR)
 }
 
-private fun formatDividerDate(timestamp: Long): String {
+private fun formatDividerDate(timestamp: Long, context: android.content.Context): String {
     val now = Calendar.getInstance()
     val date = Calendar.getInstance().apply { timeInMillis = timestamp }
 
     return when {
         now.get(Calendar.YEAR) == date.get(Calendar.YEAR) &&
-        now.get(Calendar.DAY_OF_YEAR) == date.get(Calendar.DAY_OF_YEAR) -> "HOY"
+        now.get(Calendar.DAY_OF_YEAR) == date.get(Calendar.DAY_OF_YEAR) -> context.getString(R.string.chat_today)
 
         now.get(Calendar.YEAR) == date.get(Calendar.YEAR) &&
-        now.get(Calendar.DAY_OF_YEAR) - date.get(Calendar.DAY_OF_YEAR) == 1 -> "AYER"
+        now.get(Calendar.DAY_OF_YEAR) - date.get(Calendar.DAY_OF_YEAR) == 1 -> context.getString(R.string.chat_yesterday)
 
         else -> SimpleDateFormat("d 'de' MMMM", Locale("es", "ES")).format(Date(timestamp)).uppercase()
     }
 }
 
-private fun formatMessageDate(timestamp: Long): String {
+private fun formatMessageDate(timestamp: Long, context: android.content.Context): String {
     val now = Calendar.getInstance()
     val msgDate = Calendar.getInstance().apply { timeInMillis = timestamp }
 
@@ -3011,7 +3040,7 @@ private fun formatMessageDate(timestamp: Long): String {
         }
         now.get(Calendar.YEAR) == msgDate.get(Calendar.YEAR) &&
         now.get(Calendar.DAY_OF_YEAR) - msgDate.get(Calendar.DAY_OF_YEAR) == 1 -> {
-            "Ayer " + SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp))
+            context.getString(R.string.chat_yesterday_prefix) + SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp))
         }
         now.get(Calendar.YEAR) == msgDate.get(Calendar.YEAR) -> {
             SimpleDateFormat("d MMM, HH:mm", Locale.getDefault()).format(Date(timestamp))
@@ -3020,6 +3049,17 @@ private fun formatMessageDate(timestamp: Long): String {
             SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(timestamp))
         }
     }
+}
+
+/**
+ * Resultado de intentar agregar un adjunto a la cola de envío.
+ */
+private enum class AddMediaResult {
+    ADDED,
+    DUPLICATE,
+    COUNT_LIMIT,
+    SIZE_LIMIT,
+    TOTAL_LIMIT
 }
 
 /**

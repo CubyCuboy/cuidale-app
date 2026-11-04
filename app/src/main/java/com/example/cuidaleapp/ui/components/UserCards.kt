@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -27,6 +28,7 @@ import coil3.compose.SubcomposeAsyncImage
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.example.cuidaleapp.R
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 
 @Composable
@@ -85,7 +87,7 @@ fun CuidaleUserCard(
                             modifier = Modifier.align(Alignment.TopStart).offset(x = (-4).dp, y = (-4).dp)
                         ) {
                             Text(
-                                "NUEVO", 
+                                stringResource(R.string.badge_new),
                                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp),
                                 color = Color.White,
@@ -95,7 +97,7 @@ fun CuidaleUserCard(
                     }
                 }
                 Spacer(modifier = Modifier.width(16.dp)); Column(modifier = Modifier.weight(1f)) {
-                    val fullName = listOf(nombre, apellido).filter { it.isNotBlank() }.joinToString(" ").ifEmpty { "Usuario Cuidale" }
+                    val fullName = listOf(nombre, apellido).filter { it.isNotBlank() }.joinToString(" ").ifEmpty { stringResource(R.string.common_default_user) }
                     
                     Text(
                         text = fullName, 
@@ -111,12 +113,12 @@ fun CuidaleUserCard(
                         )
                     )
                     if (tipo == "familiar") {
-                        Text(text = buildString { if (edad.isNotEmpty()) append("$edad años • "); append(comuna) }, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
-                        if (nivelDependencia.isNotEmpty()) Text(text = "Dependencia: $nivelDependencia", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium), color = colors.primary)
+                        Text(text = buildString { if (edad.isNotEmpty()) { append(edad); append(stringResource(R.string.age_years_suffix)); append(" • ") }; append(comuna) }, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                        if (nivelDependencia.isNotEmpty()) Text(text = stringResource(R.string.user_card_dependency, nivelDependencia), style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium), color = colors.primary)
                     } else if (tipo == "cuidador") {
                         val locationText = if (comuna.isNotEmpty()) comuna else comunas.joinToString(", "); if (locationText.isNotEmpty()) Text(text = locationText, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         if (especializacion.isNotEmpty()) Text(text = especializacion, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium), color = colors.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        if (horarios.isNotEmpty()) Text(text = "Horario: ${horarios.joinToString(", ")}", style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant.copy(alpha = 0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (horarios.isNotEmpty()) Text(text = stringResource(R.string.user_card_schedule, horarios.joinToString(", ")), style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant.copy(alpha = 0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
                 Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = colors.onSurfaceVariant.copy(alpha = 0.4f))

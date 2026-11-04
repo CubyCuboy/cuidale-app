@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -41,6 +42,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import coil3.compose.AsyncImage
+import com.example.cuidaleapp.R
 import com.example.cuidaleapp.data.ChileData
 import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
@@ -85,7 +87,7 @@ fun EditProfileScreen(
 
     LaunchedEffect(remoteState) {
         if (remoteState is ProfileViewModel.RemoteState.Success) {
-            Toast.makeText(context, "Perfil actualizado correctamente", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.profile_update_success), Toast.LENGTH_SHORT).show()
             viewModel.resetRemoteState()
             onNavigateBack()
         }
@@ -170,12 +172,12 @@ fun EditProfileScreen(
                 showConfirmPhotoDialog = false
                 selectedImageUri = null
             },
-            title = { Text("Confirmar foto", fontWeight = FontWeight.Bold) },
+            title = { Text(stringResource(R.string.edit_profile_confirm_photo), fontWeight = FontWeight.Bold) },
             text = {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     AsyncImage(model = selectedImageUri, contentDescription = null, modifier = Modifier.size(150.dp).clip(CircleShape), contentScale = ContentScale.Crop)
                     Spacer(Modifier.height(12.dp))
-                    Text("¿Deseas usar esta imagen como vista previa?", textAlign = TextAlign.Center)
+                    Text(stringResource(R.string.edit_profile_confirm_photo_question), textAlign = TextAlign.Center)
                 }
             },
             confirmButton = {
@@ -184,7 +186,7 @@ fun EditProfileScreen(
                     pendingDeletePhoto = false
                     showConfirmPhotoDialog = false
                     selectedImageUri = null
-                }) { Text("Usar esta") }
+                }) { Text(stringResource(R.string.edit_profile_use_this)) }
             },
             dismissButton = {
                 TextButton(onClick = { 
@@ -201,7 +203,7 @@ fun EditProfileScreen(
     if (showImageSourceDialog) {
         AlertDialog(
             onDismissRequest = { showImageSourceDialog = false },
-            title = { Text("Cambiar foto de perfil", fontWeight = FontWeight.Bold) },
+            title = { Text(stringResource(R.string.edit_profile_change_photo_title), fontWeight = FontWeight.Bold) },
             text = {
                 Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Button(onClick = {
@@ -219,7 +221,7 @@ fun EditProfileScreen(
                     }, modifier = Modifier.fillMaxWidth(), enabled = isOnline) {
                         Icon(Icons.Default.CameraAlt, null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Cámara")
+                        Text(stringResource(R.string.source_camera))
                     }
                     Button(onClick = {
                         galleryLauncher.launch("image/*")
@@ -227,7 +229,7 @@ fun EditProfileScreen(
                     }, modifier = Modifier.fillMaxWidth(), enabled = isOnline) {
                         Icon(Icons.Default.Collections, null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Galería")
+                        Text(stringResource(R.string.source_gallery))
                     }
                     if (userData.fotoUrl.isNotEmpty()) {
                         Button(onClick = {
@@ -237,13 +239,13 @@ fun EditProfileScreen(
                         }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer), enabled = isOnline) {
                             Icon(Icons.Default.Delete, null)
                             Spacer(Modifier.width(8.dp))
-                            Text("Quitar foto")
+                            Text(stringResource(R.string.edit_profile_remove_photo))
                         }
                     }
                 }
             },
             confirmButton = {},
-            dismissButton = { TextButton(onClick = { showImageSourceDialog = false }) { Text("Cancelar") } }
+            dismissButton = { TextButton(onClick = { showImageSourceDialog = false }) { Text(stringResource(R.string.common_cancel)) } }
         )
     }
 
@@ -265,9 +267,9 @@ fun EditProfileScreen(
         ) {
             Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onNavigateBack, modifier = Modifier.background(Color.Black.copy(alpha = 0.15f), CircleShape)) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = Color.White)
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back), tint = Color.White)
                 }
-                Text("Editar Perfil", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = Color.White), modifier = Modifier.padding(start = 12.dp))
+                Text(stringResource(R.string.edit_profile_title), style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = Color.White), modifier = Modifier.padding(start = 12.dp))
             }
 
             if (!isOnline) {
@@ -275,7 +277,7 @@ fun EditProfileScreen(
                     Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.WifiOff, null, tint = Color.White)
                         Spacer(Modifier.width(12.dp))
-                        Text("Estás offline. No puedes guardar cambios.", color = Color.White, style = MaterialTheme.typography.bodySmall)
+                        Text(stringResource(R.string.edit_profile_offline), color = Color.White, style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
@@ -338,14 +340,14 @@ fun EditProfileScreen(
             ) {
                 Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
                     
-                    EditSectionHeader(icon = Icons.Default.Person, title = "Información Personal", accentColor = accentColor)
+                    EditSectionHeader(icon = Icons.Default.Person, title = stringResource(R.string.edit_profile_section_personal), accentColor = accentColor)
                     
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        EditFieldWrapper(label = "Primer Nombre", error = if (!isNombreValid && nombre.isNotEmpty()) "Mínimo 2 caracteres" else null) {
+                        EditFieldWrapper(label = stringResource(R.string.register_first_name), error = if (!isNombreValid && nombre.isNotEmpty()) stringResource(R.string.edit_profile_error_min_2) else null) {
                             CuidaleTextField(
                                 value = nombre, 
                                 onValueChange = { nombre = it }, 
-                                placeholder = "Tu nombre", 
+                                placeholder = stringResource(R.string.edit_profile_placeholder_name), 
                                 leadingIcon = { Icon(Icons.Default.Badge, null, tint = accentColor.copy(alpha = 0.6f)) },
                                 isError = !isNombreValid && nombre.isNotEmpty(), 
                                 modifier = Modifier.offset { IntOffset(nombreShake.value.roundToInt(), 0) },
@@ -353,11 +355,11 @@ fun EditProfileScreen(
                             )
                         }
 
-                        EditFieldWrapper(label = "Segundo Nombre (Opcional)") {
+                        EditFieldWrapper(label = stringResource(R.string.register_second_name)) {
                             CuidaleTextField(
                                 value = nombreS, 
                                 onValueChange = { nombreS = it }, 
-                                placeholder = "Segundo nombre", 
+                                placeholder = stringResource(R.string.edit_profile_placeholder_second_name), 
                                 leadingIcon = { Icon(Icons.Default.Badge, null, tint = accentColor.copy(alpha = 0.3f)) },
                                 enabled = !isLoading && isOnline
                             )
@@ -365,11 +367,11 @@ fun EditProfileScreen(
 
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Box(modifier = Modifier.weight(1f)) {
-                                EditFieldWrapper(label = "Apellido Paterno", error = if (!isApellidoPaValid && apellidoPa.isNotEmpty()) "Mínimo 2" else null) {
+                                EditFieldWrapper(label = stringResource(R.string.register_last_name_paternal), error = if (!isApellidoPaValid && apellidoPa.isNotEmpty()) stringResource(R.string.edit_profile_error_min_2_short) else null) {
                                     CuidaleTextField(
                                         value = apellidoPa, 
                                         onValueChange = { apellidoPa = it }, 
-                                        placeholder = "Paterno", 
+                                        placeholder = stringResource(R.string.edit_profile_placeholder_paternal), 
                                         isError = !isApellidoPaValid && apellidoPa.isNotEmpty(), 
                                         modifier = Modifier.offset { IntOffset(apellidoShake.value.roundToInt(), 0) },
                                         enabled = !isLoading && isOnline
@@ -377,11 +379,11 @@ fun EditProfileScreen(
                                 }
                             }
                             Box(modifier = Modifier.weight(1f)) {
-                                EditFieldWrapper(label = "Apellido Materno") {
+                                EditFieldWrapper(label = stringResource(R.string.register_last_name_maternal)) {
                                     CuidaleTextField(
                                         value = apellidoMa, 
                                         onValueChange = { apellidoMa = it }, 
-                                        placeholder = "Materno", 
+                                        placeholder = stringResource(R.string.edit_profile_placeholder_maternal), 
                                         enabled = !isLoading && isOnline
                                     )
                                 }
@@ -391,14 +393,14 @@ fun EditProfileScreen(
 
                     HorizontalDivider(color = textColor.copy(alpha = 0.08f))
 
-                    EditSectionHeader(icon = Icons.Default.LocationOn, title = "Contacto y Ubicación", accentColor = accentColor)
+                    EditSectionHeader(icon = Icons.Default.LocationOn, title = stringResource(R.string.edit_profile_section_contact), accentColor = accentColor)
 
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        EditFieldWrapper(label = "Teléfono", error = if (!isPhoneValid && telefono.isNotEmpty()) "Formato inválido (9 dígitos)" else null) {
+                        EditFieldWrapper(label = stringResource(R.string.edit_profile_phone_label), error = if (!isPhoneValid && telefono.isNotEmpty()) stringResource(R.string.edit_profile_error_phone) else null) {
                             CuidaleTextField(
                                 value = telefono, 
                                 onValueChange = { if(it.length <= 9) telefono = it }, 
-                                placeholder = "Ej: 9 8765 4321", 
+                                placeholder = stringResource(R.string.register_phone_placeholder), 
                                 keyboardType = KeyboardType.Phone, 
                                 leadingIcon = { Icon(Icons.Default.Phone, null, tint = accentColor.copy(alpha = 0.6f)) },
                                 isError = !isPhoneValid && telefono.isNotEmpty(), 
@@ -408,7 +410,7 @@ fun EditProfileScreen(
                         }
 
                         CuidaleExposedDropdown(
-                            label = "Región",
+                            label = stringResource(R.string.edit_profile_region_label),
                             options = regionsList,
                             selectedOption = region,
                             onOptionSelected = { region = it; comuna = "" },
@@ -417,7 +419,7 @@ fun EditProfileScreen(
 
                         AnimatedVisibility(visible = region.isNotEmpty()) {
                             CuidaleExposedDropdown(
-                                label = "Comuna",
+                                label = stringResource(R.string.edit_profile_commune_label),
                                 options = communesForSelectedRegion,
                                 selectedOption = comuna,
                                 onOptionSelected = { comuna = it },
@@ -428,13 +430,13 @@ fun EditProfileScreen(
 
                     HorizontalDivider(color = textColor.copy(alpha = 0.08f))
 
-                    EditSectionHeader(icon = Icons.Default.FormatQuote, title = "Sobre mí", accentColor = accentColor)
+                    EditSectionHeader(icon = Icons.Default.FormatQuote, title = stringResource(R.string.edit_profile_section_about), accentColor = accentColor)
 
                     Column {
                         CuidaleTextField(
                             value = descripcion, 
                             onValueChange = { if(it.length <= 300) descripcion = it }, 
-                            placeholder = "Cuéntanos un poco sobre ti y tu experiencia...", 
+                            placeholder = stringResource(R.string.edit_profile_placeholder_about), 
                             modifier = Modifier.height(140.dp), 
                             singleLine = false, 
                             enabled = !isLoading && isOnline
@@ -481,7 +483,7 @@ fun EditProfileScreen(
                     }
 
                     HardShadowButton(
-                        text = if (isLoading) "GUARDANDO..." else "GUARDAR CAMBIOS",
+                        text = if (isLoading) stringResource(R.string.edit_profile_saving) else stringResource(R.string.edit_profile_save_upper),
                         onClick = {
                             if (isFormValid) {
                                 viewModel.updateProfileWithPhoto(

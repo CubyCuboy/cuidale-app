@@ -98,7 +98,7 @@ fun EmailVerificationScreen(
                 IconButton(onClick = onNavigateBack) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Volver",
+                        contentDescription = stringResource(R.string.cd_back),
                         tint = onGradientText
                     )
                 }
@@ -234,7 +234,7 @@ fun Step1Email(
             CuidaleTextField(
                 value = email,
                 onValueChange = onEmailChange,
-                placeholder = "ejemplo@correo.com",
+                placeholder = stringResource(R.string.email_generic_placeholder),
                 containerColor = CuidaleThemeExtras.customColors.inputBackground,
                 keyboardType = KeyboardType.Email,
                 enabled = !isLoading,
@@ -276,8 +276,8 @@ fun Step2Code(
     error: String? = null
 ) {
     CodeVerificationStep(
-        title = "Código de Verificación",
-        targetLabel = "Hemos enviado un código a ",
+        title = stringResource(R.string.verification_code_title),
+        targetLabel = stringResource(R.string.verification_code_sent_to),
         targetValue = email,
         code = code,
         onCodeChange = onCodeChange,
@@ -286,8 +286,8 @@ fun Step2Code(
         onResend = onResend,
         onVerify = onVerify,
         onBack = onBack,
-        verifyLabel = "Verificar",
-        backLabel = "Cancelar / Cambiar Correo",
+        verifyLabel = stringResource(R.string.verification_verify_button),
+        backLabel = stringResource(R.string.verification_cancel_button),
         isDark = isDark,
         isLoading = isLoading,
         error = error

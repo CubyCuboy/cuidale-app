@@ -60,6 +60,7 @@ object AppCacheManager {
         prefs.edit().putBoolean("dark_mode", isDark).apply()
 
         context.getSharedPreferences("verification_prefs", Context.MODE_PRIVATE).edit().clear().apply()
+        context.getSharedPreferences("rut_resolution_prefs", Context.MODE_PRIVATE).edit().clear().apply()
     }
 
     fun cacheSizeBytes(context: Context): Long {

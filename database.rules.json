@@ -3,7 +3,7 @@
     "notificaciones": {
       "$uid": {
         ".read": "$uid === auth.uid",
-        ".write": "auth != null"
+        ".write": "$uid === auth.uid"
       }
     },
     "messages": {

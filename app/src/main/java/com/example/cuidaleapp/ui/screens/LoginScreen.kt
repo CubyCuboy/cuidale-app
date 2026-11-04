@@ -194,7 +194,7 @@ fun LoginForm(
                     Crossfade(targetState = isDark, animationSpec = tween(400), label = "themeAnim") { dark ->
                         Icon(
                             imageVector = if (dark) Icons.Filled.LightMode else Icons.Filled.DarkMode,
-                            contentDescription = "Cambiar modo",
+                            contentDescription = stringResource(R.string.cd_toggle_theme),
                             tint = onGradientText
                         )
                     }
@@ -323,8 +323,8 @@ fun LoginForm(
             }
 
             HardShadowButton(
-                text = if (isLoading) "Ingresando$loadingDots"
-                else if (needsVerification) "Verificar Cuenta"
+                text = if (isLoading) stringResource(R.string.login_logging_in) + loadingDots
+                else if (needsVerification) stringResource(R.string.login_verify_account)
                 else if (isError) stringResource(R.string.login_button_retry)
                 else stringResource(R.string.login_button_enter),
                 containerColor = loginButtonColor,
@@ -358,7 +358,7 @@ fun LoginForm(
                     shape = RoundedCornerShape(12.dp),
                     elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
                 ) {
-                    Text("Google", color = Color.Black, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.provider_google), color = Color.Black, fontWeight = FontWeight.Bold)
                 }
                 Button(
                     onClick = onMicrosoftLogin,
@@ -367,7 +367,7 @@ fun LoginForm(
                     shape = RoundedCornerShape(12.dp),
                     elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
                 ) {
-                    Text("Microsoft", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.provider_microsoft), color = Color.White, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -415,7 +415,7 @@ fun LoginLoadingScreen() {
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             AnimatedLoadingDots(
-                text = "Cargando",
+                text = stringResource(R.string.common_loading_short),
                 color = CuidaleThemeExtras.customColors.onGradient,
                 modifier = Modifier.fillMaxWidth()
             )

@@ -72,7 +72,7 @@ fun CuidaleDrawerContent(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onCloseClick) { 
-                Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = colors.onSurface) 
+                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cd_close), tint = colors.onSurface) 
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
@@ -138,7 +138,7 @@ fun CuidaleDrawerContent(
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            val fullName = listOf(nombre, apellido).filter { it.isNotBlank() }.joinToString(" ").ifEmpty { "Usuario Cuidale" }
+            val fullName = listOf(nombre, apellido).filter { it.isNotBlank() }.joinToString(" ").ifEmpty { stringResource(R.string.common_default_user) }
             
             Text(
                 text = fullName,
@@ -171,21 +171,21 @@ fun CuidaleDrawerContent(
         Spacer(modifier = Modifier.height(40.dp))
         
         Text(
-            text = "Mi Cuenta",
+            text = stringResource(R.string.nav_my_account),
             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
             color = colors.primary,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
         )
         
         NavigationDrawerItem(
-            label = { Text("Mi Perfil", fontWeight = FontWeight.Bold) }, 
+            label = { Text(stringResource(R.string.nav_my_profile), fontWeight = FontWeight.Bold) }, 
             selected = false, 
             onClick = onProfileClick, 
             icon = { Icon(Icons.Default.Person, contentDescription = null) }, 
             colors = NavigationDrawerItemDefaults.colors(unselectedContainerColor = Color.Transparent)
         )
         NavigationDrawerItem(
-            label = { Text("Ficha Técnica", fontWeight = FontWeight.Bold) }, 
+            label = { Text(stringResource(R.string.nav_ficha), fontWeight = FontWeight.Bold) }, 
             selected = false, 
             onClick = onFichaClick, 
             icon = { Icon(Icons.Default.Badge, contentDescription = null) }, 
@@ -195,14 +195,14 @@ fun CuidaleDrawerContent(
         Spacer(modifier = Modifier.height(16.dp))
         
         Text(
-            text = "Gestión",
+            text = stringResource(R.string.nav_management),
             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
             color = colors.primary,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
         )
 
         NavigationDrawerItem(
-            label = { Text("Red de Contactos", fontWeight = FontWeight.Bold) }, 
+            label = { Text(stringResource(R.string.nav_social), fontWeight = FontWeight.Bold) }, 
             selected = false, 
             onClick = onSocialClick, 
             icon = { Icon(Icons.Default.Group, contentDescription = null) }, 
@@ -210,7 +210,7 @@ fun CuidaleDrawerContent(
         )
         if (rol != "cuidador") {
             NavigationDrawerItem(
-                label = { Text("Mapa de Calor", fontWeight = FontWeight.Bold) }, 
+                label = { Text(stringResource(R.string.nav_heatmap), fontWeight = FontWeight.Bold) }, 
                 selected = false, 
                 onClick = onMapClick, 
                 icon = { Icon(Icons.Default.Map, contentDescription = null) }, 
@@ -218,7 +218,7 @@ fun CuidaleDrawerContent(
             )
         }
         NavigationDrawerItem(
-            label = { Text("Configuración", fontWeight = FontWeight.Bold) }, 
+            label = { Text(stringResource(R.string.nav_settings), fontWeight = FontWeight.Bold) }, 
             selected = false, 
             onClick = onSettingsClick, 
             icon = { Icon(Icons.Default.Settings, contentDescription = null) }, 
@@ -228,7 +228,7 @@ fun CuidaleDrawerContent(
         Spacer(modifier = Modifier.weight(1f))
         
         HardShadowButton(
-            text = "CERRAR SESIÓN", 
+            text = stringResource(R.string.nav_logout), 
             containerColor = colors.error, 
             contentColor = Color.White, 
             shadowColor = colors.error.copy(alpha = 0.2f), 
@@ -240,7 +240,7 @@ fun CuidaleDrawerContent(
         Spacer(modifier = Modifier.height(16.dp))
         
         Text(
-            text = "v${stringResource(R.string.app_version)} • Cuidale App",
+            text = stringResource(R.string.app_version_footer, stringResource(R.string.app_version), stringResource(R.string.app_name)),
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,
             style = MaterialTheme.typography.labelSmall,
@@ -268,7 +268,7 @@ fun CuidaleSearchContent(
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(text = stringResource(R.string.search_button), style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold), color = colors.primary)
-                if (selectedRegion.isNotEmpty() || selectedCommunes.isNotEmpty()) { TextButton(onClick = onClearFilters, modifier = Modifier.padding(start = 8.dp)) { Text(text = "Limpiar Filtros", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = colors.error) } }
+                if (selectedRegion.isNotEmpty() || selectedCommunes.isNotEmpty()) { TextButton(onClick = onClearFilters, modifier = Modifier.padding(start = 8.dp)) { Text(text = stringResource(R.string.search_clear_filters), style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = colors.error) } }
             }
             IconButton(onClick = onClose) { Icon(Icons.Default.KeyboardArrowDown, contentDescription = null) }
         }
@@ -284,16 +284,16 @@ fun CuidaleSearchContent(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("Usar preferencias de mi ficha", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
-                Text("Aplica automáticamente tu región y comunas", style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
+                Text(stringResource(R.string.search_use_profile_prefs), style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
+                Text(stringResource(R.string.search_use_profile_prefs_sub), style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
             }
             Switch(checked = useProfilePreferences, onCheckedChange = onTogglePreferences)
         }
         
         Spacer(modifier = Modifier.height(24.dp))
         
-        CuidaleExposedDropdown(label = "Filtrar por región", options = allRegions, selectedOption = selectedRegion, onOptionSelected = onRegionSelected, placeholder = "Seleccionar región...")
-        Spacer(modifier = Modifier.height(16.dp)); CuidaleMultiSelectDropdown(label = stringResource(R.string.search_filter_commune), options = allCommunes, selectedOptions = selectedCommunes, onOptionToggled = onCommuneToggle, maxSelection = 3, placeholder = if (selectedRegion.isEmpty()) "Selecciona una región primero" else stringResource(R.string.search_filter_commune), enabled = selectedRegion.isNotEmpty())
+        CuidaleExposedDropdown(label = stringResource(R.string.search_filter_region), options = allRegions, selectedOption = selectedRegion, onOptionSelected = onRegionSelected, placeholder = stringResource(R.string.search_select_region))
+        Spacer(modifier = Modifier.height(16.dp)); CuidaleMultiSelectDropdown(label = stringResource(R.string.search_filter_commune), options = allCommunes, selectedOptions = selectedCommunes, onOptionToggled = onCommuneToggle, maxSelection = 3, placeholder = if (selectedRegion.isEmpty()) stringResource(R.string.search_select_region_first) else stringResource(R.string.search_filter_commune), enabled = selectedRegion.isNotEmpty())
         Spacer(modifier = Modifier.height(24.dp))
     }
 }

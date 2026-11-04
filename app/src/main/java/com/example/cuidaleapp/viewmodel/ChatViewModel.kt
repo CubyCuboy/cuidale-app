@@ -799,6 +799,14 @@ class ChatViewModel : ViewModel() {
     fun deleteMessage(chatId: String, messageId: String) {
         val updates = mapOf("text" to "Este mensaje fue eliminado", "deleted" to true)
         database.child("messages").child(chatId).child(messageId).updateChildren(updates)
+
+        // Actualización optimista local: refleja el borrado de inmediato en la UI
+        // y en la caché offline (sin esperar el eco del servidor).
+        _messages.value = _messages.value.map { msg ->
+            if (msg.id == messageId) msg.copy(deleted = true, text = "Este mensaje fue eliminado") else msg
+        }
+        _pinnedMessages.value = _messages.value.filter { it.pinned && !it.deleted }
+        auth.currentUser?.uid?.let { uid -> chatCache.saveMessages(uid, chatId, _messages.value) }
     }
 
     fun togglePin(chatId: String, messageId: String, currentPinned: Boolean, senderName: String) {

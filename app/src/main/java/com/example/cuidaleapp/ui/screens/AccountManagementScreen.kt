@@ -4,8 +4,6 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import android.app.Activity
 import android.content.Intent
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -36,13 +34,23 @@ import com.example.cuidaleapp.ui.components.HardShadowButton
 import com.example.cuidaleapp.ui.components.ProviderBrandIcon
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.ProfileViewModel
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.android.gms.common.api.ApiException
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.OAuthProvider
 import com.google.firebase.firestore.FirebaseFirestore
+import android.content.MutableContextWrapper
+import android.util.Base64
+import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.GetCredentialResponse
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
+import org.json.JSONObject
+import java.security.SecureRandom
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -79,6 +87,7 @@ fun AccountManagementScreen(
     }
 
     val scope = rememberCoroutineScope()
+    val credentialManager = remember { CredentialManager.create(context) }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var successMessage by remember { mutableStateOf<String?>(null) }
@@ -295,16 +304,34 @@ fun AccountManagementScreen(
         }
     }
 
-    val googleAuthLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
-        try {
-            val account = task.getResult(ApiException::class.java)
-            val idToken = account?.idToken
-            val newEmail = account?.email
-            val newDisplayName = account?.displayName
-            if (idToken != null && newEmail != null) {
+    fun generateSecureRandomNonce(byteLength: Int = 32): String {
+        val randomBytes = ByteArray(byteLength)
+        SecureRandom().nextBytes(randomBytes)
+        return Base64.encodeToString(randomBytes, Base64.NO_WRAP or Base64.URL_SAFE or Base64.NO_PADDING)
+    }
+
+    fun decodeJwtPayload(token: String?): JSONObject? {
+        if (token.isNullOrBlank()) return null
+        return try {
+            val parts = token.split('.')
+            if (parts.size < 2) null else {
+                val normalized = parts[1].replace('-', '+').replace('_', '/')
+                val padding = (4 - normalized.length % 4) % 4
+                val bytes = Base64.decode(normalized + "=".repeat(padding), Base64.DEFAULT)
+                JSONObject(String(bytes, Charsets.UTF_8))
+            }
+        } catch (e: Exception) { null }
+    }
+
+    fun handleGoogleCredential(response: GetCredentialResponse) {
+        val credential = response.credential
+        if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+            try {
+                val googleCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                val idToken = googleCredential.idToken
+                val payload = decodeJwtPayload(idToken)
+                val newEmail = payload?.optString("email")?.takeIf { it.isNotBlank() }
+                if (idToken != null && newEmail != null) {
                 scope.launch {
                     isLoading = true
                     errorMessage = null
@@ -396,15 +423,18 @@ fun AccountManagementScreen(
                         isChangingGoogle = false
                     }
                 }
-            } else {
-                errorMessage = "No se pudo obtener la información de la cuenta de Google"
+                } else {
+                    errorMessage = "No se pudo obtener la información de la cuenta de Google"
+                    isLoading = false
+                    isChangingGoogle = false
+                }
+            } catch (e: GoogleIdTokenParsingException) {
+                errorMessage = "Error en Google Sign-In: ${e.message}"
                 isLoading = false
                 isChangingGoogle = false
             }
-        } catch (e: ApiException) {
-            if (e.statusCode != 12501) {
-                errorMessage = "Error en Google Sign-In: ${e.message}"
-            }
+        } else {
+            errorMessage = "No se pudo obtener la información de la cuenta de Google"
             isLoading = false
             isChangingGoogle = false
         }
@@ -421,17 +451,28 @@ fun AccountManagementScreen(
         errorMessage = null
         successMessage = null
 
-        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken("397845476517-4uhbn38sqf9lhu5b8r075r3ns3glfful.apps.googleusercontent.com")
-            .requestEmail()
-            .requestProfile()
+        val request = GetCredentialRequest.Builder()
+            .addCredentialOption(
+                GetSignInWithGoogleOption.Builder(context.getString(com.example.cuidaleapp.R.string.google_client_id))
+                    .setNonce(generateSecureRandomNonce())
+                    .build()
+            )
             .build()
-        val googleSignInClient = GoogleSignIn.getClient(context, gso)
-        googleSignInClient.signOut().addOnCompleteListener {
-            val signInIntent = googleSignInClient.signInIntent
-            googleAuthLauncher.launch(signInIntent)
+
+        scope.launch {
+            try {
+                val response = credentialManager.getCredential(MutableContextWrapper(context), request)
+                handleGoogleCredential(response)
+            } catch (e: GetCredentialException) {
+                if (e !is GetCredentialCancellationException) {
+                    errorMessage = "No se pudo vincular la cuenta de Google."
+                }
+                isLoading = false
+                isChangingGoogle = false
+            }
         }
     }
+
 
     fun formatTimestamp(timestamp: Long): String {
         val validTime = if (timestamp <= 0L) System.currentTimeMillis() else timestamp

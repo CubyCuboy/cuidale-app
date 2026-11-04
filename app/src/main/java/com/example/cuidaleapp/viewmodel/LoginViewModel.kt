@@ -361,14 +361,44 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     } else {
                         val formattedRut = formatRut(input)
-                        val hashedRut = HashUtils.hashRut(formattedRut)
-                        val doc = db.collection("usuarios").document(hashedRut).get().await()
 
-                        if (doc.exists()) {
-                            userData = parseDocumentToUserData(doc)
-                            targetEmail = userData?.correo ?: throw Exception("El usuario no tiene un correo asociado")
-                        } else {
-                            throw Exception("Rut no encontrado")
+                        // 1) Intentar con el rutKey cacheado localmente (sin llamar Cloud Function).
+                        var resolvedRut: com.example.cuidaleapp.utils.ResolvedAccount? = null
+                        val cachedKey = getCachedRutKey(formattedRut)
+                        if (cachedKey.isNotBlank()) {
+                            val cachedDoc = db.collection("usuarios").document(cachedKey).get().await()
+                            if (cachedDoc.exists()) {
+                                val cachedUser = parseDocumentToUserData(cachedDoc)
+                                if (cachedUser != null && cachedUser.correo.isNotBlank()) {
+                                    resolvedRut = com.example.cuidaleapp.utils.ResolvedAccount(
+                                        email = cachedUser.correo,
+                                        hasPassword = cachedUser.findLinkedAccount("email") != null,
+                                        verified = cachedUser.verificado,
+                                        rutKey = cachedKey
+                                    )
+                                    userData = cachedUser
+                                }
+                            }
+                        }
+
+                        // 2) Fallback: Cloud Function (primera vez o si cambió el RUT/dispositivo).
+                        if (resolvedRut == null) {
+                            resolvedRut = com.example.cuidaleapp.utils.FirebaseFunctionsApi.resolveAccountByRut(formattedRut)
+                            if (resolvedRut != null && resolvedRut.rutKey.isNotBlank()) {
+                                saveCachedRutKey(formattedRut, resolvedRut.rutKey)
+                            }
+                        }
+
+                        val finalResolved = resolvedRut ?: throw Exception("Rut no encontrado")
+                        if (!finalResolved.hasPassword) {
+                            throw Exception("Esta cuenta usa otro método de acceso (Google/Microsoft)")
+                        }
+                        targetEmail = finalResolved.email.ifBlank { throw Exception("El usuario no tiene un correo asociado") }
+                        if (userData == null) {
+                            val doc = com.example.cuidaleapp.utils.AccountUtils.findCanonicalUserDocument(db, targetEmail, null)
+                            if (doc != null) {
+                                userData = parseDocumentToUserData(doc)
+                            }
                         }
                     }
 
@@ -423,14 +453,26 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 val formattedRut = formatRut(input)
-                val hashedRut = HashUtils.hashRut(formattedRut)
-                val doc = db.collection("usuarios").document(hashedRut).get().await()
-                if (doc.exists()) {
-                    val email = doc.getString("correo") ?: ""
-                    if (email.isNotBlank()) {
-                        onResolved(email)
-                        return@launch
+
+                val cachedKey = getCachedRutKey(formattedRut)
+                if (cachedKey.isNotBlank()) {
+                    val doc = db.collection("usuarios").document(cachedKey).get().await()
+                    if (doc.exists()) {
+                        val email = doc.getString("correo") ?: ""
+                        if (email.isNotBlank()) {
+                            onResolved(email)
+                            return@launch
+                        }
                     }
+                }
+
+                val resolvedRut = com.example.cuidaleapp.utils.FirebaseFunctionsApi.resolveAccountByRut(formattedRut)
+                if (resolvedRut != null && resolvedRut.rutKey.isNotBlank()) {
+                    saveCachedRutKey(formattedRut, resolvedRut.rutKey)
+                }
+                if (resolvedRut != null && resolvedRut.email.isNotBlank()) {
+                    onResolved(resolvedRut.email)
+                    return@launch
                 }
                 onResolved(input)
             } catch (e: Exception) {
@@ -667,5 +709,15 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                 _uiState.value = LoginUiState.Error(parseLoginErrorMessage(e))
             }
         }
+    }
+
+    private val rutPrefs: android.content.SharedPreferences
+        get() = getApplication<Application>().getSharedPreferences("rut_resolution_prefs", Context.MODE_PRIVATE)
+
+    private fun getCachedRutKey(rut: String): String =
+        rutPrefs.getString("rut_key_" + rut.trim(), "") ?: ""
+
+    private fun saveCachedRutKey(rut: String, key: String) {
+        rutPrefs.edit().putString("rut_key_" + rut.trim(), key).apply()
     }
 }

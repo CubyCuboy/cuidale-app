@@ -120,7 +120,7 @@ fun RegisterScreen(
                 IconButton(onClick = onNavigateBack) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Volver",
+                        contentDescription = stringResource(R.string.cd_back),
                         tint = onGradientText
                     )
                 }
@@ -350,11 +350,11 @@ fun RegisterPersonalStep(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            InputFieldLabel("Primer Nombre")
+            InputFieldLabel(stringResource(R.string.register_first_name))
             CuidaleTextField(
                 value = nombre,
                 onValueChange = viewModel::onNombreChange,
-                placeholder = "Ej: Juan",
+                placeholder = stringResource(R.string.register_first_name_placeholder),
                 containerColor = CuidaleThemeExtras.customColors.inputBackground,
                 isError = nombre.isNotEmpty() && nombre.length < 2,
                 imeAction = androidx.compose.ui.text.input.ImeAction.Next
@@ -362,22 +362,22 @@ fun RegisterPersonalStep(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            InputFieldLabel("Segundo Nombre (Opcional)")
+            InputFieldLabel(stringResource(R.string.register_second_name))
             CuidaleTextField(
                 value = nombreS,
                 onValueChange = viewModel::onNombreSChange,
-                placeholder = "Ej: Antonio",
+                placeholder = stringResource(R.string.register_second_name_placeholder),
                 containerColor = CuidaleThemeExtras.customColors.inputBackground,
                 imeAction = androidx.compose.ui.text.input.ImeAction.Next
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            InputFieldLabel("Apellido Paterno")
+            InputFieldLabel(stringResource(R.string.register_last_name_paternal))
             CuidaleTextField(
                 value = apellidoPa,
                 onValueChange = viewModel::onApellidoPaChange,
-                placeholder = "Ej: Pérez",
+                placeholder = stringResource(R.string.register_last_name_paternal_placeholder),
                 containerColor = CuidaleThemeExtras.customColors.inputBackground,
                 isError = apellidoPa.isNotEmpty() && apellidoPa.length < 2,
                 imeAction = androidx.compose.ui.text.input.ImeAction.Next
@@ -385,11 +385,11 @@ fun RegisterPersonalStep(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            InputFieldLabel("Apellido Materno (Opcional)")
+            InputFieldLabel(stringResource(R.string.register_last_name_maternal))
             CuidaleTextField(
                 value = apellidoMa,
                 onValueChange = viewModel::onApellidoMaChange,
-                placeholder = "Ej: González",
+                placeholder = stringResource(R.string.register_last_name_maternal_placeholder),
                 containerColor = CuidaleThemeExtras.customColors.inputBackground,
                 imeAction = androidx.compose.ui.text.input.ImeAction.Next
             )
@@ -399,10 +399,10 @@ fun RegisterPersonalStep(
             InputFieldLabel(stringResource(R.string.register_email_label))
             if (email.isNotEmpty() && !isEmailValid) {
                 val emailError = when {
-                    !email.contains("@") -> "Falta el '@'"
-                    !email.substringAfter("@").contains(".") -> "Falta el dominio (ej: .com)"
-                    email.substringAfterLast(".").length < 2 -> "Dominio incompleto"
-                    else -> "Correo inválido"
+                    !email.contains("@") -> stringResource(R.string.email_error_no_at)
+                    !email.substringAfter("@").contains(".") -> stringResource(R.string.email_error_no_domain)
+                    email.substringAfterLast(".").length < 2 -> stringResource(R.string.email_error_domain_short)
+                    else -> stringResource(R.string.register_error_invalid_email)
                 }
                 Text(
                     text = emailError,
@@ -415,7 +415,7 @@ fun RegisterPersonalStep(
             CuidaleTextField(
                 value = email,
                 onValueChange = viewModel::onEmailChange,
-                placeholder = "ejemplo@correo.com",
+                placeholder = stringResource(R.string.email_generic_placeholder),
                 containerColor = CuidaleThemeExtras.customColors.inputBackground,
                 keyboardType = KeyboardType.Email,
                 isError = email.isNotEmpty() && !isEmailValid,
@@ -427,7 +427,7 @@ fun RegisterPersonalStep(
             InputFieldLabel(stringResource(R.string.register_rut_label))
             if (rut.isNotEmpty() && !isRutValid) {
                 Text(
-                    text = "RUT inválido (ej: 12.345.678-9)",
+                    text = stringResource(R.string.register_rut_invalid_hint),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(start = 8.dp, bottom = 4.dp).fillMaxWidth(),
@@ -437,7 +437,7 @@ fun RegisterPersonalStep(
             CuidaleTextField(
                 value = rut,
                 onValueChange = viewModel::onRutChange,
-                placeholder = "12.345.678-9",
+                placeholder = stringResource(R.string.register_rut_placeholder),
                 containerColor = CuidaleThemeExtras.customColors.inputBackground,
                 isError = rut.isNotEmpty() && !isRutValid,
                 imeAction = androidx.compose.ui.text.input.ImeAction.Next
@@ -445,10 +445,10 @@ fun RegisterPersonalStep(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            InputFieldLabel("Teléfono (9 dígitos)")
+            InputFieldLabel(stringResource(R.string.register_phone_label))
             if (telefono.isNotEmpty() && !PhoneUtils.isValidChileanPhone(telefono)) {
                 Text(
-                    text = "Debe tener 9 dígitos y empezar con 9 o 2",
+                    text = stringResource(R.string.register_phone_invalid_hint),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(start = 8.dp, bottom = 4.dp).fillMaxWidth(),
@@ -458,7 +458,7 @@ fun RegisterPersonalStep(
             CuidaleTextField(
                 value = telefono,
                 onValueChange = viewModel::onTelefonoChange,
-                placeholder = "Ej: 9 8765 4321",
+                placeholder = stringResource(R.string.register_phone_placeholder),
                 containerColor = CuidaleThemeExtras.customColors.inputBackground,
                 keyboardType = KeyboardType.Phone,
                 isError = telefono.isNotEmpty() && !PhoneUtils.isValidChileanPhone(telefono),
@@ -484,7 +484,7 @@ fun RegisterPersonalStep(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Badge,
-                            contentDescription = "Error",
+                            contentDescription = stringResource(R.string.cd_error),
                             tint = MaterialTheme.colorScheme.error,
                             modifier = Modifier.size(20.dp)
                         )
@@ -539,7 +539,7 @@ fun RegisterPersonalStep(
             Text(text = stringResource(R.string.forgot_password_footer_prefix), style = MaterialTheme.typography.bodyMedium, color = CuidaleThemeExtras.customColors.onGradient)
             Spacer(modifier = Modifier.width(4.dp))
             Text(
-                text = "Ingresa aquí",
+                text = stringResource(R.string.register_login_link),
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                 color = CuidaleThemeExtras.customColors.onGradient,
                 modifier = Modifier.clickable { onLoginRedirect() }
@@ -590,7 +590,7 @@ fun RegisterLocationStep(
                     Spacer(modifier = Modifier.width(4.dp))
                 }
                 Text(
-                    text = if (selectedRegion.isEmpty()) "Selecciona tu Región" else "Región seleccionada",
+                    text = if (selectedRegion.isEmpty()) stringResource(R.string.register_select_region_hint) else stringResource(R.string.register_region_selected),
                     style = MaterialTheme.typography.labelLarge,
                     color = regionColor,
                     fontWeight = if (selectedRegion.isEmpty()) FontWeight.Bold else FontWeight.Normal
@@ -631,7 +631,7 @@ fun RegisterLocationStep(
                             Spacer(modifier = Modifier.width(4.dp))
                         }
                         Text(
-                            text = if (selectedComuna.isEmpty()) "Ahora elige tu Comuna" else "Comuna",
+                            text = if (selectedComuna.isEmpty()) stringResource(R.string.register_select_comuna_hint) else stringResource(R.string.register_commune_selected),
                             style = MaterialTheme.typography.labelLarge,
                             color = comunaColor,
                             fontWeight = if (selectedComuna.isEmpty()) FontWeight.Bold else FontWeight.Normal
@@ -685,7 +685,7 @@ fun RegisterLocationStep(
             CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary)
         } else {
             HardShadowButton(
-                text = if (isExternal) "Finalizar Registro" else stringResource(R.string.register_button_next),
+                text = if (isExternal) stringResource(R.string.register_button_finish) else stringResource(R.string.register_button_next),
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 shadowColor = if (isDark) CuidaleThemeExtras.shadows.hardShadowPrimary else CuidaleThemeExtras.shadows.hardShadowPrimary,
@@ -718,7 +718,7 @@ fun RegisterLocationStep(
             Text(text = stringResource(R.string.forgot_password_footer_prefix), style = MaterialTheme.typography.bodyMedium, color = CuidaleThemeExtras.customColors.onGradient)
             Spacer(modifier = Modifier.width(4.dp))
             Text(
-                text = "Ingresa aquí",
+                text = stringResource(R.string.register_login_link),
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                 color = CuidaleThemeExtras.customColors.onGradient,
                 modifier = Modifier.clickable { onBack() }
@@ -909,7 +909,7 @@ fun RegisterPasswordStep(
             )
             Spacer(modifier = Modifier.width(4.dp))
             Text(
-                text = "Ingresa aquí",
+                text = stringResource(R.string.register_login_link),
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                 color = CuidaleThemeExtras.customColors.onGradient,
                 modifier = Modifier.clickable { onBack() }
@@ -935,7 +935,7 @@ fun RegisterSuccessStep(
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
-            text = "¡Registro Exitoso!",
+            text = stringResource(R.string.register_success_title),
             style = MaterialTheme.typography.displaySmall,
             color = CuidaleThemeExtras.customColors.onGradient,
             textAlign = TextAlign.Center
@@ -944,8 +944,7 @@ fun RegisterSuccessStep(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = if (isExternal) "Tu cuenta ha sido creada correctamente. Ya puedes comenzar a usar Cuidale."
-                   else "Tu cuenta ha sido creada correctamente. Ingresa con tu correo y contraseña para comenzar.",
+            text = if (isExternal) stringResource(R.string.register_success_message_external) else stringResource(R.string.register_success_message),
             style = MaterialTheme.typography.bodyLarge,
             color = CuidaleThemeExtras.customColors.onGradient,
             textAlign = TextAlign.Center
@@ -954,7 +953,7 @@ fun RegisterSuccessStep(
         Spacer(modifier = Modifier.height(48.dp))
 
         HardShadowButton(
-            text = if (isExternal) "Comenzar" else "Ir a Iniciar Sesión",
+            text = if (isExternal) stringResource(R.string.register_start_button) else stringResource(R.string.register_go_login_button),
             containerColor = Color.White,
             contentColor = MaterialTheme.colorScheme.primary,
             shadowColor = Color.Black.copy(alpha = 0.1f),

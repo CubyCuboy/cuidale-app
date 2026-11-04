@@ -20,11 +20,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.example.cuidaleapp.R
 import com.example.cuidaleapp.activities.EditProfileActivity
 import com.example.cuidaleapp.activities.FichaActivity
 import com.example.cuidaleapp.activities.PhoneVerificationActivity
@@ -110,11 +112,11 @@ fun ProfileScreen(
                                 onClick = onNavigateBack,
                                 modifier = Modifier.background(Color.Black.copy(alpha = 0.3f), CircleShape)
                             ) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = Color.White)
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back), tint = Color.White)
                             }
                             Spacer(modifier = Modifier.width(12.dp))
                             Text(
-                                text = "MI PERFIL",
+                                text = stringResource(R.string.profile_my_profile_upper),
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                 color = Color.White
                             )
@@ -123,7 +125,7 @@ fun ProfileScreen(
                                 onClick = onSettingsClick,
                                 modifier = Modifier.background(Color.Black.copy(alpha = 0.3f), CircleShape)
                             ) {
-                                Icon(Icons.Default.Settings, "Ajustes", tint = Color.White)
+                                Icon(Icons.Default.Settings, stringResource(R.string.cd_settings), tint = Color.White)
                             }
                         }
                     }
@@ -147,7 +149,7 @@ fun ProfileScreen(
                             if (userData.fotoUrl.isNotEmpty()) {
                                 coil3.compose.SubcomposeAsyncImage(
                                     model = userData.fotoUrl,
-                                    contentDescription = "Profile",
+                                    contentDescription = stringResource(R.string.cd_profile),
                                     modifier = Modifier.fillMaxSize().clip(CircleShape),
                                     contentScale = ContentScale.Crop,
                                     loading = {
@@ -213,7 +215,7 @@ fun ProfileScreen(
                                                 Icon(Icons.Default.VerifiedUser, null, modifier = Modifier.size(14.dp), tint = customColors.warning)
                                                 Spacer(modifier = Modifier.width(6.dp))
                                                 Text(
-                                                    "Verificar ahora",
+                                                    stringResource(R.string.profile_verify_now),
                                                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                                                     color = customColors.warning
                                                 )
@@ -225,7 +227,7 @@ fun ProfileScreen(
                                 Spacer(modifier = Modifier.height(24.dp))
                                 
                                 HardShadowButton(
-                                    text = "EDITAR PERFIL",
+                                    text = stringResource(R.string.profile_edit_button_upper),
                                     onClick = { context.startActivity(Intent(context, EditProfileActivity::class.java)) },
                                     containerColor = accentColor,
                                     contentColor = Color.White,
@@ -239,20 +241,20 @@ fun ProfileScreen(
                                 HorizontalDivider(color = textColor.copy(alpha = 0.08f))
                                 Spacer(modifier = Modifier.height(20.dp))
 
-                                InfoItem(Icons.Default.Badge, "RUT", userData.rut, textColor, secondaryTextColor)
+                                InfoItem(Icons.Default.Badge, stringResource(R.string.info_rut), userData.rut, textColor, secondaryTextColor)
                                 
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     InfoItem(
                                         Icons.Default.Phone, 
-                                        "TELÉFONO", 
-                                        userData.telefono.ifEmpty { "No especificado" }, 
+                                        stringResource(R.string.info_phone), 
+                                        userData.telefono.ifEmpty { stringResource(R.string.common_not_specified) }, 
                                         textColor, 
                                         secondaryTextColor,
                                         modifier = Modifier.weight(1f)
                                     )
                                     if (userData.telefono.isNotEmpty() && !userData.telefonoVerificado) {
                                         Text(
-                                            "NO VERIFICADO",
+                                            stringResource(R.string.profile_not_verified),
                                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
                                             color = customColors.warning,
                                             modifier = Modifier.padding(start = 8.dp)
@@ -260,8 +262,8 @@ fun ProfileScreen(
                                     }
                                 }
                                 
-                                InfoItem(Icons.Default.Place, "UBICACIÓN", "${userData.comuna}, ${userData.region}", textColor, secondaryTextColor)
-                                InfoItem(Icons.Default.Work, "ROL", userData.rol.replaceFirstChar { it.uppercase() }, textColor, secondaryTextColor)
+                                InfoItem(Icons.Default.Place, stringResource(R.string.info_location), "${userData.comuna}, ${userData.region}", textColor, secondaryTextColor)
+                                InfoItem(Icons.Default.Work, stringResource(R.string.info_role), userData.rol.replaceFirstChar { it.uppercase() }, textColor, secondaryTextColor)
 
                                 if (userData.descripcion.isNotEmpty()) {
                                     Spacer(modifier = Modifier.height(20.dp))
@@ -295,7 +297,7 @@ fun ProfileScreen(
                             horizontalAlignment = Alignment.Start
                         ) {
                             Text(
-                                text = if (userData.rol == "cuidador") "MI FICHA TÉCNICA" else "FICHA DEL FAMILIAR",
+                                text = if (userData.rol == "cuidador") stringResource(R.string.profile_my_ficha_technical) else stringResource(R.string.profile_familiar_ficha),
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                 color = accentColor,
                                 modifier = Modifier.padding(start = 8.dp, bottom = 12.dp)
@@ -373,9 +375,9 @@ fun FichaPlaceholder(
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = if (role == "cuidador") 
-                    "Parece ser que aún no sabemos mucho de ti" 
+                    stringResource(R.string.profile_ficha_placeholder_title_caregiver) 
                 else 
-                    "Aún no tenemos información de tu familiar",
+                    stringResource(R.string.profile_ficha_placeholder_title_rep),
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 textAlign = TextAlign.Center,
                 color = textColor
@@ -383,16 +385,16 @@ fun FichaPlaceholder(
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = if (role == "cuidador")
-                    "Ingresa tus datos en la ficha técnica para que las familias puedan conocer tu experiencia."
+                    stringResource(R.string.profile_ficha_placeholder_desc_caregiver)
                 else
-                    "Ingresa sus datos en la ficha técnica para que podamos ayudarte mejor a encontrar el cuidado ideal.",
+                    stringResource(R.string.profile_ficha_placeholder_desc_rep),
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
                 color = secondaryTextColor
             )
             Spacer(modifier = Modifier.height(24.dp))
             HardShadowButton(
-                text = "CREAR FICHA",
+                text = stringResource(R.string.profile_create_ficha),
                 onClick = onCreateClick,
                 containerColor = accentColor,
                 contentColor = Color.White,

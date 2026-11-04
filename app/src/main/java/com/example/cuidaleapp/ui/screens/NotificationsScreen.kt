@@ -58,7 +58,7 @@ fun NotificationsScreen(
 
 
         Text(
-            text = "Bandeja de notificaciones",
+            text = stringResource(R.string.notif_tray_title),
             style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black),
             color = Color.White,
             modifier = Modifier.padding(24.dp)
@@ -78,7 +78,7 @@ fun NotificationsScreen(
                     )
                     Spacer(Modifier.height(16.dp))
                     Text(
-                        "No tienes notificaciones en tu bandeja",
+                        stringResource(R.string.notif_empty),
                         color = Color.White.copy(alpha = 0.7f),
                         style = MaterialTheme.typography.bodyLarge
                     )
@@ -101,7 +101,7 @@ fun NotificationsScreen(
                 if (groupedMessages.isNotEmpty()) {
                     item(key = "header_msgs") {
                         Text(
-                            "MENSAJES PENDIENTES",
+                            stringResource(R.string.notif_pending_msgs_header),
                             style = MaterialTheme.typography.labelMedium,
                             color = if (isDark) Color.LightGray else Color.Gray,
                             modifier = Modifier.padding(bottom = 8.dp).animateItem()
@@ -131,13 +131,13 @@ fun NotificationsScreen(
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
                                                 buildAnnotatedString {
-                                                    append("Tienes ")
+                                                    append(stringResource(R.string.notif_you_have))
                                                     withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = customColors.aqua)) {
-                                                        append("${msgs.size} mensajes")
+                                                        append(stringResource(R.string.notif_messages, msgs.size))
                                                     }
-                                                    append(" de ")
+                                                    append(stringResource(R.string.notif_from))
                                                     withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                                                        append(sender?.nombre ?: "Usuario")
+                                                        append(sender?.nombre ?: stringResource(R.string.chat_user_fallback))
                                                     }
                                                 },
                                                 style = MaterialTheme.typography.bodyMedium,
@@ -163,7 +163,7 @@ fun NotificationsScreen(
                                         ) {
                                             Icon(Icons.Default.Visibility, null, modifier = Modifier.size(16.dp))
                                             Spacer(Modifier.width(4.dp))
-                                            Text("Leído", fontSize = 12.sp)
+                                            Text(stringResource(R.string.notif_mark_read_short), fontSize = 12.sp)
                                         }
 
                                         Button(
@@ -174,7 +174,7 @@ fun NotificationsScreen(
                                         ) {
                                             Icon(Icons.AutoMirrored.Filled.Chat, null, modifier = Modifier.size(16.dp))
                                             Spacer(Modifier.width(4.dp))
-                                            Text("Ir al Chat", fontSize = 12.sp)
+                                            Text(stringResource(R.string.notif_go_chat), fontSize = 12.sp)
                                         }
                                     }
                                 }
@@ -186,7 +186,7 @@ fun NotificationsScreen(
                 if (otherNotifs.isNotEmpty()) {
                     item(key = "header_alerts") {
                         Text(
-                            "ALERTAS Y SOLICITUDES",
+                            stringResource(R.string.notif_alerts_header),
                             style = MaterialTheme.typography.labelMedium,
                             color = Color.White.copy(alpha = 0.7f),
                             modifier = Modifier.padding(top = 8.dp, bottom = 8.dp).animateItem()
