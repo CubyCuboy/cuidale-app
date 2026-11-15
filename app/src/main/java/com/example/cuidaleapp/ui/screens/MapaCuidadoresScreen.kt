@@ -51,13 +51,17 @@ import com.google.accompanist.systemuicontroller.rememberSystemUiController
 import com.mapbox.geojson.Feature
 import com.mapbox.geojson.FeatureCollection
 import com.mapbox.geojson.Point
+import com.mapbox.geojson.Polygon
 import com.mapbox.maps.CameraOptions
 import com.mapbox.maps.MapView
 import com.mapbox.maps.Style
 import com.mapbox.maps.extension.style.expressions.dsl.generated.interpolate
 import com.mapbox.maps.extension.style.expressions.generated.Expression
 import com.mapbox.maps.extension.style.layers.addLayer
+import com.mapbox.maps.extension.style.layers.addLayerAt
+import com.mapbox.maps.extension.style.layers.generated.backgroundLayer
 import com.mapbox.maps.extension.style.layers.generated.circleLayer
+import com.mapbox.maps.extension.style.layers.generated.fillLayer
 import com.mapbox.maps.extension.style.layers.generated.heatmapLayer
 import com.mapbox.maps.extension.style.layers.generated.symbolLayer
 import com.mapbox.maps.extension.style.layers.getLayer
@@ -239,7 +243,7 @@ fun MapaCuidadoresScreen(
                 val centroBusqueda = state.centroBusqueda ?: viewModel.puntoGeneralRM
                 val cameraEventId = state.cameraEventId
 
-                // Mapbox HeatmapView con gradiente térmico continuo Gris a Naranja y Puntos sólidos intactos
+                // Mapbox HeatmapView con máscara gris global sobre carreteras, verdes y todo el mapa
                 MapboxHeatmapView(
                     geoJsonData = geoJson,
                     centro = centroBusqueda,
@@ -333,7 +337,7 @@ fun MapaCuidadoresScreen(
                             )
                         )
 
-                        // Columna de Botones Flotantes de Acción: GPS, Norte y Alternar Capas
+                        // Columna de Botones Flotantes de Acción: GPS, Norte y Modo Zonas de Calor (Ícono de Fuego)
                         Column(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
@@ -378,7 +382,7 @@ fun MapaCuidadoresScreen(
                                 )
                             }
 
-                            // 3. Botón para Alternar entre Mapa de Calor Gris-Naranja y Capa Estándar
+                            // 3. Botón para Alternar Modo Zonas de Calor (Ícono de Fuego)
                             IconButton(
                                 onClick = { modoMapaDeCalor = !modoMapaDeCalor },
                                 modifier = Modifier
@@ -389,9 +393,9 @@ fun MapaCuidadoresScreen(
                                     )
                             ) {
                                 Icon(
-                                    imageVector = if (modoMapaDeCalor) Icons.Default.LocalFireDepartment else Icons.Default.Layers,
-                                    contentDescription = "Alternar Modo Mapa",
-                                    tint = if (modoMapaDeCalor) Color(0xFFFF6D00) else MaterialTheme.colorScheme.primary
+                                    imageVector = Icons.Default.LocalFireDepartment,
+                                    contentDescription = "Modo Zona de Calor",
+                                    tint = if (modoMapaDeCalor) Color(0xFFFF6D00) else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -617,9 +621,8 @@ fun MapaCuidadoresScreen(
 }
 
 /**
- * Componente ejecutor de Mapbox Maps SDK v11 que configura el mapa interactivo con zonas de calor
- * continuas teñidas de Gris (0 cuidadores) a Naranja Intenso (30+ cuidadores),
- * manteniendo los puntos de cuidadores intactos por encima.
+ * Componente ejecutor de Mapbox Maps SDK v11 que configura el mapa interactivo con máscara gris
+ * completa sobre carreteras, áreas verdes y aguas, destacando los puntos de calor térmicos.
  */
 @Composable
 fun MapboxHeatmapView(
@@ -639,8 +642,35 @@ fun MapboxHeatmapView(
         mapView.mapboxMap.loadStyle(Style.MAPBOX_STREETS) { style ->
             val sourceId = "cuidadores-geojson-source"
             val userSourceId = "user-location-geojson-source"
+            val worldSourceId = "world-grey-mask-source"
 
-            // 1. Fuente GeoJSON de Cuidadores
+            // 1. Fuente y Capa de Máscara Gris Global sobre Todo el Mapa (Carreteras, Verdes, Aguas)
+            val worldRing = listOf(
+                Point.fromLngLat(-180.0, -85.0),
+                Point.fromLngLat(180.0, -85.0),
+                Point.fromLngLat(180.0, 85.0),
+                Point.fromLngLat(-180.0, 85.0),
+                Point.fromLngLat(-180.0, -85.0)
+            )
+            val worldPolygon = Polygon.fromLngLats(listOf(worldRing))
+            val worldFeatureCollection = FeatureCollection.fromFeatures(listOf(Feature.fromGeometry(worldPolygon)))
+
+            if (style.getSource(worldSourceId) == null) {
+                val worldSource = geoJsonSource(worldSourceId) {
+                    featureCollection(worldFeatureCollection)
+                }
+                style.addSource(worldSource)
+            }
+
+            if (style.getLayer("world-grey-mask-layer") == null) {
+                val greyMaskLayer = fillLayer("world-grey-mask-layer", worldSourceId) {
+                    fillColor("#424242") // Gris neutro uniforme que cubre carreteras, áreas verdes y mares
+                    fillOpacity(0.82) // 82% de opacidad para que todo el mapa sea un lienzo gris
+                }
+                style.addLayer(greyMaskLayer)
+            }
+
+            // 2. Fuente GeoJSON de Cuidadores
             if (style.getSource(sourceId) == null) {
                 val source = geoJsonSource(sourceId) {
                     geoJsonData?.let { featureCollection(it) }
@@ -651,9 +681,9 @@ fun MapboxHeatmapView(
                 style.addSource(source)
             }
 
-            // 2. Capa de Mapa de Calor Térmico (Gris a Naranja 0 a 30+ cuidadores)
-            if (style.getLayer("cuidadores-heatmap-layer") == null) {
-                val heatmap = heatmapLayer("cuidadores-heatmap-layer", sourceId) {
+            // 3. Capa de Puntos de Calor Térmicos Vibrantes (Cyan -> Amarillo -> Naranja -> Rojo Fuego)
+            if (style.getLayer("cuidadores-heat-points-layer") == null) {
+                val heatPoints = heatmapLayer("cuidadores-heat-points-layer", sourceId) {
                     heatmapWeight(1.0)
                     heatmapColor(
                         interpolate {
@@ -661,23 +691,23 @@ fun MapboxHeatmapView(
                             heatmapDensity()
                             stop {
                                 literal(0.0)
-                                color(Color(0x009E9E9E).toArgb()) // Transparente afuera
+                                color(Color(0x00000000).toArgb()) // Transparente afuera
                             }
                             stop {
-                                literal(0.12)
-                                color(Color(0x669E9E9E).toArgb()) // Gris translúcido para bajas concentraciones (~0 cuidadores)
+                                literal(0.15)
+                                color(Color(0xDD00E5FF).toArgb()) // Cyan brillante de alto impacto
                             }
                             stop {
-                                literal(0.40)
-                                color(Color(0x99FFB74D).toArgb()) // Naranja claro
+                                literal(0.45)
+                                color(Color(0xE6FFEB3B).toArgb()) // Amarillo brillante
                             }
                             stop {
-                                literal(0.70)
-                                color(Color(0xCCFF9800).toArgb()) // Naranja medio
+                                literal(0.75)
+                                color(Color(0xF1FF6D00).toArgb()) // Naranja fuego
                             }
                             stop {
                                 literal(1.00)
-                                color(Color(0xE6FF5722).toArgb()) // Naranja intenso (30 o más cuidadores)
+                                color(Color(0xFFD50000).toArgb()) // Rojo intenso
                             }
                         }
                     )
@@ -687,24 +717,24 @@ fun MapboxHeatmapView(
                             zoom()
                             stop {
                                 literal(0.0)
-                                literal(8.0)
+                                literal(10.0)
                             }
                             stop {
                                 literal(9.0)
-                                literal(32.0)
+                                literal(28.0)
                             }
                             stop {
-                                literal(14.0)
-                                literal(75.0)
+                                literal(15.0)
+                                literal(65.0)
                             }
                         }
                     )
-                    heatmapOpacity(0.85)
+                    heatmapOpacity(0.92)
                 }
-                style.addLayer(heatmap)
+                style.addLayer(heatPoints)
             }
 
-            // 3. Capa Puntos Individuales Sólidos de Cuidadores (INTACTOS)
+            // 4. Capa Puntos Individuales Sólidos de Cuidadores (para Modo Normal)
             if (style.getLayer("unclustered-caregivers-layer") == null) {
                 val unclusteredPoints = circleLayer("unclustered-caregivers-layer", sourceId) {
                     filter(Expression.not(Expression.has("point_count")))
@@ -716,7 +746,7 @@ fun MapboxHeatmapView(
                 style.addLayer(unclusteredPoints)
             }
 
-            // 4. Capa Círculos Agrupados (Clusters)
+            // 5. Capa Círculos Agrupados (Clusters para Modo Normal)
             if (style.getLayer("cluster-circles-layer") == null) {
                 val clusterCircles = circleLayer("cluster-circles-layer", sourceId) {
                     filter(Expression.has("point_count"))
@@ -762,7 +792,7 @@ fun MapboxHeatmapView(
                 style.addLayer(clusterCircles)
             }
 
-            // 5. Capa Conteo Numérico de Agrupaciones
+            // 6. Capa Conteo Numérico de Agrupaciones
             if (style.getLayer("cluster-count-layer") == null) {
                 val clusterCountText = symbolLayer("cluster-count-layer", sourceId) {
                     filter(Expression.has("point_count"))
@@ -775,7 +805,7 @@ fun MapboxHeatmapView(
                 style.addLayer(clusterCountText)
             }
 
-            // 6. Indicación de Posición Actual del Usuario / Centro de Búsqueda
+            // 7. Indicación de Posición Actual del Usuario / Centro de Búsqueda
             val userPointFeature = Feature.fromGeometry(centro)
             val userFeatureCollection = FeatureCollection.fromFeatures(listOf(userPointFeature))
 
@@ -812,11 +842,20 @@ fun MapboxHeatmapView(
         }
     }
 
-    // Alternar Visibilidad entre Capa de Mapa de Calor y Capas de Clusters/Puntos
+    // Alternar Visibilidad entre Modo Zona de Calor (Máscara Gris Global + Puntos de Calor) y Modo Estándar
     LaunchedEffect(modoMapaDeCalor) {
         mapView.mapboxMap.getStyle { style ->
             val heatVis = if (modoMapaDeCalor) Visibility.VISIBLE else Visibility.NONE
-            style.getLayer("cuidadores-heatmap-layer")?.visibility(heatVis)
+            val normalVis = if (!modoMapaDeCalor) Visibility.VISIBLE else Visibility.NONE
+
+            // Máscara gris global y puntos de calor
+            style.getLayer("world-grey-mask-layer")?.visibility(heatVis)
+            style.getLayer("cuidadores-heat-points-layer")?.visibility(heatVis)
+
+            // Puntos sólidos y clusters estándar
+            style.getLayer("unclustered-caregivers-layer")?.visibility(normalVis)
+            style.getLayer("cluster-circles-layer")?.visibility(normalVis)
+            style.getLayer("cluster-count-layer")?.visibility(normalVis)
         }
     }
 
