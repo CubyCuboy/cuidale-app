@@ -97,6 +97,8 @@ fun MapaCuidadoresScreen(
     val useProfilePreferences by viewModel.useProfilePreferences.collectAsState()
     val sinComunasEnFicha by viewModel.sinComunasEnFicha.collectAsState()
 
+    val hasActiveFilters = selectedRegion.isNotEmpty() || selectedCommunes.isNotEmpty() || useProfilePreferences
+
     // Configurar la barra de estado completamente transparente
     val systemUiController = rememberSystemUiController()
     SideEffect {
@@ -111,6 +113,7 @@ fun MapaCuidadoresScreen(
     var resetNorthTrigger by remember { mutableLongStateOf(0L) }
     var modoMapaDeCalor by remember { mutableStateOf(true) } // Por defecto modo mapa de calor
     var showFilterSheet by remember { mutableStateOf(false) }
+    var cuidadorBurbuja by remember { mutableStateOf<Cuidador?>(null) } // Burbuja sobre el punto tocado
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     val filterSheetState = rememberModalBottomSheetState()
@@ -243,7 +246,7 @@ fun MapaCuidadoresScreen(
                 val centroBusqueda = state.centroBusqueda ?: viewModel.puntoGeneralRM
                 val cameraEventId = state.cameraEventId
 
-                // Mapbox HeatmapView con máscara gris global sobre carreteras, verdes y todo el mapa
+                // Mapbox HeatmapView con toque inteligente (Burbuja directa sobre punto o lista general)
                 MapboxHeatmapView(
                     geoJsonData = geoJson,
                     centro = centroBusqueda,
@@ -251,8 +254,22 @@ fun MapaCuidadoresScreen(
                     resetNorthTrigger = resetNorthTrigger,
                     modoMapaDeCalor = modoMapaDeCalor,
                     onMapClick = { punto ->
-                        viewModel.filtrarPorZonaSeleccionada(punto, 1500.0)
-                        showBottomSheet = true
+                        val latTocado = punto.latitude()
+                        val lngTocado = punto.longitude()
+
+                        // Buscar si se tocó directamente un punto de cuidador (menos de 800m del toque)
+                        val cuidadorCercano = cuidadores.minByOrNull { c ->
+                            LocationUtils.calcularDistanciaMetros(latTocado, lngTocado, c.latitud, c.longitud)
+                        }
+
+                        if (cuidadorCercano != null && LocationUtils.calcularDistanciaMetros(latTocado, lngTocado, cuidadorCercano.latitud, cuidadorCercano.longitud) <= 800.0) {
+                            cuidadorBurbuja = cuidadorCercano
+                            showBottomSheet = false
+                        } else {
+                            cuidadorBurbuja = null
+                            viewModel.filtrarPorZonaSeleccionada(punto, 1500.0)
+                            showBottomSheet = true
+                        }
                     }
                 )
 
@@ -301,7 +318,10 @@ fun MapaCuidadoresScreen(
                                 .clip(RoundedCornerShape(16.dp))
                                 .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)),
                             trailingIcon = {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(end = 4.dp)
+                                ) {
                                     if (textoBusqueda.isNotEmpty()) {
                                         IconButton(onClick = {
                                             textoBusqueda = ""
@@ -312,21 +332,32 @@ fun MapaCuidadoresScreen(
                                         }
                                     }
 
-                                    // Botón para abrir el panel de Filtros embebido
-                                    IconButton(onClick = { showFilterSheet = true }) {
-                                        BadgedBox(
-                                            badge = {
-                                                if (selectedRegion.isNotEmpty() || selectedCommunes.isNotEmpty() || useProfilePreferences) {
-                                                    Badge(containerColor = MaterialTheme.colorScheme.primary)
-                                                }
-                                            }
+                                    // Botón de Filtros Estilizado (Pill/Card Container)
+                                    Surface(
+                                        onClick = { showFilterSheet = true },
+                                        color = if (hasActiveFilters) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.padding(vertical = 4.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                                         ) {
                                             Icon(
-                                                imageVector = Icons.Default.FilterList,
+                                                imageVector = Icons.Default.Tune,
                                                 contentDescription = "Filtros de Búsqueda",
-                                                tint = if (selectedRegion.isNotEmpty() || selectedCommunes.isNotEmpty() || useProfilePreferences)
-                                                    MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                                tint = if (hasActiveFilters) Color.White else MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(18.dp)
                                             )
+                                            if (hasActiveFilters) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(7.dp)
+                                                        .clip(CircleShape)
+                                                        .background(Color.White)
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -346,6 +377,7 @@ fun MapaCuidadoresScreen(
                             IconButton(
                                 onClick = {
                                     sugerenciasUbicacion = emptyList()
+                                    cuidadorBurbuja = null
                                     ejecutarOPedirGps()
                                 },
                                 enabled = !isCargandoGps,
@@ -423,6 +455,7 @@ fun MapaCuidadoresScreen(
                                             .clickable {
                                                 textoBusqueda = sugerencia.titulo
                                                 sugerenciasUbicacion = emptyList()
+                                                cuidadorBurbuja = null
                                                 keyboardController?.hide()
                                                 viewModel.buscarPorCoordenadasDirectas(sugerencia.titulo, sugerencia.punto)
                                             }
@@ -462,6 +495,135 @@ fun MapaCuidadoresScreen(
                     }
                 }
 
+                // BURBUJA INFORMATIVA FLOTANTE AL TOCAR UN CUIDADOR ESPECÍFICO
+                AnimatedVisibility(
+                    visible = cuidadorBurbuja != null,
+                    enter = fadeIn() + scaleIn(initialScale = 0.85f),
+                    exit = fadeOut() + scaleOut(targetScale = 0.85f),
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(horizontal = 24.dp)
+                ) {
+                    cuidadorBurbuja?.let { cuidador ->
+                        Surface(
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
+                            shape = RoundedCornerShape(20.dp),
+                            shadowElevation = 14.dp,
+                            modifier = Modifier.fillMaxWidth(0.92f)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.PersonPin,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "Cuidador en esta ubicación",
+                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { cuidadorBurbuja = null },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Cerrar",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(56.dp)
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.primaryContainer),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (cuidador.fotoUrl.isNotBlank()) {
+                                            AsyncImage(
+                                                model = cuidador.fotoUrl,
+                                                contentDescription = null,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        } else {
+                                            Icon(
+                                                imageVector = Icons.Default.Person,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                modifier = Modifier.size(30.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.width(12.dp))
+
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = cuidador.nombre,
+                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+
+                                        Text(
+                                            text = cuidador.especialidad,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+
+                                        Spacer(modifier = Modifier.height(2.dp))
+
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.LocationOn,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(13.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(2.dp))
+                                            Text(
+                                                text = cuidador.comuna,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                HardShadowButton(
+                                    text = "VER PERFIL COMPLETO",
+                                    onClick = {
+                                        cuidadorBurbuja = null
+                                        onUserClick(cuidador.id)
+                                    },
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = Color.White
+                                )
+                            }
+                        }
+                    }
+                }
+
                 // Botón flotante para desplegar el BottomSheet con la lista de cuidadores
                 Box(
                     modifier = Modifier
@@ -471,7 +633,10 @@ fun MapaCuidadoresScreen(
                 ) {
                     HardShadowButton(
                         text = "VER CUIDADORES (${cuidadores.size})",
-                        onClick = { showBottomSheet = true },
+                        onClick = {
+                            cuidadorBurbuja = null
+                            showBottomSheet = true
+                        },
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = Color.White,
                         icon = Icons.AutoMirrored.Filled.FormatListBulleted
@@ -621,8 +786,8 @@ fun MapaCuidadoresScreen(
 }
 
 /**
- * Componente ejecutor de Mapbox Maps SDK v11 que configura el mapa interactivo con máscara gris
- * completa sobre carreteras, áreas verdes y aguas, destacando los puntos de calor térmicos.
+ * Componente ejecutor de Mapbox Maps SDK v11 que configura el mapa interactivo con filtro gris
+ * uniforme sobre todo el mapa y puntos de calor térmicos vibrantes de alto contraste.
  */
 @Composable
 fun MapboxHeatmapView(
@@ -842,7 +1007,7 @@ fun MapboxHeatmapView(
         }
     }
 
-    // Alternar Visibilidad entre Modo Zona de Calor (Máscara Gris Global + Puntos de Calor) y Modo Estándar
+    // Alternar Visibilidad entre Modo Zona de Calor (Filtro Gris + Puntos de Calor) y Modo Estándar
     LaunchedEffect(modoMapaDeCalor) {
         mapView.mapboxMap.getStyle { style ->
             val heatVis = if (modoMapaDeCalor) Visibility.VISIBLE else Visibility.NONE
