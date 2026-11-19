@@ -86,10 +86,27 @@ service cloud.firestore {
     }
 
     // --- VÍNCULOS Y MENSAJES ---
+    // Los vínculos se identifican por el ID de documento de los usuarios (UID).
+    // Se acepta la participación por uids o por uid1/uid2.
     match /vinculos/{vinculoId} {
-      allow read: if isAuthenticated() && request.auth.uid in resource.data.uids;
-      allow create: if isAuthenticated() && request.auth.uid in request.resource.data.uids;
-      allow update, delete: if isAuthenticated() && request.auth.uid in resource.data.uids;
+      // Permitir consultar el documento aunque no exista (necesario para saber si
+      // ya hay un vínculo antes de crearlo). Si existe, solo sus participantes.
+      allow read: if isAuthenticated() && (
+        !exists(/databases/$(database)/documents/vinculos/$(vinculoId)) ||
+        request.auth.uid in resource.data.uids ||
+        resource.data.uid1 == request.auth.uid ||
+        resource.data.uid2 == request.auth.uid
+      );
+      allow create: if isAuthenticated() && (
+        request.auth.uid in request.resource.data.uids ||
+        request.resource.data.uid1 == request.auth.uid ||
+        request.resource.data.uid2 == request.auth.uid
+      );
+      allow update, delete: if isAuthenticated() && (
+        request.auth.uid in resource.data.uids ||
+        resource.data.uid1 == request.auth.uid ||
+        resource.data.uid2 == request.auth.uid
+      );
 
       match /mensajes/{mensajeId} {
         allow read, create: if isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/vinculos/$(vinculoId)).data.uids;
@@ -113,7 +130,10 @@ service cloud.firestore {
         resource.data.representanteUid == request.auth.uid ||
         resource.data.cuidadorUid == request.auth.uid
       );
-      allow create: if isAuthenticated() && request.resource.data.representanteUid == request.auth.uid;
+      allow create: if isAuthenticated() && (
+        request.resource.data.representanteUid == request.auth.uid ||
+        request.resource.data.cuidadorUid == request.auth.uid
+      );
       allow update, delete: if isAuthenticated() && (
         resource.data.representanteUid == request.auth.uid ||
         resource.data.cuidadorUid == request.auth.uid
@@ -127,6 +147,15 @@ service cloud.firestore {
         resource.data.cuidadorUid == request.auth.uid
       );
       allow create: if isAuthenticated() && request.resource.data.cuidadorUid == request.auth.uid;
+    }
+
+    // --- ARCHIVO DE MENSAJES (copia local en Firestore) ---
+    match /archived_messages/{chatId} {
+      allow read, write: if isAuthenticated() && request.auth.uid in chatId.split("_");
+
+      match /history/{msgId} {
+        allow read, write: if isAuthenticated() && request.auth.uid in chatId.split("_");
+      }
     }
   }
 }

@@ -1,6 +1,9 @@
 package com.example.cuidaleapp.ui.components
 
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
+import android.content.res.Resources
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -23,6 +26,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculatePan
@@ -33,19 +40,18 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -59,6 +65,7 @@ import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -88,13 +95,16 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
+import androidx.core.view.WindowInsetsCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultDataSource
@@ -136,6 +146,80 @@ object VideoThumbnailCache {
         return File(diskDir(context), "$name.png")
     }
 
+    private val memoryDuration = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    
+    private val fetchGate = java.util.concurrent.Semaphore(2)
+
+    private fun durationFile(context: Context, url: String): File {
+        val name = java.security.MessageDigest.getInstance("MD5")
+            .digest(url.toByteArray())
+            .joinToString("") { "%02x".format(it) }
+        return File(diskDir(context), "$name.dur")
+    }
+
+    fun getDuration(context: Context, url: String): Long {
+        memoryDuration[url]?.let { return it }
+        return runCatching {
+            durationFile(context, url).takeIf { it.exists() }?.readText()?.trim()?.toLongOrNull() ?: -1L
+        }.getOrDefault(-1L)
+    }
+
+    private fun saveDuration(context: Context, url: String, durationMs: Long) {
+        if (durationMs <= 0) return
+        memoryDuration[url] = durationMs
+        runCatching { durationFile(context, url).writeText(durationMs.toString()) }
+    }
+
+    private fun downloadVideoToTemp(context: Context, url: String): File? {
+        return try {
+            val tmp = File(context.cacheDir, "vid_tmp_" + System.currentTimeMillis() + ".mp4")
+            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            conn.instanceFollowRedirects = true
+            conn.connectTimeout = 15000
+            conn.readTimeout = 30000
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13) CuidaleApp/1.0")
+            conn.inputStream.use { input ->
+                tmp.outputStream().use { out -> input.copyTo(out) }
+            }
+            tmp
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun scaleToMax(bmp: android.graphics.Bitmap, maxSide: Int): android.graphics.Bitmap {
+        val longSide = if (bmp.width >= bmp.height) bmp.width else bmp.height
+        val scale = if (longSide > maxSide) maxSide.toFloat() / longSide else 1f
+        if (scale >= 1f) return bmp
+        val scaled = android.graphics.Bitmap.createScaledBitmap(
+            bmp,
+            (bmp.width * scale).toInt().coerceAtLeast(1),
+            (bmp.height * scale).toInt().coerceAtLeast(1),
+            true
+        )
+        bmp.recycle()
+        return scaled
+    }
+
+    private fun scaledDims(widthPx: Int, heightPx: Int, maxSide: Int): Pair<Int, Int> {
+        if (widthPx <= 0 || heightPx <= 0) return maxSide to maxSide
+        val longSide = maxOf(widthPx, heightPx)
+        if (longSide <= maxSide) return widthPx to heightPx
+        val scale = maxSide.toFloat() / longSide
+        return (widthPx * scale).toInt().coerceAtLeast(1) to (heightPx * scale).toInt().coerceAtLeast(1)
+    }
+
+    private fun extractFrameScaled(retriever: android.media.MediaMetadataRetriever, dw: Int, dh: Int): android.graphics.Bitmap? {
+        return if (android.os.Build.VERSION.SDK_INT >= 27) {
+            retriever.getScaledFrameAtTime(500_000L, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC, dw, dh)
+                ?: retriever.getScaledFrameAtTime(0, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC, dw, dh)
+        } else {
+            val raw = retriever.getFrameAtTime(500_000L, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                ?: retriever.getFrameAtTime(0, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+            raw?.let { scaleToMax(it, 480) }
+        }
+    }
+
     fun get(context: Context, url: String): android.graphics.Bitmap? {
         memory[url]?.let { return it }
         return runCatching {
@@ -160,20 +244,65 @@ object VideoThumbnailCache {
     }
 
     suspend fun fetch(context: Context, url: String): android.graphics.Bitmap? {
-        get(context, url)?.let { return it }
-        val bmp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        return fetchWithDuration(context, url).first
+    }
+
+    suspend fun fetchWithDuration(context: Context, url: String): Pair<android.graphics.Bitmap?, Long> {
+        val cached = get(context, url)
+        if (cached != null) return cached to getDuration(context, url)
+
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             runCatching {
-                val retriever = android.media.MediaMetadataRetriever()
+                var durationMs = -1L
+                var frame: android.graphics.Bitmap? = null
+                var dw = 480
+                var dh = 480
+                fetchGate.acquire()
                 try {
-                    retriever.setDataSource(url)
-                    retriever.getFrameAtTime(0, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                    val retriever = android.media.MediaMetadataRetriever()
+                    try {
+                        retriever.setDataSource(context, android.net.Uri.parse(url))
+                        durationMs = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: -1L
+                        val vw = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: -1
+                        val vh = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: -1
+                        val (sw, sh) = scaledDims(vw, vh, 480)
+                        dw = sw
+                        dh = sh
+                        frame = extractFrameScaled(retriever, dw, dh)
+                    } catch (e: Exception) {
+                        frame = null
+                    } finally {
+                        runCatching { retriever.release() }
+                    }
+
+                    if (frame == null) {
+                        val tmp = downloadVideoToTemp(context, url)
+                        if (tmp != null) {
+                            try {
+                                val r2 = android.media.MediaMetadataRetriever()
+                                try {
+                                    r2.setDataSource(tmp.absolutePath)
+                                    durationMs = r2.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: -1L
+                                    frame = extractFrameScaled(r2, dw, dh)
+                                } finally {
+                                    runCatching { r2.release() }
+                                }
+                            } catch (e: Exception) {
+                                frame = null
+                            }
+                        }
+                        runCatching { tmp?.delete() }
+                    }
                 } finally {
-                    runCatching { retriever.release() }
+                    fetchGate.release()
                 }
-            }.getOrNull()
+
+                val result = frame?.let { scaleToMax(it, 480) }
+                if (result != null) put(context, url, result)
+                if (durationMs > 0) saveDuration(context, url, durationMs)
+                result to durationMs
+            }.getOrDefault(null to -1L)
         }
-        if (bmp != null) put(context, url, bmp)
-        return bmp
     }
 
     fun clear(context: Context) {
@@ -206,6 +335,71 @@ fun VideoFirstFrame(
         ) {
             Icon(Icons.Default.PlayArrow, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp))
         }
+    }
+}
+
+@Composable
+fun VideoPreviewWithDuration(
+    url: String,
+    modifier: Modifier = Modifier,
+    showDuration: Boolean = true
+) {
+    val context = LocalContext.current
+    val state by produceState<Pair<android.graphics.Bitmap?, Long>>(
+        initialValue = VideoThumbnailCache.get(context, url) to VideoThumbnailCache.getDuration(context, url),
+        url
+    ) {
+        value = VideoThumbnailCache.fetchWithDuration(context, url)
+    }
+    val frame = state.first
+    val durationMs = state.second
+
+    Box(modifier = modifier) {
+        if (frame != null) {
+            AsyncImage(
+                model = frame,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Box(
+                modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.PlayArrow, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp))
+            }
+        }
+
+        if (showDuration && durationMs > 0) {
+            Surface(
+                color = Color.Black.copy(alpha = 0.7f),
+                shape = RoundedCornerShape(6.dp),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(4.dp)
+            ) {
+                Text(
+                    formatVideoDuration(durationMs),
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
+        }
+    }
+}
+
+fun formatVideoDuration(durationMs: Long): String {
+    val totalSeconds = (durationMs / 1000L).coerceAtLeast(0L)
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return if (minutes >= 60) {
+        val hours = minutes / 60
+        val remMin = minutes % 60
+        "%d:%02d:%02d".format(hours, remMin, seconds)
+    } else {
+        "%d:%02d".format(minutes, seconds)
     }
 }
 
@@ -247,6 +441,7 @@ object VideoPlayerCache {
     private const val MAX_PLAYERS = 8
     private val players = java.util.LinkedHashMap<String, ExoPlayer>()
     private val readyUrls = mutableSetOf<String>()
+    private val endedUrls = mutableSetOf<String>()
 
     fun get(context: Context, url: String): ExoPlayer {
         players[url]?.let { return it }
@@ -267,6 +462,9 @@ object VideoPlayerCache {
                     if (playbackState == Player.STATE_READY || playbackState == Player.STATE_ENDED) {
                         readyUrls.add(url)
                     }
+                    if (playbackState == Player.STATE_ENDED) {
+                        endedUrls.add(url)
+                    }
                 }
             })
         }
@@ -275,10 +473,12 @@ object VideoPlayerCache {
     }
 
     fun isReady(url: String): Boolean = url in readyUrls
+    fun isEnded(url: String): Boolean = url in endedUrls
     fun releaseAll() {
         players.values.forEach { it.release() }
         players.clear()
         readyUrls.clear()
+        endedUrls.clear()
     }
 
     fun pauseAll() {
@@ -324,6 +524,7 @@ fun ChatMediaImage(
     url: String,
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Fit,
+    fullSize: Int? = null,
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null
 ) {
@@ -363,6 +564,7 @@ fun ChatMediaImage(
     val fullRequest = remember(url, retryKey) {
         ImageRequest.Builder(context)
             .data(url)
+            .apply { fullSize?.let { size(it) } }
             .memoryCachePolicy(CachePolicy.ENABLED)
             .diskCachePolicy(CachePolicy.ENABLED)
             .crossfade(true)
@@ -900,24 +1102,29 @@ private fun MediaThumbnailCard(
     val shape = RoundedCornerShape(8.dp)
 
     val scale by animateFloatAsState(
-        targetValue = if (selected) 1.18f else 1f,
+        targetValue = if (selected) 1f else 0.82f,
         animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMediumLow
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMedium
         ),
         label = "thumbScale"
     )
+    val thumbAlpha by animateFloatAsState(
+        targetValue = if (selected) 1f else 0.55f,
+        animationSpec = tween(180),
+        label = "thumbAlpha"
+    )
     val elevation by animateDpAsState(
-        targetValue = if (selected) 10.dp else 0.dp,
+        targetValue = if (selected) 12.dp else 0.dp,
         animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMediumLow
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMedium
         ),
         label = "thumbElevation"
     )
     val lift by animateDpAsState(
-        targetValue = if (selected) (-6).dp else 0.dp,
-        animationSpec = tween(200),
+        targetValue = if (selected) (-8).dp else 0.dp,
+        animationSpec = tween(220),
         label = "thumbLift"
     )
 
@@ -937,6 +1144,7 @@ private fun MediaThumbnailCard(
                     scaleX = scale
                     scaleY = scale
                     translationY = lift.toPx()
+                    this.alpha = thumbAlpha
                 }
                 .clip(shape)
                 .border(2.dp, if (selected) Color.White else Color.Transparent, shape)
@@ -944,11 +1152,26 @@ private fun MediaThumbnailCard(
         ) {
             when (item.first) {
                 "video" -> VideoFirstFrame(item.second, Modifier.fillMaxSize())
-                else -> AsyncImage(
+                else -> SubcomposeAsyncImage(
                     model = item.second,
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
+                    contentScale = ContentScale.Crop,
+                    error = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Warning,
+                                contentDescription = "Imagen no disponible",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
                 )
             }
         }
@@ -965,7 +1188,36 @@ fun MediaBatchGalleryViewer(
 ) {
     val initialIndex = items.indexOfFirst { it.second == initialUrl }.coerceAtLeast(0)
     val pagerState = rememberPagerState(pageCount = { items.size }, initialPage = initialIndex)
+    val thumbListState = rememberLazyListState(initialFirstVisibleItemIndex = initialIndex.coerceAtLeast(0))
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    // Sincroniza la fila de miniaturas con la página activa del visor.
+    LaunchedEffect(pagerState.currentPage) {
+        thumbListState.animateScrollToItem(pagerState.currentPage.coerceAtLeast(0))
+    }
+
+    // Carrusel de miniaturas: filmstrip sincronizado con el pager.
+    val density = LocalDensity.current
+
+    // Insets reales de navegación: la ventana del Dialog no siempre los reporta en
+    // dispositivos edge-to-edge (Android 15), así que se leen desde el decorView de la Activity.
+    val activity = remember(context) {
+        generateSequence(context) { (it as? ContextWrapper)?.baseContext }
+            .filterIsInstance<Activity>()
+            .firstOrNull()
+    }
+    val decorNavInsetPx = remember(activity) {
+        val insets = activity?.window?.decorView?.rootWindowInsets
+        if (insets == null) 0
+        else WindowInsetsCompat.toWindowInsetsCompat(insets)
+            .getInsets(WindowInsetsCompat.Type.navigationBars())
+            .bottom
+    }
+    var dialogHeightPx by remember { mutableIntStateOf(0) }
+    val displayHeightPx = remember { Resources.getSystem().displayMetrics.heightPixels }
+    val necesitaInsetAbajo = dialogHeightPx > 0 &&
+        (displayHeightPx - dialogHeightPx) < decorNavInsetPx
 
     var chromeVisible by remember { mutableStateOf(true) }
 
@@ -973,6 +1225,22 @@ fun MediaBatchGalleryViewer(
         val currentItem = items.getOrNull(pagerState.currentPage)
         val currentUrl = if (currentItem?.first == "video") currentItem.second else null
         VideoPlayerCache.pauseExcept(currentUrl)
+
+        // Ocultar el chrome (miniaturas) tras 3 s mientras se reproduce un video,
+        // y mostrarlo de nuevo automáticamente cuando el video termina.
+        if (currentItem?.first == "video") {
+            kotlinx.coroutines.delay(3000)
+            chromeVisible = false
+            while (true) {
+                kotlinx.coroutines.delay(500)
+                if (VideoPlayerCache.isEnded(currentItem.second)) {
+                    chromeVisible = true
+                    break
+                }
+            }
+        } else {
+            chromeVisible = true
+        }
     }
 
     DisposableEffect(Unit) {
@@ -988,6 +1256,7 @@ fun MediaBatchGalleryViewer(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .onSizeChanged { dialogHeightPx = it.height }
                 .background(Color.Black)
         ) {
 
@@ -1054,25 +1323,44 @@ fun MediaBatchGalleryViewer(
                 enter = slideInVertically(tween(250)) { it } + fadeIn(tween(250)) + expandVertically(tween(250)),
                 exit = shrinkVertically(tween(180)) + fadeOut(tween(180))
             ) {
-                LazyRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .background(
-                            Color.Black.copy(alpha = 0.65f),
-                            RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
-                        ),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    itemsIndexed(items) { index, item ->
-                        val selected = index == pagerState.currentPage
-                        MediaThumbnailCard(
-                            item = item,
-                            index = index,
-                            selected = selected,
-                            onClick = { scope.launch { pagerState.animateScrollToPage(index) } }
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val thumbSizeDp = 58.dp
+                    val thumbSpacingDp = 10.dp
+                    val thumbSizePx = with(density) { thumbSizeDp.toPx() }
+                    val viewportWidthPx = with(density) { maxWidth.toPx() }
+                    val leadingPx = ((viewportWidthPx - thumbSizePx) / 2f).coerceAtLeast(0f)
+                    val bottomInsetPx = if (necesitaInsetAbajo) {
+                        maxOf(
+                            WindowInsets.navigationBars.getBottom(density),
+                            decorNavInsetPx
                         )
+                    } else 0
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = with(density) { bottomInsetPx.toDp() })
+                            .background(
+                                Color.Black.copy(alpha = 0.65f),
+                                RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                            )
+                            .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                    ) {
+                        LazyRow(
+                            state = thumbListState,
+                            modifier = Modifier.padding(vertical = 12.dp),
+                            contentPadding = PaddingValues(horizontal = with(density) { leadingPx.toDp() }),
+                            horizontalArrangement = Arrangement.spacedBy(thumbSpacingDp)
+                        ) {
+                            itemsIndexed(items, key = { _, item -> "${item.first}:${item.second}" }) { index, item ->
+                                MediaThumbnailCard(
+                                    item = item,
+                                    index = index,
+                                    selected = index == pagerState.currentPage,
+                                    onClick = { scope.launch { pagerState.animateScrollToPage(index) } }
+                                )
+                            }
+                        }
                     }
                 }
             }

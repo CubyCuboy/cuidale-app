@@ -628,6 +628,9 @@
     <string name="chat_error_compress_image">No se pudo comprimir la imagen</string>
     <string name="chat_error_read_file">No se pudo leer el archivo</string>
     <string name="chat_error_send_media">Error al enviar multimedia</string>
+    <string name="chat_disclaimer_title">Aviso importante</string>
+    <string name="chat_disclaimer_body">Lo que se hable en este chat y los datos compartidos desde aquí son responsabilidad de ambos participantes. Esto incluye los mensajes de texto, fotos, videos, documentos y cualquier otra información que envíes. No compartas datos sensibles (contraseñas, claves, documentos personales, ubicación exacta, datos bancarios) con personas que no conozcas en persona. Recuerda que no podemos garantizar la privacidad total del contenido que el otro usuario pueda reenviar o guardar. Al usar este chat aceptas estas condiciones bajo tu propia responsabilidad.</string>
+    <string name="chat_disclaimer_hold_cta">Mantén presionado 3 s para continuar</string>
     <string name="chat_media_limit_reached">Has alcanzado el límite máximo. Elimina adjuntos para poder agregar más.</string>
     <string name="chat_error_photo_size">La foto supera el límite individual de 25 MB (pesa %1$s).</string>
     <string name="chat_error_photo_limit">No se pudo agregar la foto: límite de adjuntos alcanzado (%1$d/10).</string>

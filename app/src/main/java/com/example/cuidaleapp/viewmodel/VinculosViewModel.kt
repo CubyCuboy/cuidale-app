@@ -1,6 +1,7 @@
 package com.example.cuidaleapp.viewmodel
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.cuidaleapp.models.Notification
@@ -149,7 +150,8 @@ class VinculosViewModel(application: Application) : AndroidViewModel(application
                 _uiState.value = VinculosUiState.Success("Solicitud enviada")
                 loadVinculos()
             } catch (e: Exception) {
-                _uiState.value = VinculosUiState.Error("Error al enviar solicitud")
+                Log.e("VINCULO_DEBUG", "enviarSolicitud falló", e)
+                _uiState.value = VinculosUiState.Error("Error al enviar solicitud: ${e.localizedMessage ?: e.message}")
             }
         }
     }

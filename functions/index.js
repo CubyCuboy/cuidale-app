@@ -369,9 +369,23 @@ exports.resolveAccountByRut = onCall(
     const data = doc.data() || {};
     const email = String(data.correo || "");
     if (!email) throw new HttpsError("not-found", "La cuenta no tiene un correo asociado.");
-    const hasPassword = Array.isArray(data.linkedAccounts)
+    let hasPassword = Array.isArray(data.linkedAccounts)
       ? data.linkedAccounts.some((a) => a.providerId === "email")
       : false;
+
+    // Cuentas vinculadas o heredadas pueden no tener el campo linkedAccounts con
+    // el proveedor "email". Consultamos Firebase Auth para confirmar si la
+    // cuenta realmente tiene contraseña (proveedor password).
+    if (!hasPassword) {
+      try {
+        const authUser = await auth.getUserByEmail(email);
+        hasPassword = authUser.providerData.some(
+          (p) => p.providerId === "password" || p.providerId === "email"
+        );
+      } catch (e) {
+        console.error("resolveAccountByRut: al verificar proveedores:", e);
+      }
+    }
 
     return {
       ok: true,

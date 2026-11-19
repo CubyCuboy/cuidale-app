@@ -335,89 +335,57 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     val input = identifier.lowercase().trim()
                     val isEmail = input.isNotEmpty() && input[0].isLetter() && input.contains("@")
 
-                    var targetEmail: String = ""
-                    var userData: UserData? = null
+                    var targetEmail = ""
+                    var cachedRutKey: String? = null
 
                     if (isEmail) {
                         targetEmail = input
-                        val query = db.collection("usuarios")
-                            .whereEqualTo("correo", targetEmail)
-                            .get()
-                            .await()
-
-                        if (!query.isEmpty) {
-                            userData = parseDocumentToUserData(query.documents[0])
-                        } else {
-                            val queryRetry = db.collection("usuarios")
-                                .whereEqualTo("correo", identifier.trim())
-                                .get()
-                                .await()
-                            if (!queryRetry.isEmpty) {
-                                userData = parseDocumentToUserData(queryRetry.documents[0])
-                                targetEmail = userData?.correo ?: identifier.trim()
-                            } else {
-                                throw Exception("Usuario no registrado")
-                            }
-                        }
                     } else {
                         val formattedRut = formatRut(input)
+                        cachedRutKey = getCachedRutKey(formattedRut).ifBlank { null }
 
-                        // 1) Intentar con el rutKey cacheado localmente (sin llamar Cloud Function).
-                        var resolvedRut: com.example.cuidaleapp.utils.ResolvedAccount? = null
-                        val cachedKey = getCachedRutKey(formattedRut)
-                        if (cachedKey.isNotBlank()) {
-                            val cachedDoc = db.collection("usuarios").document(cachedKey).get().await()
-                            if (cachedDoc.exists()) {
-                                val cachedUser = parseDocumentToUserData(cachedDoc)
-                                if (cachedUser != null && cachedUser.correo.isNotBlank()) {
-                                    resolvedRut = com.example.cuidaleapp.utils.ResolvedAccount(
-                                        email = cachedUser.correo,
-                                        hasPassword = cachedUser.findLinkedAccount("email") != null,
-                                        verified = cachedUser.verificado,
-                                        rutKey = cachedKey
-                                    )
-                                    userData = cachedUser
-                                }
-                            }
+                        // Resolver la cuenta por RUT con la Cloud Function (Admin SDK:
+                        // funciona sin sesión y no depende de las reglas). Evita leer
+                        // Firestore antes del sign-in (que con las reglas actuales
+                        // devolvía "Permission denied").
+                        val resolvedRut = com.example.cuidaleapp.utils.FirebaseFunctionsApi.resolveAccountByRut(formattedRut)
+                            ?: throw Exception("Rut no encontrado")
+                        if (resolvedRut.rutKey.isNotBlank()) {
+                            saveCachedRutKey(formattedRut, resolvedRut.rutKey)
+                            cachedRutKey = resolvedRut.rutKey
                         }
-
-                        // 2) Fallback: Cloud Function (primera vez o si cambió el RUT/dispositivo).
-                        if (resolvedRut == null) {
-                            resolvedRut = com.example.cuidaleapp.utils.FirebaseFunctionsApi.resolveAccountByRut(formattedRut)
-                            if (resolvedRut != null && resolvedRut.rutKey.isNotBlank()) {
-                                saveCachedRutKey(formattedRut, resolvedRut.rutKey)
-                            }
-                        }
-
-                        val finalResolved = resolvedRut ?: throw Exception("Rut no encontrado")
-                        if (!finalResolved.hasPassword) {
+                        if (!resolvedRut.hasPassword) {
                             throw Exception("Esta cuenta usa otro método de acceso (Google/Microsoft)")
                         }
-                        targetEmail = finalResolved.email.ifBlank { throw Exception("El usuario no tiene un correo asociado") }
-                        if (userData == null) {
-                            val doc = com.example.cuidaleapp.utils.AccountUtils.findCanonicalUserDocument(db, targetEmail, null)
-                            if (doc != null) {
-                                userData = parseDocumentToUserData(doc)
-                            }
-                        }
+                        targetEmail = resolvedRut.email.ifBlank { throw Exception("El usuario no tiene un correo asociado") }
                     }
 
+                    // 1) Autenticar PRIMERO (las reglas exigen sesión para leer "usuarios").
                     try {
                         auth.signInWithEmailAndPassword(targetEmail, contrasena).await()
                     } catch (e: Exception) {
                         throw Exception("Credenciales incorrectas")
                     }
 
-                    if (userData != null) {
-                        val passwordAccount = userData.findLinkedAccount("email")
-                        val isVerified = passwordAccount?.verificado ?: userData.verificado
-                        if (!isVerified) {
-                            throw LoginNeedsVerification(targetEmail)
-                        }
-                        userSession.saveUser(userData)
-                    } else {
-                        throw Exception("Error al recuperar datos")
+                    // 2) Con sesión iniciada, cargar el perfil desde Firestore, usando
+                    //    primero el documento por RUT hasheado (cacheado) y luego el
+                    //    canónico por correo/uid.
+                    val uid = auth.currentUser?.uid ?: throw Exception("Error al recuperar datos")
+                    val userData = cachedRutKey?.let { key ->
+                        db.collection("usuarios").document(key).get().await()
+                            .takeIf { it.exists() }
+                            ?.let { parseDocumentToUserData(it, uid) }
+                    } ?: com.example.cuidaleapp.utils.AccountUtils.findCanonicalUserDocument(db, targetEmail, uid)
+                        ?.let { parseDocumentToUserData(it, uid) }
+                        ?: throw Exception("Error al recuperar datos")
+
+                    val passwordAccount = userData.findLinkedAccount("email")
+                    val isVerified = passwordAccount?.verificado ?: userData.verificado
+                    if (!isVerified) {
+                        throw LoginNeedsVerification(targetEmail)
                     }
+
+                    userSession.saveUser(userData)
                     userData
                 }
 
@@ -453,18 +421,6 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 val formattedRut = formatRut(input)
-
-                val cachedKey = getCachedRutKey(formattedRut)
-                if (cachedKey.isNotBlank()) {
-                    val doc = db.collection("usuarios").document(cachedKey).get().await()
-                    if (doc.exists()) {
-                        val email = doc.getString("correo") ?: ""
-                        if (email.isNotBlank()) {
-                            onResolved(email)
-                            return@launch
-                        }
-                    }
-                }
 
                 val resolvedRut = com.example.cuidaleapp.utils.FirebaseFunctionsApi.resolveAccountByRut(formattedRut)
                 if (resolvedRut != null && resolvedRut.rutKey.isNotBlank()) {

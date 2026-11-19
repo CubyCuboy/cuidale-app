@@ -12,8 +12,16 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import android.util.Log
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.aspectRatio
@@ -231,6 +239,7 @@ fun ChatScreen(
                     coil3.SingletonImageLoader.get(context).enqueue(
                         coil3.request.ImageRequest.Builder(context)
                             .data(url)
+                            .size(512)
                             .memoryCachePolicy(coil3.request.CachePolicy.ENABLED)
                             .diskCachePolicy(coil3.request.CachePolicy.ENABLED)
                             .build()
@@ -306,8 +315,10 @@ fun ChatScreen(
         val downloadUrl: String
         when (item.kind) {
             "image" -> {
-                val compressed = MediaCompressor.compressImage(context, item.uri) ?: throw Exception(context.getString(R.string.chat_error_compress_image))
-                storageRef.putBytes(compressed).await()
+                // Streaming directo (sin cargar la imagen completa en memoria) para
+                // evitar OutOfMemory con imágenes pesadas.
+                val input = context.contentResolver.openInputStream(item.uri) ?: throw Exception(context.getString(R.string.chat_error_read_file))
+                input.use { stream -> storageRef.putStream(stream).await() }
                 downloadUrl = storageRef.downloadUrl.await().toString()
                 viewModel.sendMessage(
                     chatId = chatId,
@@ -392,6 +403,7 @@ fun ChatScreen(
     fun sendPendingMedia() {
         if (isUploadingMedia || pendingMediaItems.isEmpty()) return
         scope.launch {
+            try {
             isUploadingMedia = true
             val replyMsg = replyingToMessage
             val items = pendingMediaItems.toList()
@@ -421,7 +433,7 @@ fun ChatScreen(
                         }
                 }
                 if (uploaded.isNotEmpty()) {
-                    viewModel.sendMediaBatch(chatId, uploaded)
+                    runCatching { viewModel.sendMediaBatch(chatId, uploaded) }
                     replyingToMessage = null
                     // Pre-cachea el lote recién enviado para que quede disponible
                     // offline sin volver a descargarlo.
@@ -431,6 +443,7 @@ fun ChatScreen(
                                 coil3.SingletonImageLoader.get(context).enqueue(
                                     coil3.request.ImageRequest.Builder(context)
                                         .data(url)
+                                        .size(512)
                                         .memoryCachePolicy(coil3.request.CachePolicy.ENABLED)
                                         .diskCachePolicy(coil3.request.CachePolicy.ENABLED)
                                         .build()
@@ -446,7 +459,12 @@ fun ChatScreen(
             }
 
             mediaError = firstError
-            isUploadingMedia = false
+            } catch (t: Throwable) {
+                Log.e("ChatScreen", "sendPendingMedia falló", t)
+                mediaError = context.getString(R.string.chat_error_send_media)
+            } finally {
+                isUploadingMedia = false
+            }
         }
     }
 
@@ -502,16 +520,18 @@ fun ChatScreen(
     // el filtrado estricto ocurre en addPendingMedia (nunca se supera 10/25MB).
     // Selector nativo múltiple (imágenes + videos). Limita la selección a los
     // cupos disponibles para que el usuario no seleccione de más ni se descarte
-    // nada en silencio.
+    // nada en silencio. IMPORTANTE: PickMultipleVisualMedia exige maxItems > 1,
+    // así que cuando la cola llega a 10 no se puede pedir 1 (crash).
     val mediaPickerLauncher = key(pendingMediaItems.size) {
         rememberLauncherForActivityResult(
-            ActivityResultContracts.PickMultipleVisualMedia(maxItems = (10 - pendingMediaItems.size).coerceAtLeast(1))
+            ActivityResultContracts.PickMultipleVisualMedia(maxItems = (10 - pendingMediaItems.size).coerceIn(2, 10))
         ) { uris ->
             var added = 0
             var countLimit = false
             var sizeLimit = false
             var totalLimit = false
             val overSized = mutableListOf<Pair<String, String>>() // (nombre, peso legible)
+            try {
             uris.forEach { uri ->
                 if (pendingMediaItems.size >= 10) { countLimit = true; return@forEach }
                 val kind = if (MediaCompressor.isVideo(context, uri)) "video" else "image"
@@ -532,12 +552,18 @@ fun ChatScreen(
             mediaError = when {
                 sizeLimit -> {
                     val detalle = overSized.joinToString("; ") { (n, s) -> "$n ($s)" }
-                    context.getString(R.string.chat_error_media_size_overall, detalle, totalAdjuntos)
+                    context.getString(R.string.chat_error_media_size_overall, detalle, totalAdjuntos) +
+                        " Envíalo en un mensaje aparte."
                 }
-                totalLimit -> context.getString(R.string.chat_error_media_total_limit, totalAdjuntos)
+                totalLimit -> context.getString(R.string.chat_error_media_total_limit, totalAdjuntos) +
+      " El último archivo supera el máximo; envíalo en un mensaje aparte."
                 countLimit -> context.getString(R.string.chat_error_media_count_limit, totalAdjuntos)
                 added == 0 && uris.isNotEmpty() -> context.getString(R.string.chat_error_media_add_failed)
                 else -> null
+            }
+            } catch (t: Throwable) {
+                Log.e("ChatScreen", "media picker falló", t)
+                mediaError = context.getString(R.string.chat_error_media_add_failed)
             }
         }
     }
@@ -564,6 +590,12 @@ fun ChatScreen(
     }
     
     var highlightedMessageId by remember { mutableStateOf<String?>(null) }
+  var showFirstChatDisclaimer by remember {
+      mutableStateOf(
+          !context.getSharedPreferences("cuidale_prefs", android.content.Context.MODE_PRIVATE)
+              .getBoolean("first_chat_disclaimer_done", false)
+      )
+  }
     var fullImageUrl by remember { mutableStateOf<String?>(null) }
     var fullVideoUrl by remember { mutableStateOf<String?>(null) }
     var galleryMessage by remember { mutableStateOf<ChatMessage?>(null) }
@@ -1043,7 +1075,21 @@ fun ChatScreen(
                                     }
                                 }
                             } else {
-                                val reversedMessages = remember(filteredMessages) { filteredMessages.reversed() }
+                                val chatItems = remember(filteredMessages) {
+                                    val asc = buildList {
+                                        var lastDay: Pair<Int, Int>? = null
+                                        filteredMessages.sortedBy { it.timestamp }.forEach { m ->
+                                            val c = Calendar.getInstance().apply { timeInMillis = m.timestamp }
+                                            val day = c.get(Calendar.YEAR) to c.get(Calendar.DAY_OF_YEAR)
+                                            if (day != lastDay) {
+                                                add(ChatListItem.Header(m.timestamp))
+                                                lastDay = day
+                                            }
+                                            add(ChatListItem.Message(m))
+                                        }
+                                    }
+                                    asc.asReversed()
+                                }
                                 LazyColumn(
                                     state = listState,
                                     modifier = Modifier.fillMaxSize(),
@@ -1060,55 +1106,55 @@ fun ChatScreen(
                                             }
                                         }
                                     }
-                                    items(items = reversedMessages, key = { it.id }) { msg ->
-                                        val index = reversedMessages.indexOf(msg)
-
-                                        if (index < reversedMessages.size - 1) {
-                                            val nextMsg = reversedMessages[index + 1]
-                                            if (!isSameDay(msg.timestamp, nextMsg.timestamp)) {
-                                                DayDivider(msg.timestamp)
-                                            }
-                                        } else if (index == reversedMessages.size - 1) {
-                                            DayDivider(msg.timestamp)
+                                    items(items = chatItems, key = {
+                                        when (it) {
+                                            is ChatListItem.Header -> "h-${it.timestamp}"
+                                            is ChatListItem.Message -> "m-${it.msg.id}"
                                         }
-
-                                        androidx.compose.animation.AnimatedVisibility(
-                                            visible = true,
-                                            enter = fadeIn(tween(250)) + scaleIn(initialScale = 0.92f, animationSpec = tween(250)),
-                                            modifier = Modifier.animateItem()
-                                        ) {
-                                            if (msg.senderId == "system") {
-                                                SystemMessage(msg.text)
-                                            } else {
-                                                val isHighlighted = highlightedMessageId == msg.id
-                                                ChatBubble(
-                                                    msg = msg,
-                                                    isMe = msg.senderId == myUid,
-                                                    isDark = isDark,
-                                                    isSelected = selectedMessages.any { it.id == msg.id },
-                                                    isHighlighted = isHighlighted,
-                                                    onClick = {
-                                                        if (selectedMessages.isNotEmpty()) {
-                                                            if (selectedMessages.any { it.id == msg.id }) selectedMessages.removeAll { it.id == msg.id }
-                                                            else selectedMessages.add(msg)
-                                                        }
-                                                    },
-                                                    onLongClick = { if (selectedMessages.isEmpty()) selectedMessages.add(msg) },
-                                                    onSwipeRight = { if (!isBlocked && !iHaveBlocked && isOnline) replyingToMessage = msg },
-                                                    onImageClick = { fullImageUrl = msg.imageUrl },
-                                                    onExpandVideo = { fullVideoUrl = it },
-                                                    onOpenBatchImage = { url ->
-                                                        galleryMessage = msg
-                                                        galleryStartUrl = url
-                                                    },
-                                                    onViewPostulacion = { solId -> onViewRequest?.invoke(solId) ?: onRedirectToRequests() },
-                                                    onDoubleClick = {
-                                                        if (msg.senderId == myUid && !msg.deleted && isOnline) {
-                                                            messageToEdit = msg
-                                                            inputText = msg.text
-                                                        }
+                                    }) { entry ->
+                                        when (entry) {
+                                            is ChatListItem.Header -> DayDivider(entry.timestamp)
+                                            is ChatListItem.Message -> {
+                                                val msg = entry.msg
+                                                androidx.compose.animation.AnimatedVisibility(
+                                                    visible = true,
+                                                    enter = fadeIn(tween(250)) + scaleIn(initialScale = 0.92f, animationSpec = tween(250)),
+                                                    modifier = Modifier.animateItem()
+                                                ) {
+                                                    if (msg.senderId == "system") {
+                                                        SystemMessage(msg.text)
+                                                    } else {
+                                                        val isHighlighted = highlightedMessageId == msg.id
+                                                        ChatBubble(
+                                                            msg = msg,
+                                                            isMe = msg.senderId == myUid,
+                                                            isDark = isDark,
+                                                            isSelected = selectedMessages.any { it.id == msg.id },
+                                                            isHighlighted = isHighlighted,
+                                                            onClick = {
+                                                                if (selectedMessages.isNotEmpty()) {
+                                                                    if (selectedMessages.any { it.id == msg.id }) selectedMessages.removeAll { it.id == msg.id }
+                                                                    else selectedMessages.add(msg)
+                                                                }
+                                                            },
+                                                            onLongClick = { if (selectedMessages.isEmpty()) selectedMessages.add(msg) },
+                                                            onSwipeRight = { if (!isBlocked && !iHaveBlocked && isOnline) replyingToMessage = msg },
+                                                            onImageClick = { fullImageUrl = msg.imageUrl },
+                                                            onExpandVideo = { fullVideoUrl = it },
+                                                            onOpenBatchImage = { url ->
+                                                                galleryMessage = msg
+                                                                galleryStartUrl = url
+                                                            },
+                                                            onViewPostulacion = { solId -> onViewRequest?.invoke(solId) ?: onRedirectToRequests() },
+                                                            onDoubleClick = {
+                                                                if (msg.senderId == myUid && !msg.deleted && isOnline) {
+                                                                    messageToEdit = msg
+                                                                    inputText = msg.text
+                                                                }
+                                                            }
+                                                        )
                                                     }
-                                                )
+                                                }
                                             }
                                         }
                                     }
@@ -1338,7 +1384,7 @@ fun ChatScreen(
                                                 Box(modifier = Modifier.size(64.dp)) {
                                                     when (item.kind) {
                                                         "image" -> AsyncImage(
-                                                            model = item.uri,
+                                                            model = coil3.request.ImageRequest.Builder(context).data(item.uri).size(256).build(),
                                                             contentDescription = item.name,
                                                             modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)),
                                                             contentScale = ContentScale.Crop
@@ -1811,7 +1857,7 @@ fun ChatScreen(
                                     .background(MaterialTheme.colorScheme.surfaceVariant)
                             ) {
                                 when (item.kind) {
-                                    "image" -> AsyncImage(model = item.uri, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                    "image" -> AsyncImage(model = coil3.request.ImageRequest.Builder(context).data(item.uri).size(256).build(), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                                     "video" -> com.example.cuidaleapp.ui.components.VideoFirstFrame(item.uri.toString(), Modifier.fillMaxSize())
                                     else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                         Icon(Icons.AutoMirrored.Filled.InsertDriveFile, null, tint = Color.Gray)
@@ -1952,7 +1998,76 @@ fun ChatScreen(
         }
     }
 
-    if (showPinnedMessages) {
+      if (showFirstChatDisclaimer) {
+        val holdProgress = remember { mutableFloatStateOf(0f) }
+        var holding by remember { mutableStateOf(false) }
+        LaunchedEffect(holding) {
+            if (holding) {
+                val start = System.currentTimeMillis()
+                while (System.currentTimeMillis() - start < 3000L) {
+                    holdProgress.floatValue = (System.currentTimeMillis() - start) / 3000f
+                    kotlinx.coroutines.delay(40)
+                }
+                holdProgress.floatValue = 1f
+                context.getSharedPreferences("cuidale_prefs", android.content.Context.MODE_PRIVATE)
+                    .edit().putBoolean("first_chat_disclaimer_done", true).commit()
+                showFirstChatDisclaimer = false
+            } else {
+                holdProgress.floatValue = 0f
+            }
+        }
+        Dialog(
+            onDismissRequest = {},
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnBackPress = false,
+                dismissOnClickOutside = false
+            )
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    modifier = Modifier.fillMaxWidth().padding(24.dp)
+                ) {
+                    Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(stringResource(R.string.chat_disclaimer_title), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.headlineSmall)
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            stringResource(R.string.chat_disclaimer_body),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Spacer(Modifier.height(24.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(MaterialTheme.colorScheme.primary)
+                                .pointerInput(Unit) {
+                                    awaitEachGesture {
+                                        awaitFirstDown()
+                                        holding = true
+                                        waitForUpOrCancellation()
+                                        holding = false
+                                    }
+                                }
+                                .padding(vertical = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(stringResource(R.string.chat_disclaimer_hold_cta), color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Medium)
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        LinearProgressIndicator(progress = { holdProgress.floatValue }, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            }
+        }
+    }
+
+  if (showPinnedMessages) {
         var pinnedFilter by remember { mutableStateOf<String?>(null) }
         val filteredPinned = remember(pinnedMessages, pinnedFilter) {
             pinnedMessages.filter { msg ->
@@ -2181,7 +2296,8 @@ fun ChatBubble(
         }
 
         Column(horizontalAlignment = if (isMe) Alignment.End else Alignment.Start) {
-            val hasMedia = msg.imageUrl != null || msg.videoUrl != null || msg.fileUrl != null || msg.type == "media_group"
+            val esLote = msg.type == "media_group" || msg.metadata.containsKey("mediaBatch")
+            val hasMedia = msg.imageUrl != null || msg.videoUrl != null || msg.fileUrl != null || esLote
             Surface(
                 color = finalBubbleColor,
                 shape = RoundedCornerShape(
@@ -2240,7 +2356,7 @@ fun ChatBubble(
                                         onLongClick = onLongClick
                                     )
                             ) {
-                                com.example.cuidaleapp.ui.components.VideoFirstFrame(url = msg.videoUrl, modifier = Modifier.fillMaxSize())
+                                com.example.cuidaleapp.ui.components.VideoPreviewWithDuration(url = msg.videoUrl, modifier = Modifier.fillMaxSize())
                                 Box(
                                     modifier = Modifier
                                         .align(Alignment.Center)
@@ -2258,8 +2374,8 @@ fun ChatBubble(
                             Spacer(Modifier.height(4.dp))
                         }
                         
-                        when (msg.type) {
-                            "media_group" -> {
+                        when {
+                            esLote -> {
                                 MediaBatchContent(
                                     msg = msg,
                                     onImageClick = { url -> onOpenBatchImage(url) },
@@ -2267,10 +2383,10 @@ fun ChatBubble(
                                     onLongClick = onLongClick
                                 )
                             }
-                            "aviso_postulacion", "solicitud_compartida" -> {
+                            msg.type == "aviso_postulacion" || msg.type == "solicitud_compartida" -> {
                                 RequestAlertBubble(msg, onViewClick = { onViewPostulacion(msg.metadata["solicitudId"] ?: "") })
                             }
-                            "tarea_compartida" -> {
+                            msg.type == "tarea_compartida" -> {
                                 TaskSharedBubble(msg.text, isMe)
                             }
                             else -> {
@@ -2329,9 +2445,11 @@ private fun MediaBatchContent(
     val total = items.size
     val visible = items.take(6)
 
-    // Precarga el lote completo a la caché local: imágenes completas (Coil)
-    // y primer frame de cada video, para que todo el conjunto quede cacheados
-    // y no haya que descargarlo de nuevo al revisarlo o verlo offline.
+    // Precarga el lote completo a la caché local: versión acotada de cada imagen
+    // (Coil) y primer frame de cada video, para que todo el conjunto quede cacheados
+    // y no haya que descargarlo de nuevo al revisarlo o verlo offline. La precarga
+    // debe estar acotada: sin .size() Coil decodifica a resolución completa y 10
+    // imágenes simultáneas provocan OutOfMemory.
     val context = LocalContext.current
     LaunchedEffect(items) {
         items.forEach { item ->
@@ -2340,6 +2458,7 @@ private fun MediaBatchContent(
                     coil3.SingletonImageLoader.get(context).enqueue(
                         coil3.request.ImageRequest.Builder(context)
                             .data(item.second)
+                            .size(1024)
                             .memoryCachePolicy(coil3.request.CachePolicy.ENABLED)
                             .diskCachePolicy(coil3.request.CachePolicy.ENABLED)
                             .build()
@@ -2350,107 +2469,217 @@ private fun MediaBatchContent(
         }
     }
 
-    // Grid adaptativo: el número de columnas depende del ancho disponible, así
-    // las miniaturas quedan cuadradas y sin cortes en cualquier resolución.
-    BoxWithConstraints(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
-        val minCell = 92.dp
-        val cols = (maxWidth / minCell).toInt().coerceIn(1, 3)
-        val space = 4.dp
+    // Grid estilo WhatsApp: celdas cuadradas con Crop (sin barras negras) y
+    // disposición adaptativa según la cantidad. El "+N" se integra en la última
+    // miniatura visible en lugar de un contador flotante.
+    val extraCount = (total - visible.size).coerceAtLeast(0)
+    val space = 4.dp
 
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(space)
-        ) {
-            var idx = 0
-            while (idx < visible.size) {
-                val remaining = visible.size - idx
-                val rowCount = minOf(cols, remaining)
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(space)
+    ) {
+        when (visible.size) {
+            1 -> {
+                MediaBatchTile(
+                    item = visible[0],
+                    modifier = Modifier.fillMaxWidth().aspectRatio(4f / 3f),
+                    featured = true,
+                    extraCount = extraCount,
+                    onImageClick = onImageClick,
+                    onLongClick = onLongClick
+                )
+            }
+            2 -> {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(space)
                 ) {
-                    repeat(rowCount) { offset ->
-                        val item = visible[idx + offset]
-                        val isLastSingle = remaining == 1
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .then(
-                                    if (isLastSingle) Modifier.aspectRatio(4f / 3f)
-                                    else Modifier.aspectRatio(1f)
-                                )
-                                .clip(RoundedCornerShape(12.dp))
-                        ) {
-                            when (item.first) {
-                                "video" -> {
-                                    // Preview estático + play (sin crear un ExoPlayer por tile).
-                                    com.example.cuidaleapp.ui.components.VideoFirstFrame(
-                                        url = item.second,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                    Box(
-                                        modifier = Modifier
-                                            .align(Alignment.Center)
-                                            .size(if (isLastSingle) 56.dp else 40.dp)
-                                            .background(Color.Black.copy(alpha = 0.45f), CircleShape)
-                                            .combinedClickable(
-                                                interactionSource = remember { MutableInteractionSource() },
-                                                indication = null,
-                                                onClick = { onExpandVideo(item.second) },
-                                                onLongClick = onLongClick
-                                            ),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            Icons.Default.PlayArrow,
-                                            null,
-                                            tint = Color.White,
-                                            modifier = Modifier.size(if (isLastSingle) 32.dp else 24.dp)
-                                        )
-                                    }
-                                }
-                                else -> Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(Color.Black.copy(alpha = 0.04f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    com.example.cuidaleapp.ui.components.ChatMediaImage(
-                                        url = item.second,
-                                        modifier = Modifier.fillMaxSize(),
-                                        // Fit muestra la imagen completa sin cortarla; el
-                                        // fondo oscuro suave rellena el espacio sobrante.
-                                        contentScale = ContentScale.Fit,
-                                        onClick = { onImageClick(item.second) },
-                                        onLongClick = onLongClick
-                                    )
-                                }
-                            }
+                    repeat(2) { i ->
+                        MediaBatchTile(
+                            item = visible[i],
+                            modifier = Modifier.weight(1f).aspectRatio(1f),
+                            extraCount = if (i == 1) extraCount else 0,
+                            onImageClick = onImageClick,
+                            onLongClick = onLongClick
+                        )
+                    }
+                }
+            }
+            3 -> {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(space)
+                ) {
+                    MediaBatchTile(
+                        item = visible[0],
+                        modifier = Modifier.weight(1f).aspectRatio(1f),
+                        featured = true,
+                        onImageClick = onImageClick,
+                        onLongClick = onLongClick
+                    )
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(space)
+                    ) {
+                        MediaBatchTile(
+                            item = visible[1],
+                            modifier = Modifier.fillMaxWidth().weight(1f),
+                            onImageClick = onImageClick,
+                            onLongClick = onLongClick
+                        )
+                        MediaBatchTile(
+                            item = visible[2],
+                            modifier = Modifier.fillMaxWidth().weight(1f),
+                            extraCount = extraCount,
+                            onImageClick = onImageClick,
+                            onLongClick = onLongClick
+                        )
+                    }
+                }
+            }
+            4 -> {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(space)
+                ) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(space)) {
+                        MediaBatchTile(visible[0], Modifier.weight(1f).aspectRatio(1f), onImageClick = onImageClick, onLongClick = onLongClick)
+                        MediaBatchTile(visible[1], Modifier.weight(1f).aspectRatio(1f), onImageClick = onImageClick, onLongClick = onLongClick)
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(space)) {
+                        MediaBatchTile(visible[2], Modifier.weight(1f).aspectRatio(1f), onImageClick = onImageClick, onLongClick = onLongClick)
+                        MediaBatchTile(visible[3], Modifier.weight(1f).aspectRatio(1f), extraCount = extraCount, onImageClick = onImageClick, onLongClick = onLongClick)
+                    }
+                }
+            }
+            5 -> {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(space)
+                ) {
+                    MediaBatchTile(
+                        item = visible[0],
+                        modifier = Modifier.weight(1f).aspectRatio(1f),
+                        featured = true,
+                        onImageClick = onImageClick,
+                        onLongClick = onLongClick
+                    )
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(space)
+                    ) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(space)) {
+                            MediaBatchTile(visible[1], Modifier.weight(1f).aspectRatio(1f), onImageClick = onImageClick, onLongClick = onLongClick)
+                            MediaBatchTile(visible[2], Modifier.weight(1f).aspectRatio(1f), onImageClick = onImageClick, onLongClick = onLongClick)
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(space)) {
+                            MediaBatchTile(visible[3], Modifier.weight(1f).aspectRatio(1f), onImageClick = onImageClick, onLongClick = onLongClick)
+                            MediaBatchTile(visible[4], Modifier.weight(1f).aspectRatio(1f), extraCount = extraCount, onImageClick = onImageClick, onLongClick = onLongClick)
                         }
                     }
                 }
-                idx += rowCount
+            }
+            else -> {
+                // 6 o más: 2 filas × 3 columnas, "+N" en la última celda.
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(space)
+                ) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(space)) {
+                        repeat(3) { i ->
+                            MediaBatchTile(visible[i], Modifier.weight(1f).aspectRatio(1f), onImageClick = onImageClick, onLongClick = onLongClick)
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(space)) {
+                        repeat(3) { i ->
+                            val index = i + 3
+                            MediaBatchTile(visible[index], Modifier.weight(1f).aspectRatio(1f), extraCount = if (index == 5) extraCount else 0, onImageClick = onImageClick, onLongClick = onLongClick)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Celda individual del lote: miniatura con Crop (sin barras negras), overlay de
+ * play para videos y badge "+N" cuando hay más elementos que los visibles.
+ */
+@Composable
+private fun MediaBatchTile(
+    item: Triple<String, String, String>,
+    modifier: Modifier = Modifier,
+    featured: Boolean = false,
+    extraCount: Int = 0,
+    onImageClick: (String) -> Unit,
+    onLongClick: () -> Unit
+) {
+    val playIconOuter = if (featured) 56.dp else 40.dp
+    val playIconInner = if (featured) 32.dp else 24.dp
+
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .combinedClickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = { onImageClick(item.second) },
+                onLongClick = onLongClick
+            )
+    ) {
+        when (item.first) {
+            "video" -> {
+                com.example.cuidaleapp.ui.components.VideoPreviewWithDuration(
+                    url = item.second,
+                    modifier = Modifier.fillMaxSize()
+                )
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(playIconOuter)
+                        .background(Color.Black.copy(alpha = 0.45f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.PlayArrow,
+                        null,
+                        tint = Color.White,
+                        modifier = Modifier.size(playIconInner)
+                    )
+                }
+            }
+            else -> Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.04f)),
+                contentAlignment = Alignment.Center
+            ) {
+                com.example.cuidaleapp.ui.components.ChatMediaImage(
+                    url = item.second,
+                    modifier = Modifier.fillMaxSize(),
+                    fullSize = 768,
+                    // Crop recorta la imagen para llenar la celda sin barras negras.
+                    contentScale = ContentScale.Crop
+                )
             }
         }
 
-        // Contador de elementos: elevado y despejado para no superponerse con
-        // la barra de navegación ni ocultar la miniatura.
-        Surface(
-            color = Color.Black.copy(alpha = 0.55f),
-            shape = CircleShape,
-            shadowElevation = 4.dp,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .zIndex(1f)
-                .padding(6.dp)
-        ) {
-            Text(
-                text = total.toString(),
-                color = Color.White,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp)
-            )
+        if (extraCount > 0) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.45f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "+$extraCount",
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }
@@ -2989,6 +3218,11 @@ fun SystemMessage(text: String) {
     }
 }
 
+private sealed interface ChatListItem {
+    data class Header(val timestamp: Long) : ChatListItem
+    data class Message(val msg: ChatMessage) : ChatListItem
+}
+
 @Composable
 fun DayDivider(timestamp: Long) {
     Row(
@@ -3005,13 +3239,6 @@ fun DayDivider(timestamp: Long) {
         )
         HorizontalDivider(modifier = Modifier.weight(1f), color = Color.Gray.copy(alpha = 0.2f))
     }
-}
-
-private fun isSameDay(t1: Long, t2: Long): Boolean {
-    val c1 = Calendar.getInstance().apply { timeInMillis = t1 }
-    val c2 = Calendar.getInstance().apply { timeInMillis = t2 }
-    return c1.get(Calendar.YEAR) == c2.get(Calendar.YEAR) &&
-           c1.get(Calendar.DAY_OF_YEAR) == c2.get(Calendar.DAY_OF_YEAR)
 }
 
 private fun formatDividerDate(timestamp: Long, context: android.content.Context): String {
@@ -3085,7 +3312,28 @@ private fun LocalVideoPreview(uri: android.net.Uri, modifier: Modifier = Modifie
                 val retriever = android.media.MediaMetadataRetriever()
                 try {
                     retriever.setDataSource(context, uri)
-                    retriever.getFrameAtTime(1000, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                    if (android.os.Build.VERSION.SDK_INT >= 27) {
+                        // Decodifica directamente redimensionado: nunca materializa el frame
+                        // a resolución completa (evita OOM con lotes de videos).
+                        retriever.getScaledFrameAtTime(1000, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 640, 640)
+                    } else {
+                        val raw = retriever.getFrameAtTime(1000, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC) ?: return@runCatching null
+                        // Redimensiona el frame para no dejar bitmaps enormes en memoria.
+                        val longSide = if (raw.width >= raw.height) raw.width else raw.height
+                        val scale = if (longSide > 640) 640f / longSide else 1f
+                        if (scale < 1f) {
+                            val scaled = android.graphics.Bitmap.createScaledBitmap(
+                                raw,
+                                (raw.width * scale).toInt().coerceAtLeast(1),
+                                (raw.height * scale).toInt().coerceAtLeast(1),
+                                true
+                            )
+                            raw.recycle()
+                            scaled
+                        } else {
+                            raw
+                        }
+                    }
                 } finally {
                     runCatching { retriever.release() }
                 }
