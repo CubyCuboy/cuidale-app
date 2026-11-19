@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.cuidaleapp.models.Cuidador
 import com.example.cuidaleapp.models.toFeatureCollection
 import com.example.cuidaleapp.utils.LocationUtils
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.mapbox.geojson.FeatureCollection
 import com.mapbox.geojson.Point
@@ -22,6 +23,7 @@ sealed interface MapaUiState {
     data class Success(
         val cuidadores: List<Cuidador>,
         val geoJsonData: FeatureCollection?,
+        val comunaGeoJsonData: FeatureCollection? = null,
         val centroBusqueda: Point?,
         val mensajeAviso: String?,
         val cameraEventId: Long = System.currentTimeMillis()
@@ -32,6 +34,7 @@ sealed interface MapaUiState {
 class MapaCuidadoresViewModel(application: Application) : AndroidViewModel(application) {
 
     private val db = FirebaseFirestore.getInstance()
+    private val auth = FirebaseAuth.getInstance()
 
     private val _uiState = MutableStateFlow<MapaUiState>(MapaUiState.Loading)
     val uiState: StateFlow<MapaUiState> = _uiState.asStateFlow()
@@ -39,14 +42,77 @@ class MapaCuidadoresViewModel(application: Application) : AndroidViewModel(appli
     private val _isCargandoGps = MutableStateFlow(false)
     val isCargandoGps: StateFlow<Boolean> = _isCargandoGps.asStateFlow()
 
-    // Todos los cuidadores obtenidos de Firestore sin filtrar
+    // Filtros embebidos del mapa
+    private val _selectedRegion = MutableStateFlow("")
+    val selectedRegion: StateFlow<String> = _selectedRegion.asStateFlow()
+
+    private val _selectedCommunes = MutableStateFlow<List<String>>(emptyList())
+    val selectedCommunes: StateFlow<List<String>> = _selectedCommunes.asStateFlow()
+
+    // Preferencias de la Ficha Técnica del usuario
+    private val _useProfilePreferences = MutableStateFlow(false)
+    val useProfilePreferences: StateFlow<Boolean> = _useProfilePreferences.asStateFlow()
+
+    private val _profileCommunes = MutableStateFlow<List<String>>(emptyList())
+    val profileCommunes: StateFlow<List<String>> = _profileCommunes.asStateFlow()
+
+    private val _sinComunasEnFicha = MutableStateFlow(false)
+    val sinComunasEnFicha: StateFlow<Boolean> = _sinComunasEnFicha.asStateFlow()
+
+    // Lista completa de todos los cuidadores cargados desde Firestore con su desfase de privacidad
     private var todosLosCuidadores = mutableListOf<Cuidador>()
 
     // Punto central por defecto (Región Metropolitana, Santiago de Chile: Lat -33.4489, Lng -70.6693)
     val puntoGeneralRM = Point.fromLngLat(-70.6693, -33.4489)
 
     init {
+        cargarPreferenciasFicha()
         cargarCuidadoresFirestore()
+    }
+
+    /**
+     * Carga las comunas de preferencia guardadas en la Ficha Técnica del usuario actual
+     */
+    fun cargarPreferenciasFicha() {
+        val uid = auth.currentUser?.uid ?: return
+        viewModelScope.launch {
+            try {
+                val doc = db.collection("fichas").document(uid).get().await()
+                if (doc.exists()) {
+                    val tipo = doc.getString("tipo")
+                    val comunas = if (tipo == "cuidador") {
+                        @Suppress("UNCHECKED_CAST") (doc.get("comunas") as? List<String> ?: emptyList())
+                    } else {
+                        @Suppress("UNCHECKED_CAST") (doc.get("comunas_preferencia") as? List<String> ?: emptyList())
+                    }
+                    _profileCommunes.value = comunas
+                } else {
+                    _profileCommunes.value = emptyList()
+                }
+            } catch (e: Exception) {
+                _profileCommunes.value = emptyList()
+            }
+        }
+    }
+
+    /**
+     * Activa o desactiva la aplicación de preferencias de la Ficha del usuario
+     */
+    fun toggleProfilePreferences(enabled: Boolean) {
+        _useProfilePreferences.value = enabled
+        if (enabled) {
+            if (_profileCommunes.value.isNotEmpty()) {
+                _selectedCommunes.value = _profileCommunes.value.take(3)
+                _sinComunasEnFicha.value = false
+            } else {
+                _sinComunasEnFicha.value = true
+                _selectedCommunes.value = emptyList()
+            }
+        } else {
+            _sinComunasEnFicha.value = false
+            _selectedCommunes.value = emptyList()
+        }
+        aplicarFiltrosYActualizarUi(moverCamara = false)
     }
 
     /**
@@ -66,6 +132,7 @@ class MapaCuidadoresViewModel(application: Application) : AndroidViewModel(appli
                         val nombre = doc.getString("nombre") ?: doc.getString("nombre_completo") ?: "Cuidador"
                         val especialidad = doc.getString("especialidad") ?: doc.getString("especializacion") ?: "Cuidado General"
                         val comuna = doc.getString("comuna") ?: "Santiago"
+                        val region = doc.getString("region") ?: "Metropolitana de Santiago"
                         val disponible = doc.getBoolean("disponible") ?: true
                         val fotoUrl = doc.getString("fotoUrl") ?: ""
 
@@ -81,6 +148,7 @@ class MapaCuidadoresViewModel(application: Application) : AndroidViewModel(appli
                                 nombre = nombre,
                                 especialidad = especialidad,
                                 comuna = comuna,
+                                region = region,
                                 disponible = disponible,
                                 latitud = latFinal,
                                 longitud = lngFinal,
@@ -92,7 +160,7 @@ class MapaCuidadoresViewModel(application: Application) : AndroidViewModel(appli
                     e.printStackTrace()
                 }
 
-                // 2. Si "cuidadores" tiene pocos registros, complementar desde "usuarios" con rol == "cuidador"
+                // 2. Complementar desde "usuarios" con rol == "cuidador"
                 if (listaCuidadores.size < 5) {
                     try {
                         val queryUsuarios = db.collection("usuarios")
@@ -110,6 +178,7 @@ class MapaCuidadoresViewModel(application: Application) : AndroidViewModel(appli
                             val apellido = doc.getString("apellido_pa") ?: ""
                             val nombreCompleto = "$nombre $apellido".trim()
                             val comuna = doc.getString("comuna") ?: "Santiago"
+                            val region = doc.getString("region") ?: "Metropolitana de Santiago"
                             val fotoUrl = doc.getString("fotoUrl") ?: ""
 
                             var especialidad = "Cuidador Certificado"
@@ -133,6 +202,7 @@ class MapaCuidadoresViewModel(application: Application) : AndroidViewModel(appli
                                     nombre = nombreCompleto,
                                     especialidad = especialidad,
                                     comuna = comuna,
+                                    region = region,
                                     disponible = true,
                                     latitud = latFinal,
                                     longitud = lngFinal,
@@ -146,14 +216,10 @@ class MapaCuidadoresViewModel(application: Application) : AndroidViewModel(appli
                 }
 
                 todosLosCuidadores = listaCuidadores
-                val geoJson = todosLosCuidadores.toFeatureCollection()
-
-                _uiState.value = MapaUiState.Success(
-                    cuidadores = todosLosCuidadores.toList(),
-                    geoJsonData = geoJson,
-                    centroBusqueda = puntoGeneralRM,
-                    mensajeAviso = "Vista general: Cuidadores en la Región Metropolitana",
-                    cameraEventId = System.currentTimeMillis()
+                aplicarFiltrosYActualizarUi(
+                    nuevoCentro = puntoGeneralRM,
+                    aviso = "Vista general: Cuidadores en la Región Metropolitana",
+                    moverCamara = true
                 )
             } catch (e: Exception) {
                 _uiState.value = MapaUiState.Error(
@@ -175,34 +241,33 @@ class MapaCuidadoresViewModel(application: Application) : AndroidViewModel(appli
                     val latGps = ubicacionGps.latitude()
                     val lngGps = ubicacionGps.longitude()
 
-                    val filtrados = todosLosCuidadores.filter { c ->
+                    val baseList = obtenerListaFiltradaPorFiltros()
+                    val filtrados = baseList.filter { c ->
                         val dist = LocationUtils.calcularDistanciaMetros(latGps, lngGps, c.latitud, c.longitud)
-                        dist <= 3000.0 // 3 km
+                        dist <= 3000.0
                     }
 
-                    val geoJson = (if (filtrados.isNotEmpty()) filtrados else todosLosCuidadores).toFeatureCollection()
+                    val resultado = if (filtrados.isNotEmpty()) filtrados else baseList
                     val mensaje = if (filtrados.isNotEmpty()) {
-                        "Se encontraron ${filtrados.size} cuidadores a menos de 3 km de tu ubicación GPS."
+                        "Se encontraron ${filtrados.size} cuidadores a menos de 3 km de tu GPS."
                     } else {
-                        "Ubicación centrada en tu GPS. Sin cuidadores a menos de 3 km (mostrando vista general)."
+                        "Ubicación centrada en tu GPS. Mostrando cuidadores disponibles."
                     }
 
                     _uiState.value = MapaUiState.Success(
-                        cuidadores = if (filtrados.isNotEmpty()) filtrados else todosLosCuidadores,
-                        geoJsonData = geoJson,
+                        cuidadores = resultado,
+                        geoJsonData = resultado.toFeatureCollection(),
                         centroBusqueda = ubicacionGps,
                         mensajeAviso = mensaje,
                         cameraEventId = System.currentTimeMillis()
                     )
                 } else {
-                    // Estado de fallback/error de geolocalización (UH4)
-                    val currentState = _uiState.value
-                    val cuidadoresActuales = if (currentState is MapaUiState.Success) currentState.cuidadores else todosLosCuidadores
+                    val baseList = obtenerListaFiltradaPorFiltros()
                     _uiState.value = MapaUiState.Success(
-                        cuidadores = cuidadoresActuales,
-                        geoJsonData = cuidadoresActuales.toFeatureCollection(),
+                        cuidadores = baseList,
+                        geoJsonData = baseList.toFeatureCollection(),
                         centroBusqueda = puntoGeneralRM,
-                        mensajeAviso = "No se pudo obtener la ubicación GPS. Verifica tus permisos y el GPS activado.",
+                        mensajeAviso = "No se pudo obtener la ubicación GPS. Verifica tus permisos y el GPS.",
                         cameraEventId = System.currentTimeMillis()
                     )
                 }
@@ -213,18 +278,19 @@ class MapaCuidadoresViewModel(application: Application) : AndroidViewModel(appli
     }
 
     /**
-     * Búsqueda directa por coordenadas de un punto seleccionado de sugerencia (calle, avenida, dirección)
+     * Búsqueda directa por coordenadas de un punto de sugerencia
      */
     fun buscarPorCoordenadasDirectas(nombreLugar: String, punto: Point) {
         val latDir = punto.latitude()
         val lngDir = punto.longitude()
 
-        val filtrados = todosLosCuidadores.filter { c ->
+        val baseList = obtenerListaFiltradaPorFiltros()
+        val filtrados = baseList.filter { c ->
             val dist = LocationUtils.calcularDistanciaMetros(latDir, lngDir, c.latitud, c.longitud)
-            dist <= 3000.0 // 3 km
+            dist <= 3000.0
         }
 
-        val listaResultado = if (filtrados.isNotEmpty()) filtrados else todosLosCuidadores
+        val listaResultado = if (filtrados.isNotEmpty()) filtrados else baseList
         val mensaje = if (filtrados.isNotEmpty()) {
             "Se encontraron ${filtrados.size} cuidadores cerca de '$nombreLugar'."
         } else {
@@ -241,7 +307,7 @@ class MapaCuidadoresViewModel(application: Application) : AndroidViewModel(appli
     }
 
     /**
-     * Búsqueda manual por dirección/comuna mediante Geocoder nativo y fallback comunal local (UH2)
+     * Búsqueda manual por dirección/comuna mediante Geocoder nativo y fallback comunal local
      */
     fun buscarPorDireccionManual(context: Context, direccionTexto: String) {
         val textoLimpio = direccionTexto.trim()
@@ -254,7 +320,6 @@ class MapaCuidadoresViewModel(application: Application) : AndroidViewModel(appli
             val queryFormateada = if (!textoLimpio.lowercase().contains("chile")) "$textoLimpio, Chile" else textoLimpio
             var ubicacionDir = LocationUtils.geocodificarDireccion(context, queryFormateada)
 
-            // Fallback directo por coordenadas de comunas conocidas de Chile si Geocoder no responde
             if (ubicacionDir == null) {
                 val coords = resolverCoordenadas(null, null, textoLimpio)
                 if (coords != Pair(-33.4489, -70.6693) || textoLimpio.lowercase().contains("santiago")) {
@@ -265,12 +330,10 @@ class MapaCuidadoresViewModel(application: Application) : AndroidViewModel(appli
             if (ubicacionDir != null) {
                 buscarPorCoordenadasDirectas(textoLimpio, ubicacionDir)
             } else {
-                // Manejo de error de geocodificación (UH4)
-                val currentState = _uiState.value
-                val cuidadoresActuales = if (currentState is MapaUiState.Success) currentState.cuidadores else todosLosCuidadores
+                val baseList = obtenerListaFiltradaPorFiltros()
                 _uiState.value = MapaUiState.Success(
-                    cuidadores = cuidadoresActuales,
-                    geoJsonData = cuidadoresActuales.toFeatureCollection(),
+                    cuidadores = baseList,
+                    geoJsonData = baseList.toFeatureCollection(),
                     centroBusqueda = puntoGeneralRM,
                     mensajeAviso = "No se encontró la ubicación para '$textoLimpio'. Mostrando vista general.",
                     cameraEventId = System.currentTimeMillis()
@@ -280,52 +343,49 @@ class MapaCuidadoresViewModel(application: Application) : AndroidViewModel(appli
     }
 
     /**
-     * Limpia el texto de búsqueda y restablece los cuidadores MANTENIENDO la posición actual de la cámara sin mover el mapa.
+     * Selecciona un cuidador específico al tocar su punto en el mapa y despliega la lista con ese único cuidador
      */
-    fun limpiarTextoBusquedaSinMoverCamara() {
-        val currentState = _uiState.value
-        if (currentState is MapaUiState.Success) {
-            _uiState.value = currentState.copy(
-                cuidadores = todosLosCuidadores.toList(),
-                geoJsonData = todosLosCuidadores.toFeatureCollection(),
-                mensajeAviso = null
-                // centroBusqueda y cameraEventId NO se modifican para evitar movimientos no deseados de la cámara
-            )
-        }
-    }
-
-    /**
-     * Estado fallback sin GPS ni dirección manual (UH3). Restablece la vista al centro de la RM.
-     */
-    fun limpiarFiltroUbicacion() {
+    fun seleccionarCuidadorEspecifico(cuidador: Cuidador) {
+        val puntoCuidador = Point.fromLngLat(cuidador.longitud, cuidador.latitud)
         _uiState.value = MapaUiState.Success(
-            cuidadores = todosLosCuidadores.toList(),
-            geoJsonData = todosLosCuidadores.toFeatureCollection(),
-            centroBusqueda = puntoGeneralRM,
-            mensajeAviso = "Vista general de Región Metropolitana. Filtros de ubicación restablecidos.",
+            cuidadores = listOf(cuidador),
+            geoJsonData = listOf(cuidador).toFeatureCollection(),
+            centroBusqueda = puntoCuidador,
+            mensajeAviso = "Cuidador seleccionado: ${cuidador.nombre}",
             cameraEventId = System.currentTimeMillis()
         )
     }
 
     /**
-     * Filtrar cuidadores por una zona seleccionada en el mapa al tocar una coordenada.
+     * Selección por toque de mapa: busca el cuidador más cercano al toque (si hay alguno a menos de 800m)
      */
     fun filtrarPorZonaSeleccionada(puntoTocado: Point, radioMetros: Double = 1500.0) {
         val latTocado = puntoTocado.latitude()
         val lngTocado = puntoTocado.longitude()
 
-        val filtrados = todosLosCuidadores.filter { c ->
+        val baseList = obtenerListaFiltradaPorFiltros()
+
+        val cuidadorTocado = baseList.minByOrNull { c ->
+            LocationUtils.calcularDistanciaMetros(latTocado, lngTocado, c.latitud, c.longitud)
+        }
+
+        if (cuidadorTocado != null && LocationUtils.calcularDistanciaMetros(latTocado, lngTocado, cuidadorTocado.latitud, cuidadorTocado.longitud) <= 800.0) {
+            seleccionarCuidadorEspecifico(cuidadorTocado)
+            return
+        }
+
+        val filtrados = baseList.filter { c ->
             val dist = LocationUtils.calcularDistanciaMetros(latTocado, lngTocado, c.latitud, c.longitud)
             dist <= radioMetros
         }
 
-        val listaResultado = if (filtrados.isNotEmpty()) filtrados else todosLosCuidadores
+        val listaResultado = if (filtrados.isNotEmpty()) filtrados else baseList
         val radioKm = String.format("%.1f", radioMetros / 1000.0)
 
         val mensaje = if (filtrados.isNotEmpty()) {
             "${filtrados.size} cuidadores en el área seleccionada (radio de $radioKm km)."
         } else {
-            "No hay cuidadores en el área directa tocada. Mostrando vista general."
+            "Mostrando cuidadores en la zona."
         }
 
         _uiState.value = MapaUiState.Success(
@@ -338,21 +398,92 @@ class MapaCuidadoresViewModel(application: Application) : AndroidViewModel(appli
     }
 
     /**
-     * Asigna coordenadas geográficas a partir de lat/lng recibidos o mediante las coordenadas base de la comuna.
+     * Métodos de Filtro de Región y Comuna (MANTIENEN la cámara sin mover la posición)
+     */
+    fun selectRegion(region: String) {
+        _useProfilePreferences.value = false
+        _sinComunasEnFicha.value = false
+        _selectedRegion.value = region
+        _selectedCommunes.value = emptyList()
+        aplicarFiltrosYActualizarUi(moverCamara = false)
+    }
+
+    fun toggleCommune(comuna: String) {
+        _useProfilePreferences.value = false
+        _sinComunasEnFicha.value = false
+        val actuales = _selectedCommunes.value.toMutableList()
+        if (actuales.contains(comuna)) {
+            actuales.remove(comuna)
+        } else if (actuales.size < 3) {
+            actuales.add(comuna)
+        }
+        _selectedCommunes.value = actuales
+        aplicarFiltrosYActualizarUi(moverCamara = false)
+    }
+
+    fun limpiarFiltros() {
+        _useProfilePreferences.value = false
+        _sinComunasEnFicha.value = false
+        _selectedRegion.value = ""
+        _selectedCommunes.value = emptyList()
+        aplicarFiltrosYActualizarUi(moverCamara = false)
+    }
+
+    fun limpiarTextoBusquedaSinMoverCamara() {
+        aplicarFiltrosYActualizarUi(moverCamara = false)
+    }
+
+    fun limpiarFiltroUbicacion() {
+        limpiarFiltros()
+        aplicarFiltrosYActualizarUi(nuevoCentro = puntoGeneralRM, aviso = "Filtros de ubicación restablecidos.", moverCamara = true)
+    }
+
+    private fun obtenerListaFiltradaPorFiltros(): List<Cuidador> {
+        val reg = _selectedRegion.value
+        val coms = _selectedCommunes.value
+
+        return todosLosCuidadores.filter { c ->
+            val cumpleRegion = reg.isEmpty() || c.region.contains(reg, ignoreCase = true) || reg.contains(c.region, ignoreCase = true)
+            val cumpleComuna = coms.isEmpty() || coms.any { com -> c.comuna.equals(com, ignoreCase = true) }
+            cumpleRegion && cumpleComuna
+        }
+    }
+
+    private fun aplicarFiltrosYActualizarUi(
+        nuevoCentro: Point? = null,
+        aviso: String? = null,
+        moverCamara: Boolean = false
+    ) {
+        val listaFiltrada = obtenerListaFiltradaPorFiltros()
+        val currentState = _uiState.value as? MapaUiState.Success
+
+        val centroActual = nuevoCentro ?: currentState?.centroBusqueda ?: puntoGeneralRM
+        val cameraEventId = if (moverCamara) System.currentTimeMillis() else (currentState?.cameraEventId ?: System.currentTimeMillis())
+
+        _uiState.value = MapaUiState.Success(
+            cuidadores = listaFiltrada,
+            geoJsonData = listaFiltrada.toFeatureCollection(),
+            centroBusqueda = centroActual,
+            mensajeAviso = aviso ?: "Cuidadores filtrados (${listaFiltrada.size})",
+            cameraEventId = cameraEventId
+        )
+    }
+
+    /**
+     * Asigna coordenadas geográficas con desfase aleatorio de ~200m para resguardar privacidad de la dirección exacta
      */
     private fun resolverCoordenadas(lat: Double?, lng: Double?, comuna: String): Pair<Double, Double> {
-        if (lat != null && lng != null && lat != 0.0 && lng != 0.0) {
-            return Pair(lat, lng)
+        val coordsBase = if (lat != null && lng != null && lat != 0.0 && lng != 0.0) {
+            Pair(lat, lng)
+        } else {
+            mapCoordenadasComunas[comuna.trim().lowercase()] ?: Pair(-33.4489, -70.6693)
         }
 
-        val coordenadasComuna = mapCoordenadasComunas[comuna.trim().lowercase()]
-            ?: Pair(-33.4489, -70.6693) // Santiago Centro por defecto
+        // Desfase aleatorio de privacidad de ~200m (±0.0018 grados de latitud/longitud)
+        val jitterLat = (Random.nextDouble() - 0.5) * 0.0036
+        val jitterLng = (Random.nextDouble() - 0.5) * 0.0036
 
-        // Añadir una pequeña variación aleatoria (jitter) para evitar superposición perfecta
-        val jitterLat = (Random.nextDouble() - 0.5) * 0.015
-        val jitterLng = (Random.nextDouble() - 0.5) * 0.015
-
-        return Pair(coordenadasComuna.first + jitterLat, coordenadasComuna.second + jitterLng)
+        return Pair(coordsBase.first + jitterLat, coordsBase.second + jitterLng)
     }
 
     private val mapCoordenadasComunas = mapOf(

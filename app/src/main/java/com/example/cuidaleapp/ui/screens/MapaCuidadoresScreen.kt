@@ -39,6 +39,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import com.example.cuidaleapp.data.ChileData
 import com.example.cuidaleapp.models.Cuidador
+import com.example.cuidaleapp.ui.components.CuidaleSearchContent
 import com.example.cuidaleapp.ui.components.HardShadowButton
 import com.example.cuidaleapp.ui.components.HardShadowPanel
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
@@ -47,17 +48,24 @@ import com.example.cuidaleapp.utils.SugerenciaUbicacion
 import com.example.cuidaleapp.viewmodel.MapaCuidadoresViewModel
 import com.example.cuidaleapp.viewmodel.MapaUiState
 import com.google.accompanist.systemuicontroller.rememberSystemUiController
+import com.mapbox.geojson.Feature
 import com.mapbox.geojson.FeatureCollection
 import com.mapbox.geojson.Point
+import com.mapbox.geojson.Polygon
 import com.mapbox.maps.CameraOptions
 import com.mapbox.maps.MapView
 import com.mapbox.maps.Style
 import com.mapbox.maps.extension.style.expressions.dsl.generated.interpolate
 import com.mapbox.maps.extension.style.expressions.generated.Expression
 import com.mapbox.maps.extension.style.layers.addLayer
+import com.mapbox.maps.extension.style.layers.addLayerAt
+import com.mapbox.maps.extension.style.layers.generated.backgroundLayer
 import com.mapbox.maps.extension.style.layers.generated.circleLayer
+import com.mapbox.maps.extension.style.layers.generated.fillLayer
+import com.mapbox.maps.extension.style.layers.generated.heatmapLayer
 import com.mapbox.maps.extension.style.layers.generated.symbolLayer
 import com.mapbox.maps.extension.style.layers.getLayer
+import com.mapbox.maps.extension.style.layers.properties.generated.Visibility
 import com.mapbox.maps.extension.style.sources.addSource
 import com.mapbox.maps.extension.style.sources.generated.GeoJsonSource
 import com.mapbox.maps.extension.style.sources.generated.geoJsonSource
@@ -67,6 +75,7 @@ import com.mapbox.maps.plugin.animation.flyTo
 import com.mapbox.maps.plugin.compass.compass
 import com.mapbox.maps.plugin.gestures.addOnMapClickListener
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -74,12 +83,21 @@ import java.util.Locale
 fun MapaCuidadoresScreen(
     onNavigateBack: () -> Unit,
     onUserClick: (String) -> Unit,
+    onNavigateToFicha: () -> Unit = {},
     viewModel: MapaCuidadoresViewModel = viewModel()
 ) {
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val scope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsState()
     val isCargandoGps by viewModel.isCargandoGps.collectAsState()
+
+    val selectedRegion by viewModel.selectedRegion.collectAsState()
+    val selectedCommunes by viewModel.selectedCommunes.collectAsState()
+    val useProfilePreferences by viewModel.useProfilePreferences.collectAsState()
+    val sinComunasEnFicha by viewModel.sinComunasEnFicha.collectAsState()
+
+    val hasActiveFilters = selectedRegion.isNotEmpty() || selectedCommunes.isNotEmpty() || useProfilePreferences
 
     // Configurar la barra de estado completamente transparente
     val systemUiController = rememberSystemUiController()
@@ -93,7 +111,12 @@ fun MapaCuidadoresScreen(
     var textoBusqueda by remember { mutableStateOf("") }
     var sugerenciasUbicacion by remember { mutableStateOf<List<SugerenciaUbicacion>>(emptyList()) }
     var resetNorthTrigger by remember { mutableLongStateOf(0L) }
+    var modoMapaDeCalor by remember { mutableStateOf(true) } // Por defecto modo mapa de calor
+    var showFilterSheet by remember { mutableStateOf(false) }
+    var cuidadorBurbuja by remember { mutableStateOf<Cuidador?>(null) } // Burbuja sobre el punto tocado
+
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+    val filterSheetState = rememberModalBottomSheetState()
     var showBottomSheet by remember { mutableStateOf(false) }
 
     // Lista completa de comunas de Chile como respaldo local offline
@@ -101,16 +124,15 @@ fun MapaCuidadoresScreen(
         ChileData.regions.flatMap { it.comunas }.distinct().sorted()
     }
 
-    // Consulta de sugerencias en vivo mediante Mapbox Places API (calles, avenidas, pasajes y lugares)
+    // Consulta de sugerencias en vivo mediante Mapbox Places API
     LaunchedEffect(textoBusqueda) {
         val q = textoBusqueda.trim()
         if (q.length >= 2) {
-            delay(250) // Debounce de 250 ms para optimizar peticiones
+            delay(250) // Debounce 250 ms
             val sugerenciasApi = LocationUtils.buscarSugerenciasMapbox(context, q)
             if (sugerenciasApi.isNotEmpty()) {
                 sugerenciasUbicacion = sugerenciasApi
             } else {
-                // Respaldar con comunas locales de ChileData si la API no devuelve resultados
                 val comunasLocal = todasLasComunas.filter { comuna ->
                     comuna.lowercase().contains(q.lowercase())
                 }.take(5).map { comuna ->
@@ -224,19 +246,34 @@ fun MapaCuidadoresScreen(
                 val centroBusqueda = state.centroBusqueda ?: viewModel.puntoGeneralRM
                 val cameraEventId = state.cameraEventId
 
-                // Render del mapa Mapbox con agrupamiento (clusters) y puntos sólidos
+                // Mapbox HeatmapView con toque inteligente (Burbuja directa sobre punto o lista general)
                 MapboxHeatmapView(
                     geoJsonData = geoJson,
                     centro = centroBusqueda,
                     cameraEventId = cameraEventId,
                     resetNorthTrigger = resetNorthTrigger,
+                    modoMapaDeCalor = modoMapaDeCalor,
                     onMapClick = { punto ->
-                        viewModel.filtrarPorZonaSeleccionada(punto, 1500.0)
-                        showBottomSheet = true
+                        val latTocado = punto.latitude()
+                        val lngTocado = punto.longitude()
+
+                        // Buscar si se tocó directamente un punto de cuidador (menos de 800m del toque)
+                        val cuidadorCercano = cuidadores.minByOrNull { c ->
+                            LocationUtils.calcularDistanciaMetros(latTocado, lngTocado, c.latitud, c.longitud)
+                        }
+
+                        if (cuidadorCercano != null && LocationUtils.calcularDistanciaMetros(latTocado, lngTocado, cuidadorCercano.latitud, cuidadorCercano.longitud) <= 800.0) {
+                            cuidadorBurbuja = cuidadorCercano
+                            showBottomSheet = false
+                        } else {
+                            cuidadorBurbuja = null
+                            viewModel.filtrarPorZonaSeleccionada(punto, 1500.0)
+                            showBottomSheet = true
+                        }
                     }
                 )
 
-                // Barra Superior Flotante de Búsqueda y Sugerencias en Vivo (UH1, UH2, UH3)
+                // Barra Superior Flotante de Búsqueda y Sugerencias en Vivo
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -262,7 +299,7 @@ fun MapaCuidadoresScreen(
                             )
                         }
 
-                        // Input para búsqueda manual por dirección / comuna / calles (UH2)
+                        // Input para búsqueda manual por dirección / comuna / calles
                         OutlinedTextField(
                             value = textoBusqueda,
                             onValueChange = { textoBusqueda = it },
@@ -281,21 +318,47 @@ fun MapaCuidadoresScreen(
                                 .clip(RoundedCornerShape(16.dp))
                                 .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)),
                             trailingIcon = {
-                                if (textoBusqueda.isNotEmpty()) {
-                                    IconButton(onClick = {
-                                        textoBusqueda = ""
-                                        sugerenciasUbicacion = emptyList()
-                                        viewModel.limpiarTextoBusquedaSinMoverCamara()
-                                    }) {
-                                        Icon(Icons.Default.Clear, contentDescription = "Limpiar")
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(end = 4.dp)
+                                ) {
+                                    if (textoBusqueda.isNotEmpty()) {
+                                        IconButton(onClick = {
+                                            textoBusqueda = ""
+                                            sugerenciasUbicacion = emptyList()
+                                            viewModel.limpiarTextoBusquedaSinMoverCamara()
+                                        }) {
+                                            Icon(Icons.Default.Clear, contentDescription = "Limpiar")
+                                        }
                                     }
-                                } else {
-                                    IconButton(onClick = {
-                                        sugerenciasUbicacion = emptyList()
-                                        keyboardController?.hide()
-                                        viewModel.buscarPorDireccionManual(context, textoBusqueda)
-                                    }) {
-                                        Icon(Icons.Default.Search, contentDescription = "Buscar")
+
+                                    // Botón de Filtros Estilizado (Pill/Card Container)
+                                    Surface(
+                                        onClick = { showFilterSheet = true },
+                                        color = if (hasActiveFilters) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.padding(vertical = 4.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Tune,
+                                                contentDescription = "Filtros de Búsqueda",
+                                                tint = if (hasActiveFilters) Color.White else MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            if (hasActiveFilters) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(7.dp)
+                                                        .clip(CircleShape)
+                                                        .background(Color.White)
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             },
@@ -305,15 +368,16 @@ fun MapaCuidadoresScreen(
                             )
                         )
 
-                        // Columna de Botones Flotantes: GPS y Orientación al Norte (debajo del GPS)
+                        // Columna de Botones Flotantes de Acción: GPS, Norte y Modo Zonas de Calor (Ícono de Fuego)
                         Column(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            // Botón de GPS rápido (UH1)
+                            // 1. Botón de GPS rápido
                             IconButton(
                                 onClick = {
                                     sugerenciasUbicacion = emptyList()
+                                    cuidadorBurbuja = null
                                     ejecutarOPedirGps()
                                 },
                                 enabled = !isCargandoGps,
@@ -336,7 +400,7 @@ fun MapaCuidadoresScreen(
                                 }
                             }
 
-                            // Botón Orientar Mapa al Norte (Ubicación ajustada justo debajo del botón GPS)
+                            // 2. Botón Orientar Mapa al Norte (debajo del GPS)
                             IconButton(
                                 onClick = { resetNorthTrigger = System.currentTimeMillis() },
                                 modifier = Modifier
@@ -347,6 +411,23 @@ fun MapaCuidadoresScreen(
                                     imageVector = Icons.Default.Explore,
                                     contentDescription = "Orientar al Norte",
                                     tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+
+                            // 3. Botón para Alternar Modo Zonas de Calor (Ícono de Fuego)
+                            IconButton(
+                                onClick = { modoMapaDeCalor = !modoMapaDeCalor },
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (modoMapaDeCalor) MaterialTheme.colorScheme.secondaryContainer
+                                        else MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+                                    )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.LocalFireDepartment,
+                                    contentDescription = "Modo Zona de Calor",
+                                    tint = if (modoMapaDeCalor) Color(0xFFFF6D00) else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -374,6 +455,7 @@ fun MapaCuidadoresScreen(
                                             .clickable {
                                                 textoBusqueda = sugerencia.titulo
                                                 sugerenciasUbicacion = emptyList()
+                                                cuidadorBurbuja = null
                                                 keyboardController?.hide()
                                                 viewModel.buscarPorCoordenadasDirectas(sugerencia.titulo, sugerencia.punto)
                                             }
@@ -413,6 +495,135 @@ fun MapaCuidadoresScreen(
                     }
                 }
 
+                // BURBUJA INFORMATIVA FLOTANTE AL TOCAR UN CUIDADOR ESPECÍFICO
+                AnimatedVisibility(
+                    visible = cuidadorBurbuja != null,
+                    enter = fadeIn() + scaleIn(initialScale = 0.85f),
+                    exit = fadeOut() + scaleOut(targetScale = 0.85f),
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(horizontal = 24.dp)
+                ) {
+                    cuidadorBurbuja?.let { cuidador ->
+                        Surface(
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
+                            shape = RoundedCornerShape(20.dp),
+                            shadowElevation = 14.dp,
+                            modifier = Modifier.fillMaxWidth(0.92f)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.PersonPin,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "Cuidador en esta ubicación",
+                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { cuidadorBurbuja = null },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Cerrar",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(56.dp)
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.primaryContainer),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (cuidador.fotoUrl.isNotBlank()) {
+                                            AsyncImage(
+                                                model = cuidador.fotoUrl,
+                                                contentDescription = null,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        } else {
+                                            Icon(
+                                                imageVector = Icons.Default.Person,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                modifier = Modifier.size(30.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.width(12.dp))
+
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = cuidador.nombre,
+                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+
+                                        Text(
+                                            text = cuidador.especialidad,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+
+                                        Spacer(modifier = Modifier.height(2.dp))
+
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.LocationOn,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(13.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(2.dp))
+                                            Text(
+                                                text = cuidador.comuna,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                HardShadowButton(
+                                    text = "VER PERFIL COMPLETO",
+                                    onClick = {
+                                        cuidadorBurbuja = null
+                                        onUserClick(cuidador.id)
+                                    },
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = Color.White
+                                )
+                            }
+                        }
+                    }
+                }
+
                 // Botón flotante para desplegar el BottomSheet con la lista de cuidadores
                 Box(
                     modifier = Modifier
@@ -422,14 +633,90 @@ fun MapaCuidadoresScreen(
                 ) {
                     HardShadowButton(
                         text = "VER CUIDADORES (${cuidadores.size})",
-                        onClick = { showBottomSheet = true },
+                        onClick = {
+                            cuidadorBurbuja = null
+                            showBottomSheet = true
+                        },
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = Color.White,
                         icon = Icons.AutoMirrored.Filled.FormatListBulleted
                     )
                 }
 
-                // BottomSheet desplegable (ModalBottomSheet Material 3)
+                // ModalBottomSheet con los Filtros de Búsqueda Embebidos
+                if (showFilterSheet) {
+                    ModalBottomSheet(
+                        onDismissRequest = { showFilterSheet = false },
+                        sheetState = filterSheetState,
+                        containerColor = CuidaleThemeExtras.customColors.panelBackground
+                    ) {
+                        Column {
+                            // Aviso si el usuario activó la preferencia pero no tiene comunas guardadas en la ficha
+                            if (sinComunasEnFicha) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.95f),
+                                    shape = RoundedCornerShape(16.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 24.dp, vertical = 8.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(14.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Warning,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.error
+                                        )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "Aún no tienes comunas en tu ficha técnica",
+                                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                                color = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                            Text(
+                                                text = "Asigna tus comunas preferidas para aplicar este filtro.",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f)
+                                            )
+                                        }
+                                        Button(
+                                            onClick = {
+                                                showFilterSheet = false
+                                                onNavigateToFicha()
+                                            },
+                                            shape = RoundedCornerShape(10.dp),
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = MaterialTheme.colorScheme.error,
+                                                contentColor = Color.White
+                                            ),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                        ) {
+                                            Text("CONFIGURAR", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
+                                        }
+                                    }
+                                }
+                            }
+
+                            CuidaleSearchContent(
+                                allRegions = ChileData.regions.map { it.name },
+                                selectedRegion = selectedRegion,
+                                onRegionSelected = { viewModel.selectRegion(it) },
+                                allCommunes = ChileData.regions.find { it.name == selectedRegion }?.comunas?.sorted() ?: emptyList(),
+                                selectedCommunes = selectedCommunes,
+                                onCommuneToggle = { viewModel.toggleCommune(it) },
+                                onClearFilters = { viewModel.limpiarFiltros() },
+                                onClose = { scope.launch { filterSheetState.hide() }.invokeOnCompletion { showFilterSheet = false } },
+                                useProfilePreferences = useProfilePreferences,
+                                onTogglePreferences = { viewModel.toggleProfilePreferences(it) }
+                            )
+                        }
+                    }
+                }
+
+                // BottomSheet desplegable con la lista de Cuidadores Filtrados
                 if (showBottomSheet) {
                     ModalBottomSheet(
                         onDismissRequest = { showBottomSheet = false },
@@ -466,9 +753,10 @@ fun MapaCuidadoresScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = "No hay cuidadores en este sector.",
+                                        text = "No hay cuidadores en este sector con los filtros actuales.",
                                         style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center
                                     )
                                 }
                             } else {
@@ -498,8 +786,8 @@ fun MapaCuidadoresScreen(
 }
 
 /**
- * Componente ejecutor de Mapbox Maps SDK v11 que configura GeoJsonSource con agrupamiento (clustering)
- * de puntos sólidos y capas de conteo total por zona.
+ * Componente ejecutor de Mapbox Maps SDK v11 que configura el mapa interactivo con filtro gris
+ * uniforme sobre todo el mapa y puntos de calor térmicos vibrantes de alto contraste.
  */
 @Composable
 fun MapboxHeatmapView(
@@ -507,34 +795,115 @@ fun MapboxHeatmapView(
     centro: Point,
     cameraEventId: Long,
     resetNorthTrigger: Long,
+    modoMapaDeCalor: Boolean,
     onMapClick: (Point) -> Unit
 ) {
     val context = LocalContext.current
     val mapView = remember { MapView(context) }
 
     LaunchedEffect(mapView) {
-        // Desactivar el compass por defecto de Mapbox para usar nuestro botón custom alineado
         mapView.compass.enabled = false
 
         mapView.mapboxMap.loadStyle(Style.MAPBOX_STREETS) { style ->
             val sourceId = "cuidadores-geojson-source"
+            val userSourceId = "user-location-geojson-source"
+            val worldSourceId = "world-grey-mask-source"
 
-            // 1. Configuración de la fuente GeoJSON con Clustering activo
+            // 1. Fuente y Capa de Máscara Gris Global sobre Todo el Mapa (Carreteras, Verdes, Aguas)
+            val worldRing = listOf(
+                Point.fromLngLat(-180.0, -85.0),
+                Point.fromLngLat(180.0, -85.0),
+                Point.fromLngLat(180.0, 85.0),
+                Point.fromLngLat(-180.0, 85.0),
+                Point.fromLngLat(-180.0, -85.0)
+            )
+            val worldPolygon = Polygon.fromLngLats(listOf(worldRing))
+            val worldFeatureCollection = FeatureCollection.fromFeatures(listOf(Feature.fromGeometry(worldPolygon)))
+
+            if (style.getSource(worldSourceId) == null) {
+                val worldSource = geoJsonSource(worldSourceId) {
+                    featureCollection(worldFeatureCollection)
+                }
+                style.addSource(worldSource)
+            }
+
+            if (style.getLayer("world-grey-mask-layer") == null) {
+                val greyMaskLayer = fillLayer("world-grey-mask-layer", worldSourceId) {
+                    fillColor("#424242") // Gris neutro uniforme que cubre carreteras, áreas verdes y mares
+                    fillOpacity(0.82) // 82% de opacidad para que todo el mapa sea un lienzo gris
+                }
+                style.addLayer(greyMaskLayer)
+            }
+
+            // 2. Fuente GeoJSON de Cuidadores
             if (style.getSource(sourceId) == null) {
                 val source = geoJsonSource(sourceId) {
                     geoJsonData?.let { featureCollection(it) }
                     cluster(true)
-                    clusterRadius(50L) // Radio en píxeles para agrupar puntos cercanos
-                    clusterMaxZoom(14L) // Zoom máximo en el cual se agrupan los puntos
+                    clusterRadius(50L)
+                    clusterMaxZoom(14L)
                 }
                 style.addSource(source)
             }
 
-            // 2. Capa para puntos individuales de cuidadores (puntos sólidos sin degradados)
+            // 3. Capa de Puntos de Calor Térmicos Vibrantes (Cyan -> Amarillo -> Naranja -> Rojo Fuego)
+            if (style.getLayer("cuidadores-heat-points-layer") == null) {
+                val heatPoints = heatmapLayer("cuidadores-heat-points-layer", sourceId) {
+                    heatmapWeight(1.0)
+                    heatmapColor(
+                        interpolate {
+                            linear()
+                            heatmapDensity()
+                            stop {
+                                literal(0.0)
+                                color(Color(0x00000000).toArgb()) // Transparente afuera
+                            }
+                            stop {
+                                literal(0.15)
+                                color(Color(0xDD00E5FF).toArgb()) // Cyan brillante de alto impacto
+                            }
+                            stop {
+                                literal(0.45)
+                                color(Color(0xE6FFEB3B).toArgb()) // Amarillo brillante
+                            }
+                            stop {
+                                literal(0.75)
+                                color(Color(0xF1FF6D00).toArgb()) // Naranja fuego
+                            }
+                            stop {
+                                literal(1.00)
+                                color(Color(0xFFD50000).toArgb()) // Rojo intenso
+                            }
+                        }
+                    )
+                    heatmapRadius(
+                        interpolate {
+                            exponential { literal(1.5) }
+                            zoom()
+                            stop {
+                                literal(0.0)
+                                literal(10.0)
+                            }
+                            stop {
+                                literal(9.0)
+                                literal(28.0)
+                            }
+                            stop {
+                                literal(15.0)
+                                literal(65.0)
+                            }
+                        }
+                    )
+                    heatmapOpacity(0.92)
+                }
+                style.addLayer(heatPoints)
+            }
+
+            // 4. Capa Puntos Individuales Sólidos de Cuidadores (para Modo Normal)
             if (style.getLayer("unclustered-caregivers-layer") == null) {
                 val unclusteredPoints = circleLayer("unclustered-caregivers-layer", sourceId) {
                     filter(Expression.not(Expression.has("point_count")))
-                    circleColor("#1E88E5") // Azul sólido vibrante
+                    circleColor("#1E88E5")
                     circleRadius(8.5)
                     circleStrokeWidth(2.5)
                     circleStrokeColor("#FFFFFF")
@@ -542,7 +911,7 @@ fun MapboxHeatmapView(
                 style.addLayer(unclusteredPoints)
             }
 
-            // 3. Capa para círculos agrupados (clusters) con colores según cantidad
+            // 5. Capa Círculos Agrupados (Clusters para Modo Normal)
             if (style.getLayer("cluster-circles-layer") == null) {
                 val clusterCircles = circleLayer("cluster-circles-layer", sourceId) {
                     filter(Expression.has("point_count"))
@@ -552,15 +921,15 @@ fun MapboxHeatmapView(
                             get { literal("point_count") }
                             stop {
                                 literal(2.0)
-                                color(Color(0xFF00897B).toArgb()) // Verde menta para agrupaciones pequeñas
+                                color(Color(0xFF00897B).toArgb())
                             }
                             stop {
                                 literal(10.0)
-                                color(Color(0xFF1E88E5).toArgb()) // Azul primario para agrupaciones medianas
+                                color(Color(0xFF1E88E5).toArgb())
                             }
                             stop {
                                 literal(25.0)
-                                color(Color(0xFF1565C0).toArgb()) // Azul marino para agrupaciones grandes
+                                color(Color(0xFF1565C0).toArgb())
                             }
                         }
                     )
@@ -588,7 +957,7 @@ fun MapboxHeatmapView(
                 style.addLayer(clusterCircles)
             }
 
-            // 4. Capa para mostrar el número total de cuidadores dentro de la agrupación
+            // 6. Capa Conteo Numérico de Agrupaciones
             if (style.getLayer("cluster-count-layer") == null) {
                 val clusterCountText = symbolLayer("cluster-count-layer", sourceId) {
                     filter(Expression.has("point_count"))
@@ -600,6 +969,36 @@ fun MapboxHeatmapView(
                 }
                 style.addLayer(clusterCountText)
             }
+
+            // 7. Indicación de Posición Actual del Usuario / Centro de Búsqueda
+            val userPointFeature = Feature.fromGeometry(centro)
+            val userFeatureCollection = FeatureCollection.fromFeatures(listOf(userPointFeature))
+
+            if (style.getSource(userSourceId) == null) {
+                val userSource = geoJsonSource(userSourceId) {
+                    featureCollection(userFeatureCollection)
+                }
+                style.addSource(userSource)
+            }
+
+            if (style.getLayer("user-location-outer-pulse") == null) {
+                val outerPulse = circleLayer("user-location-outer-pulse", userSourceId) {
+                    circleColor("#2196F3")
+                    circleOpacity(0.25)
+                    circleRadius(20.0)
+                }
+                style.addLayer(outerPulse)
+            }
+
+            if (style.getLayer("user-location-inner-circle") == null) {
+                val innerCircle = circleLayer("user-location-inner-circle", userSourceId) {
+                    circleColor("#1976D2")
+                    circleRadius(8.0)
+                    circleStrokeWidth(3.0)
+                    circleStrokeColor("#FFFFFF")
+                }
+                style.addLayer(innerCircle)
+            }
         }
 
         mapView.mapboxMap.addOnMapClickListener { point ->
@@ -608,7 +1007,24 @@ fun MapboxHeatmapView(
         }
     }
 
-    // Actualización reactiva de los datos del GeoJsonSource al cambiar geoJsonData
+    // Alternar Visibilidad entre Modo Zona de Calor (Filtro Gris + Puntos de Calor) y Modo Estándar
+    LaunchedEffect(modoMapaDeCalor) {
+        mapView.mapboxMap.getStyle { style ->
+            val heatVis = if (modoMapaDeCalor) Visibility.VISIBLE else Visibility.NONE
+            val normalVis = if (!modoMapaDeCalor) Visibility.VISIBLE else Visibility.NONE
+
+            // Máscara gris global y puntos de calor
+            style.getLayer("world-grey-mask-layer")?.visibility(heatVis)
+            style.getLayer("cuidadores-heat-points-layer")?.visibility(heatVis)
+
+            // Puntos sólidos y clusters estándar
+            style.getLayer("unclustered-caregivers-layer")?.visibility(normalVis)
+            style.getLayer("cluster-circles-layer")?.visibility(normalVis)
+            style.getLayer("cluster-count-layer")?.visibility(normalVis)
+        }
+    }
+
+    // Actualizar reactivamente la fuente GeoJSON de cuidadores
     LaunchedEffect(geoJsonData) {
         if (geoJsonData != null) {
             mapView.mapboxMap.getStyle { style ->
@@ -618,7 +1034,16 @@ fun MapboxHeatmapView(
         }
     }
 
-    // Centrado suave de la cámara al cambiar de coordenadas o re-disparar el evento de cámara
+    // Actualizar reactivamente el punto indicador de la posición del usuario
+    LaunchedEffect(centro) {
+        mapView.mapboxMap.getStyle { style ->
+            val userSource = style.getSource("user-location-geojson-source") as? GeoJsonSource
+            val userFeatureCollection = FeatureCollection.fromFeatures(listOf(Feature.fromGeometry(centro)))
+            userSource?.featureCollection(userFeatureCollection)
+        }
+    }
+
+    // Centrado suave de la cámara sólo cuando cameraEventId se modifica
     LaunchedEffect(centro, cameraEventId) {
         mapView.mapboxMap.flyTo(
             CameraOptions.Builder()
