@@ -1,6 +1,5 @@
 package com.example.cuidaleapp.ui.screens
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -9,28 +8,29 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.example.cuidaleapp.R
-import com.example.cuidaleapp.ui.components.ConnectivityBanner
+import com.example.cuidaleapp.models.UserData
 import com.example.cuidaleapp.ui.components.CuidaleTextField
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
-import com.example.cuidaleapp.models.UserData
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.tasks.await
-
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.material.icons.filled.SearchOff
 import com.example.cuidaleapp.utils.ConnectivityObserver
+import com.example.cuidaleapp.utils.ErrorCodes
+import com.example.cuidaleapp.utils.ErrorMessages
+import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,7 +40,10 @@ fun SearchProfileScreen(
 ) {
     val isOnline by ConnectivityObserver.isOnline.collectAsState()
     val customColors = CuidaleThemeExtras.customColors
-    
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
     var searchQuery by remember { mutableStateOf("") }
     var searchResults by remember { mutableStateOf<List<UserData>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
@@ -61,6 +64,9 @@ fun SearchProfileScreen(
                 
                 searchResults = query.toObjects(UserData::class.java)
             } catch (e: Exception) {
+                scope.launch {
+                    snackbarHostState.showSnackbar(ErrorMessages.resolve(context, ErrorCodes.Database.GENERIC))
+                }
             } finally {
                 isLoading = false
             }
@@ -71,26 +77,32 @@ fun SearchProfileScreen(
         }
     }
 
-    Box(
-        modifier = Modifier.fillMaxSize()
-    ) {
-
-
-        Column(
+    Scaffold(
+        containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { innerPadding ->
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(horizontal = 24.dp)
+                .padding(innerPadding)
         ) {
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(horizontal = 24.dp)
+            ) {
 
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onNavigateBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver", tint = Color.White)
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back), tint = Color.White)
                 }
-                Text("Buscar Usuarios", style = MaterialTheme.typography.headlineSmall, color = Color.White)
+                Text(stringResource(R.string.search_users_title), style = MaterialTheme.typography.headlineSmall, color = Color.White)
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -98,7 +110,7 @@ fun SearchProfileScreen(
             CuidaleTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = if (isOnline) "Buscar por nombre..." else "Conéctate para buscar...",
+                placeholder = if (isOnline) stringResource(R.string.search_by_name_placeholder) else stringResource(R.string.search_connect_placeholder),
                 enabled = isOnline,
                 containerColor = if (isOnline) customColors.inputBackground else Color.Gray.copy(alpha = 0.1f)
             )
@@ -110,8 +122,8 @@ fun SearchProfileScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.SearchOff, null, modifier = Modifier.size(64.dp), tint = Color.White.copy(alpha = 0.3f))
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text("No hay conexión a internet", color = Color.White.copy(alpha = 0.6f))
-                        Text("La búsqueda no está disponible offline", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.4f))
+                        Text(stringResource(R.string.search_no_connection), color = Color.White.copy(alpha = 0.6f))
+                        Text(stringResource(R.string.search_unavailable_offline), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.4f))
                     }
                 }
             } else if (isLoading) {
@@ -128,6 +140,7 @@ fun SearchProfileScreen(
                         UserSearchItem(user) { onUserClick(user.uid) }
                     }
                 }
+            }
             }
         }
     }

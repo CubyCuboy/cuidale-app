@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -32,7 +33,10 @@ import com.example.cuidaleapp.activities.EmailVerificationActivity
 import com.example.cuidaleapp.ui.components.HardShadowPanel
 import com.example.cuidaleapp.ui.components.HardShadowButton
 import com.example.cuidaleapp.ui.components.ProviderBrandIcon
+import com.example.cuidaleapp.R
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
+import com.example.cuidaleapp.utils.ErrorCodes
+import com.example.cuidaleapp.utils.ErrorMessages
 import com.example.cuidaleapp.viewmodel.ProfileViewModel
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
@@ -136,7 +140,7 @@ fun AccountManagementScreen(
                         }
                         Spacer(modifier = Modifier.height(20.dp))
                         Text(
-                            text = "¡Operación Exitosa!",
+                            text = stringResource(R.string.account_management_operation_success),
                             style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
                             color = MaterialTheme.colorScheme.onSurface,
                             textAlign = TextAlign.Center
@@ -150,7 +154,7 @@ fun AccountManagementScreen(
                         )
                         Spacer(modifier = Modifier.height(28.dp))
                         HardShadowButton(
-                            text = "Continuar en Gestión de Cuentas",
+                            text = stringResource(R.string.account_management_continue_account_management),
                             containerColor = MaterialTheme.colorScheme.primary,
                             contentColor = MaterialTheme.colorScheme.onPrimary,
                             shadowColor = shadowPalette.hardShadowPrimary,
@@ -175,7 +179,7 @@ fun AccountManagementScreen(
             if (!query.isEmpty) {
                 val userDocRef = query.documents[0].reference
                 val notifRef = userDocRef.collection("notificaciones").document()
-                val data = mapOf("title" to "Gestión de Cuenta", "text" to text)
+                val data = mapOf("title" to context.getString(R.string.settings_account_management), "text" to text)
                 val resolved = com.example.cuidaleapp.utils.NotificationTemplates.resolve(context, "configuracion_cuenta", data)
                 val notif = mapOf(
                     "id" to notifRef.id,
@@ -200,18 +204,17 @@ fun AccountManagementScreen(
             msg.contains("requires-recent-login", ignoreCase = true) ||
             msg.contains("recent authentication", ignoreCase = true) ||
             e is com.google.firebase.auth.FirebaseAuthRecentLoginRequiredException ->
-                "Por seguridad, debes cerrar sesión y volver a ingresar antes de vincular un nuevo método de acceso."
-            
+                ErrorMessages.resolve(context, ErrorCodes.Auth.SESSION_EXPIRED)
+
             msg.contains("already-in-use", ignoreCase = true) ||
             msg.contains("collision", ignoreCase = true) ||
             e is com.google.firebase.auth.FirebaseAuthUserCollisionException ->
-                "Este correo o cuenta ya pertenece a otro usuario registrado. Si intentas vincular una cuenta nueva, usa un correo diferente o desvincula el anterior."
-                
+                ErrorMessages.resolve(context, ErrorCodes.Auth.EMAIL_IN_USE)
+
             msg.contains("permission-denied", ignoreCase = true) ||
             msg.contains("Missing or insufficient permissions", ignoreCase = true) ->
-                "Error de permisos en el servidor. Inténtalo nuevamente."
+                ErrorMessages.resolve(context, ErrorCodes.Auth.PERMISSION_DENIED)
 
-            // Cancelación de la ventana OAuth (p. ej. Microsoft/Google) -> mensaje en español.
             msg.contains("operation was cancelled", ignoreCase = true) ||
             msg.contains("cancelled", ignoreCase = true) ||
             msg.contains("canceled", ignoreCase = true) ||
@@ -220,9 +223,9 @@ fun AccountManagementScreen(
             msg.contains("USER_CANCELLED", ignoreCase = true) ||
             msg.contains("auth/cancelled", ignoreCase = true) ||
             msg.contains("auth/signin-cancelled", ignoreCase = true) ->
-                "Vinculación cancelada."
+                context.getString(R.string.account_management_link_cancelled)
 
-            else -> if (msg.isNotBlank()) msg else "Error al vincular la cuenta"
+            else -> if (msg.isNotBlank()) ErrorMessages.get(context, msg) else ErrorMessages.resolve(context, ErrorCodes.Unknown.GENERIC)
         }
     }
 
@@ -259,16 +262,16 @@ fun AccountManagementScreen(
                 userDocRef.set(updates, com.google.firebase.firestore.SetOptions.merge()).await()
 
                 val title = when (actionType) {
-                    "link" -> "Cuenta de $providerName Vinculada"
-                    "change" -> "Cuenta de $providerName Cambiada"
-                    "unlink" -> "Cuenta de $providerName Desvinculada"
-                    else -> "Actualización de Cuenta"
+                    "link" -> context.getString(R.string.account_management_history_linked, providerName)
+                    "change" -> context.getString(R.string.account_management_history_changed, providerName)
+                    "unlink" -> context.getString(R.string.account_management_history_unlinked, providerName)
+                    else -> context.getString(R.string.account_management_history_update)
                 }
                 val desc = when (actionType) {
-                    "link" -> "Has vinculado tu cuenta de $providerName (${accountEmail.ifEmpty { "vinculación exitosa" }})"
-                    "change" -> "Has cambiado tu cuenta de $providerName (${accountEmail.ifEmpty { "cambio exitoso" }})"
-                    "unlink" -> "Has desvinculado tu cuenta de $providerName"
-                    else -> "Modificación de proveedor $providerName"
+                    "link" -> context.getString(R.string.account_management_history_link_desc, providerName, accountEmail.ifEmpty { context.getString(R.string.account_management_link_success_placeholder) })
+                    "change" -> context.getString(R.string.account_management_history_change_desc, providerName, accountEmail.ifEmpty { context.getString(R.string.account_management_change_success_placeholder) })
+                    "unlink" -> context.getString(R.string.account_management_history_unlink_desc, providerName)
+                    else -> context.getString(R.string.account_management_history_modify_desc, providerName)
                 }
                 viewModel.logAccountHistory("provider_$actionType", title, desc)
             }
@@ -375,10 +378,10 @@ fun AccountManagementScreen(
                                         incompleteAuthUser?.delete()?.await()
                                     } catch (eAuth: Exception) {}
 
-                                    errorMessage = "Se detectó y eliminó un registro incompleto previo de la cuenta $newEmail. Vuelve a presionar 'Vincular' para asociarla a tu cuenta actual."
+                                    errorMessage = context.getString(R.string.account_management_removed_incomplete_record, newEmail)
                                     return@launch
                                 } else {
-                                    throw Exception("La cuenta $newEmail ya pertenece a un usuario registrado y completado.")
+                                    throw Exception(context.getString(R.string.account_management_email_already_registered, newEmail))
                                 }
                             } else {
                                 throw e
@@ -388,8 +391,6 @@ fun AccountManagementScreen(
 
                         val uid = currentUser?.uid ?: ""
                         if (uid.isNotBlank()) {
-                            // Solo se actualiza el correo; NO se tocan nombre/apellidos/foto
-                            // (los datos de perfil pertenecen al usuario, no al auth externo).
                             val updates = mapOf<String, Any>(
                                 "correo" to newEmail
                             )
@@ -409,32 +410,32 @@ fun AccountManagementScreen(
                             }
                         }
 
-                        updateProviderTimestampAndHistory("google.com", "Google", if (isChangingGoogle) "change" else "link", newEmail)
+                        updateProviderTimestampAndHistory("google.com", context.getString(R.string.provider_google), if (isChangingGoogle) "change" else "link", newEmail)
 
                         viewModel.refreshFromFirestore()
                         refreshProviders()
                         isLoading = false
-                        successDialogMessage = if (isChangingGoogle) "Cuenta de Google cambiada con éxito" else "Cuenta de Google vinculada con éxito"
+                        successDialogMessage = if (isChangingGoogle) context.getString(R.string.account_management_google_change_success) else context.getString(R.string.account_management_google_link_success)
                         sendAccountNotification(successDialogMessage!!)
                     } catch (e: Exception) {
                         isLoading = false
-                        errorMessage = e.localizedMessage ?: "Error al actualizar cuenta de Google"
+                        errorMessage = ErrorMessages.get(context, e.localizedMessage ?: e.message)
                     } finally {
                         isChangingGoogle = false
                     }
                 }
                 } else {
-                    errorMessage = "No se pudo obtener la información de la cuenta de Google"
+                    errorMessage = context.getString(R.string.account_management_google_info_failed)
                     isLoading = false
                     isChangingGoogle = false
                 }
             } catch (e: GoogleIdTokenParsingException) {
-                errorMessage = "Error en Google Sign-In: ${e.message}"
+                errorMessage = ErrorMessages.get(context, e.message)
                 isLoading = false
                 isChangingGoogle = false
             }
         } else {
-            errorMessage = "No se pudo obtener la información de la cuenta de Google"
+            errorMessage = context.getString(R.string.account_management_google_info_failed)
             isLoading = false
             isChangingGoogle = false
         }
@@ -443,7 +444,7 @@ fun AccountManagementScreen(
     fun startNativeGoogleAuth(changing: Boolean) {
         val totalLinkedCount = (userData.linkedAccounts.map { it.providerId } + userProviders.map { com.example.cuidaleapp.utils.AccountUtils.normalizeProviderId(it.providerId) }).distinct().size
         if (changing && totalLinkedCount <= 1) {
-            errorMessage = "Debes tener al menos 2 métodos de autenticación vinculados para poder cambiar este método de acceso."
+            errorMessage = context.getString(R.string.account_management_min_two_methods)
             return
         }
         isChangingGoogle = changing
@@ -453,7 +454,7 @@ fun AccountManagementScreen(
 
         val request = GetCredentialRequest.Builder()
             .addCredentialOption(
-                GetSignInWithGoogleOption.Builder(context.getString(com.example.cuidaleapp.R.string.google_client_id))
+                GetSignInWithGoogleOption.Builder(context.getString(R.string.google_client_id))
                     .setNonce(generateSecureRandomNonce())
                     .build()
             )
@@ -465,7 +466,7 @@ fun AccountManagementScreen(
                 handleGoogleCredential(response)
             } catch (e: GetCredentialException) {
                 if (e !is GetCredentialCancellationException) {
-                    errorMessage = "No se pudo vincular la cuenta de Google."
+                    errorMessage = ErrorMessages.get(context, e.localizedMessage ?: e.message)
                 }
                 isLoading = false
                 isChangingGoogle = false
@@ -491,7 +492,7 @@ fun AccountManagementScreen(
             return
         }
         if (activity == null || currentUser == null) {
-            errorMessage = "No se pudo iniciar la acción"
+            errorMessage = context.getString(R.string.account_management_action_failed)
             return
         }
         isLoading = true
@@ -499,7 +500,7 @@ fun AccountManagementScreen(
         successMessage = null
 
         val providerName = when (providerId) {
-            "microsoft.com" -> "Microsoft"
+            "microsoft.com" -> context.getString(R.string.provider_microsoft)
             else -> providerId
         }
 
@@ -512,7 +513,6 @@ fun AccountManagementScreen(
             .addOnSuccessListener {
                 scope.launch {
                     try {
-                        // Timeout de 25s para la sincronización post-vinculación.
                         val ok = kotlinx.coroutines.withTimeoutOrNull(25_000L) {
                             currentUser.reload().await()
                             syncPrimaryEmailFromAuth(providerId)
@@ -524,14 +524,14 @@ fun AccountManagementScreen(
                         }
                         isLoading = false
                         if (ok == true) {
-                            successDialogMessage = "Cuenta de $providerName vinculada con éxito"
+                            successDialogMessage = context.getString(R.string.account_management_provider_link_success, providerName)
                             sendAccountNotification(successDialogMessage!!)
                         } else {
-                            errorMessage = "La vinculación está tardando demasiado. Revisa tu conexión e inténtalo de nuevo."
+                            errorMessage = context.getString(R.string.account_management_link_timeout)
                         }
                     } catch (e: Exception) {
                         isLoading = false
-                        errorMessage = e.localizedMessage ?: "Error al finalizar vinculación"
+                        errorMessage = ErrorMessages.get(context, e.localizedMessage ?: e.message)
                     }
                 }
             }
@@ -549,13 +549,13 @@ fun AccountManagementScreen(
         val totalLinkedCount = (userData.linkedAccounts.map { it.providerId } + userProviders.map { com.example.cuidaleapp.utils.AccountUtils.normalizeProviderId(it.providerId) }).distinct().size
         if (totalLinkedCount <= 1) {
             isLoading = false
-            errorMessage = "No puedes desvincular el único método de acceso. Tu cuenta quedaría inaccesible."
+            errorMessage = context.getString(R.string.account_management_cannot_unlink_only)
             return
         }
         val providerName = when (providerId) {
-            "google.com" -> "Google"
-            "microsoft.com" -> "Microsoft"
-            "password", "email" -> "Correo y Contraseña"
+            "google.com" -> context.getString(R.string.provider_google)
+            "microsoft.com" -> context.getString(R.string.provider_microsoft)
+            "password", "email" -> context.getString(R.string.account_management_email_password)
             else -> providerId
         }
         scope.launch {
@@ -571,11 +571,11 @@ fun AccountManagementScreen(
                 viewModel.refreshFromFirestore()
                 refreshProviders()
                 isLoading = false
-                successDialogMessage = "Cuenta desvinculada con éxito"
+                successDialogMessage = context.getString(R.string.account_management_unlink_success)
                 sendAccountNotification(successDialogMessage!!)
             } catch (e: Exception) {
                 isLoading = false
-                errorMessage = e.localizedMessage ?: "Error al desvincular cuenta"
+                errorMessage = ErrorMessages.get(context, e.localizedMessage ?: e.message)
             }
         }
     }
@@ -591,12 +591,12 @@ fun AccountManagementScreen(
             return
         }
         if (activity == null || currentUser == null) {
-            errorMessage = "No se pudo iniciar la acción"
+            errorMessage = context.getString(R.string.account_management_action_failed)
             return
         }
         val totalLinkedCount = (userData.linkedAccounts.map { it.providerId } + userProviders.map { com.example.cuidaleapp.utils.AccountUtils.normalizeProviderId(it.providerId) }).distinct().size
         if (totalLinkedCount <= 1) {
-            errorMessage = "Debes tener al menos 2 métodos de autenticación vinculados para poder cambiar este método de acceso."
+            errorMessage = context.getString(R.string.account_management_min_two_methods)
             return
         }
         isLoading = true
@@ -604,8 +604,8 @@ fun AccountManagementScreen(
         successMessage = null
 
         val providerName = when (providerId) {
-            "microsoft.com" -> "Microsoft"
-            "password", "email" -> "Correo y Contraseña"
+            "microsoft.com" -> context.getString(R.string.provider_microsoft)
+            "password", "email" -> context.getString(R.string.account_management_email_password)
             else -> providerId
         }
 
@@ -629,14 +629,14 @@ fun AccountManagementScreen(
                         }
                         isLoading = false
                         if (ok == true) {
-                            successDialogMessage = "Cuenta actualizada con éxito"
+                            successDialogMessage = context.getString(R.string.account_management_update_success)
                             sendAccountNotification(successDialogMessage!!)
                         } else {
-                            errorMessage = "El cambio de cuenta está tardando demasiado. Revisa tu conexión e inténtalo de nuevo."
+                            errorMessage = context.getString(R.string.account_management_change_timeout)
                         }
                     } catch (e: Exception) {
                         isLoading = false
-                        errorMessage = e.localizedMessage ?: "Error al actualizar cuenta"
+                        errorMessage = ErrorMessages.get(context, e.localizedMessage ?: e.message)
                     }
                 }
             }
@@ -668,10 +668,10 @@ fun AccountManagementScreen(
                     onClick = onBack,
                     modifier = Modifier.background(Color.Black.copy(alpha = 0.15f), CircleShape)
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver", tint = Color.White)
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back), tint = Color.White)
                 }
                 Text(
-                    text = "Gestión de Cuenta",
+                    text = stringResource(R.string.settings_account_management),
                     style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
                     color = Color.White,
                     modifier = Modifier.padding(start = 16.dp)
@@ -681,7 +681,7 @@ fun AccountManagementScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             HardShadowButton(
-                text = "Ver Historial de Cambios",
+                text = stringResource(R.string.account_management_view_change_history),
                 containerColor = MaterialTheme.colorScheme.secondary,
                 contentColor = Color.White,
                 shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
@@ -707,17 +707,17 @@ fun AccountManagementScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Text(
-                        text = "Información del Usuario",
+                        text = stringResource(R.string.account_management_user_info),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurface
                     )
 
-                    AccountDetailItem("Nombre", "${userData.nombre} ${userData.apellido_pa}")
-                    AccountDetailItem("Correo", userData.correo.ifEmpty { currentUser?.email ?: "N/A" })
-                    AccountDetailItem("RUT", userData.rut.ifEmpty { "N/A" })
-                    AccountDetailItem("Teléfono", userData.telefono.ifEmpty { "N/A" })
-                    AccountDetailItem("Rol", userData.rol.uppercase().ifEmpty { "N/A" })
-                    AccountDetailItem("Región / Comuna", "${userData.region} / ${userData.comuna}")
+                    AccountDetailItem(stringResource(R.string.account_management_name), "${userData.nombre} ${userData.apellido_pa}")
+                    AccountDetailItem(stringResource(R.string.account_management_email), userData.correo.ifEmpty { currentUser?.email ?: stringResource(R.string.account_management_not_available) })
+                    AccountDetailItem(stringResource(R.string.profile_label_rut), userData.rut.ifEmpty { stringResource(R.string.account_management_not_available) })
+                    AccountDetailItem(stringResource(R.string.profile_label_phone), userData.telefono.ifEmpty { stringResource(R.string.account_management_not_available) })
+                    AccountDetailItem(stringResource(R.string.profile_label_role), userData.rol.uppercase().ifEmpty { stringResource(R.string.account_management_not_available) })
+                    AccountDetailItem(stringResource(R.string.account_management_region_comuna), "${userData.region} / ${userData.comuna}")
                 }
             }
 
@@ -735,7 +735,7 @@ fun AccountManagementScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Text(
-                        text = "Cuentas Vinculadas",
+                        text = stringResource(R.string.account_management_linked_accounts),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -811,7 +811,7 @@ fun AccountManagementScreen(
                     if (!allProvidersLinked) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Agregar nuevos proveedores:",
+                            text = stringResource(R.string.account_management_add_new_providers),
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -824,7 +824,7 @@ fun AccountManagementScreen(
                             ) {
                                 ProviderBrandIcon("google.com")
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Vincular cuenta de Google", color = Color.Black, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.account_management_link_google), color = Color.Black, fontWeight = FontWeight.Bold)
                             }
                         }
 
@@ -836,7 +836,7 @@ fun AccountManagementScreen(
                             ) {
                                 ProviderBrandIcon("microsoft.com")
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Vincular cuenta de Microsoft", color = Color.White, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.account_management_link_microsoft), color = Color.White, fontWeight = FontWeight.Bold)
                             }
                         }
 
@@ -851,7 +851,7 @@ fun AccountManagementScreen(
                             ) {
                                 Icon(Icons.Default.Email, null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Agregar Correo y Contraseña", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.account_management_add_email_password), color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -925,7 +925,7 @@ fun LinkedAccountCard(
                     shape = RoundedCornerShape(6.dp)
                 ) {
                     Text(
-                        text = if (isVerified) "Verificado" else "No verificado",
+                        text = if (isVerified) stringResource(R.string.account_management_verified) else stringResource(R.string.account_management_not_verified),
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = if (isVerified) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
@@ -934,8 +934,8 @@ fun LinkedAccountCard(
                 }
             }
 
-            Text("Cuenta: $accountName", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-            Text("Vinculación: $dateStr", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.account_management_account_format, accountName), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+            Text(stringResource(R.string.account_management_linked_at_format, dateStr), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -949,7 +949,7 @@ fun LinkedAccountCard(
                     ) {
                         Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Verificar", style = MaterialTheme.typography.labelMedium)
+                        Text(stringResource(R.string.account_management_verify), style = MaterialTheme.typography.labelMedium)
                     }
                 }
 
@@ -958,7 +958,7 @@ fun LinkedAccountCard(
                     TextButton(onClick = onChangeAccount) {
                         Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Cambiar", style = MaterialTheme.typography.labelMedium)
+                        Text(stringResource(R.string.account_management_change), style = MaterialTheme.typography.labelMedium)
                     }
                 }
 
@@ -970,7 +970,7 @@ fun LinkedAccountCard(
                     ) {
                         Icon(Icons.Default.LinkOff, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Desvincular", style = MaterialTheme.typography.labelMedium)
+                        Text(stringResource(R.string.account_management_unlink), style = MaterialTheme.typography.labelMedium)
                     }
                 }
             }

@@ -26,6 +26,9 @@ class TareasViewModel : ViewModel() {
     private val _tareasHoy = MutableStateFlow<List<RegistroTarea>>(emptyList())
     val tareasHoy: StateFlow<List<RegistroTarea>> = _tareasHoy
 
+    private val _tareasAtrasadas = MutableStateFlow<List<RegistroTarea>>(emptyList())
+    val tareasAtrasadas: StateFlow<List<RegistroTarea>> = _tareasAtrasadas
+
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
 
@@ -115,6 +118,23 @@ class TareasViewModel : ViewModel() {
     private var tareasListener: ListenerRegistration? = null
     private var registrosListener: ListenerRegistration? = null
 
+    private var atrasadasListener: ListenerRegistration? = null
+
+    fun cargarTareasAtrasadas(solicitudId: String) {
+        atrasadasListener?.remove()
+        val today = getTodayDate()
+        atrasadasListener = db.collection("solicitudes").document(solicitudId)
+            .collection("registros_tareas")
+            .whereLessThan("fecha", today)
+            .addSnapshotListener { snapshot, _ ->
+                if (snapshot != null) {
+                    _tareasAtrasadas.value = snapshot.toObjects(RegistroTarea::class.java)
+                        .filter { !it.completada && !it.postergada }
+                        .sortedByDescending { it.fecha }
+                }
+            }
+    }
+
     fun cargarTareasFicha(pacienteFichaId: String) {
         tareasListener?.remove()
         tareasListener = db.collection("fichas").document(pacienteFichaId)
@@ -179,7 +199,8 @@ class TareasViewModel : ViewModel() {
                     titulo = tarea.titulo,
                     tipo = tarea.tipo,
                     descripcion = tarea.descripcion,
-                    frecuencia = tarea.frecuencia
+                    frecuencia = tarea.frecuencia,
+                    exigirFoto = tarea.exigirFoto
                 )
                 db.collection("solicitudes").document(solicitudId)
                     .collection("registros_tareas").document(regId)
@@ -190,31 +211,133 @@ class TareasViewModel : ViewModel() {
         }
     }
 
-    fun marcarTareaCompletada(solicitudId: String, registroId: String, completada: Boolean, userId: String, notas: String = "", titulo: String = "", otherUid: String = "") {
+    fun marcarTareaCompletada(
+        solicitudId: String,
+        registroId: String,
+        completada: Boolean,
+        userId: String,
+        notas: String = "",
+        titulo: String = "",
+        otherUid: String = "",
+        fotoUrl: String = "",
+        fotoStoragePath: String = "",
+        exigirFoto: Boolean = false
+    ) {
         viewModelScope.launch {
             try {
                 val ahora = Timestamp.now()
+                val sinEvidencia = completada && exigirFoto && fotoUrl.isBlank()
                 val updates = mutableMapOf<String, Any?>(
                     "completada" to completada,
                     "completadaPor" to if (completada) userId else "",
                     "fechaCompletado" to (if (completada) ahora else null),
-                    "notas" to notas
+                    "notas" to notas,
+                    "sinEvidenciaFotografica" to sinEvidencia
                 )
+                if (fotoUrl.isNotEmpty()) updates["fotoUrl"] = fotoUrl
+                if (fotoStoragePath.isNotEmpty()) updates["fotoStoragePath"] = fotoStoragePath
+
                 db.collection("solicitudes").document(solicitudId)
                     .collection("registros_tareas").document(registroId)
                     .update(updates).await()
 
                 if (completada && otherUid.isNotEmpty()) {
                     val hora = SimpleDateFormat("HH:mm", Locale.getDefault()).format(ahora.toDate())
-                    val texto = "✅ Tarea finalizada ($hora): $titulo"
-                    enviarMensajeSistemaChat(userId, otherUid, texto)
-                    
-                    enviarNotificacionAUsuario(otherUid, userId, "tarea_finalizada", "Tarea Finalizada", texto, mapOf("solicitudId" to solicitudId, "registroId" to registroId))
+                    if (sinEvidencia) {
+                        val texto = "⚠️ La tarea \"$titulo\" se completó sin evidencia fotográfica ($hora)."
+                        enviarMensajeSistemaChat(userId, otherUid, texto)
+                        enviarNotificacionAUsuario(otherUid, userId, "tarea_sin_evidencia", "Tarea sin evidencia", texto, mapOf("solicitudId" to solicitudId, "registroId" to registroId))
+                    } else {
+                        if (fotoUrl.isNotEmpty()) {
+                            enviarMensajeTareaFinalizada(userId, otherUid, titulo, hora, notas, fotoUrl, solicitudId, registroId)
+                        } else {
+                            val texto = "✅ Tarea finalizada ($hora): $titulo"
+                            enviarMensajeSistemaChat(userId, otherUid, texto)
+                        }
+                        enviarNotificacionAUsuario(otherUid, userId, "tarea_finalizada", "Tarea Finalizada", "✅ Tarea finalizada ($hora): $titulo", mapOf("solicitudId" to solicitudId, "registroId" to registroId))
+                    }
                 }
             } catch (e: Exception) {
                 _error.value = "Error al marcar tarea: ${e.localizedMessage}"
             }
         }
+    }
+
+    suspend fun subirFotoEvidencia(context: Context, uri: android.net.Uri): Pair<String, String>? {
+        return try {
+            val bytes = com.example.cuidaleapp.utils.MediaCompressor.compressImage(context, uri) ?: return null
+            val ext = if (com.example.cuidaleapp.utils.MediaCompressor.isImage(context, uri)) ".jpg" else ".dat"
+            val path = "chat_media/tarea_evidencia/${System.currentTimeMillis()}-${(0 until 100000).random()}$ext"
+            val ref = com.google.firebase.storage.FirebaseStorage.getInstance().reference.child(path)
+            ref.putBytes(bytes).await()
+            val url = ref.downloadUrl.await().toString()
+            url to path
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun limpiarEvidenciasViejas(solicitudId: String) {
+        viewModelScope.launch {
+            try {
+                val dayMs = 24L * 60 * 60 * 1000
+                val ahora = System.currentTimeMillis()
+                val snapshot = db.collection("solicitudes").document(solicitudId)
+                    .collection("registros_tareas")
+                    .get().await()
+                val viejos = snapshot.documents.mapNotNull { doc ->
+                    val fecha = doc.getTimestamp("fechaCompletado")?.toDate()?.time
+                    val path = doc.getString("fotoStoragePath")
+                    if (path != null && fecha != null && (ahora - fecha) > 3 * dayMs) doc to path else null
+                }
+                for ((doc, path) in viejos) {
+                    runCatching { com.google.firebase.storage.FirebaseStorage.getInstance().getReference(path).delete().await() }
+                    doc.reference.update(mapOf("fotoUrl" to "", "fotoStoragePath" to "")).await()
+                }
+            } catch (e: Exception) { }
+        }
+    }
+
+    private fun enviarMensajeTareaFinalizada(myUid: String, otherUid: String, titulo: String, hora: String, notas: String, fotoUrl: String, solicitudId: String, registroId: String) {
+        val chatId = if (myUid < otherUid) "${myUid}_$otherUid" else "${otherUid}_$myUid"
+        val ref = com.google.firebase.database.FirebaseDatabase.getInstance().reference
+            .child("messages").child(chatId).push()
+        val msg = mapOf(
+            "id" to (ref.key ?: UUID.randomUUID().toString()),
+            "senderId" to myUid,
+            "text" to "✅ Tarea finalizada ($hora): $titulo" +
+                "\n\n📝 DESCRIPCIÓN DE LO REALIZADO:\n${notas.ifBlank { "Sin descripción adicional." }}",
+            "type" to "text",
+            "timestamp" to System.currentTimeMillis(),
+            "imageUrl" to fotoUrl.ifBlank { null },
+            "metadata" to mapOf(
+                "solicitudId" to solicitudId,
+                "registroId" to registroId,
+                "titulo" to titulo,
+                "hora" to hora
+            ),
+            "readBy" to mapOf(myUid to true)
+        )
+        ref.setValue(msg)
+    }
+
+    fun enviarConsultaTarea(myUid: String, otherUid: String, titulo: String, horario: String, descripcion: String, solicitudId: String, registroId: String) {
+        val chatId = if (myUid < otherUid) "${myUid}_$otherUid" else "${otherUid}_$myUid"
+        val ref = com.google.firebase.database.FirebaseDatabase.getInstance().reference
+            .child("messages").child(chatId).push()
+        val msg = mapOf(
+            "id" to (ref.key ?: UUID.randomUUID().toString()),
+            "senderId" to myUid,
+            "text" to "🔎 Pregunta sobre la tarea:\n\n" +
+                "*$titulo* ($horario)\n\n" +
+                "📝 Indicaciones: ${descripcion.ifBlank { "Sin indicaciones específicas" }}\n\n" +
+                "¿Podrías confirmarme cómo proceder?",
+            "type" to "text",
+            "timestamp" to System.currentTimeMillis(),
+            "metadata" to mapOf("solicitudId" to solicitudId, "registroId" to registroId),
+            "readBy" to mapOf(myUid to true)
+        )
+        ref.setValue(msg)
     }
 
     fun postergarTarea(solicitudId: String, registroId: String, motivo: String, userId: String, titulo: String, otherUid: String) {
@@ -364,7 +487,8 @@ class TareasViewModel : ViewModel() {
                             titulo = tarea.titulo,
                             tipo = tarea.tipo,
                             descripcion = tarea.descripcion,
-                            frecuencia = tarea.frecuencia
+                            frecuencia = tarea.frecuencia,
+                            exigirFoto = tarea.exigirFoto
                         )
                         val ref = solRef.collection("registros_tareas").document(regId)
                         batch.set(ref, registro)
@@ -374,7 +498,8 @@ class TareasViewModel : ViewModel() {
                             "titulo" to tarea.titulo,
                             "horarioPrevisto" to tarea.horarioInicio,
                             "descripcion" to tarea.descripcion,
-                            "tipo" to tarea.tipo.name
+                            "tipo" to tarea.tipo.name,
+                            "exigirFoto" to tarea.exigirFoto
                         ))
                     }
                 }
@@ -595,5 +720,6 @@ class TareasViewModel : ViewModel() {
         super.onCleared()
         tareasListener?.remove()
         registrosListener?.remove()
+        atrasadasListener?.remove()
     }
 }

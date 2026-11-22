@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -31,6 +32,8 @@ import com.example.cuidaleapp.ui.components.HardShadowButton
 import com.example.cuidaleapp.ui.components.HardShadowPanel
 import com.example.cuidaleapp.ui.components.InputFieldLabel
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
+import com.example.cuidaleapp.utils.ErrorCodes
+import com.example.cuidaleapp.utils.ErrorMessages
 import com.example.cuidaleapp.viewmodel.AddEmailPasswordState
 import com.example.cuidaleapp.viewmodel.AddEmailPasswordViewModel
 import kotlin.math.roundToInt
@@ -104,7 +107,7 @@ fun AddEmailPasswordScreen(
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Volver",
+                        contentDescription = stringResource(R.string.cd_back),
                         tint = Color.White
                     )
                 }
@@ -113,7 +116,7 @@ fun AddEmailPasswordScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "Agregar Correo y Contraseña",
+                text = stringResource(R.string.add_email_title),
                 style = typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
                 color = Color.White,
                 textAlign = TextAlign.Center
@@ -181,28 +184,31 @@ private fun EmailStep(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                text = "Paso 1: Correo Electrónico",
+                text = stringResource(R.string.add_email_step1_title),
                 style = typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-                text = "Ingresa el correo electrónico que deseas asociar a tu cuenta.",
+                text = stringResource(R.string.add_email_step1_desc),
                 style = typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            InputFieldLabel("Correo electrónico")
+            InputFieldLabel(stringResource(R.string.add_email_email_label))
             CuidaleTextField(
                 value = email,
                 onValueChange = onEmailChange,
-                placeholder = "ejemplo@correo.cl",
+                placeholder = stringResource(R.string.add_email_email_placeholder),
                 containerColor = customColors.inputBackground,
                 imeAction = androidx.compose.ui.text.input.ImeAction.Next
             )
 
-            if (error != null) {
+            val context = LocalContext.current
+            val visibleError = error?.let { ErrorMessages.get(context, it) }
+
+            if (visibleError != null) {
                 Text(
-                    text = error,
+                    text = visibleError,
                     color = MaterialTheme.colorScheme.error,
                     style = typography.bodySmall,
                     textAlign = TextAlign.Center,
@@ -213,7 +219,7 @@ private fun EmailStep(
             val isEmailValid = com.example.cuidaleapp.utils.AccountUtils.validateEmail(email)
 
             HardShadowButton(
-                text = "Siguiente",
+                text = stringResource(R.string.register_button_next),
                 onClick = onNext,
                 enabled = isEmailValid,
                 modifier = Modifier.fillMaxWidth(),
@@ -269,12 +275,12 @@ private fun PasswordStep(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "Paso 2: Contraseña de Acceso",
+                    text = stringResource(R.string.add_email_step2_title),
                     style = typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "Establece una contraseña segura para tu cuenta.",
+                    text = stringResource(R.string.add_email_step2_desc),
                     style = typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 8.dp)
@@ -292,11 +298,11 @@ private fun PasswordStep(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                InputFieldLabel("Contraseña")
+                InputFieldLabel(stringResource(R.string.add_email_password_label))
                 CuidaleTextField(
                     value = password,
                     onValueChange = onPasswordChange,
-                    placeholder = "Ingrese su contraseña",
+                    placeholder = stringResource(R.string.register_pass_placeholder),
                     containerColor = customColors.inputBackground,
                     isPassword = true,
                     isPasswordVisible = isPassVisible,
@@ -307,11 +313,11 @@ private fun PasswordStep(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                InputFieldLabel("Repetir contraseña")
+                InputFieldLabel(stringResource(R.string.add_email_confirm_password_label))
                 CuidaleTextField(
                     value = confirmPassword,
                     onValueChange = onConfirmPasswordChange,
-                    placeholder = "Reingrese su contraseña",
+                    placeholder = stringResource(R.string.register_confirm_pass_placeholder),
                     containerColor = customColors.inputBackground,
                     isPassword = true,
                     isPasswordVisible = isConfirmPassVisible,
@@ -329,9 +335,12 @@ private fun PasswordStep(
             }
         }
 
-        if (error != null) {
+        val context = LocalContext.current
+        val visibleError = error?.let { ErrorMessages.get(context, it) }
+
+        if (visibleError != null) {
             Text(
-                text = error,
+                text = visibleError,
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.labelMedium,
                 modifier = Modifier.padding(top = 12.dp)
@@ -344,14 +353,14 @@ private fun PasswordStep(
             CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary)
         } else {
             HardShadowButton(
-                text = "Vincular y Finalizar",
+                text = stringResource(R.string.add_email_link_finish),
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 shadowColor = shadowPalette.hardShadowPrimary,
                 icon = Icons.Default.CheckCircle,
                 enabled = isPassValid && passMatches,
                 isErrorMode = error != null,
-                errorText = error,
+                errorText = visibleError,
                 onClick = onLink
             )
         }
@@ -359,7 +368,7 @@ private fun PasswordStep(
         Spacer(modifier = Modifier.height(12.dp))
 
         HardShadowButton(
-            text = "Volver",
+            text = stringResource(R.string.cd_back),
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
             shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.3f),

@@ -23,6 +23,7 @@ data class Tarea(
     val diasSeleccionados: List<Int> = emptyList(),
     val mesesSeleccionados: List<Int> = emptyList(),
     val fechaEspecifica: String? = null,
+    val exigirFoto: Boolean = false,
     val activa: Boolean = true,
     val creadaPor: String = "",
     val fechaCreacion: Timestamp = Timestamp.now()
@@ -40,6 +41,10 @@ data class RegistroTarea(
     val motivoPostergacion: String = "",
     val fechaPostergacion: Timestamp? = null,
     val notas: String = "",
+    val fotoUrl: String = "",
+    val fotoStoragePath: String = "",
+    val exigirFoto: Boolean = false,
+    val sinEvidenciaFotografica: Boolean = false,
     val descripcion: String = "",
     val frecuencia: FrecuenciaTarea = FrecuenciaTarea.DIARIA,
     val horarioPrevisto: String = "",

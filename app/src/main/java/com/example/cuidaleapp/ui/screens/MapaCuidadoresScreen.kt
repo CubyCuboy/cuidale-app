@@ -589,6 +589,21 @@ fun MapaCuidadoresScreen(
                                             overflow = TextOverflow.Ellipsis
                                         )
 
+                                        if (!cuidador.verificado) {
+                                            Surface(
+                                                color = Color(0xFFFFF3E0),
+                                                shape = RoundedCornerShape(50)
+                                            ) {
+                                                Text(
+                                                    "Sin verificación oficial",
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = Color(0xFFE65100),
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+
                                         Spacer(modifier = Modifier.height(2.dp))
 
                                         Row(verticalAlignment = Alignment.CenterVertically) {

@@ -11,6 +11,7 @@ import com.example.cuidaleapp.utils.HashUtils
 import com.example.cuidaleapp.utils.PhoneUtils
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.functions.FirebaseFunctions
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -340,6 +341,34 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
             _uiState.value = RegisterUiState.Error("Por favor ingresa un RUT válido")
             return false
         }
+
+        // Sin sesión activa (registro tradicional): se consulta la Cloud Function
+        // pública resolveAccountByRut (busca por RUT sin requerir autenticación ni
+        // que el cliente calcule el hash). Así no se lee Firestore directamente.
+        if (auth.currentUser == null) {
+            return try {
+                val functions = FirebaseFunctions.getInstance("southamerica-west1")
+                val result = functions.getHttpsCallable("resolveAccountByRut")
+                    .call(mapOf("rut" to formattedRut))
+                    .await()
+                val data = result.data as? Map<*, *>
+                if (data?.get("ok") == true) {
+                    val verified = data["verified"] == true
+                    _uiState.value = RegisterUiState.Error(
+                        if (verified) "El RUT ingresado ya se encuentra registrado y verificado."
+                        else "El RUT ingresado ya se encuentra registrado por otro usuario"
+                    )
+                    false
+                } else {
+                    true
+                }
+            } catch (e: Exception) {
+                // No encontrado -> RUT disponible
+                true
+            }
+        }
+
+        // Con sesión activa (flujo externo): lectura normal sobre Firestore.
         val hashedRut = HashUtils.hashRut(formattedRut)
         return try {
             val docCheck = db.collection("usuarios").document(hashedRut).get().await()
@@ -365,15 +394,20 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
             _uiState.value = RegisterUiState.Loading
             try {
                 val formattedRut = formatRutForSaving(_rut.value)
-                val hashedRut = HashUtils.hashRut(formattedRut)
 
-                val docCheck = db.collection("usuarios").document(hashedRut).get().await()
-                if (docCheck.exists()) {
-                    throw Exception("El RUT ya se encuentra registrado por otro usuario")
-                }
-
+                // Primero se crea la cuenta de Auth para quedar autenticado y poder
+                // leer/escribir en Firestore según las reglas de seguridad (isAuthenticated).
                 val result = auth.createUserWithEmailAndPassword(_email.value, _password.value).await()
                 val uid = result.user?.uid ?: throw Exception("No se pudo obtener el ID de usuario")
+
+                // Verificación post-autenticación: el RUT no debe estar en uso.
+                // Se busca por el campo "rut" (sin calcular hash en el cliente).
+                val rutConflicts = db.collection("usuarios").whereEqualTo("rut", formattedRut).get().await()
+                if (!rutConflicts.isEmpty) {
+                    // El RUT ya pertenece a otra cuenta: se revierte la cuenta creada.
+                    runCatching { result.user?.delete()?.await() }
+                    throw Exception("El RUT ya se encuentra registrado por otro usuario")
+                }
 
                 val now = System.currentTimeMillis()
                 val entryId = java.util.UUID.randomUUID().toString()
@@ -418,6 +452,8 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
                     "updatedAt" to nowTimestamp
                 )
 
+                // El documento canónico del usuario se guarda en usuarios/{hashedRut}
+                val hashedRut = HashUtils.hashRut(formattedRut)
                 val userDocRef = db.collection("usuarios").document(hashedRut)
                 userDocRef.set(userData).await()
 

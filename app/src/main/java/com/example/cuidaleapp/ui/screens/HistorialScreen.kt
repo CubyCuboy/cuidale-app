@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -13,13 +12,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import coil3.compose.AsyncImage
+import com.example.cuidaleapp.R
 import com.example.cuidaleapp.models.HistorialServicio
 import com.example.cuidaleapp.models.UserData
 import com.example.cuidaleapp.ui.components.*
@@ -56,16 +55,16 @@ fun HistorialScreen(
     if (showDeleteAllDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteAllDialog = false },
-            title = { Text("Borrar todo el historial") },
-            text = { Text("¿Estás seguro de eliminar todo el historial de servicios? Esta acción no se puede deshacer.") },
+            title = { Text(stringResource(R.string.historial_borrar_todo_titulo)) },
+            text = { Text(stringResource(R.string.historial_borrar_todo_mensaje)) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.borrarTodoElHistorial(userData.rol)
                     showDeleteAllDialog = false
-                }) { Text("BORRAR TODO", color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.historial_borrar_todo_accion), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteAllDialog = false }) { Text("CANCELAR") }
+                TextButton(onClick = { showDeleteAllDialog = false }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
@@ -73,7 +72,7 @@ fun HistorialScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("HISTORIAL", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.historial_titulo), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
@@ -82,31 +81,31 @@ fun HistorialScreen(
                 actions = {
                     Box {
                         IconButton(onClick = { showSortMenu = true }) {
-                            Icon(Icons.Default.Sort, "Ordenar")
+                            Icon(Icons.Default.Sort, stringResource(R.string.historial_ordenar))
                         }
                         DropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
                             DropdownMenuItem(
-                                text = { Text("Más recientes primero") },
+                                text = { Text(stringResource(R.string.historial_orden_recientes)) },
                                 onClick = { sortOrder = "fecha_desc"; showSortMenu = false },
                                 leadingIcon = { Icon(Icons.Default.History, null) }
                             )
                             DropdownMenuItem(
-                                text = { Text("Más antiguos primero") },
+                                text = { Text(stringResource(R.string.historial_orden_antiguos)) },
                                 onClick = { sortOrder = "fecha_asc"; showSortMenu = false },
                                 leadingIcon = { Icon(Icons.Default.Update, null) }
                             )
                             DropdownMenuItem(
-                                text = { Text("Por calificación") },
+                                text = { Text(stringResource(R.string.historial_orden_calificacion)) },
                                 onClick = { sortOrder = "calificacion"; showSortMenu = false },
                                 leadingIcon = { Icon(Icons.Default.Star, null) }
                             )
                             DropdownMenuItem(
-                                text = { Text("Paciente (A-Z)") },
+                                text = { Text(stringResource(R.string.historial_orden_paciente)) },
                                 onClick = { sortOrder = "paciente_alf"; showSortMenu = false },
                                 leadingIcon = { Icon(Icons.Default.SortByAlpha, null) }
                             )
                             DropdownMenuItem(
-                                text = { Text("Por fecha de aceptación") },
+                                text = { Text(stringResource(R.string.historial_orden_aceptacion)) },
                                 onClick = { sortOrder = "aceptacion"; showSortMenu = false },
                                 leadingIcon = { Icon(Icons.Default.CheckCircle, null) }
                             )
@@ -114,7 +113,7 @@ fun HistorialScreen(
                     }
                     if (historial.isNotEmpty()) {
                         IconButton(onClick = { showDeleteAllDialog = true }) {
-                            Icon(Icons.Default.DeleteSweep, "Borrar todo", tint = MaterialTheme.colorScheme.error)
+                            Icon(Icons.Default.DeleteSweep, stringResource(R.string.historial_borrar_todo), tint = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
@@ -132,7 +131,7 @@ fun HistorialScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.History, null, modifier = Modifier.size(64.dp), tint = Color.White)
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text("No hay servicios finalizados en el historial.", color = Color.White)
+                        Text(stringResource(R.string.historial_vacio), color = Color.White)
                     }
                 }
             } else {
@@ -193,8 +192,8 @@ fun HistorialCard(
                     val dateTermino = DateUtils.formatDate(item.fechaTermino?.toDate()?.time)
                     val dateInicio = DateUtils.formatDate(item.fechaInicio?.toDate()?.time)
                     
-                    Text("Periodo de servicio", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                    Text("$dateInicio — $dateTermino", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.historial_periodo_servicio), style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                    Text(stringResource(R.string.historial_periodo_formato, dateInicio, dateTermino), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
                 }
                 IconButton(onClick = onDelete) {
                     Icon(Icons.Default.Delete, null, tint = colors.error.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
@@ -205,21 +204,21 @@ fun HistorialCard(
             HorizontalDivider(color = colors.onSurface.copy(alpha = 0.05f))
             Spacer(modifier = Modifier.height(16.dp))
 
-            CuidaleDetailRow(Icons.Default.FamilyRestroom, "Paciente", "${item.pacienteNombre} (${item.pacienteEdad} años)")
-            CuidaleDetailRow(Icons.Default.Person, "Representante", item.representanteNombre)
+            CuidaleDetailRow(Icons.Default.FamilyRestroom, stringResource(R.string.historial_paciente), stringResource(R.string.historial_paciente_con_edad, item.pacienteNombre, item.pacienteEdad))
+            CuidaleDetailRow(Icons.Default.Person, stringResource(R.string.historial_representante), item.representanteNombre)
             
             if (role == "representante") {
-                CuidaleDetailRow(Icons.Default.MedicalServices, "Cuidador", item.cuidadorNombre)
-                CuidaleDetailRow(Icons.Default.School, "Especialidad", item.cuidadorEspecialidad)
+                CuidaleDetailRow(Icons.Default.MedicalServices, stringResource(R.string.historial_cuidador), item.cuidadorNombre)
+                CuidaleDetailRow(Icons.Default.School, stringResource(R.string.historial_especialidad), item.cuidadorEspecialidad)
             } else {
                 val censoredPhone = if (item.representanteTelefono.length >= 4) {
                     "*******" + item.representanteTelefono.takeLast(4)
                 } else if (item.representanteTelefono.isNotEmpty()) {
                     item.representanteTelefono
-                } else "No registrado"
+                } else stringResource(R.string.historial_no_registrado)
                 
                 if (item.representanteTelefono.isNotEmpty()) {
-                    CuidaleDetailRow(Icons.Default.Phone, "Teléfono", censoredPhone)
+                    CuidaleDetailRow(Icons.Default.Phone, stringResource(R.string.historial_telefono), censoredPhone)
                 }
             }
 
@@ -236,14 +235,18 @@ fun HistorialCard(
                             Icon(Icons.Default.Star, null, tint = Color(0xFFFFB300), modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = if (item.calificacion != null) "Calificación: ${item.calificacion}" else "Sin calificación",
+                                text = if (item.calificacion != null) {
+                                    stringResource(R.string.historial_calificacion_formato, item.calificacion.toString())
+                                } else {
+                                    stringResource(R.string.historial_sin_calificacion)
+                                },
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Bold
                             )
                         }
                         if (role == "representante") {
                             TextButton(onClick = { showRatingDialog = true }) {
-                                Text(if (item.calificacion == null) "CALIFICAR" else "EDITAR")
+                                Text(if (item.calificacion == null) stringResource(R.string.historial_calificar) else stringResource(R.string.historial_editar))
                             }
                         }
                     }
@@ -260,7 +263,7 @@ fun HistorialCard(
 
             Spacer(modifier = Modifier.height(16.dp))
             
-            val buttonText = if (role == "representante") "VER PERFIL CUIDADOR" else "VER PERFIL REPRESENTANTE"
+            val buttonText = if (role == "representante") stringResource(R.string.historial_ver_perfil_cuidador) else stringResource(R.string.historial_ver_perfil_representante)
             val targetUid = if (role == "representante") item.cuidadorUid else item.representanteUid
             val buttonColor = if (role == "representante") colors.primary else colors.secondary
 
@@ -288,10 +291,10 @@ fun RatingDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Calificar Servicio") },
+        title = { Text(stringResource(R.string.historial_dialogo_titulo)) },
         text = {
             Column {
-                Text("¿Cómo calificarías el desempeño del cuidador?", style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(R.string.historial_dialogo_pregunta), style = MaterialTheme.typography.bodyMedium)
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
                     repeat(5) { index ->
@@ -310,7 +313,7 @@ fun RatingDialog(
                 OutlinedTextField(
                     value = observation,
                     onValueChange = { observation = it },
-                    label = { Text("Observaciones (Opcional)") },
+                    label = { Text(stringResource(R.string.historial_dialogo_observaciones)) },
                     modifier = Modifier.fillMaxWidth(),
                     maxLines = 3
                 )
@@ -318,12 +321,12 @@ fun RatingDialog(
         },
         confirmButton = {
             TextButton(onClick = { onConfirm(rating.toDouble(), observation) }) {
-                Text("GUARDAR")
+                Text(stringResource(R.string.historial_guardar))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("CANCELAR")
+                Text(stringResource(R.string.action_cancel))
             }
         }
     )

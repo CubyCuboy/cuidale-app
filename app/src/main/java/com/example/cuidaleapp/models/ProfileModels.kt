@@ -1,6 +1,7 @@
 package com.example.cuidaleapp.models
 
 import android.net.Uri
+import com.google.firebase.Timestamp
 import java.util.UUID
 
 enum class VisibilityPolicy {
@@ -100,6 +101,50 @@ data class ContactMethod(
     val id: String = UUID.randomUUID().toString()
 )
 
+data class FormacionAcademica(
+    val id: String = UUID.randomUUID().toString(),
+    val titulo: String = "",
+    val institucion: String = "",
+    val anioInicio: String = "",
+    val anioFin: String = ""
+)
+
+data class ExperienciaLaboral(
+    val id: String = UUID.randomUUID().toString(),
+    val cargo: String = "",
+    val empresa: String = "",
+    val desde: String = "",
+    val hasta: String = "",
+    val tiempoExperiencia: String = "",
+    val descripcion: String = ""
+)
+
+data class Certificado(
+    val id: String = UUID.randomUUID().toString(),
+    val nombre: String = "",
+    val tipoArchivo: String = "", // pdf | doc | docx | png | jpg | jpeg
+    val urlArchivo: String = "",
+    val storagePath: String = "",
+    val fechaSubida: Timestamp? = null,
+    val estadoValidacion: String = "pendiente"
+)
+
+data class ReferenciaLaboral(
+    val id: String = UUID.randomUUID().toString(),
+    val nombre: String = "",
+    val empresa: String = "",
+    val telefono: String = "",
+    val cargo: String = "",
+    val detalle: String = ""
+)
+
+data class CalificacionPublica(
+    val autorNombre: String = "",
+    val calificacion: Double = 0.0,
+    val observacion: String = "",
+    val fecha: Timestamp? = null
+)
+
 data class ViewerPermissions(
     val canSeePrivatePhotos: Boolean = false,
     val canSeeContactInfo: Boolean = false,
@@ -129,6 +174,16 @@ data class ProfileDomainModel(
     val galleryPhotos: List<ProfileImage> = emptyList(),
     val socialLinks: List<SocialLink> = emptyList(),
     val contactMethods: List<ContactMethod> = emptyList(),
+    val verificacionOficial: String = "pendiente",
+    val fechaNacimiento: String = "",
+    val discapacidad: Boolean = false,
+    val tipoDiscapacidad: String = "",
+    val tiempoDiscapacidad: String = "",
+    val valorHoraReferencial: Int = 0,
+    val formacionAcademica: List<FormacionAcademica> = emptyList(),
+    val experienciasLaborales: List<ExperienciaLaboral> = emptyList(),
+    val certificados: List<Certificado> = emptyList(),
+    val referenciasLaborales: List<ReferenciaLaboral> = emptyList(),
     val descripcion: String = ""
 )
 
@@ -161,6 +216,16 @@ data class EditProfileDraftState(
     val galleryPhotos: List<ProfileImage> = emptyList(),
     val socialLinks: List<SocialLink> = emptyList(),
     val contactMethods: List<ContactMethod> = emptyList(),
+    val verificacionOficial: String = "pendiente",
+    val fechaNacimiento: String = "",
+    val discapacidad: Boolean = false,
+    val tipoDiscapacidad: String = "",
+    val tiempoDiscapacidad: String = "",
+    val valorHoraReferencial: Int = 0,
+    val formacionAcademica: List<FormacionAcademica> = emptyList(),
+    val experienciasLaborales: List<ExperienciaLaboral> = emptyList(),
+    val certificados: List<Certificado> = emptyList(),
+    val referenciasLaborales: List<ReferenciaLaboral> = emptyList(),
     val isDirty: Boolean = false,
     val isSaving: Boolean = false,
     val descripcion: String = "",

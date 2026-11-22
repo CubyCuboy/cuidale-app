@@ -45,6 +45,7 @@ fun CuidaleUserCard(
     horarios: List<String> = emptyList(), 
     isNew: Boolean = false,
     isLoading: Boolean = false,
+    verificado: Boolean = false,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
@@ -119,6 +120,21 @@ fun CuidaleUserCard(
                         val locationText = if (comuna.isNotEmpty()) comuna else comunas.joinToString(", "); if (locationText.isNotEmpty()) Text(text = locationText, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         if (especializacion.isNotEmpty()) Text(text = especializacion, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium), color = colors.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         if (horarios.isNotEmpty()) Text(text = stringResource(R.string.user_card_schedule, horarios.joinToString(", ")), style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant.copy(alpha = 0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (!verificado) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Surface(
+                                color = Color(0xFFFFF3E0),
+                                shape = RoundedCornerShape(50)
+                            ) {
+                                Text(
+                                    "Sin verificación oficial",
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                    color = Color(0xFFE65100),
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
                     }
                 }
                 Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = colors.onSurfaceVariant.copy(alpha = 0.4f))

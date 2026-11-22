@@ -15,10 +15,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.example.cuidaleapp.R
 import com.example.cuidaleapp.models.PostulacionCuidado
 import com.example.cuidaleapp.ui.components.HardShadowPanel
 import com.example.cuidaleapp.viewmodel.SolicitudViewModel
@@ -39,10 +41,10 @@ fun PostulacionesScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("POSTULACIONES", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.postulaciones_title), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back))
                     }
                 }
             )
@@ -51,7 +53,7 @@ fun PostulacionesScreen(
         Column(modifier = Modifier.padding(innerPadding).padding(horizontal = 24.dp)) {
             if (list.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No hay postulaciones para esta solicitud.")
+                    Text(stringResource(R.string.postulaciones_empty))
                 }
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -90,7 +92,7 @@ fun PostulacionItem(
                     if (postulacion.cuidadorFoto.isNotEmpty()) {
                         AsyncImage(model = postulacion.cuidadorFoto, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                     } else {
-                        Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center), tint = Color.Gray)
+                        Icon(Icons.Default.Person, stringResource(R.string.postulaciones_avatar_cuidador), modifier = Modifier.align(Alignment.Center), tint = Color.Gray)
                     }
                 }
                 Spacer(modifier = Modifier.width(12.dp))
@@ -102,21 +104,21 @@ fun PostulacionItem(
                     onClick = onViewInfo,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("VER INFO", fontSize = 11.sp)
+                    Text(stringResource(R.string.postulaciones_ver_info), fontSize = 11.sp)
                 }
                 Button(
                     onClick = onAccept,
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
-                    Text("ACEPTAR", fontSize = 11.sp)
+                    Text(stringResource(R.string.action_accept), fontSize = 11.sp)
                 }
                 OutlinedButton(
                     onClick = onReject,
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("RECHAZAR", fontSize = 11.sp)
+                    Text(stringResource(R.string.solicitudes_rechazar), fontSize = 11.sp)
                 }
             }
         }

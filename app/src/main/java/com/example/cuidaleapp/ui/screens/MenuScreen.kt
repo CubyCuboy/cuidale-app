@@ -36,6 +36,7 @@ import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.data.ChileData
 import com.example.cuidaleapp.utils.ConnectivityObserver
+import com.example.cuidaleapp.utils.ErrorMessages
 import com.example.cuidaleapp.viewmodel.FichaState
 import com.example.cuidaleapp.viewmodel.SearchState
 import com.example.cuidaleapp.viewmodel.SearchViewModel
@@ -293,7 +294,7 @@ fun MenuScreen(
                                 is SearchState.Error -> {
                                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                         Text(
-                                            text = state.message,
+                                            text = ErrorMessages.get(context, state.message),
                                             color = MaterialTheme.colorScheme.error,
                                             textAlign = TextAlign.Center
                                         )

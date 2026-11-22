@@ -38,6 +38,9 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
     private val _historial = MutableStateFlow<List<HistorialServicio>>(emptyList())
     val historial: StateFlow<List<HistorialServicio>> = _historial
 
+    private val _representantesFotos = MutableStateFlow<Map<String, String>>(emptyMap())
+    val representantesFotos: StateFlow<Map<String, String>> = _representantesFotos
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
 
@@ -100,10 +103,29 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                         .filter { it.id !in finalizingIds }
                         .sortedByDescending { it.createdAt }
                     _misSolicitudes.value = list
-                    
+                    cargarFotosRepresentantes(list.map { it.representanteUid })
+
                     listenToPostulaciones(list.map { it.id })
                 }
             }
+    }
+
+    fun cargarFotosRepresentantes(uids: List<String>) {
+        val missing = uids.filter { it.isNotBlank() && !_representantesFotos.value.containsKey(it) }.distinct()
+        if (missing.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                var fotos = emptyMap<String, String>()
+                for (chunk in missing.chunked(30)) {
+                    val snap = db.collection("usuarios").whereIn("uid", chunk).get().await()
+                    fotos += snap.documents.mapNotNull { doc ->
+                        val uid = doc.getString("uid") ?: return@mapNotNull null
+                        uid to (doc.getString("fotoUrl") ?: "")
+                    }.toMap()
+                }
+                _representantesFotos.value = _representantesFotos.value + fotos
+            } catch (e: Exception) { }
+        }
     }
 
     fun refreshData() {
@@ -179,8 +201,10 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
             .whereEqualTo("estado", "cerrada")
             .addSnapshotListener { snapshot, _ ->
                 if (snapshot != null) {
-                    _solicitudesAceptadas.value = snapshot.toObjects(SolicitudCuidado::class.java)
+                    val aceptadas = snapshot.toObjects(SolicitudCuidado::class.java)
                         .filter { it.id !in finalizingIds }
+                    _solicitudesAceptadas.value = aceptadas
+                    cargarFotosRepresentantes(aceptadas.map { it.representanteUid })
                 }
             }
 
@@ -208,6 +232,7 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                             }
                         }
                         _misPostulaciones.value = result
+                        cargarFotosRepresentantes(result.map { it.first.representanteUid })
                     }
                 }
             }
@@ -222,6 +247,7 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
         esIndefinido: Boolean,
         horarioStr: String,
         periodos: List<String>,
+        exigirFotoTareas: Boolean = false,
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {
@@ -238,6 +264,7 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                 val repNombre = if (userDoc != null) "${userDoc.getString("nombre")} ${userDoc.getString("apellido_pa")}" else ""
                 val repRut = userDoc?.getString("rut") ?: ""
                 val repTel = userDoc?.getString("telefono") ?: ""
+                val repFoto = userDoc?.getString("fotoUrl") ?: ""
 
                 val id = UUID.randomUUID().toString()
                 val solicitud = SolicitudCuidado(
@@ -246,6 +273,7 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                     representanteNombre = repNombre,
                     representanteRut = repRut,
                     representanteTelefono = repTel,
+                    representanteFoto = repFoto,
                     pacienteFichaId = pacienteFichaId,
                     nombrePaciente = nombrePaciente,
                     fotoPaciente = fotoPaciente,
@@ -254,6 +282,7 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                     esIndefinido = esIndefinido,
                     horarioStr = horarioStr,
                     periodos = periodos,
+                    exigirFotoTareas = exigirFotoTareas,
                     estado = "abierta",
                     createdAt = Timestamp.now()
                 )

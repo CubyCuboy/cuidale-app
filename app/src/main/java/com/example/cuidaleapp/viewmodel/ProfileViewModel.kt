@@ -413,7 +413,17 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     "telefono" to finalUser.telefono,
                     "region" to finalUser.region,
                     "comuna" to finalUser.comuna,
-                    "descripcion" to finalUser.descripcion
+                    "descripcion" to finalUser.descripcion,
+                    "fechaNacimiento" to finalUser.fechaNacimiento,
+                    "discapacidad" to finalUser.discapacidad,
+                    "tipoDiscapacidad" to finalUser.tipoDiscapacidad,
+                    "tiempoDiscapacidad" to finalUser.tiempoDiscapacidad,
+                    "valorHoraReferencial" to finalUser.valorHoraReferencial,
+                    "verificacionOficial" to finalUser.verificacionOficial,
+                    "formacionAcademica" to finalUser.formacionAcademica,
+                    "experienciasLaborales" to finalUser.experienciasLaborales,
+                    "certificados" to finalUser.certificados,
+                    "referenciasLaborales" to finalUser.referenciasLaborales
                 )
                 updateFirestoreUser(uid, userMap)
 
@@ -424,7 +434,18 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                         if (fichaDoc.exists()) {
                             val fichaUpdate = mapOf(
                                 "nombre" to finalUser.nombre,
-                                "apellido_pa" to finalUser.apellido_pa
+                                "apellido_pa" to finalUser.apellido_pa,
+                                "descripcion" to finalUser.descripcion,
+                                "fechaNacimiento" to finalUser.fechaNacimiento,
+                                "discapacidad" to finalUser.discapacidad,
+                                "tipoDiscapacidad" to finalUser.tipoDiscapacidad,
+                                "tiempoDiscapacidad" to finalUser.tiempoDiscapacidad,
+                                "valorHoraReferencial" to finalUser.valorHoraReferencial,
+                                "verificacionOficial" to finalUser.verificacionOficial,
+                                "formacionAcademica" to finalUser.formacionAcademica,
+                                "experienciasLaborales" to finalUser.experienciasLaborales,
+                                "certificados" to finalUser.certificados,
+                                "referenciasLaborales" to finalUser.referenciasLaborales
                             )
                             fichaRef.update(fichaUpdate).await()
                         }

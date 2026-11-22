@@ -78,6 +78,8 @@ import kotlinx.coroutines.withContext
 import com.example.cuidaleapp.R
 import com.example.cuidaleapp.ui.components.fadingEdge
 import com.example.cuidaleapp.utils.AppNavigationState
+import com.example.cuidaleapp.utils.ErrorCodes
+import com.example.cuidaleapp.utils.ErrorMessages
 import com.example.cuidaleapp.models.ChatMessage
 import com.example.cuidaleapp.models.UserData
 import com.example.cuidaleapp.models.SolicitudCuidado
@@ -115,7 +117,6 @@ fun ChatScreen(
     val outbox by viewModel.outbox.collectAsState()
     val pendingOutbox = outbox.filter { it.chatId == chatId }
     val liveUsers by viewModel.usersMap.collectAsState()
-    // Usa los datos más frescos del usuario (Firestore) si están disponibles.
     val liveOtherUser = liveUsers[otherUser.uid]?.let { it.copy(uid = otherUser.uid) } ?: otherUser
     val otherStatus by viewModel.otherUserStatus.collectAsState()
     val isOtherTyping by viewModel.isOtherTyping.collectAsState()
@@ -176,15 +177,11 @@ fun ChatScreen(
     var replyingToMessage by remember { mutableStateOf<ChatMessage?>(null) }
     val selectedMessages = remember { mutableStateListOf<ChatMessage>() }
 
-    // Para volver a la búsqueda con el botón de regresar después de haber
-    // navegado a un mensaje desde los resultados.
     var pendingReturnToSearch by remember { mutableStateOf(false) }
     var savedSearchQuery by remember { mutableStateOf("") }
     var savedSearchMediaFilter by remember { mutableStateOf<String?>(null) }
     var savedSearchSenderFilter by remember { mutableStateOf<String?>(null) }
 
-    // Indicador de recuperación de mensajes al entrar al chat (caché vacía,
-    // conexión lenta o primera carga). Se oculta al llegar mensajes o a los 2.5s.
     var isRecovering by remember { mutableStateOf(true) }
     LaunchedEffect(messages) {
         if (messages.isNotEmpty()) isRecovering = false
@@ -194,13 +191,9 @@ fun ChatScreen(
         isRecovering = false
     }
 
-    // Si venimos de una búsqueda y navegamos a un mensaje, el botón de
-    // regresar del sistema vuelve a la búsqueda (con sus filtros) en lugar de
-    // salir del chat.
     androidx.activity.compose.BackHandler(enabled = (isSearchActive || pendingReturnToSearch) && selectedMessages.isEmpty()) {
         when {
             isSearchActive -> {
-                // En el menú de búsqueda, volver regresa al chat normal.
                 viewModel.setSearchQuery("")
                 searchMediaFilter = null
                 searchSenderFilter = null
@@ -208,7 +201,6 @@ fun ChatScreen(
                 pendingReturnToSearch = false
             }
             pendingReturnToSearch -> {
-                // Después de navegar a un mensaje, volver restaura la búsqueda.
                 isSearchActive = true
                 viewModel.setSearchQuery(savedSearchQuery)
                 searchMediaFilter = savedSearchMediaFilter
@@ -218,9 +210,6 @@ fun ChatScreen(
         }
     }
 
-    // Precarga el multimedia de los mensajes recientes a la caché local
-    // (imágenes vía Coil, primer frame de videos vía VideoThumbnailCache).
-    // Así, al entrar al chat, lo ya visto no se vuelve a descargar visiblemente.
     LaunchedEffect(messages) {
         val urls = buildList {
             messages.takeLast(30).forEach { m ->
@@ -250,8 +239,6 @@ fun ChatScreen(
         }
     }
 
-    // ── Flujo de multimedia: primero se agregan a una cola local para
-    //    previsualizar y poder borrar antes de enviar. ──
     fun requestMediaLaunch(action: () -> Unit) {
         if (mediaLimitReached) {
             mediaError = context.getString(R.string.chat_media_limit_reached)
@@ -280,7 +267,6 @@ fun ChatScreen(
             "image", "video", "file" -> kind
             else -> "file"
         }
-        // Evita duplicados exactos del mismo archivo/URI.
         if (pendingMediaItems.any { it.uri == uri }) return AddMediaResult.DUPLICATE
 
         val size = runCatching { MediaCompressor.getSize(context, uri) }.getOrDefault(0L)
@@ -315,9 +301,7 @@ fun ChatScreen(
         val downloadUrl: String
         when (item.kind) {
             "image" -> {
-                // Streaming directo (sin cargar la imagen completa en memoria) para
-                // evitar OutOfMemory con imágenes pesadas.
-                val input = context.contentResolver.openInputStream(item.uri) ?: throw Exception(context.getString(R.string.chat_error_read_file))
+                val input = context.contentResolver.openInputStream(item.uri) ?: throw Exception(ErrorMessages.resolve(context, ErrorCodes.Storage.DOWNLOAD_FAILED))
                 input.use { stream -> storageRef.putStream(stream).await() }
                 downloadUrl = storageRef.downloadUrl.await().toString()
                 viewModel.sendMessage(
@@ -332,7 +316,7 @@ fun ChatScreen(
                 )
             }
             "video" -> {
-                val input = context.contentResolver.openInputStream(item.uri) ?: throw Exception(context.getString(R.string.chat_error_read_file))
+                val input = context.contentResolver.openInputStream(item.uri) ?: throw Exception(ErrorMessages.resolve(context, ErrorCodes.Storage.DOWNLOAD_FAILED))
                 input.use { stream -> storageRef.putStream(stream).await() }
                 downloadUrl = storageRef.downloadUrl.await().toString()
                 viewModel.sendMessage(
@@ -347,7 +331,7 @@ fun ChatScreen(
                 )
             }
             else -> {
-                val input = context.contentResolver.openInputStream(item.uri) ?: throw Exception(context.getString(R.string.chat_error_read_file))
+                val input = context.contentResolver.openInputStream(item.uri) ?: throw Exception(ErrorMessages.resolve(context, ErrorCodes.Storage.DOWNLOAD_FAILED))
                 input.use { stream -> storageRef.putStream(stream).await() }
                 downloadUrl = storageRef.downloadUrl.await().toString()
                 viewModel.sendMessage(
@@ -382,17 +366,17 @@ fun ChatScreen(
         val downloadUrl: String
         when (item.kind) {
             "image" -> {
-                val compressed = MediaCompressor.compressImage(context, item.uri) ?: throw Exception(context.getString(R.string.chat_error_compress_image))
+                val compressed = MediaCompressor.compressImage(context, item.uri) ?: throw Exception(ErrorMessages.resolve(context, ErrorCodes.Storage.GENERIC))
                 storageRef.putBytes(compressed).await()
                 downloadUrl = storageRef.downloadUrl.await().toString()
             }
             "video" -> {
-                val input = context.contentResolver.openInputStream(item.uri) ?: throw Exception(context.getString(R.string.chat_error_read_file))
+                val input = context.contentResolver.openInputStream(item.uri) ?: throw Exception(ErrorMessages.resolve(context, ErrorCodes.Storage.DOWNLOAD_FAILED))
                 input.use { stream -> storageRef.putStream(stream).await() }
                 downloadUrl = storageRef.downloadUrl.await().toString()
             }
             else -> {
-                val input = context.contentResolver.openInputStream(item.uri) ?: throw Exception(context.getString(R.string.chat_error_read_file))
+                val input = context.contentResolver.openInputStream(item.uri) ?: throw Exception(ErrorMessages.resolve(context, ErrorCodes.Storage.DOWNLOAD_FAILED))
                 input.use { stream -> storageRef.putStream(stream).await() }
                 downloadUrl = storageRef.downloadUrl.await().toString()
             }
@@ -409,16 +393,14 @@ fun ChatScreen(
             val items = pendingMediaItems.toList()
             var firstError: String? = null
 
-            // Un solo elemento: se envía como mensaje multimedia normal.
             if (items.size == 1) {
                 val item = items[0]
                 if (item in pendingMediaItems) {
                     runCatching { uploadSingleMedia(item, replyMsg) }
                         .onSuccess { pendingMediaItems.remove(item); replyingToMessage = null }
-                        .onFailure { firstError = it.message ?: context.getString(R.string.chat_error_send_media) }
+                        .onFailure { firstError = it.message ?: ErrorMessages.resolve(context, ErrorCodes.Storage.UPLOAD_FAILED) }
                 }
             } else if (items.size > 1) {
-                // Varios elementos: se suben todos y se agrupan en UN mensaje.
                 val uploaded = mutableListOf<Triple<String, String, String>>()
                 val succeededIdx = mutableSetOf<Int>()
                 items.forEachIndexed { index, item ->
@@ -429,14 +411,12 @@ fun ChatScreen(
                             succeededIdx.add(index)
                         }
                         .onFailure { e ->
-                            firstError = firstError ?: (e.message ?: context.getString(R.string.chat_error_send_media))
+                            firstError = firstError ?: (e.message ?: ErrorMessages.resolve(context, ErrorCodes.Storage.UPLOAD_FAILED))
                         }
                 }
                 if (uploaded.isNotEmpty()) {
                     runCatching { viewModel.sendMediaBatch(chatId, uploaded) }
                     replyingToMessage = null
-                    // Pre-cachea el lote recién enviado para que quede disponible
-                    // offline sin volver a descargarlo.
                     uploaded.forEach { (kind, url, _) ->
                         when (kind) {
                             "image" -> runCatching {
@@ -453,7 +433,6 @@ fun ChatScreen(
                         }
                     }
                 }
-                // Eliminar de golpe los que sí se subieron (no uno a uno).
                 val removed = items.filterIndexed { index, _ -> index in succeededIdx }.toSet()
                 pendingMediaItems.removeAll { it in removed }
             }
@@ -461,7 +440,7 @@ fun ChatScreen(
             mediaError = firstError
             } catch (t: Throwable) {
                 Log.e("ChatScreen", "sendPendingMedia falló", t)
-                mediaError = context.getString(R.string.chat_error_send_media)
+                mediaError = ErrorMessages.resolve(context, ErrorCodes.Storage.UPLOAD_FAILED)
             } finally {
                 isUploadingMedia = false
             }
@@ -501,7 +480,7 @@ fun ChatScreen(
                 cameraLauncher.launch(uri)
             }
         } catch (e: Exception) {
-            mediaError = e.message ?: context.getString(R.string.chat_error_open_camera)
+            mediaError = e.message ?: ErrorMessages.resolve(context, ErrorCodes.Unknown.GENERIC)
         }
     }
 
@@ -516,12 +495,6 @@ fun ChatScreen(
         if (granted) openCamera() else cameraPermissionLauncher.launch(permission)
     }
 
-    // Selector nativo múltiple (imágenes + videos). Se pide el máximo posible;
-    // el filtrado estricto ocurre en addPendingMedia (nunca se supera 10/25MB).
-    // Selector nativo múltiple (imágenes + videos). Limita la selección a los
-    // cupos disponibles para que el usuario no seleccione de más ni se descarte
-    // nada en silencio. IMPORTANTE: PickMultipleVisualMedia exige maxItems > 1,
-    // así que cuando la cola llega a 10 no se puede pedir 1 (crash).
     val mediaPickerLauncher = key(pendingMediaItems.size) {
         rememberLauncherForActivityResult(
             ActivityResultContracts.PickMultipleVisualMedia(maxItems = (10 - pendingMediaItems.size).coerceIn(2, 10))
@@ -530,7 +503,7 @@ fun ChatScreen(
             var countLimit = false
             var sizeLimit = false
             var totalLimit = false
-            val overSized = mutableListOf<Pair<String, String>>() // (nombre, peso legible)
+            val overSized = mutableListOf<Pair<String, String>>()
             try {
             uris.forEach { uri ->
                 if (pendingMediaItems.size >= 10) { countLimit = true; return@forEach }
@@ -553,17 +526,17 @@ fun ChatScreen(
                 sizeLimit -> {
                     val detalle = overSized.joinToString("; ") { (n, s) -> "$n ($s)" }
                     context.getString(R.string.chat_error_media_size_overall, detalle, totalAdjuntos) +
-                        " Envíalo en un mensaje aparte."
+                        " " + context.getString(R.string.chat_error_media_size_overall_extra)
                 }
                 totalLimit -> context.getString(R.string.chat_error_media_total_limit, totalAdjuntos) +
-      " El último archivo supera el máximo; envíalo en un mensaje aparte."
+      " " + context.getString(R.string.chat_error_media_total_limit_extra)
                 countLimit -> context.getString(R.string.chat_error_media_count_limit, totalAdjuntos)
                 added == 0 && uris.isNotEmpty() -> context.getString(R.string.chat_error_media_add_failed)
                 else -> null
             }
             } catch (t: Throwable) {
                 Log.e("ChatScreen", "media picker falló", t)
-                mediaError = context.getString(R.string.chat_error_media_add_failed)
+                mediaError = ErrorMessages.resolve(context, ErrorCodes.Storage.GENERIC)
             }
         }
     }
@@ -616,13 +589,10 @@ fun ChatScreen(
         searchMediaFilter = null
         searchSenderFilter = null
 
-        // +1 por el item de cabecera ("escribiendo...") en el LazyColumn.
         val index = messages.reversed().indexOfFirst { it.id == msg.id }
         if (index != -1) {
             scope.launch {
                 val targetIndex = index + 1
-                // Si el mensaje está lejos, salta directo (más fluido); si está
-                // cerca, anima el desplazamiento.
                 val current = listState.firstVisibleItemIndex
                 if (kotlin.math.abs(targetIndex - current) > 20) {
                     listState.scrollToItem(targetIndex)
@@ -704,8 +674,6 @@ fun ChatScreen(
     DisposableEffect(Unit) {
         onDispose {
             AppNavigationState.setActiveChat(null)
-            // No forzar "desconectado" al salir del chat: la presencia depende de la
-            // visibilidad global de la app (MenuActivity), no de si estás en el chat.
             viewModel.clearActiveChatListeners()
             viewModel.setTyping(chatId, false)
             com.example.cuidaleapp.ui.components.VideoPlayerCache.releaseAll()
@@ -840,7 +808,6 @@ fun ChatScreen(
                             when {
                                 selectedMessages.isNotEmpty() -> selectedMessages.clear()
                                 isSearchActive -> {
-                                    // El botón de regresar cierra la búsqueda.
                                     viewModel.setSearchQuery("")
                                     searchMediaFilter = null
                                     searchSenderFilter = null
@@ -960,7 +927,6 @@ fun ChatScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.Bold
                             )
-                            // Fila horizontal con scroll: nunca se comprime en pantallas angostas.
                             LazyRow(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1013,8 +979,6 @@ fun ChatScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        // En modo búsqueda no hay barra de escritura, así que
-                        // evitamos que los resultados queden bajo la navegación.
                         .then(if (isSearchActive) Modifier.navigationBarsPadding() else Modifier)
                 ) {
                     when {
@@ -1089,6 +1053,25 @@ fun ChatScreen(
                                         }
                                     }
                                     asc.asReversed()
+                                }
+                                if (initialMessage != null) {
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                                    ) {
+                                        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Chat, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                                            Spacer(Modifier.width(8.dp))
+                                            Text(
+                                                stringResource(R.string.chat_question_about_task),
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    }
+                                    Spacer(Modifier.height(8.dp))
                                 }
                                 LazyColumn(
                                     state = listState,
@@ -1255,7 +1238,6 @@ fun ChatScreen(
                                 val replyLabel = com.example.cuidaleapp.ui.components.replyLabelFor(replyMsg, context)
                                 Surface(
                                     modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp).clickable {
-                                        // Navegar al mensaje original que se está respondiendo.
                                         val targetIndex = filteredMessages.reversed().indexOfFirst { it.id == replyMsg.id }
                                         if (targetIndex != -1) {
                                             scope.launch {
@@ -2232,7 +2214,6 @@ fun ChatBubble(
 ) {
     var swipeOffset by remember { mutableFloatStateOf(0f) }
 
-    // Animación suave del desplazamiento al deslizar para responder.
     val animatedSwipe by androidx.compose.animation.core.animateFloatAsState(
         targetValue = swipeOffset,
         animationSpec = androidx.compose.animation.core.spring(
@@ -2242,7 +2223,6 @@ fun ChatBubble(
         label = "swipeOffset"
     )
 
-    // Escala animada al seleccionar/resaltar.
     val bubbleScale by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (isSelected || isHighlighted) 0.96f else 1f,
         animationSpec = androidx.compose.animation.core.tween(250),
@@ -2340,10 +2320,6 @@ fun ChatBubble(
                             Spacer(Modifier.height(4.dp))
                         }
                         if (msg.videoUrl != null) {
-                            // Preview estático (primer frame desde caché) + play que
-                            // abre el reproductor a pantalla completa. Evita crear
-                            // reproductores para cada video visible (menos lag al
-                            // hacer scroll rápido por el chat).
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -2411,7 +2387,6 @@ fun ChatBubble(
                 Text(formatMessageDate(msg.timestamp, LocalContext.current), style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                 if (msg.metadata["pending_send"] == "true") {
                     Spacer(Modifier.width(4.dp))
-                    // Mensaje pendiente de envío (outbox): muestra el indicador de carga.
                     CircularProgressIndicator(
                         modifier = Modifier.size(12.dp),
                         strokeWidth = 1.5.dp,
@@ -2445,11 +2420,6 @@ private fun MediaBatchContent(
     val total = items.size
     val visible = items.take(6)
 
-    // Precarga el lote completo a la caché local: versión acotada de cada imagen
-    // (Coil) y primer frame de cada video, para que todo el conjunto quede cacheados
-    // y no haya que descargarlo de nuevo al revisarlo o verlo offline. La precarga
-    // debe estar acotada: sin .size() Coil decodifica a resolución completa y 10
-    // imágenes simultáneas provocan OutOfMemory.
     val context = LocalContext.current
     LaunchedEffect(items) {
         items.forEach { item ->
@@ -2469,9 +2439,6 @@ private fun MediaBatchContent(
         }
     }
 
-    // Grid estilo WhatsApp: celdas cuadradas con Crop (sin barras negras) y
-    // disposición adaptativa según la cantidad. El "+N" se integra en la última
-    // miniatura visible en lugar de un contador flotante.
     val extraCount = (total - visible.size).coerceAtLeast(0)
     val space = 4.dp
 
@@ -2581,7 +2548,6 @@ private fun MediaBatchContent(
                 }
             }
             else -> {
-                // 6 o más: 2 filas × 3 columnas, "+N" en la última celda.
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(space)
@@ -2660,7 +2626,6 @@ private fun MediaBatchTile(
                     url = item.second,
                     modifier = Modifier.fillMaxSize(),
                     fullSize = 768,
-                    // Crop recorta la imagen para llenar la celda sin barras negras.
                     contentScale = ContentScale.Crop
                 )
             }
@@ -2674,7 +2639,7 @@ private fun MediaBatchTile(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "+$extraCount",
+                    text = stringResource(R.string.chat_plus_count, extraCount),
                     color = Color.White,
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
@@ -2783,8 +2748,6 @@ private fun SearchMediaGallery(
     val hasMedia = { m: ChatMessage ->
         m.imageUrl != null || m.videoUrl != null || m.fileUrl != null || m.type == "media_group"
     }
-    // En Fotos/Videos/Docs se desarman los lotes (galería plana). En Multimedia
-    // y Todos se mantienen agrupados (cada lote es un tile con su contador).
     val flatMode = kindFilter == "image" || kindFilter == "video" || kindFilter == "file"
 
     if (flatMode) {
@@ -2884,7 +2847,6 @@ private fun MediaFlatTile(
             }
         }
 
-        // Siempre disponible: ir al mensaje de origen.
         IconButton(
             onClick = { onGoToMessage(item.message) },
             modifier = Modifier
@@ -2977,7 +2939,6 @@ private fun MediaGroupTile(
             }
         }
 
-        // Siempre disponible: ir al mensaje de origen.
         IconButton(
             onClick = { onGoToMessage(msg) },
             modifier = Modifier
@@ -3036,7 +2997,6 @@ private fun SearchResultsList(
                     modifier = Modifier.padding(10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Icono / miniatura
                     Box(
                         modifier = Modifier
                             .size(52.dp)
@@ -3134,7 +3094,7 @@ fun RequestAlertBubble(msg: ChatMessage, onViewClick: () -> Unit) {
     val statusText = when(status) {
         "abierta" -> stringResource(R.string.chat_status_available)
         "cerrada" -> stringResource(R.string.chat_status_taken)
-        else -> "..."
+        else -> stringResource(R.string.chat_status_loading)
     }
 
     Surface(color = Color.Black.copy(alpha = 0.05f), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -3313,12 +3273,9 @@ private fun LocalVideoPreview(uri: android.net.Uri, modifier: Modifier = Modifie
                 try {
                     retriever.setDataSource(context, uri)
                     if (android.os.Build.VERSION.SDK_INT >= 27) {
-                        // Decodifica directamente redimensionado: nunca materializa el frame
-                        // a resolución completa (evita OOM con lotes de videos).
                         retriever.getScaledFrameAtTime(1000, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 640, 640)
                     } else {
                         val raw = retriever.getFrameAtTime(1000, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC) ?: return@runCatching null
-                        // Redimensiona el frame para no dejar bitmaps enormes en memoria.
                         val longSide = if (raw.width >= raw.height) raw.width else raw.height
                         val scale = if (longSide > 640) 640f / longSide else 1f
                         if (scale < 1f) {

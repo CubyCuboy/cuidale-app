@@ -2,36 +2,24 @@ package com.example.cuidaleapp.ui.screens
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.layout.offset
-import androidx.compose.ui.unit.IntOffset
-import kotlin.math.roundToInt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Cancel
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -44,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.cuidaleapp.R
 import com.example.cuidaleapp.ui.components.*
+import com.example.cuidaleapp.utils.ErrorCodes
+import com.example.cuidaleapp.utils.ErrorMessages
 import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.RecoveryViewModel
@@ -78,6 +68,8 @@ fun RecoveryPasswordScreen(
     val gradient = CuidaleThemeExtras.gradient
     val onGradientText = CuidaleThemeExtras.customColors.onGradient
     val typography = MaterialTheme.typography
+
+    val context = LocalContext.current
 
     val stepsLabels = listOf(
         stringResource(R.string.forgot_password_step_email),
@@ -142,7 +134,8 @@ fun RecoveryPasswordScreen(
             Spacer(modifier = Modifier.height(32.dp))
 
             Crossfade(targetState = currentStep, animationSpec = tween(500), label = "stepTransition") { step ->
-                val error = if (uiState is RecoveryUiState.Error) (uiState as RecoveryUiState.Error).message else null
+                val message = if (uiState is RecoveryUiState.Error) (uiState as RecoveryUiState.Error).message else null
+                val error = message?.let { ErrorMessages.get(context, it) } ?: ErrorMessages.resolve(context, ErrorCodes.Unknown.GENERIC)
                 
                 when (step) {
                     RecoveryStep.EMAIL -> RecoveryEmailStep(

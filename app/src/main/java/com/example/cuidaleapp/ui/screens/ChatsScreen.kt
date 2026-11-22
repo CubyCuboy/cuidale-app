@@ -364,7 +364,7 @@ fun ChatCard(
                     )
                     if (chat.lastMessage != null && !isBlocked) {
                         Text(
-                            text = formatMessageDate(chat.lastMessage.timestamp),
+                            text = formatMessageDate(context, chat.lastMessage.timestamp),
                             style = MaterialTheme.typography.labelSmall,
                             color = if (chat.unreadCount > 0) MaterialTheme.colorScheme.primary else Color.Gray
                         )
@@ -396,7 +396,7 @@ fun ChatCard(
                                     }
                                     val text = lastMsg?.text?.takeIf { it.isNotBlank() } ?: ""
                                     when {
-                                        text.isNotBlank() && icon.isNotBlank() -> "$text · $icon"
+                                        text.isNotBlank() && icon.isNotBlank() -> stringResource(R.string.chats_text_with_icon, text, icon)
                                         icon.isNotBlank() -> icon
                                         else -> text.ifBlank { stringResource(R.string.chats_start_chat) }
                                     }
@@ -602,12 +602,12 @@ fun EmptyState(text: String, icon: androidx.compose.ui.graphics.vector.ImageVect
     }
 }
 
-private fun formatMessageDate(timestamp: Long): String {
+private fun formatMessageDate(context: android.content.Context, timestamp: Long): String {
     val now = java.util.Calendar.getInstance()
     val msgDate = java.util.Calendar.getInstance().apply { timeInMillis = timestamp }
     return if (now.get(java.util.Calendar.DATE) == msgDate.get(java.util.Calendar.DATE)) {
-        java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(timestamp))
+        java.text.SimpleDateFormat(context.getString(R.string.chats_date_format_time), java.util.Locale.getDefault()).format(java.util.Date(timestamp))
     } else {
-        java.text.SimpleDateFormat("dd/MM", java.util.Locale.getDefault()).format(java.util.Date(timestamp))
+        java.text.SimpleDateFormat(context.getString(R.string.chats_date_format_short), java.util.Locale.getDefault()).format(java.util.Date(timestamp))
     }
 }

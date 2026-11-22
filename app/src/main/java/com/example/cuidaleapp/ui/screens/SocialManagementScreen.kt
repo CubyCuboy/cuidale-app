@@ -25,10 +25,12 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
+import com.example.cuidaleapp.R
 import com.example.cuidaleapp.models.UserData
 import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
@@ -65,10 +67,10 @@ fun SocialManagementScreen(
         topBar = {
             Column(modifier = Modifier.background(customColors.panelBackground)) {
                 TopAppBar(
-                    title = { Text("Red de Contactos", fontWeight = FontWeight.Black) },
+                    title = { Text(stringResource(R.string.nav_social), fontWeight = FontWeight.Black) },
                     navigationIcon = {
                         IconButton(onClick = onNavigateBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
@@ -86,11 +88,11 @@ fun SocialManagementScreen(
                         )
                     }
                 ) {
-                    SocialTab(0, "CONTACTOS", selectedTab == 0) { selectedTab = 0 }
-                    SocialTab(1, "FAVORITOS", selectedTab == 1) { selectedTab = 1 }
-                    SocialTab(2, "GUARDADOS", selectedTab == 2) { selectedTab = 2 }
-                    SocialTab(3, "NO DESEADOS", selectedTab == 3) { selectedTab = 3 }
-                    SocialTab(4, "BLOQUEADOS", selectedTab == 4) { selectedTab = 4 }
+                    SocialTab(0, stringResource(R.string.social_tab_contactos), selectedTab == 0) { selectedTab = 0 }
+                    SocialTab(1, stringResource(R.string.social_tab_favoritos), selectedTab == 1) { selectedTab = 1 }
+                    SocialTab(2, stringResource(R.string.social_tab_guardados), selectedTab == 2) { selectedTab = 2 }
+                    SocialTab(3, stringResource(R.string.social_tab_no_deseados), selectedTab == 3) { selectedTab = 3 }
+                    SocialTab(4, stringResource(R.string.social_tab_bloqueados), selectedTab == 4) { selectedTab = 4 }
                 }
             }
         }
@@ -108,7 +110,11 @@ fun SocialManagementScreen(
                     0 -> {
                         val acceptedVinculos = misVinculos.filter { it.estado == "aceptado" }
                         if (acceptedVinculos.isEmpty()) {
-                            SocialEmptyState(Icons.Default.People, "Aún no tienes contactos", "Conecta con cuidadores o familias para que aparezcan aquí.")
+                            SocialEmptyState(
+                                Icons.Default.People,
+                                stringResource(R.string.social_empty_contactos_title),
+                                stringResource(R.string.social_empty_contactos_subtitle)
+                            )
                         } else {
                             LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 items(acceptedVinculos) { vinculo ->
@@ -121,19 +127,47 @@ fun SocialManagementScreen(
                     }
                     1 -> {
                         val users = managedUsers.filter { favoritos.contains(it.uid) }
-                        SocialUserList(users, Icons.Default.Star, "Sin favoritos", "Marca perfiles con una estrella para tenerlos siempre a mano.", onUserClick, favoritosViewModel)
+                        SocialUserList(
+                            users,
+                            Icons.Default.Star,
+                            stringResource(R.string.social_empty_favoritos_title),
+                            stringResource(R.string.social_empty_favoritos_subtitle),
+                            onUserClick,
+                            favoritosViewModel
+                        )
                     }
                     2 -> {
                         val users = managedUsers.filter { guardados.contains(it.uid) }
-                        SocialUserList(users, Icons.Default.Bookmark, "Nada guardado", "Guarda perfiles que te interesen para revisarlos después.", onUserClick, favoritosViewModel)
+                        SocialUserList(
+                            users,
+                            Icons.Default.Bookmark,
+                            stringResource(R.string.social_empty_guardados_title),
+                            stringResource(R.string.social_empty_guardados_subtitle),
+                            onUserClick,
+                            favoritosViewModel
+                        )
                     }
                     3 -> {
                         val users = managedUsers.filter { noDeseados.contains(it.uid) }
-                        SocialUserList(users, Icons.Default.VisibilityOff, "Lista limpia", "Aquí aparecerán los perfiles que decidiste no volver a ver.", onUserClick, favoritosViewModel)
+                        SocialUserList(
+                            users,
+                            Icons.Default.VisibilityOff,
+                            stringResource(R.string.social_empty_no_deseados_title),
+                            stringResource(R.string.social_empty_no_deseados_subtitle),
+                            onUserClick,
+                            favoritosViewModel
+                        )
                     }
                     4 -> {
                         val users = managedUsers.filter { bloqueados.contains(it.uid) }
-                        SocialUserList(users, Icons.Default.Block, "Sin bloqueos", "Usuarios bloqueados no podrán contactarte ni ver tu perfil.", onUserClick, favoritosViewModel)
+                        SocialUserList(
+                            users,
+                            Icons.Default.Block,
+                            stringResource(R.string.social_empty_bloqueados_title),
+                            stringResource(R.string.social_empty_bloqueados_subtitle),
+                            onUserClick,
+                            favoritosViewModel
+                        )
                     }
                 }
             }
@@ -224,7 +258,7 @@ fun ContactCard(user: UserData?, onUserClick: () -> Unit) {
             Spacer(Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    user?.let { "${it.nombre} ${it.apellido_pa}" } ?: "Cargando...",
+                    user?.let { "${it.nombre} ${it.apellido_pa}" } ?: stringResource(R.string.common_loading),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -306,25 +340,25 @@ fun SocialActionButtons(
     ) {
         ActionButton(
             icon = if (isFavorito) Icons.Default.Star else Icons.Default.StarBorder,
-            label = if (isFavorito) "Favorito" else "Marcar",
+            label = if (isFavorito) stringResource(R.string.social_action_favorito) else stringResource(R.string.social_action_marcar),
             color = if (isFavorito) Color(0xFFFFD700) else Color.Gray,
             onClick = onToggleFav
         )
         ActionButton(
             icon = if (isGuardado) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-            label = if (isGuardado) "Guardado" else "Guardar",
+            label = if (isGuardado) stringResource(R.string.social_action_guardado) else stringResource(R.string.social_action_guardar),
             color = if (isGuardado) MaterialTheme.colorScheme.primary else Color.Gray,
             onClick = onToggleSaved
         )
         ActionButton(
             icon = if (isNoDeseado) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-            label = if (isNoDeseado) "Mostrar" else "Ocultar",
+            label = if (isNoDeseado) stringResource(R.string.social_action_mostrar) else stringResource(R.string.social_action_ocultar),
             color = if (isNoDeseado) Color(0xFF2196F3) else Color.Gray,
             onClick = onToggleHidden
         )
         ActionButton(
             icon = if (isBloqueado) Icons.Default.LockOpen else Icons.Default.Block,
-            label = if (isBloqueado) "Desbloquear" else "Bloquear",
+            label = if (isBloqueado) stringResource(R.string.social_action_desbloquear) else stringResource(R.string.social_action_bloquear),
             color = if (isBloqueado) Color(0xFF4CAF50) else Color.Red.copy(alpha = 0.7f),
             onClick = onToggleBlocked
         )

@@ -8,6 +8,10 @@ import com.example.cuidaleapp.data.ChileData
 import com.example.cuidaleapp.models.Tarea
 import com.example.cuidaleapp.models.FrecuenciaTarea
 import com.example.cuidaleapp.models.TipoTarea
+import com.example.cuidaleapp.models.FormacionAcademica
+import com.example.cuidaleapp.models.ExperienciaLaboral
+import com.example.cuidaleapp.models.ReferenciaLaboral
+import com.example.cuidaleapp.models.Certificado
 import com.example.cuidaleapp.utils.ImageUtils
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
@@ -154,6 +158,15 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
         comunas: List<String>,
         horarios: List<String>,
         descripcion: String,
+        fechaNacimiento: String = "",
+        discapacidad: Boolean = false,
+        tipoDiscapacidad: String = "",
+        tiempoDiscapacidad: String = "",
+        valorHoraReferencial: Int = 0,
+        formacionAcademica: List<FormacionAcademica> = emptyList(),
+        experienciasLaborales: List<ExperienciaLaboral> = emptyList(),
+        referenciasLaborales: List<ReferenciaLaboral> = emptyList(),
+        certificados: List<Certificado> = emptyList(),
         onSuccess: () -> Unit = {}
     ) {
         val user = auth.currentUser ?: return
@@ -168,11 +181,25 @@ class FichaViewModel(application: Application) : AndroidViewModel(application) {
                     "comunas" to comunas,
                     "horarios" to horarios,
                     "descripcion" to descripcion.trim(),
+                    "fechaNacimiento" to fechaNacimiento.trim(),
+                    "discapacidad" to discapacidad,
+                    "tipoDiscapacidad" to tipoDiscapacidad.trim(),
+                    "tiempoDiscapacidad" to tiempoDiscapacidad.trim(),
+                    "valorHoraReferencial" to valorHoraReferencial,
+                    "formacionAcademica" to formacionAcademica,
+                    "experienciasLaborales" to experienciasLaborales,
+                    "referenciasLaborales" to referenciasLaborales,
+                    "certificados" to certificados,
                     "activa" to true,
                     "ultima_actualizacion" to Timestamp.now()
                 )
+                val userDocs = db.collection("usuarios").whereEqualTo("uid", user.uid).get().await()
+                val estadoVerificacion = if (!userDocs.isEmpty) {
+                    userDocs.documents[0].getString("verificacionOficial") ?: "pendiente"
+                } else "pendiente"
+                data["verificacionOficial"] = estadoVerificacion
                 db.collection("fichas").document(user.uid).set(data).await()
-                
+
                 checkProfile()
                 onSuccess()
             } catch (e: Exception) {

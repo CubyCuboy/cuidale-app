@@ -48,6 +48,7 @@ import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.ProfileViewModel
 import com.example.cuidaleapp.utils.ConnectivityObserver
+import com.example.cuidaleapp.utils.ErrorMessages
 import com.example.cuidaleapp.utils.PhoneUtils
 import java.io.File
 import kotlin.math.roundToInt
@@ -72,6 +73,15 @@ fun EditProfileScreen(
     var comuna by remember { mutableStateOf("") }
     var descripcion by remember { mutableStateOf("") }
 
+    var fechaNacimiento by remember { mutableStateOf(userData.fechaNacimiento) }
+    var discapacidadBool by remember { mutableStateOf(userData.discapacidad) }
+    var tipoDiscapacidad by remember { mutableStateOf(userData.tipoDiscapacidad) }
+    var tiempoDiscapacidad by remember { mutableStateOf(userData.tiempoDiscapacidad) }
+    var valorHoraReferencial by remember { mutableStateOf(userData.valorHoraReferencial) }
+    var formacionTexto by remember { mutableStateOf(formacionesATexto(userData.formacionAcademica)) }
+    var experienciaTexto by remember { mutableStateOf(experienciasATexto(userData.experienciasLaborales)) }
+    var referenciasTexto by remember { mutableStateOf(referenciasATexto(userData.referenciasLaborales)) }
+
     LaunchedEffect(userData) {
         if (userData.uid.isNotEmpty() && remoteState !is ProfileViewModel.RemoteState.Loading) {
             nombre = userData.nombre
@@ -95,7 +105,6 @@ fun EditProfileScreen(
 
     val isNombreValid = nombre.length >= 2
     val isApellidoPaValid = apellidoPa.length >= 2
-    // El teléfono es opcional: se puede guardar sin él (o con formato válido si se ingresa).
     val isPhoneValid = telefono.isEmpty() || (PhoneUtils.isValidChileanPhone(telefono) && telefono.length == 9)
     val isFormValid = isNombreValid && isApellidoPaValid && isPhoneValid && region.isNotEmpty() && comuna.isNotEmpty()
 
@@ -195,7 +204,7 @@ fun EditProfileScreen(
                     }
                     showConfirmPhotoDialog = false
                     selectedImageUri = null
-                }) { Text("Cancelar") }
+                }) { Text(stringResource(R.string.common_cancel)) }
             }
         )
     }
@@ -442,12 +451,81 @@ fun EditProfileScreen(
                             enabled = !isLoading && isOnline
                         )
                         Text(
-                            "${descripcion.length}/300", 
+                            stringResource(R.string.edit_profile_char_count, descripcion.length),
                             style = MaterialTheme.typography.labelSmall, 
                             color = textColor.copy(alpha = 0.4f), 
                             modifier = Modifier.fillMaxWidth().padding(top = 4.dp), 
                             textAlign = TextAlign.End
                         )
+                    }
+
+                    if (userData.rol == "cuidador") {
+                        HorizontalDivider(color = textColor.copy(alpha = 0.08f))
+                        EditSectionHeader(icon = Icons.Default.Badge, title = stringResource(R.string.edit_profile_section_caregiver), accentColor = accentColor)
+
+                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            EditFieldWrapper(label = stringResource(R.string.edit_profile_label_birthdate)) {
+                                CuidaleTextField(
+                                    value = fechaNacimiento,
+                                    onValueChange = { if (it.length <= 10) fechaNacimiento = it },
+                                    placeholder = stringResource(R.string.edit_profile_placeholder_birthdate_example),
+                                    enabled = !isLoading && isOnline
+                                )
+                            }
+                            Text(stringResource(R.string.edit_profile_age_visible, com.example.cuidaleapp.ui.components.calcularEdad(fechaNacimiento)), style = MaterialTheme.typography.labelSmall, color = textColor.copy(alpha = 0.6f))
+
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                Checkbox(checked = discapacidadBool, onCheckedChange = { discapacidadBool = it })
+                                Text(stringResource(R.string.edit_profile_ask_disability), style = MaterialTheme.typography.bodyMedium, color = textColor)
+                            }
+                            if (discapacidadBool) {
+                                CuidaleTextField(value = tipoDiscapacidad, onValueChange = { tipoDiscapacidad = it }, placeholder = stringResource(R.string.edit_profile_placeholder_disability_type), enabled = !isLoading && isOnline)
+                                Spacer(Modifier.height(8.dp))
+                                CuidaleTextField(value = tiempoDiscapacidad, onValueChange = { tiempoDiscapacidad = it }, placeholder = stringResource(R.string.edit_profile_placeholder_disability_time), enabled = !isLoading && isOnline)
+                            }
+
+                            EditFieldWrapper(label = stringResource(R.string.edit_profile_label_hourly_rate)) {
+                                CuidaleTextField(
+                                    value = if (valorHoraReferencial > 0) valorHoraReferencial.toString() else "",
+                                    onValueChange = { valorHoraReferencial = it.filter(Char::isDigit).take(6).toIntOrNull() ?: 0 },
+                                    placeholder = stringResource(R.string.edit_profile_placeholder_hourly_rate_example),
+                                    enabled = !isLoading && isOnline
+                                )
+                            }
+
+                            EditFieldWrapper(label = stringResource(R.string.edit_profile_label_education)) {
+                                CuidaleTextField(
+                                    value = formacionTexto,
+                                    onValueChange = { formacionTexto = it },
+                                    placeholder = stringResource(R.string.edit_profile_placeholder_education_example),
+                                    singleLine = false,
+                                    modifier = Modifier.height(110.dp),
+                                    enabled = !isLoading && isOnline
+                                )
+                            }
+
+                            EditFieldWrapper(label = stringResource(R.string.edit_profile_label_experience)) {
+                                CuidaleTextField(
+                                    value = experienciaTexto,
+                                    onValueChange = { experienciaTexto = it },
+                                    placeholder = stringResource(R.string.edit_profile_placeholder_experience_example),
+                                    singleLine = false,
+                                    modifier = Modifier.height(120.dp),
+                                    enabled = !isLoading && isOnline
+                                )
+                            }
+
+                            EditFieldWrapper(label = stringResource(R.string.edit_profile_label_references)) {
+                                CuidaleTextField(
+                                    value = referenciasTexto,
+                                    onValueChange = { referenciasTexto = it },
+                                    placeholder = stringResource(R.string.edit_profile_placeholder_references_example),
+                                    singleLine = false,
+                                    modifier = Modifier.height(110.dp),
+                                    enabled = !isLoading && isOnline
+                                )
+                            }
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -472,7 +550,7 @@ fun EditProfileScreen(
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = errorMessage,
+                                        text = ErrorMessages.get(context, errorMessage),
                                         color = MaterialTheme.colorScheme.onErrorContainer,
                                         style = MaterialTheme.typography.bodySmall,
                                         fontWeight = FontWeight.Bold
@@ -495,7 +573,15 @@ fun EditProfileScreen(
                                         telefono = telefono,
                                         region = region,
                                         comuna = comuna,
-                                        descripcion = descripcion
+                                        descripcion = descripcion,
+                                        fechaNacimiento = fechaNacimiento.trim(),
+                                        discapacidad = discapacidadBool,
+                                        tipoDiscapacidad = tipoDiscapacidad.trim(),
+                                        tiempoDiscapacidad = tiempoDiscapacidad.trim(),
+                                        valorHoraReferencial = valorHoraReferencial,
+                                        formacionAcademica = parseFormaciones(formacionTexto),
+                                        experienciasLaborales = parseExperiencias(experienciaTexto),
+                                        referenciasLaborales = parseReferencias(referenciasTexto)
                                     ), 
                                     pendingPhotoUri, 
                                     pendingDeletePhoto
@@ -550,3 +636,54 @@ fun EditFieldWrapper(
         }
     }
 }
+
+private fun formacionesATexto(list: List<com.example.cuidaleapp.models.FormacionAcademica>): String =
+    list.joinToString("\n") { f ->
+        listOf(f.titulo, f.institucion, f.anioInicio, f.anioFin).joinToString(" | ")
+    }
+
+private fun experienciasATexto(list: List<com.example.cuidaleapp.models.ExperienciaLaboral>): String =
+    list.joinToString("\n") { e ->
+        listOf(e.cargo, e.empresa, e.desde, e.hasta, e.tiempoExperiencia, e.descripcion).joinToString(" | ")
+    }
+
+private fun referenciasATexto(list: List<com.example.cuidaleapp.models.ReferenciaLaboral>): String =
+    list.joinToString("\n") { r ->
+        listOf(r.nombre, r.empresa, r.telefono, r.cargo, r.detalle).joinToString(" | ")
+    }
+
+private fun parseFormaciones(text: String): List<com.example.cuidaleapp.models.FormacionAcademica> =
+    text.lines().filter { it.isNotBlank() }.map { line ->
+        val p = line.split("|").map { it.trim() }
+        com.example.cuidaleapp.models.FormacionAcademica(
+            titulo = p.getOrNull(0) ?: "",
+            institucion = p.getOrNull(1) ?: "",
+            anioInicio = p.getOrNull(2) ?: "",
+            anioFin = p.getOrNull(3) ?: ""
+        )
+    }
+
+private fun parseExperiencias(text: String): List<com.example.cuidaleapp.models.ExperienciaLaboral> =
+    text.lines().filter { it.isNotBlank() }.map { line ->
+        val p = line.split("|").map { it.trim() }
+        com.example.cuidaleapp.models.ExperienciaLaboral(
+            cargo = p.getOrNull(0) ?: "",
+            empresa = p.getOrNull(1) ?: "",
+            desde = p.getOrNull(2) ?: "",
+            hasta = p.getOrNull(3) ?: "",
+            tiempoExperiencia = p.getOrNull(4) ?: "",
+            descripcion = p.getOrNull(5) ?: ""
+        )
+    }
+
+private fun parseReferencias(text: String): List<com.example.cuidaleapp.models.ReferenciaLaboral> =
+    text.lines().filter { it.isNotBlank() }.map { line ->
+        val p = line.split("|").map { it.trim() }
+        com.example.cuidaleapp.models.ReferenciaLaboral(
+            nombre = p.getOrNull(0) ?: "",
+            empresa = p.getOrNull(1) ?: "",
+            telefono = p.getOrNull(2) ?: "",
+            cargo = p.getOrNull(3) ?: "",
+            detalle = p.getOrNull(4) ?: ""
+        )
+    }

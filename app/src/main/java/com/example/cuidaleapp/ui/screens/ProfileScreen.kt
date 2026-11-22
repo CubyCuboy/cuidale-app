@@ -1,4 +1,4 @@
-package com.example.cuidaleapp.ui.screens
+﻿package com.example.cuidaleapp.ui.screens
 
 import android.content.Intent
 import androidx.compose.foundation.background
@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -198,6 +199,11 @@ fun ProfileScreen(
                                         color = secondaryTextColor,
                                         textAlign = TextAlign.Center
                                     )
+
+                                    if (userData.rol == "cuidador") {
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        com.example.cuidaleapp.ui.components.VerificationBadge(userData.verificacionOficial)
+                                    }
 
                                     if (userData.telefono.isNotEmpty() && !userData.telefonoVerificado) {
                                         Spacer(modifier = Modifier.height(12.dp))

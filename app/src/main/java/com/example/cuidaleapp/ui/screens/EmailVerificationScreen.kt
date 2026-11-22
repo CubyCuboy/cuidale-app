@@ -38,6 +38,9 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import com.example.cuidaleapp.R
+import com.example.cuidaleapp.utils.ErrorCodes
+import com.example.cuidaleapp.utils.ErrorMessages
+import androidx.compose.ui.platform.LocalContext
 
 @Composable
 fun EmailVerificationScreen(
@@ -53,6 +56,7 @@ fun EmailVerificationScreen(
     val code by viewModel.code.collectAsState()
     val timeLeft by viewModel.timeLeft.collectAsState()
     val attemptsLeft by viewModel.attemptsLeft.collectAsState()
+    val context = LocalContext.current
 
     LaunchedEffect(initialEmail) {
         if (initialEmail.isNotEmpty() && email.isEmpty()) {
@@ -123,7 +127,7 @@ fun EmailVerificationScreen(
             Spacer(modifier = Modifier.height(32.dp))
 
             Crossfade(targetState = uiState, animationSpec = tween(500), label = "verificationTransition") { state ->
-                val error = if (state is VerificationUiState.Error) state.message else null
+                val error = (state as? VerificationUiState.Error)?.let { ErrorMessages.get(context, it.message) }
                 
                 when (state) {
                     is VerificationUiState.Step1Email -> {

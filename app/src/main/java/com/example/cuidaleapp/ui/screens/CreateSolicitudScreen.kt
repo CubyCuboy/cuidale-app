@@ -20,12 +20,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.example.cuidaleapp.R
 import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.FichaState
 import com.example.cuidaleapp.viewmodel.FichaViewModel
 import com.example.cuidaleapp.viewmodel.SolicitudViewModel
 import com.example.cuidaleapp.utils.DateUtils
+import com.example.cuidaleapp.utils.ErrorCodes
+import com.example.cuidaleapp.utils.ErrorMessages
 import com.example.cuidaleapp.models.SolicitudCuidado
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
@@ -42,6 +47,7 @@ fun CreateSolicitudScreen(
     fichaViewModel: FichaViewModel,
     onNavigateBack: () -> Unit
 ) {
+    val context = LocalContext.current
     val fichaState by fichaViewModel.state.collectAsState()
     val scrollState = rememberScrollState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -50,6 +56,7 @@ fun CreateSolicitudScreen(
     var hoursStr by remember { mutableStateOf("") }
     var selectedPeriods by remember { mutableStateOf(setOf<String>()) }
     var esIndefinido by remember { mutableStateOf(true) }
+    var exigirFotoTareas by remember { mutableStateOf(false) }
     
     var startDate by remember { mutableStateOf<Long?>(null) }
     var endDate by remember { mutableStateOf<Long?>(null) }
@@ -89,6 +96,7 @@ fun CreateSolicitudScreen(
                     hoursStr = sol.horarioStr
                     selectedPeriods = sol.periodos.toSet()
                     esIndefinido = sol.esIndefinido
+                    exigirFotoTareas = sol.exigirFotoTareas
                     startDate = sol.fechaInicio?.toDate()?.time
                     endDate = sol.fechaFin?.toDate()?.time
                     
@@ -101,7 +109,7 @@ fun CreateSolicitudScreen(
                     } catch (e: Exception) {}
                 }
             } catch (e: Exception) {
-                scope.launch { snackbarHostState.showSnackbar("Error al cargar datos: ${e.message}") }
+                scope.launch { snackbarHostState.showSnackbar(ErrorMessages.get(context, e.message)) }
             } finally {
                 isLoadingExisting = false
             }
@@ -115,7 +123,7 @@ fun CreateSolicitudScreen(
                 TextButton(onClick = {
                     startDate = startDateState.selectedDateMillis
                     showStartDatePicker = false
-                }) { Text("ACEPTAR") }
+                }) { Text(stringResource(R.string.crear_solicitud_aceptar)) }
             }
         ) { DatePicker(state = startDateState) }
     }
@@ -127,7 +135,7 @@ fun CreateSolicitudScreen(
                 TextButton(onClick = {
                     endDate = endDateState.selectedDateMillis
                     showEndDatePicker = false
-                }) { Text("ACEPTAR") }
+                }) { Text(stringResource(R.string.crear_solicitud_aceptar)) }
             }
         ) { DatePicker(state = endDateState) }
     }
@@ -156,10 +164,10 @@ fun CreateSolicitudScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text(if (requestId == null) "CREAR SOLICITUD" else "EDITAR SOLICITUD", fontWeight = FontWeight.Bold) },
+                title = { Text(if (requestId == null) stringResource(R.string.crear_solicitud_crear_solicitud) else stringResource(R.string.crear_solicitud_editar_solicitud), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.crear_solicitud_volver))
                     }
                 }
             )
@@ -179,21 +187,23 @@ fun CreateSolicitudScreen(
                 when (val fs = fichaState) {
                     is FichaState.Loading -> CircularProgressIndicator()
                     is FichaState.View -> {
-                        val patientName = fs.data["nombre_completo"]?.toString() ?: "Mi Paciente"
+                        val patientName = fs.data["nombre_completo"]?.toString() ?: stringResource(R.string.crear_solicitud_mi_paciente)
                         val patientPhoto = (fs.data["fotos"] as? List<*>)?.firstOrNull()?.toString() ?: ""
+                        val defaultStartHour = stringResource(R.string.crear_solicitud_hora_inicio_defecto)
+                        val defaultEndHour = stringResource(R.string.crear_solicitud_hora_fin_defecto)
 
                         Text(
-                            "Solicitud para: $patientName",
+                            stringResource(R.string.crear_solicitud_solicitud_para, patientName),
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.primary
                         )
                         
                         Spacer(modifier = Modifier.height(24.dp))
 
-                        InputFieldLabel("DURACIÓN DEL SERVICIO")
+                        InputFieldLabel(stringResource(R.string.crear_solicitud_duracion_servicio))
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                             Checkbox(checked = esIndefinido, onCheckedChange = { esIndefinido = it })
-                            Text("Indefinido", style = MaterialTheme.typography.bodyLarge)
+                            Text(stringResource(R.string.crear_solicitud_indefinido), style = MaterialTheme.typography.bodyLarge)
                         }
                         
                         if (!esIndefinido) {
@@ -204,7 +214,7 @@ fun CreateSolicitudScreen(
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     Column(Modifier.padding(12.dp)) {
-                                        Text("INICIO", style = MaterialTheme.typography.labelSmall)
+                                        Text(stringResource(R.string.crear_solicitud_inicio), style = MaterialTheme.typography.labelSmall)
                                         Text(DateUtils.formatDate(startDate), fontWeight = FontWeight.Bold)
                                     }
                                 }
@@ -213,7 +223,7 @@ fun CreateSolicitudScreen(
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     Column(Modifier.padding(12.dp)) {
-                                        Text("FIN", style = MaterialTheme.typography.labelSmall)
+                                        Text(stringResource(R.string.crear_solicitud_fin), style = MaterialTheme.typography.labelSmall)
                                         Text(DateUtils.formatDate(endDate), fontWeight = FontWeight.Bold)
                                     }
                                 }
@@ -222,15 +232,15 @@ fun CreateSolicitudScreen(
 
                         Spacer(modifier = Modifier.height(24.dp))
 
-                        InputFieldLabel("HORARIO DEL SERVICIO")
+                        InputFieldLabel(stringResource(R.string.crear_solicitud_horario_servicio))
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             OutlinedCard(
                                 onClick = { showStartTimePicker = true },
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Column(Modifier.padding(12.dp)) {
-                                    Text("DESDE", style = MaterialTheme.typography.labelSmall)
-                                    Text(startHourStr.ifEmpty { "00:00" }, fontWeight = FontWeight.Bold)
+                                    Text(stringResource(R.string.crear_solicitud_desde), style = MaterialTheme.typography.labelSmall)
+                                    Text(startHourStr.ifEmpty { defaultStartHour }, fontWeight = FontWeight.Bold)
                                 }
                             }
                             OutlinedCard(
@@ -238,8 +248,8 @@ fun CreateSolicitudScreen(
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Column(Modifier.padding(12.dp)) {
-                                    Text("HASTA", style = MaterialTheme.typography.labelSmall)
-                                    Text(endHourStr.ifEmpty { "23:59" }, fontWeight = FontWeight.Bold)
+                                    Text(stringResource(R.string.crear_solicitud_hasta), style = MaterialTheme.typography.labelSmall)
+                                    Text(endHourStr.ifEmpty { defaultEndHour }, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -282,17 +292,51 @@ fun CreateSolicitudScreen(
                                             }
                                         }
                                     },
-                                    label = { Text(p, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center) }
+                                    label = { Text(periodLabel(p), modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center) }
                                 )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                    Checkbox(checked = exigirFotoTareas, onCheckedChange = { exigirFotoTareas = it })
+                                    Column {
+                                        Text(
+                                            stringResource(R.string.crear_solicitud_pedir_foto),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            stringResource(R.string.crear_solicitud_recomendado),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = Color.Gray
+                                        )
+                                    }
+                                }
+                                if (exigirFotoTareas) {
+                                    Text(
+                                        stringResource(R.string.crear_solicitud_foto_explicacion),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
+                                    )
+                                }
                             }
                         }
 
                         Spacer(modifier = Modifier.height(32.dp))
 
                         val missingFields = mutableListOf<String>()
-                        if (startHourStr.isEmpty() || endHourStr.isEmpty()) missingFields.add("Horario")
-                        if (selectedPeriods.isEmpty()) missingFields.add("Etiquetas")
-                        if (!esIndefinido && (startDate == null || endDate == null)) missingFields.add("Fechas")
+                        if (startHourStr.isEmpty() || endHourStr.isEmpty()) missingFields.add(stringResource(R.string.crear_solicitud_campo_horario))
+                        if (selectedPeriods.isEmpty()) missingFields.add(stringResource(R.string.crear_solicitud_campo_etiquetas))
+                        if (!esIndefinido && (startDate == null || endDate == null)) missingFields.add(stringResource(R.string.crear_solicitud_campo_fechas))
 
                         if (missingFields.isNotEmpty()) {
                             Surface(
@@ -301,10 +345,10 @@ fun CreateSolicitudScreen(
                                 modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
                             ) {
                                 Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Error, null, tint = MaterialTheme.colorScheme.error)
+                                    Icon(Icons.Default.Error, stringResource(R.string.crear_solicitud_advertencia), tint = MaterialTheme.colorScheme.error)
                                     Spacer(Modifier.width(8.dp))
                                     Text(
-                                        "Falta completar: ${missingFields.joinToString(", ")}",
+                                        stringResource(R.string.crear_solicitud_falta_completar, missingFields.joinToString(", ")),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.error
                                     )
@@ -315,7 +359,7 @@ fun CreateSolicitudScreen(
                         val canCreate = missingFields.isEmpty() && !isSaving
 
                         HardShadowButton(
-                            text = if (isSaving) "PROCESANDO..." else if (requestId == null) "CREAR SOLICITUD" else "GUARDAR CAMBIOS",
+                            text = if (isSaving) stringResource(R.string.crear_solicitud_procesando) else if (requestId == null) stringResource(R.string.crear_solicitud_crear_solicitud) else stringResource(R.string.crear_solicitud_guardar_cambios),
                             containerColor = if (canCreate) MaterialTheme.colorScheme.primary else Color.Gray,
                             contentColor = Color.White,
                             shadowColor = if (canCreate) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else Color.Transparent,
@@ -332,13 +376,14 @@ fun CreateSolicitudScreen(
                                         esIndefinido = esIndefinido,
                                         horarioStr = hoursStr,
                                         periodos = selectedPeriods.toList(),
+                                        exigirFotoTareas = exigirFotoTareas,
                                         onSuccess = {
                                             isSaving = false
                                             onNavigateBack()
                                         },
                                         onError = { error ->
                                             isSaving = false
-                                            scope.launch { snackbarHostState.showSnackbar("Error: $error") }
+                                            scope.launch { snackbarHostState.showSnackbar(ErrorMessages.get(context, error)) }
                                         }
                                     )
                                 } else {
@@ -347,6 +392,7 @@ fun CreateSolicitudScreen(
                                             "horarioStr" to hoursStr,
                                             "periodos" to selectedPeriods.toList(),
                                             "esIndefinido" to esIndefinido,
+                                            "exigirFotoTareas" to exigirFotoTareas,
                                             "fechaInicio" to startDate?.let { Timestamp(Date(it)) },
                                             "fechaFin" to endDate?.let { Timestamp(Date(it)) }
                                         )
@@ -355,7 +401,7 @@ fun CreateSolicitudScreen(
                                         onNavigateBack() 
                                     }.addOnFailureListener { e ->
                                         isSaving = false
-                                        scope.launch { snackbarHostState.showSnackbar("Error: ${e.message}") }
+                                        scope.launch { snackbarHostState.showSnackbar(ErrorMessages.get(context, e.message)) }
                                     }
                                 }
                             }
@@ -364,13 +410,13 @@ fun CreateSolicitudScreen(
                         Spacer(modifier = Modifier.height(16.dp))
 
                         TextButton(onClick = onNavigateBack, enabled = !isSaving) {
-                            Text("CANCELAR", color = Color.Gray)
+                            Text(stringResource(R.string.crear_solicitud_cancelar), color = Color.Gray)
                         }
                     }
                     is FichaState.NotFound -> {
-                        Text("Primero debes completar tu ficha de familiar/paciente.", textAlign = TextAlign.Center)
+                        Text(stringResource(R.string.crear_solicitud_requiere_ficha), textAlign = TextAlign.Center)
                         Spacer(modifier = Modifier.height(16.dp))
-                        Button(onClick = onNavigateBack) { Text("REGRESAR") }
+                        Button(onClick = onNavigateBack) { Text(stringResource(R.string.crear_solicitud_regresar)) }
                     }
                     else -> { }
                 }
@@ -380,6 +426,14 @@ fun CreateSolicitudScreen(
 }
 
 
+
+@Composable
+private fun periodLabel(period: String): String = when (period) {
+    "Mañana" -> stringResource(R.string.crear_solicitud_periodo_manana)
+    "Tarde" -> stringResource(R.string.crear_solicitud_periodo_tarde)
+    "Noche" -> stringResource(R.string.crear_solicitud_periodo_noche)
+    else -> period
+}
 
 fun detectPeriodsFromHours(start: String, end: String): Set<String> {
     val set = mutableSetOf<String>()

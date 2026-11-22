@@ -12,6 +12,7 @@ data class SolicitudCuidado(
     val representanteNombre: String = "",
     val representanteRut: String = "",
     val representanteTelefono: String = "",
+    val representanteFoto: String = "",
     val pacienteFichaId: String = "",
     val nombrePaciente: String = "",
     val fotoPaciente: String = "",
@@ -25,6 +26,7 @@ data class SolicitudCuidado(
     val cuidadorNombre: String = "",
     val cuidadorFoto: String = "",
     val aceptadoAt: Timestamp? = null,
+    val exigirFotoTareas: Boolean = false,
     val createdAt: Timestamp? = null
 )
 

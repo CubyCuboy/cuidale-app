@@ -3,59 +3,112 @@ package com.example.cuidaleapp.utils
 import android.content.Context
 import com.example.cuidaleapp.R
 
+/**
+ * Resuelve un código de error (ver [ErrorCodes]) a un recurso de string.
+ */
 object ErrorMessages {
 
-    fun get(context: Context, message: String): String {
-        val msg = message.lowercase()
+    private val MAP: Map<String, Int> = mapOf(
+        // Auth
+        ErrorCodes.Auth.GENERIC to R.string.error_auth_generic,
+        ErrorCodes.Auth.EMAIL_IN_USE to R.string.error_auth_email_in_use,
+        ErrorCodes.Auth.INVALID_CREDENTIALS to R.string.error_auth_invalid_credentials,
+        ErrorCodes.Auth.WEAK_PASSWORD to R.string.error_auth_weak_password,
+        ErrorCodes.Auth.USER_DISABLED to R.string.error_auth_user_disabled,
+        ErrorCodes.Auth.TOO_MANY_REQUESTS to R.string.error_auth_too_many_requests,
+        ErrorCodes.Auth.EMAIL_NOT_VERIFIED to R.string.error_auth_email_not_verified,
+        ErrorCodes.Auth.SESSION_EXPIRED to R.string.error_auth_session_expired,
+        ErrorCodes.Auth.PERMISSION_DENIED to R.string.error_auth_permission_denied,
+        ErrorCodes.Auth.RUT_ALREADY_REGISTERED to R.string.error_auth_rut_already_registered,
+        ErrorCodes.Auth.INVALID_RUT to R.string.error_auth_invalid_rut,
+        ErrorCodes.Auth.CODE_INVALID to R.string.error_auth_code_invalid,
+        ErrorCodes.Auth.CODE_EXPIRED to R.string.error_auth_code_expired,
+        ErrorCodes.Auth.USER_NOT_FOUND to R.string.error_auth_user_not_found,
+
+        // Database
+        ErrorCodes.Database.GENERIC to R.string.error_db_generic,
+        ErrorCodes.Database.NOT_FOUND to R.string.error_db_not_found,
+        ErrorCodes.Database.PERMISSION_DENIED to R.string.error_db_permission_denied,
+        ErrorCodes.Database.OFFLINE to R.string.error_db_offline,
+        ErrorCodes.Database.TIMEOUT to R.string.error_db_timeout,
+        ErrorCodes.Database.CONFLICT to R.string.error_db_conflict,
+        ErrorCodes.Database.INVALID_DATA to R.string.error_db_invalid_data,
+
+        // Storage
+        ErrorCodes.Storage.GENERIC to R.string.error_storage_generic,
+        ErrorCodes.Storage.UPLOAD_FAILED to R.string.error_storage_upload_failed,
+        ErrorCodes.Storage.DOWNLOAD_FAILED to R.string.error_storage_download_failed,
+        ErrorCodes.Storage.FILE_TOO_LARGE to R.string.error_storage_file_too_large,
+        ErrorCodes.Storage.INVALID_FORMAT to R.string.error_storage_invalid_format,
+        ErrorCodes.Storage.FILE_NOT_FOUND to R.string.error_storage_file_not_found,
+        ErrorCodes.Storage.PERMISSION_DENIED to R.string.error_storage_permission_denied,
+
+        // Network
+        ErrorCodes.Network.GENERIC to R.string.error_net_generic,
+        ErrorCodes.Network.OFFLINE to R.string.error_net_offline,
+        ErrorCodes.Network.TIMEOUT to R.string.error_net_timeout,
+        ErrorCodes.Network.SERVER_ERROR to R.string.error_net_server_error,
+
+        // Validation
+        ErrorCodes.Validation.GENERIC to R.string.error_val_generic,
+        ErrorCodes.Validation.REQUIRED_FIELD to R.string.error_val_required_field,
+        ErrorCodes.Validation.INVALID_EMAIL to R.string.error_val_invalid_email,
+        ErrorCodes.Validation.INVALID_PHONE to R.string.error_val_invalid_phone,
+        ErrorCodes.Validation.INVALID_RUT to R.string.error_val_invalid_rut,
+        ErrorCodes.Validation.SHORT_PASSWORD to R.string.error_val_short_password,
+        ErrorCodes.Validation.PASSWORD_MISMATCH to R.string.error_val_password_mismatch,
+        ErrorCodes.Validation.INVALID_DATE to R.string.error_val_invalid_date,
+        ErrorCodes.Validation.MIN_AGE to R.string.error_val_min_age,
+        ErrorCodes.Validation.MAX_LENGTH to R.string.error_val_max_length,
+        ErrorCodes.Validation.INVALID_FILE to R.string.error_val_invalid_file,
+
+        // Service
+        ErrorCodes.Service.GENERIC to R.string.error_svc_generic,
+        ErrorCodes.Service.SOLICITUD_NOT_FOUND to R.string.error_svc_solicitud_not_found,
+        ErrorCodes.Service.POSTULACION_FAILED to R.string.error_svc_postulacion_failed,
+        ErrorCodes.Service.VINCULO_EXISTS to R.string.error_svc_vinculo_exists,
+        ErrorCodes.Service.VINCULO_NOT_FOUND to R.string.error_svc_vinculo_not_found,
+        ErrorCodes.Service.TAREA_NOT_FOUND to R.string.error_svc_tarea_not_found,
+        ErrorCodes.Service.TAREA_ALREADY_COMPLETED to R.string.error_svc_tarea_already_completed,
+        ErrorCodes.Service.CHAT_NOT_FOUND to R.string.error_svc_chat_not_found,
+        ErrorCodes.Service.SELF_REQUEST to R.string.error_svc_self_request,
+
+        // Unknown
+        ErrorCodes.Unknown.GENERIC to R.string.error_unknown_generic,
+        ErrorCodes.Unknown.CONVERSION_FAILED to R.string.error_unknown_conversion_failed,
+        ErrorCodes.Unknown.ILLEGAL_STATE to R.string.error_unknown_illegal_state
+    )
+
+    /** Devuelve el string resuelto para un código. */
+    fun resolve(context: Context, code: String): String {
+        val resId = MAP[code] ?: MAP[ErrorCodes.genericFor(code)] ?: R.string.error_unknown_generic
+        return context.getString(resId)
+    }
+
+    /** Devuelve el string resuelto a partir de una excepción. */
+    fun fromException(context: Context, e: Throwable?): String =
+        resolve(context, ErrorCodes.fromException(e))
+
+    /**
+     * Devuelve un string de error legible a partir de un mensaje crudo.
+     * Usado como fallback genérico en capturadores de errores existentes.
+     */
+    fun get(context: Context, message: String?): String {
+        if (message.isNullOrBlank()) return resolve(context, ErrorCodes.Unknown.GENERIC)
         return when {
-            msg.contains("network-request-failed") ||
-            msg.contains("network") ||
-            msg.contains("unavailable") ||
-            msg.contains("host") ||
-            msg.contains("failed to connect") ->
-                context.getString(R.string.error_network)
-
-            msg.contains("permission-denied") ||
-            msg.contains("permission_denied") ||
-            msg.contains("missing or insufficient permissions") ->
-                context.getString(R.string.error_permissions)
-
-            msg.contains("requires-recent-login") ||
-            msg.contains("recent authentication") ->
-                context.getString(R.string.error_recent_login)
-
-            msg.contains("email-already-in-use") ||
-            msg.contains("already in use") ||
-            msg.contains("collision") ->
-                context.getString(R.string.error_email_in_use)
-
-            msg.contains("weak-password") ->
-                context.getString(R.string.error_weak_password)
-
-            msg.contains("invalid-credential") ||
-            msg.contains("wrong-password") ||
-            msg.contains("user-not-found") ||
-            msg.contains("credenciales incorrectas") ->
-                context.getString(R.string.error_credentials)
-
-            msg.contains("expirado") ||
-            msg.contains("expired") ->
-                context.getString(R.string.error_code_expired)
-
-            msg.contains("código incorrecto") ||
-            msg.contains("code incorrect") ->
-                context.getString(R.string.error_code_incorrect)
-
-            msg.contains("máximo de intentos") ||
-            msg.contains("agotado") ||
-            msg.contains("resource-exhausted") ->
-                context.getString(R.string.error_attempts_exhausted)
-
-            msg.contains("correo electrónico no válido") ||
-            msg.contains("invalid email") ->
-                context.getString(R.string.error_invalid_email)
-
-            else -> if (msg.isNotBlank()) message else context.getString(R.string.error_generic)
+            message.contains("offline", ignoreCase = true) || message.contains("network", ignoreCase = true) ||
+                message.contains("internet", ignoreCase = true) -> resolve(context, ErrorCodes.Network.OFFLINE)
+            message.contains("timeout", ignoreCase = true) -> resolve(context, ErrorCodes.Network.TIMEOUT)
+            message.contains("permission denied", ignoreCase = true) ||
+                message.contains("insufficient permissions", ignoreCase = true) -> resolve(context, ErrorCodes.Database.PERMISSION_DENIED)
+            message.contains("not found", ignoreCase = true) -> resolve(context, ErrorCodes.Database.NOT_FOUND)
+            message.contains("email already in use", ignoreCase = true) -> resolve(context, ErrorCodes.Auth.EMAIL_IN_USE)
+            message.contains("weak password", ignoreCase = true) -> resolve(context, ErrorCodes.Auth.WEAK_PASSWORD)
+            message.contains("invalid credential", ignoreCase = true) || message.contains("wrong password", ignoreCase = true) ||
+                message.contains("user not found", ignoreCase = true) -> resolve(context, ErrorCodes.Auth.INVALID_CREDENTIALS)
+            message.contains("too many requests", ignoreCase = true) -> resolve(context, ErrorCodes.Auth.TOO_MANY_REQUESTS)
+            message.contains("storage", ignoreCase = true) -> resolve(context, ErrorCodes.Storage.GENERIC)
+            else -> resolve(context, ErrorCodes.Unknown.GENERIC)
         }
     }
 }

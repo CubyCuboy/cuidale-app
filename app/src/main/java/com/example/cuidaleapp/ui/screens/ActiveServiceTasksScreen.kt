@@ -3,9 +3,11 @@ package com.example.cuidaleapp.ui.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -18,14 +20,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.example.cuidaleapp.R
 import com.example.cuidaleapp.models.*
 import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.TareasViewModel
 import com.example.cuidaleapp.utils.ConnectivityObserver
+import com.example.cuidaleapp.utils.ErrorCodes
+import com.example.cuidaleapp.utils.ErrorMessages
 import java.util.Locale
 import kotlinx.coroutines.launch
 
@@ -40,6 +45,7 @@ fun ActiveServiceTasksScreen(
 ) {
     val isOnline by ConnectivityObserver.isOnline.collectAsState()
     val tareasHoy by tareasViewModel.tareasHoy.collectAsState()
+    val tareasAtrasadas by tareasViewModel.tareasAtrasadas.collectAsState()
     val error by tareasViewModel.error.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val gradient = CuidaleThemeExtras.gradient
@@ -61,11 +67,42 @@ fun ActiveServiceTasksScreen(
     val scope = rememberCoroutineScope()
 
     val context = androidx.compose.ui.platform.LocalContext.current
+    val msgCompletarTodas = stringResource(R.string.tareas_error_completar_todas)
+    val estadoCompletada = stringResource(R.string.tareas_estado_completada)
+    val estadoPospuesta = stringResource(R.string.tareas_estado_pospuesta)
+    val estadoPendiente = stringResource(R.string.tareas_estado_pendiente)
+    val shareMensajeTemplate = stringResource(R.string.tareas_share_mensaje)
+
+    var photoEvidenceUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var photoEvidenceUrl by remember { mutableStateOf<String?>(null) }
+    var photoEvidencePath by remember { mutableStateOf<String?>(null) }
+    var uploadingEvidence by remember { mutableStateOf(false) }
+
+    val photoPickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            photoEvidenceUri = uri
+            uploadingEvidence = true
+            scope.launch {
+                val uploaded = tareasViewModel.subirFotoEvidencia(context, uri)
+                if (uploaded != null) {
+                    photoEvidenceUrl = uploaded.first
+                    photoEvidencePath = uploaded.second
+                } else {
+                    snackbarHostState.showSnackbar(ErrorMessages.resolve(context, ErrorCodes.Storage.UPLOAD_FAILED))
+                }
+                uploadingEvidence = false
+            }
+        }
+    }
     LaunchedEffect(solicitud.id) {
         tareasViewModel.cargarTareasServicio(solicitud.id)
         tareasViewModel.generarInstanciasParaHoy(solicitud.id, solicitud.pacienteFichaId)
         tareasViewModel.cargarTareasDelDia(solicitud.id)
         tareasViewModel.iniciarMonitoreoTareas(context)
+        tareasViewModel.limpiarEvidenciasViejas(solicitud.id)
+        tareasViewModel.cargarTareasAtrasadas(solicitud.id)
     }
 
     LaunchedEffect(error) {
@@ -82,7 +119,7 @@ fun ActiveServiceTasksScreen(
                 CenterAlignedTopAppBar(
                     title = { 
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(if (isSelectionMode) "${selectedIds.size} seleccionadas" else "SEGUIMIENTO DIARIO", fontWeight = FontWeight.Bold, color = Color.White)
+                            Text(if (isSelectionMode) stringResource(R.string.tareas_seleccionadas_count, selectedIds.size) else stringResource(R.string.tareas_titulo_seguimiento_diario), fontWeight = FontWeight.Bold, color = Color.White)
                             if (!isSelectionMode) Text(solicitud.nombrePaciente, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.7f))
                         }
                     },
@@ -101,15 +138,15 @@ fun ActiveServiceTasksScreen(
                     actions = {
                         if (isRepresentative && !isSelectionMode && tareasHoy.isNotEmpty() && isOnline) {
                             IconButton(onClick = { isSelectionMode = true }) {
-                                Icon(Icons.Default.Checklist, "Seleccionar", tint = Color.White)
+                                Icon(Icons.Default.Checklist, stringResource(R.string.tareas_cd_seleccionar), tint = Color.White)
                             }
                         }
                         if (isSelectionMode && selectedIds.isNotEmpty() && isOnline) {
                             IconButton(onClick = { showMassConfirmDialog = true }) {
-                                Icon(Icons.Default.CheckCircle, "Finalizar", tint = Color.White)
+                                Icon(Icons.Default.CheckCircle, stringResource(R.string.tareas_cd_finalizar), tint = Color.White)
                             }
                             IconButton(onClick = { showMassPostponeDialog = true }) {
-                                Icon(Icons.Default.Schedule, "Postergar", tint = Color.White)
+                                Icon(Icons.Default.Schedule, stringResource(R.string.tareas_cd_postergar), tint = Color.White)
                             }
                             IconButton(onClick = {
                                 val selectedRegistros = tareasHoy.filter { selectedIds.contains(it.id) }
@@ -120,7 +157,7 @@ fun ActiveServiceTasksScreen(
                                 isSelectionMode = false
                                 selectedIds.clear()
                             }) {
-                                Icon(Icons.Default.Delete, "Eliminar", tint = Color.White)
+                                Icon(Icons.Default.Delete, stringResource(R.string.tareas_cd_eliminar), tint = Color.White)
                             }
                         }
                     },
@@ -137,14 +174,14 @@ fun ActiveServiceTasksScreen(
                             if (allProcessed) showSummary = true 
                             else {
                                 scope.launch {
-                                    snackbarHostState.showSnackbar("Debes completar o postergar todas las tareas antes de finalizar el turno.")
+                                    snackbarHostState.showSnackbar(msgCompletarTodas)
                                 }
                             }
                         },
                         containerColor = if (allProcessed) Color(0xFF4CAF50) else Color.Gray,
                         contentColor = Color.White,
                         icon = { Icon(Icons.Default.AssignmentTurnedIn, null) },
-                        text = { Text("FINALIZAR TURNO") }
+                        text = { Text(stringResource(R.string.tareas_finalizar_turno)) }
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                 }
@@ -154,7 +191,7 @@ fun ActiveServiceTasksScreen(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = Color.White
                     ) {
-                        Icon(Icons.Default.Add, "Agregar Tarea")
+                        Icon(Icons.Default.Add, stringResource(R.string.tareas_cd_agregar_tarea))
                     }
                 }
             }
@@ -171,9 +208,9 @@ fun ActiveServiceTasksScreen(
 
 
             if (!isOnline && tareasHoy.isEmpty()) {
-                OfflinePlaceholder(subtitle = "No se pueden cargar las tareas sin conexión.")
+                OfflinePlaceholder(subtitle = stringResource(R.string.tareas_offline_subtitle))
             } else if (tareasHoy.isEmpty()) {
-                EmptyPlaceholder("No hay tareas para hoy.")
+                EmptyPlaceholder(stringResource(R.string.tareas_vacio_hoy))
             } else {
                 Column {
                     if (!isOnline) {
@@ -185,7 +222,7 @@ fun ActiveServiceTasksScreen(
                             Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.WifiOff, null, tint = Color.White, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(8.dp))
-                                Text("Modo offline: Edición de tareas desactivada.", color = Color.White, style = MaterialTheme.typography.bodySmall)
+                                Text(stringResource(R.string.tareas_offline_banner), color = Color.White, style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }
@@ -198,9 +235,45 @@ fun ActiveServiceTasksScreen(
                         val pospuestas = tareasHoy.filter { it.postergada && !it.completada }
                         val pendientes = tareasHoy.filter { !it.completada && !it.postergada }
 
+                        if (tareasAtrasadas.isNotEmpty()) {
+                            item {
+                                TaskExpandableSection(
+                                    title = stringResource(R.string.tareas_seccion_atrasadas),
+                                    count = tareasAtrasadas.size,
+                                    tasks = tareasAtrasadas,
+                                    solicitud = solicitud,
+                                    currentUserId = currentUserId,
+                                    otherUid = otherUid,
+                                    isRepresentative = isRepresentative,
+                                    isSelectionMode = isSelectionMode,
+                                    selectedIds = selectedIds,
+                                    isOnline = isOnline,
+                                    tareasViewModel = tareasViewModel,
+                                    onNavigateToChat = onNavigateToChat,
+                                    onConfirmTask = { taskToConfirm = it },
+                                    onPostponeTask = { taskToPostpone = it },
+                                    onEditTask = { editingRegistro = it },
+                                    onToggleSelection = { id ->
+                                        if (selectedIds.contains(id)) selectedIds.remove(id)
+                                        else selectedIds.add(id)
+                                    },
+                                    onShareInChat = { reg ->
+                                        val estado = when {
+                                            reg.completada -> estadoCompletada
+                                            reg.postergada -> estadoPospuesta
+                                            else -> estadoPendiente
+                                        }
+                                        val msg = String.format(shareMensajeTemplate, reg.titulo, reg.horarioPrevisto, estado)
+                                        val chatId = if (currentUserId < otherUid) "${currentUserId}_$otherUid" else "${otherUid}_$currentUserId"
+                                        onNavigateToChat(chatId, otherUid, msg)
+                                    }
+                                )
+                            }
+                        }
+
                         item {
                             TaskExpandableSection(
-                                title = "PENDIENTES",
+                                title = stringResource(R.string.chat_task_pending),
                                 count = pendientes.size,
                                 tasks = pendientes,
                                 solicitud = solicitud,
@@ -220,7 +293,12 @@ fun ActiveServiceTasksScreen(
                                     else selectedIds.add(id)
                                 },
                                 onShareInChat = { reg ->
-                                    val msg = "Revisa esta tarea:\n*${reg.titulo}* (${reg.horarioPrevisto})\nEstado: ${if(reg.completada) "COMPLETADA" else if(reg.postergada) "POSPUESTA" else "PENDIENTE"}"
+                                    val estado = when {
+                                        reg.completada -> estadoCompletada
+                                        reg.postergada -> estadoPospuesta
+                                        else -> estadoPendiente
+                                    }
+                                    val msg = String.format(shareMensajeTemplate, reg.titulo, reg.horarioPrevisto, estado)
                                     val chatId = if (currentUserId < otherUid) "${currentUserId}_$otherUid" else "${otherUid}_$currentUserId"
                                     onNavigateToChat(chatId, otherUid, msg)
                                 }
@@ -229,7 +307,7 @@ fun ActiveServiceTasksScreen(
 
                         item {
                             TaskExpandableSection(
-                                title = "COMPLETADAS",
+                                title = stringResource(R.string.chat_task_completed),
                                 count = completadas.size,
                                 tasks = completadas,
                                 solicitud = solicitud,
@@ -249,7 +327,12 @@ fun ActiveServiceTasksScreen(
                                     else selectedIds.add(id)
                                 },
                                 onShareInChat = { reg ->
-                                    val msg = "Revisa esta tarea:\n*${reg.titulo}* (${reg.horarioPrevisto})\nEstado: ${if(reg.completada) "COMPLETADA" else if(reg.postergada) "POSPUESTA" else "PENDIENTE"}"
+                                    val estado = when {
+                                        reg.completada -> estadoCompletada
+                                        reg.postergada -> estadoPospuesta
+                                        else -> estadoPendiente
+                                    }
+                                    val msg = String.format(shareMensajeTemplate, reg.titulo, reg.horarioPrevisto, estado)
                                     val chatId = if (currentUserId < otherUid) "${currentUserId}_$otherUid" else "${otherUid}_$currentUserId"
                                     onNavigateToChat(chatId, otherUid, msg)
                                 }
@@ -258,7 +341,7 @@ fun ActiveServiceTasksScreen(
 
                         item {
                             TaskExpandableSection(
-                                title = "POSPUESTAS",
+                                title = stringResource(R.string.chat_task_postponed),
                                 count = pospuestas.size,
                                 tasks = pospuestas,
                                 solicitud = solicitud,
@@ -278,7 +361,12 @@ fun ActiveServiceTasksScreen(
                                     else selectedIds.add(id)
                                 },
                                 onShareInChat = { reg ->
-                                    val msg = "Revisa esta tarea:\n*${reg.titulo}* (${reg.horarioPrevisto})\nEstado: ${if(reg.completada) "COMPLETADA" else if(reg.postergada) "POSPUESTA" else "PENDIENTE"}"
+                                    val estado = when {
+                                        reg.completada -> estadoCompletada
+                                        reg.postergada -> estadoPospuesta
+                                        else -> estadoPendiente
+                                    }
+                                    val msg = String.format(shareMensajeTemplate, reg.titulo, reg.horarioPrevisto, estado)
                                     val chatId = if (currentUserId < otherUid) "${currentUserId}_$otherUid" else "${otherUid}_$currentUserId"
                                     onNavigateToChat(chatId, otherUid, msg)
                                 }
@@ -292,18 +380,18 @@ fun ActiveServiceTasksScreen(
         if (showMassConfirmDialog) {
             AlertDialog(
                 onDismissRequest = { showMassConfirmDialog = false },
-                title = { Text("Finalizar Tareas") },
-                text = { Text("¿Deseas marcar las ${selectedIds.size} tareas seleccionadas como finalizadas?") },
+                title = { Text(stringResource(R.string.tareas_confirm_finalizar_titulo)) },
+                text = { Text(stringResource(R.string.tareas_confirm_finalizar_mensaje, selectedIds.size)) },
                 confirmButton = {
                     Button(onClick = {
                         tareasViewModel.completarMultiplesTareas(solicitud.id, selectedIds.toList(), currentUserId, otherUid)
                         isSelectionMode = false
                         selectedIds.clear()
                         showMassConfirmDialog = false
-                    }) { Text("SÍ, FINALIZAR") }
+                    }) { Text(stringResource(R.string.tareas_confirm_si_finalizar)) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showMassConfirmDialog = false }) { Text("CANCELAR") }
+                    TextButton(onClick = { showMassConfirmDialog = false }) { Text(stringResource(R.string.action_cancel)) }
                 }
             )
         }
@@ -312,15 +400,15 @@ fun ActiveServiceTasksScreen(
             var massPostponeReason by remember { mutableStateOf("") }
             AlertDialog(
                 onDismissRequest = { showMassPostponeDialog = false },
-                title = { Text("Postergar Selección") },
+                title = { Text(stringResource(R.string.tareas_postergar_seleccion_titulo)) },
                 text = {
                     Column {
-                        Text("Indica el motivo para postergar estas ${selectedIds.size} tareas:")
+                        Text(stringResource(R.string.tareas_postergar_seleccion_mensaje, selectedIds.size))
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(
                             value = massPostponeReason,
                             onValueChange = { massPostponeReason = it },
-                            placeholder = { Text("Ej: Reprogramación masiva") },
+                            placeholder = { Text(stringResource(R.string.tareas_postergar_placeholder_masiva)) },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -334,36 +422,104 @@ fun ActiveServiceTasksScreen(
                             showMassPostponeDialog = false
                         },
                         enabled = massPostponeReason.isNotBlank()
-                    ) { Text("POSTERGAR TODAS") }
+                    ) { Text(stringResource(R.string.tareas_postergar_todas)) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showMassPostponeDialog = false }) { Text("CANCELAR") }
+                    TextButton(onClick = { showMassPostponeDialog = false }) { Text(stringResource(R.string.action_cancel)) }
                 }
             )
         }
 
         if (taskToConfirm != null) {
             AlertDialog(
-                onDismissRequest = { taskToConfirm = null },
-                title = { Text("Finalizar Tarea") },
-                text = { Text("¿Deseas marcar '${taskToConfirm?.titulo}' como finalizada?") },
-                confirmButton = {
-                    Button(onClick = {
-                        taskToConfirm?.let {
-                            tareasViewModel.marcarTareaCompletada(
-                                solicitud.id,
-                                it.id,
-                                true,
-                                currentUserId,
-                                titulo = it.titulo,
-                                otherUid = otherUid
-                            )
+                onDismissRequest = {
+                    taskToConfirm = null
+                    photoEvidenceUri = null
+                    photoEvidenceUrl = null
+                    photoEvidencePath = null
+                },
+                title = { Text(stringResource(R.string.tareas_finalizar_tarea_titulo)) },
+                text = {
+                    Column {
+                        Text(stringResource(R.string.tareas_finalizar_tarea_mensaje, taskToConfirm?.titulo ?: ""))
+                        if (!isRepresentative) {
+                            Spacer(Modifier.height(12.dp))
+                            if (taskToConfirm?.exigirFoto == true && photoEvidenceUrl == null) {
+                                Surface(
+                                    color = Color(0xFFFFF3E0),
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Warning, null, tint = Color(0xFFE65100), modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            stringResource(R.string.tareas_requiere_foto),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = Color(0xFFE65100)
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.height(10.dp))
+                            }
+                            if (photoEvidenceUrl != null) {
+                                coil3.compose.AsyncImage(
+                                    model = photoEvidenceUrl,
+                                    contentDescription = stringResource(R.string.tareas_cd_evidencia_fotografica),
+                                    modifier = Modifier.fillMaxWidth().height(140.dp),
+                                    contentScale = ContentScale.Crop
+                                )
+                                Spacer(Modifier.height(8.dp))
+                            } else if (photoEvidenceUri != null && uploadingEvidence) {
+                                Box(Modifier.fillMaxWidth().height(140.dp), contentAlignment = Alignment.Center) {
+                                    CircularProgressIndicator()
+                                }
+                            }
+                            Button(
+                                onClick = { photoPickerLauncher.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                                enabled = !uploadingEvidence,
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), contentColor = MaterialTheme.colorScheme.primary),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(if (photoEvidenceUrl == null) stringResource(R.string.tareas_adjuntar_foto) else stringResource(R.string.tareas_cambiar_foto), fontWeight = FontWeight.Bold)
+                            }
                         }
-                        taskToConfirm = null
-                    }) { Text("SÍ, FINALIZAR") }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            taskToConfirm?.let {
+                                tareasViewModel.marcarTareaCompletada(
+                                    solicitud.id,
+                                    it.id,
+                                    true,
+                                    currentUserId,
+                                    titulo = it.titulo,
+                                    otherUid = otherUid,
+                                    fotoUrl = photoEvidenceUrl.orEmpty(),
+                                    fotoStoragePath = photoEvidencePath.orEmpty(),
+                                    exigirFoto = it.exigirFoto
+                                )
+                            }
+                            taskToConfirm = null
+                            photoEvidenceUri = null
+                            photoEvidenceUrl = null
+                            photoEvidencePath = null
+                        },
+                        enabled = !uploadingEvidence
+                    ) { Text(stringResource(R.string.tareas_confirm_si_finalizar)) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { taskToConfirm = null }) { Text("CANCELAR") }
+                    TextButton(onClick = {
+                        taskToConfirm = null
+                        photoEvidenceUri = null
+                        photoEvidenceUrl = null
+                        photoEvidencePath = null
+                    }) { Text(stringResource(R.string.action_cancel)) }
                 }
             )
         }
@@ -371,15 +527,15 @@ fun ActiveServiceTasksScreen(
         if (taskToPostpone != null) {
             AlertDialog(
                 onDismissRequest = { taskToPostpone = null },
-                title = { Text("Postergar Tarea") },
+                title = { Text(stringResource(R.string.tareas_postergar_tarea_titulo)) },
                 text = {
                     Column {
-                        Text("Indica el motivo de la postergación:")
+                        Text(stringResource(R.string.tareas_postergar_tarea_mensaje))
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(
                             value = postponeReason,
                             onValueChange = { postponeReason = it },
-                            placeholder = { Text("Ej: El paciente está durmiendo") },
+                            placeholder = { Text(stringResource(R.string.tareas_postergar_placeholder_ejemplo)) },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -401,13 +557,13 @@ fun ActiveServiceTasksScreen(
                             postponeReason = ""
                         },
                         enabled = postponeReason.isNotBlank()
-                    ) { Text("POSTERGAR") }
+                    ) { Text(stringResource(R.string.tareas_postergar)) }
                 },
                 dismissButton = {
                     TextButton(onClick = { 
                         taskToPostpone = null
                         postponeReason = ""
-                    }) { Text("CANCELAR") }
+                    }) { Text(stringResource(R.string.action_cancel)) }
                 }
             )
         }
@@ -416,19 +572,19 @@ fun ActiveServiceTasksScreen(
             var observaciones by remember { mutableStateOf("") }
             AlertDialog(
                 onDismissRequest = { showSummary = false },
-                title = { Text("RESUMEN DE TURNO") },
+                title = { Text(stringResource(R.string.tareas_resumen_turno_titulo)) },
                 text = {
                     Column {
                         val completadas = tareasHoy.count { it.completada }
                         val total = tareasHoy.size
-                        Text("Tareas realizadas: $completadas de $total", fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.tareas_resumen_realizadas, completadas, total), fontWeight = FontWeight.Bold)
                         
                         if (tareasHoy.any { it.postergada }) {
-                            Text("Tareas postergadas: ${tareasHoy.count { it.postergada }}", color = Color.Red)
+                            Text(stringResource(R.string.tareas_resumen_postergadas, tareasHoy.count { it.postergada }), color = Color.Red)
                         }
 
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text("Observaciones adicionales para el representante:")
+                        Text(stringResource(R.string.tareas_resumen_observaciones))
                         OutlinedTextField(
                             value = observaciones,
                             onValueChange = { observaciones = it },
@@ -442,10 +598,10 @@ fun ActiveServiceTasksScreen(
                             showSummary = false
                             onNavigateBack()
                         }
-                    }) { Text("ENVIAR Y TERMINAR") }
+                    }) { Text(stringResource(R.string.tareas_enviar_y_terminar)) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showSummary = false }) { Text("VOLVER") }
+                    TextButton(onClick = { showSummary = false }) { Text(stringResource(R.string.action_back)) }
                 }
             )
         }
@@ -521,6 +677,7 @@ fun TaskExpandableSection(
     onToggleSelection: (String) -> Unit = {},
     onShareInChat: (RegistroTarea) -> Unit = {}
 ) {
+    val fallbackTarea = stringResource(R.string.tareas_fallback_tarea)
     var expanded by remember { mutableStateOf(title == "PENDIENTES") }
     val sectionColor = when(title) {
         "COMPLETADAS" -> Color(0xFF4CAF50)
@@ -574,7 +731,7 @@ fun TaskExpandableSection(
             ) {
                 if (tasks.isEmpty()) {
                     Text(
-                        "No hay tareas en esta sección.",
+                        stringResource(R.string.tareas_seccion_vacia),
                         modifier = Modifier.padding(16.dp),
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.White.copy(alpha = 0.5f)
@@ -598,20 +755,19 @@ fun TaskExpandableSection(
                                 if (registro.completada) null else { { onEditTask(registro) } }
                             } else null,
                             onAsk = {
-                                val frecuenciaFriendly = when(registro.frecuencia) {
-                                    FrecuenciaTarea.DIARIA -> "Diaria"
-                                    FrecuenciaTarea.SEMANAL -> "Semanal"
-                                    FrecuenciaTarea.MENSUAL -> "Mensual"
-                                    FrecuenciaTarea.UNA_VEZ -> "Una vez"
+                                if (otherUid.isNotBlank()) {
+                                    tareasViewModel.enviarConsultaTarea(
+                                        myUid = currentUserId,
+                                        otherUid = otherUid,
+                                        titulo = registro.titulo.ifBlank { fallbackTarea },
+                                        horario = registro.horarioPrevisto,
+                                        descripcion = registro.descripcion,
+                                        solicitudId = solicitud.id,
+                                        registroId = registro.id
+                                    )
+                                    val chatId = if (currentUserId < otherUid) "${currentUserId}_$otherUid" else "${otherUid}_$currentUserId"
+                                    onNavigateToChat(chatId, otherUid, null)
                                 }
-                                val msg = "Hola, tengo una duda sobre esta tarea:\n\n" +
-                                         "*${registro.titulo}*\n" +
-                                         "⏰ Horario: ${registro.horarioPrevisto}\n" +
-                                         "📋 Frecuencia: $frecuenciaFriendly\n" +
-                                         "📝 Indicaciones: ${if (registro.descripcion.isNotBlank()) registro.descripcion else "Sin indicaciones específicas"}"
-                                
-                                val chatId = if (currentUserId < otherUid) "${currentUserId}_$otherUid" else "${otherUid}_$currentUserId"
-                                onNavigateToChat(chatId, otherUid, msg)
                             },
                             onShareInChat = { onShareInChat(registro) }
                         )
@@ -690,14 +846,14 @@ fun DailyTaskCard(
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "Horario: ${registro.horarioPrevisto}",
+                            text = stringResource(R.string.tareas_horario, registro.horarioPrevisto),
                             style = MaterialTheme.typography.labelSmall,
                             color = Color.Gray
                         )
                         if (registro.completada && registro.postergada) {
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "CON RETRASO",
+                                text = stringResource(R.string.tareas_estado_con_retraso),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color(0xFFFFA000),
                                 fontWeight = FontWeight.Bold
@@ -705,7 +861,7 @@ fun DailyTaskCard(
                         } else if (registro.postergada) {
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "POSTERGADA",
+                                text = stringResource(R.string.tareas_estado_postergada),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color.Red,
                                 fontWeight = FontWeight.Bold
@@ -713,7 +869,7 @@ fun DailyTaskCard(
                         } else if (!registro.completada) {
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "PENDIENTE",
+                                text = stringResource(R.string.tareas_estado_pendiente),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = statusColor,
                                 fontWeight = FontWeight.Bold
@@ -741,13 +897,13 @@ fun DailyTaskCard(
                     Spacer(modifier = Modifier.height(12.dp))
                     
                     Text(
-                        text = "INDICACIONES:",
+                        text = stringResource(R.string.tareas_indicaciones),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Black,
                         color = statusColor
                     )
                     Text(
-                        text = if (registro.descripcion.isNotBlank()) registro.descripcion else "Sin indicaciones registradas.",
+                        text = if (registro.descripcion.isNotBlank()) registro.descripcion else stringResource(R.string.tareas_sin_indicaciones),
                         style = MaterialTheme.typography.bodyMedium,
                         color = if (isDark) Color.LightGray else Color.DarkGray
                     )
@@ -758,16 +914,16 @@ fun DailyTaskCard(
                             Icon(Icons.Default.Schedule, null, tint = Color.Red, modifier = Modifier.size(14.dp))
                             Spacer(Modifier.width(4.dp))
                             Text(
-                                text = "POSTERGADA A LAS ${registro.fechaPostergacion?.toDate()?.let { 
-                                    java.text.SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) 
-                                }}",
+                                text = stringResource(R.string.tareas_postergada_a_las, registro.fechaPostergacion?.toDate()?.let {
+                                    java.text.SimpleDateFormat("HH:mm", Locale.getDefault()).format(it)
+                                } ?: ""),
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.Red
                             )
                         }
                         Text(
-                            text = "Motivo: ${registro.motivoPostergacion}",
+                            text = stringResource(R.string.tareas_motivo, registro.motivoPostergacion),
                             style = MaterialTheme.typography.bodyMedium,
                             color = if (isDark) Color.LightGray else Color.DarkGray
                         )
@@ -776,7 +932,7 @@ fun DailyTaskCard(
                     if (registro.notas.isNotBlank() && !registro.postergada) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "NOTAS DE EJECUCIÓN:",
+                            text = if (registro.completada) stringResource(R.string.tareas_descripcion_realizado) else stringResource(R.string.tareas_notas_ejecucion),
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Black,
                             color = statusColor
@@ -794,14 +950,31 @@ fun DailyTaskCard(
                             Icon(Icons.Default.History, null, tint = Color(0xFF4CAF50), modifier = Modifier.size(14.dp))
                             Spacer(Modifier.width(4.dp))
                             Text(
-                                text = "Realizada a las ${registro.fechaCompletado?.toDate()?.let { 
+                                text = stringResource(R.string.tareas_realizada_a_las, registro.fechaCompletado?.toDate()?.let {
                                     java.text.SimpleDateFormat("HH:mm", Locale.getDefault()).format(it)
-                                }}",
+                                } ?: ""),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color(0xFF4CAF50),
                                 fontWeight = FontWeight.Bold
                             )
                         }
+                    }
+
+                    if (registro.fotoUrl.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = stringResource(R.string.tareas_evidencia_fotografica),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Black,
+                            color = Color(0xFF4CAF50)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        AsyncImage(
+                            model = registro.fotoUrl,
+                            contentDescription = stringResource(R.string.tareas_cd_foto_prueba),
+                            modifier = Modifier.fillMaxWidth().height(160.dp).clip(RoundedCornerShape(12.dp)),
+                            contentScale = ContentScale.Crop
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -815,25 +988,26 @@ fun DailyTaskCard(
                             TextButton(onClick = onEdit) {
                                 Icon(Icons.Default.Edit, null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("EDITAR")
+                                Text(stringResource(R.string.tareas_editar))
                             }
                         }
                         if (onPostpone != null && !registro.completada) {
                             TextButton(onClick = onPostpone, colors = ButtonDefaults.textButtonColors(contentColor = Color.Red)) {
                                 Icon(Icons.Default.Schedule, null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text(if (registro.postergada) "RE-POSTERGAR" else "POSTERGAR")
+                                Text(if (registro.postergada) stringResource(R.string.tareas_re_postergar) else stringResource(R.string.tareas_postergar))
                             }
                         }
                         if (onAsk != null) {
                             Button(
                                 onClick = onAsk,
+                                enabled = isOnline,
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = statusColor.copy(alpha = 0.1f), contentColor = statusColor)
                             ) {
                                 Icon(Icons.AutoMirrored.Filled.Chat, null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("PREGUNTAR", fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.tareas_preguntar), fontWeight = FontWeight.Bold)
                             }
                         }
                         if (onShareInChat != null) {

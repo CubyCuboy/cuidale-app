@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DeleteOutline
@@ -22,13 +21,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.cuidaleapp.R
 import com.example.cuidaleapp.models.UserData
-import com.example.cuidaleapp.ui.components.HardShadowButton
 import com.example.cuidaleapp.ui.components.HardShadowPanel
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.ProfileViewModel
@@ -71,10 +70,10 @@ fun AccountHistoryScreen(
                     onClick = onBack,
                     modifier = Modifier.background(Color.Black.copy(alpha = 0.15f), CircleShape)
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver", tint = Color.White)
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back), tint = Color.White)
                 }
                 Text(
-                    text = "Historial de Cambios",
+                    text = stringResource(R.string.account_history_title),
                     style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
                     color = Color.White,
                     modifier = Modifier.padding(start = 16.dp)
@@ -97,7 +96,7 @@ fun AccountHistoryScreen(
                         )
                         Spacer(Modifier.height(16.dp))
                         Text(
-                            "No hay registros en el historial",
+                            stringResource(R.string.account_history_empty),
                             color = Color.White.copy(alpha = 0.7f),
                             style = MaterialTheme.typography.bodyLarge
                         )
@@ -114,7 +113,7 @@ fun AccountHistoryScreen(
                     ) {
                         Icon(Icons.Default.DeleteOutline, null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text("Limpiar Historial", fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.account_history_clear), fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -169,7 +168,7 @@ fun AccountHistoryScreen(
                                             ) {
                                                 Icon(
                                                     Icons.Default.DeleteOutline,
-                                                    contentDescription = "Eliminar",
+                                                    contentDescription = stringResource(R.string.tareas_cd_eliminar),
                                                     tint = MaterialTheme.colorScheme.error,
                                                     modifier = Modifier.size(18.dp)
                                                 )

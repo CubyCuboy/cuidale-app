@@ -20,6 +20,23 @@ service firebase.storage {
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
+    match /certificados/{userId}/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+                   && request.auth.uid == userId
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('application/(pdf|msword|vnd.openxmlformats-officedocument.wordprocessingml.document)|image/(png|jpeg)');
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    match /chat_media/tarea_evidencia/{userId}/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/(png|jpeg|jpg|webp|heic)');
+      allow delete: if request.auth != null;
+    }
+
     match /chat_media/{chatId}/{allPaths=**} {
       allow read: if request.auth != null;
       allow write: if request.auth != null

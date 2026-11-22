@@ -432,8 +432,7 @@ private fun CacheSettingsScreen(
     val customColors = CuidaleThemeExtras.customColors
     val shadowPalette = CuidaleThemeExtras.shadows
 
-    // Asegura que el singleton de caché tenga el contexto de la app para
-    // poder leer/guardar la retención de forma confiable.
+    // Inicializa el singleton de caché con el contexto de la app.
     com.example.cuidaleapp.utils.ChatCacheStore.init(context)
 
     val currentUid = userData.uid.ifBlank {
@@ -453,7 +452,6 @@ private fun CacheSettingsScreen(
         chatsCached = com.example.cuidaleapp.utils.ChatCacheStore.loadSummaries(currentUid)
     }
 
-    // Refresca los tamaños al entrar a la pantalla (y al volver a ella).
     LaunchedEffect(Unit) {
         refreshSizes()
     }

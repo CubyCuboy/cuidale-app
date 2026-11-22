@@ -15,16 +15,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -32,15 +29,13 @@ import coil3.compose.AsyncImage
 import com.example.cuidaleapp.R
 import com.example.cuidaleapp.models.Notification
 import com.example.cuidaleapp.models.UserData
-import com.example.cuidaleapp.ui.components.ConnectivityBanner
-import com.example.cuidaleapp.ui.components.CuidaleBottomBar
-import com.example.cuidaleapp.ui.components.CuidaleCircularMenuButton
-import com.example.cuidaleapp.ui.components.CuidaleDrawerContent
 import com.example.cuidaleapp.ui.components.HardShadowPanel
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.NotificationsViewModel
-import kotlinx.coroutines.launch
 
+/**
+ * Bandeja de notificaciones: muestra mensajes, alertas y solicitudes agrupadas.
+ */
 @Composable
 fun NotificationsScreen(
     userData: UserData,
@@ -220,6 +215,9 @@ fun NotificationsScreen(
     }
 }
 
+/**
+ * Tarjeta individual de notificación con acciones contextuales según su tipo.
+ */
 @Composable
 fun NotificationItem(
     notification: Notification,
@@ -386,6 +384,7 @@ fun NotificationItem(
     }
 }
 
+/** Formatea un timestamp a hora local HH:mm. */
 private fun formatTime(timestamp: Long): String {
     val sdf = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
     return sdf.format(java.util.Date(timestamp))

@@ -14,6 +14,7 @@ data class Cuidador(
     val especialidad: String = "",
     val comuna: String = "",
     val disponible: Boolean = true,
+    val verificado: Boolean = false,
     val latitud: Double = -33.4489,
     val longitud: Double = -70.6693,
     val fotoUrl: String = "",
@@ -29,6 +30,7 @@ fun Cuidador.toFeature(): Feature {
     feature.addStringProperty("especialidad", especialidad)
     feature.addStringProperty("comuna", comuna)
     feature.addBooleanProperty("disponible", disponible)
+    feature.addBooleanProperty("verificado", verificado)
     feature.addNumberProperty("latitud", latitud)
     feature.addNumberProperty("longitud", longitud)
     if (fotoUrl.isNotBlank()) {

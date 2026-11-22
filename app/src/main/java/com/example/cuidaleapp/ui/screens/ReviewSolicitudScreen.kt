@@ -146,6 +146,20 @@ fun ReviewSolicitudScreen(
                         icon = Icons.Default.CheckCircle,
                         onClick = { showFinishConfirm = true }
                     )
+                } else if (currentUid == solicitud.representanteUid) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            "Esta solicitud fue creada por ti.",
+                            modifier = Modifier.padding(16.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = secondaryTextColor,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
                 } else {
                     HardShadowButton(
                         text = if (hasAlreadyApplied) "CANCELAR POSTULACIÓN" else "POSTULAR A SERVICIO",

@@ -147,7 +147,7 @@ object VideoThumbnailCache {
     }
 
     private val memoryDuration = java.util.concurrent.ConcurrentHashMap<String, Long>()
-    
+
     private val fetchGate = java.util.concurrent.Semaphore(2)
 
     private fun durationFile(context: Context, url: String): File {

@@ -33,7 +33,17 @@ data class UserData(
     val bloqueados: List<String> = emptyList(),
     val linkedAccounts: List<LinkedAccountDetail> = emptyList(),
     var accountHistory: List<AccountHistoryEntry> = emptyList(),
-    val rateLimits: List<RateLimitEntry> = emptyList()
+    val rateLimits: List<RateLimitEntry> = emptyList(),
+    val fechaNacimiento: String = "",
+    val discapacidad: Boolean = false,
+    val tipoDiscapacidad: String = "",
+    val tiempoDiscapacidad: String = "",
+    val valorHoraReferencial: Int = 0,
+    val verificacionOficial: String = "pendiente",
+    val formacionAcademica: List<FormacionAcademica> = emptyList(),
+    val experienciasLaborales: List<ExperienciaLaboral> = emptyList(),
+    val certificados: List<Certificado> = emptyList(),
+    val referenciasLaborales: List<ReferenciaLaboral> = emptyList()
 ) {
     fun findLinkedAccount(providerId: String): LinkedAccountDetail? {
         val cleanId = com.example.cuidaleapp.utils.AccountUtils.normalizeProviderId(providerId)
