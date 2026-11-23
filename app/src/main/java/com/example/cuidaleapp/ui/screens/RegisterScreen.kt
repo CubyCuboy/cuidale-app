@@ -5,7 +5,6 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -57,7 +56,7 @@ fun RegisterScreen(
     onNavigateBack: () -> Unit,
     onFinish: () -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = com.example.cuidaleapp.ui.theme.CuidaleThemeExtras.customColors.isDark
     val uiState by viewModel.uiState.collectAsState()
     
     var currentStep by rememberSaveable { mutableStateOf(RegisterStep.ROLE) }
@@ -664,7 +663,7 @@ fun RegisterLocationStep(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Badge,
-                        contentDescription = "Error",
+                        contentDescription = stringResource(R.string.cd_error),
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(20.dp)
                     )

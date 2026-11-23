@@ -115,6 +115,7 @@ class MapaCuidadoresViewModel(application: Application) : AndroidViewModel(appli
         aplicarFiltrosYActualizarUi(moverCamara = false)
     }
 
+
     /**
      * Consulta los cuidadores disponibles desde Firestore (colección "cuidadores" y fallback "usuarios"/"fichas").
      */

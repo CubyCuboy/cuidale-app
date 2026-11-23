@@ -1,5 +1,8 @@
 package com.example.cuidaleapp.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
@@ -11,23 +14,28 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.cuidaleapp.R
 import com.example.cuidaleapp.models.*
 
 val CERTIFICADO_FORMATOS_VALIDOS = setOf("pdf", "doc", "docx", "png", "jpg", "jpeg")
 
+/** Verifica si la extensión de un archivo corresponde a un formato de certificado válido. */
 fun formatoCertificadoValido(nombreArchivo: String): Boolean {
     val ext = nombreArchivo.substringAfterLast('.', "").lowercase()
     return ext in CERTIFICADO_FORMATOS_VALIDOS
 }
 
+/** Convierte una fecha ISO (yyyy-MM-dd) al formato visual dd/MM/yyyy. */
 fun formatFechaVisual(valor: String): String {
     if (valor.isBlank()) return ""
     val parts = valor.split("-")
     return if (parts.size == 3 && parts[0].length == 4) "${parts[2]}/${parts[1]}/${parts[0]}" else valor
 }
 
+/** Calcula la duración entre dos fechas y la expresa en años/meses. */
 fun calcularDuracion(inicio: String, fin: String): String {
     if (inicio.isBlank()) return ""
     val parse = { s: String -> runCatching { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).parse(s) }.getOrNull() }
@@ -46,6 +54,7 @@ fun calcularDuracion(inicio: String, fin: String): String {
     }
 }
 
+/** Calcula la edad a partir de una fecha de nacimiento ISO. */
 fun calcularEdad(fechaNacimiento: String): String {
     if (fechaNacimiento.isBlank()) return "--"
     return try {
@@ -80,7 +89,7 @@ fun VerificationBadge(verificacionOficial: String) {
             )
             Spacer(Modifier.width(6.dp))
             Text(
-                text = if (verified) "Verificado oficialmente" else "Sin verificación oficial",
+                text = if (verified) stringResource(R.string.caregiver_profile_verificado) else stringResource(R.string.caregiver_profile_sin_verificacion),
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = if (verified) Color(0xFF2E7D32) else Color(0xFFE65100)
@@ -100,10 +109,10 @@ fun ConsejoFotoPerfil(onUploadPhoto: () -> Unit = {}) {
             Icon(Icons.Default.Info, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text("Consejo: agrega una foto de perfil", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                Text("Las fichas con foto generan más confianza en los representantes.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                Text(stringResource(R.string.caregiver_profile_consejo_titulo), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(R.string.caregiver_profile_consejo_desc), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
             }
-            TextButton(onClick = onUploadPhoto) { Text("SUBIR") }
+            TextButton(onClick = onUploadPhoto) { Text(stringResource(R.string.caregiver_profile_subir)) }
         }
     }
 }
@@ -111,7 +120,8 @@ fun ConsejoFotoPerfil(onUploadPhoto: () -> Unit = {}) {
 @Composable
 fun CalificacionesSection(
     calificaciones: List<CalificacionPublica>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    resaltada: Boolean = false
 ) {
     var sortOrder by remember { mutableStateOf("recientes") }
     val sorted = when (sortOrder) {
@@ -121,14 +131,27 @@ fun CalificacionesSection(
     }
     val promedio = if (calificaciones.isNotEmpty()) calificaciones.map { it.calificacion }.average() else 0.0
 
-    SectionCard(
-        title = "Calificaciones",
-        subtitle = if (calificaciones.isEmpty()) null else "${calificaciones.size} ${if (calificaciones.size == 1) "reseña" else "reseñas"}",
-        modifier = modifier,
-        icon = Icons.Default.Star
+    val highlightBrush by animateColorAsState(
+        targetValue = if (resaltada) Color(0x33FFD700) else Color.Transparent,
+        animationSpec = tween(800),
+        label = "highlight"
+    )
+
+    Box(
+        modifier = Modifier
+            .then(modifier)
+            .background(highlightBrush, RoundedCornerShape(16.dp))
     ) {
+        SectionCard(
+            title = stringResource(R.string.caregiver_profile_calificaciones),
+            subtitle = if (calificaciones.isEmpty()) null
+            else if (calificaciones.size == 1) stringResource(R.string.caregiver_profile_resena_una, calificaciones.size)
+            else stringResource(R.string.caregiver_profile_resenas_varias, calificaciones.size),
+            modifier = Modifier.fillMaxWidth(),
+            icon = Icons.Default.Star
+        ) {
         if (calificaciones.isEmpty()) {
-            PlaceholderText("Aún no hay calificaciones para este cuidador.")
+            PlaceholderText(stringResource(R.string.caregiver_profile_sin_calificaciones))
         } else {
             Surface(
                 color = Color(0xFFFFF8E1),
@@ -143,14 +166,14 @@ fun CalificacionesSection(
                     Spacer(Modifier.width(8.dp))
                     Text(String.format("%.1f", promedio), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
                     Spacer(Modifier.width(6.dp))
-                    Text("de 5.0", style = MaterialTheme.typography.bodySmall, color = Color.Gray, modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.caregiver_profile_de_5_0), style = MaterialTheme.typography.bodySmall, color = Color.Gray, modifier = Modifier.weight(1f))
                     var expanded by remember { mutableStateOf(false) }
                     Box {
-                        TextButton(onClick = { expanded = true }) { Text("Ordenar", fontWeight = FontWeight.Bold) }
+                        TextButton(onClick = { expanded = true }) { Text(stringResource(R.string.caregiver_profile_ordenar), fontWeight = FontWeight.Bold) }
                         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                            DropdownMenuItem(text = { Text("Recientes") }, onClick = { sortOrder = "recientes"; expanded = false })
-                            DropdownMenuItem(text = { Text("Ascendente") }, onClick = { sortOrder = "asc"; expanded = false })
-                            DropdownMenuItem(text = { Text("Descendente") }, onClick = { sortOrder = "desc"; expanded = false })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.caregiver_profile_orden_recientes)) }, onClick = { sortOrder = "recientes"; expanded = false })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.caregiver_profile_orden_asc)) }, onClick = { sortOrder = "asc"; expanded = false })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.caregiver_profile_orden_desc)) }, onClick = { sortOrder = "desc"; expanded = false })
                         }
                     }
                 }
@@ -176,7 +199,7 @@ fun CalificacionesSection(
                             }
                             Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(c.autorNombre.ifBlank { "Anónimo" }, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                Text(c.autorNombre.ifBlank { stringResource(R.string.caregiver_profile_anonimo) }, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                                 c.fecha?.let {
                                     Text(java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.ROOT).format(it.toDate()), style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                                 }
@@ -201,18 +224,21 @@ fun CalificacionesSection(
             }
         }
     }
+    }
 }
 
 @Composable
 fun FormacionAcademicaSection(list: List<FormacionAcademica>, modifier: Modifier = Modifier) {
     SectionCard(
-        title = "Formación académica",
-        subtitle = if (list.isEmpty()) null else "${list.size} ${if (list.size == 1) "registro" else "registros"}",
+        title = stringResource(R.string.caregiver_profile_formacion),
+        subtitle = if (list.isEmpty()) null
+        else if (list.size == 1) stringResource(R.string.caregiver_profile_registro_uno, list.size)
+        else stringResource(R.string.caregiver_profile_registros_varios, list.size),
         modifier = modifier,
         icon = Icons.Default.School
     ) {
         if (list.isEmpty()) {
-            PlaceholderText("Sin formación registrada.")
+            PlaceholderText(stringResource(R.string.caregiver_profile_sin_formacion))
         } else {
             list.forEach { f ->
                 Surface(
@@ -228,7 +254,7 @@ fun FormacionAcademicaSection(list: List<FormacionAcademica>, modifier: Modifier
                         }
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(f.titulo.ifBlank { "Sin título" }, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                            Text(f.titulo.ifBlank { stringResource(R.string.caregiver_profile_sin_titulo) }, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                             if (f.institucion.isNotBlank()) {
                                 Text(f.institucion, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
@@ -236,7 +262,7 @@ fun FormacionAcademicaSection(list: List<FormacionAcademica>, modifier: Modifier
                                 Spacer(Modifier.height(6.dp))
                                 Surface(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f), shape = RoundedCornerShape(50)) {
                                     Text(
-                                        "${formatFechaVisual(f.anioInicio)} - ${if (f.anioFin.isBlank()) "Actualidad" else formatFechaVisual(f.anioFin)} · ${calcularDuracion(f.anioInicio, f.anioFin)}",
+                                        "${formatFechaVisual(f.anioInicio)} - ${if (f.anioFin.isBlank()) stringResource(R.string.caregiver_profile_actualidad) else formatFechaVisual(f.anioFin)} · ${calcularDuracion(f.anioInicio, f.anioFin)}",
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
@@ -255,13 +281,15 @@ fun FormacionAcademicaSection(list: List<FormacionAcademica>, modifier: Modifier
 @Composable
 fun ExperienciasLaboralesSection(list: List<ExperienciaLaboral>, modifier: Modifier = Modifier) {
     SectionCard(
-        title = "Experiencia laboral",
-        subtitle = if (list.isEmpty()) null else "${list.size} ${if (list.size == 1) "experiencia" else "experiencias"}",
+        title = stringResource(R.string.caregiver_profile_experiencia),
+        subtitle = if (list.isEmpty()) null
+        else if (list.size == 1) stringResource(R.string.caregiver_profile_experiencia_una, list.size)
+        else stringResource(R.string.caregiver_profile_experiencias_varias, list.size),
         modifier = modifier,
         icon = Icons.Default.Work
     ) {
         if (list.isEmpty()) {
-            PlaceholderText("Sin experiencia laboral registrada.")
+            PlaceholderText(stringResource(R.string.caregiver_profile_sin_experiencia))
         } else {
             list.forEach { e ->
                 Surface(
@@ -277,7 +305,7 @@ fun ExperienciasLaboralesSection(list: List<ExperienciaLaboral>, modifier: Modif
                         }
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(e.cargo.ifBlank { "Cargo" }, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                            Text(e.cargo.ifBlank { stringResource(R.string.caregiver_profile_cargo) }, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                             if (e.empresa.isNotBlank()) {
                                 Text(e.empresa, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
@@ -285,7 +313,7 @@ fun ExperienciasLaboralesSection(list: List<ExperienciaLaboral>, modifier: Modif
                                 Spacer(Modifier.height(6.dp))
                                 Surface(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f), shape = RoundedCornerShape(50)) {
                                     Text(
-                                        "${formatFechaVisual(e.desde)} - ${if (e.hasta.isBlank()) "Actualidad" else formatFechaVisual(e.hasta)} · ${calcularDuracion(e.desde, e.hasta)} ${if (e.tiempoExperiencia.isNotBlank()) "(${e.tiempoExperiencia})" else ""}",
+                                        "${formatFechaVisual(e.desde)} - ${if (e.hasta.isBlank()) stringResource(R.string.caregiver_profile_actualidad) else formatFechaVisual(e.hasta)} · ${calcularDuracion(e.desde, e.hasta)} ${if (e.tiempoExperiencia.isNotBlank()) "(${e.tiempoExperiencia})" else ""}",
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
@@ -308,13 +336,15 @@ fun ExperienciasLaboralesSection(list: List<ExperienciaLaboral>, modifier: Modif
 @Composable
 fun CertificadosSection(list: List<Certificado>, modifier: Modifier = Modifier) {
     SectionCard(
-        title = "Certificados y documentos",
-        subtitle = if (list.isEmpty()) null else "${list.size} ${if (list.size == 1) "documento" else "documentos"}",
+        title = stringResource(R.string.caregiver_profile_certificados),
+        subtitle = if (list.isEmpty()) null
+        else if (list.size == 1) stringResource(R.string.caregiver_profile_documento_uno, list.size)
+        else stringResource(R.string.caregiver_profile_documentos_varios, list.size),
         modifier = modifier,
         icon = Icons.Default.Description
     ) {
         if (list.isEmpty()) {
-            PlaceholderText("Sin certificados subidos.")
+            PlaceholderText(stringResource(R.string.caregiver_profile_sin_certificados))
         } else {
             list.forEach { c ->
                 Surface(
@@ -337,7 +367,7 @@ fun CertificadosSection(list: List<Certificado>, modifier: Modifier = Modifier) 
                         }
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(c.nombre.ifBlank { "Documento" }, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                            Text(c.nombre.ifBlank { stringResource(R.string.caregiver_profile_documento) }, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                             Spacer(Modifier.height(4.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 if (c.tipoArchivo.isNotBlank()) {
@@ -376,13 +406,15 @@ fun CertificadosSection(list: List<Certificado>, modifier: Modifier = Modifier) 
 @Composable
 fun ReferenciasLaboralesSection(list: List<ReferenciaLaboral>, modifier: Modifier = Modifier) {
     SectionCard(
-        title = "Referencias laborales",
-        subtitle = if (list.isEmpty()) null else "${list.size} ${if (list.size == 1) "referencia" else "referencias"}",
+        title = stringResource(R.string.caregiver_profile_referencias),
+        subtitle = if (list.isEmpty()) null
+        else if (list.size == 1) stringResource(R.string.caregiver_profile_referencia_una, list.size)
+        else stringResource(R.string.caregiver_profile_referencias_varias, list.size),
         modifier = modifier,
         icon = Icons.Default.Group
     ) {
         if (list.isEmpty()) {
-            PlaceholderText("Sin referencias registradas.")
+            PlaceholderText(stringResource(R.string.caregiver_profile_sin_referencias))
         } else {
             list.forEach { r ->
                 Surface(
@@ -403,7 +435,7 @@ fun ReferenciasLaboralesSection(list: List<ReferenciaLaboral>, modifier: Modifie
                             }
                             Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(r.nombre.ifBlank { "Referencia" }, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                Text(r.nombre.ifBlank { stringResource(R.string.caregiver_profile_referencia) }, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                                 if (r.empresa.isNotBlank()) {
                                     Text(r.empresa, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
@@ -443,8 +475,8 @@ fun ValorHoraSection(valor: Int, modifier: Modifier = Modifier) {
             Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.AttachMoney, null, tint = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(8.dp))
-                Text("Valor hora referencial", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                Text("$$valor/hora", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                Text(stringResource(R.string.caregiver_profile_valor_hora_referencial), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                Text(stringResource(R.string.caregiver_profile_valor_hora_con_valor, valor.toString()), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             }
         }
     }

@@ -12,7 +12,6 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -32,6 +31,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.ui.focus.onFocusChanged
+import kotlinx.coroutines.launch
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -143,6 +149,9 @@ fun EditProfileScreen(
     val textColor = MaterialTheme.colorScheme.onSurface
     val accentColor = if (userData.rol == "cuidador") MaterialTheme.colorScheme.primary else customColors.successStrong
 
+    val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
+    val isImeVisible = imeBottom > 0
+
     val regionsList = ChileData.regions.map { it.name }
     val communesForSelectedRegion = remember(region) {
         ChileData.regions.find { it.name == region }?.comunas?.sorted() ?: emptyList()
@@ -210,51 +219,27 @@ fun EditProfileScreen(
     }
 
     if (showImageSourceDialog) {
-        AlertDialog(
-            onDismissRequest = { showImageSourceDialog = false },
-            title = { Text(stringResource(R.string.edit_profile_change_photo_title), fontWeight = FontWeight.Bold) },
-            text = {
-                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(onClick = {
-                        val permissionCheckResult = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
-                        if (permissionCheckResult == PackageManager.PERMISSION_GRANTED) {
-                            val file = File(context.cacheDir, "temp_profile_${System.currentTimeMillis()}.jpg")
-                            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                            tempPhotoUri = uri
-                            cameraLauncher.launch(uri)
-                            showImageSourceDialog = false
-                        } else {
-                            permissionLauncher.launch(Manifest.permission.CAMERA)
-                            showImageSourceDialog = false
-                        }
-                    }, modifier = Modifier.fillMaxWidth(), enabled = isOnline) {
-                        Icon(Icons.Default.CameraAlt, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.source_camera))
-                    }
-                    Button(onClick = {
-                        galleryLauncher.launch("image/*")
-                        showImageSourceDialog = false
-                    }, modifier = Modifier.fillMaxWidth(), enabled = isOnline) {
-                        Icon(Icons.Default.Collections, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.source_gallery))
-                    }
-                    if (userData.fotoUrl.isNotEmpty()) {
-                        Button(onClick = {
-                            pendingDeletePhoto = true
-                            pendingPhotoUri = null
-                            showImageSourceDialog = false
-                        }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer), enabled = isOnline) {
-                            Icon(Icons.Default.Delete, null)
-                            Spacer(Modifier.width(8.dp))
-                            Text(stringResource(R.string.edit_profile_remove_photo))
-                        }
-                    }
+        PhotoSourcePickerDialog(
+            title = stringResource(R.string.edit_profile_change_photo_title),
+            hasCurrentPhoto = userData.fotoUrl.isNotEmpty(),
+            enabled = isOnline && !isLoading,
+            onCamera = {
+                val permissionCheckResult = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
+                if (permissionCheckResult == PackageManager.PERMISSION_GRANTED) {
+                    val file = File(context.cacheDir, "temp_profile_${System.currentTimeMillis()}.jpg")
+                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                    tempPhotoUri = uri
+                    cameraLauncher.launch(uri)
+                } else {
+                    permissionLauncher.launch(Manifest.permission.CAMERA)
                 }
             },
-            confirmButton = {},
-            dismissButton = { TextButton(onClick = { showImageSourceDialog = false }) { Text(stringResource(R.string.common_cancel)) } }
+            onGallery = { galleryLauncher.launch("image/*") },
+            onRemove = {
+                pendingDeletePhoto = true
+                pendingPhotoUri = null
+            },
+            onDismiss = { showImageSourceDialog = false }
         )
     }
 
@@ -278,7 +263,14 @@ fun EditProfileScreen(
                 IconButton(onClick = onNavigateBack, modifier = Modifier.background(Color.Black.copy(alpha = 0.15f), CircleShape)) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back), tint = Color.White)
                 }
-                Text(stringResource(R.string.edit_profile_title), style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = Color.White), modifier = Modifier.padding(start = 12.dp))
+                Column(modifier = Modifier.padding(start = 12.dp)) {
+                    Text(stringResource(R.string.edit_profile_title), style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = Color.White))
+                    Text(
+                        stringResource(R.string.edit_profile_subtitle),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.7f)
+                    )
+                }
             }
 
             if (!isOnline) {
@@ -292,48 +284,54 @@ fun EditProfileScreen(
             }
 
             Box(modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
-                Box(
-                    modifier = Modifier
-                        .size(150.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.1f))
-                        .border(4.dp, Color.White, CircleShape)
-                        .clickable(enabled = !isLoading && isOnline) { showImageSourceDialog = true }
-                ) {
-                    val imageModel = when {
-                        pendingPhotoUri != null -> pendingPhotoUri
-                        pendingDeletePhoto -> null
-                        userData.fotoUrl.isNotEmpty() -> userData.fotoUrl
-                        else -> null
-                    }
-                    if (imageModel != null) {
-                        AsyncImage(model = imageModel, contentDescription = null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
-                    } else {
-                        Icon(Icons.Default.Person, null, modifier = Modifier.size(90.dp).align(Alignment.Center), tint = Color.White.copy(alpha = 0.7f))
-                    }
-                    
-                    if (isLoading) {
-                        Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(color = Color.White, strokeWidth = 3.dp, modifier = Modifier.size(40.dp))
+                Box(modifier = Modifier.size(150.dp)) {
+                    // Avatar
+                    Surface(
+                        modifier = Modifier
+                            .size(150.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.1f))
+                            .clickable(enabled = !isLoading && isOnline) { showImageSourceDialog = true },
+                        shape = CircleShape,
+                        color = Color.White.copy(alpha = 0.15f),
+                        border = BorderStroke(3.dp, Color.White.copy(alpha = 0.9f))
+                    ) {
+                        val imageModel = when {
+                            pendingPhotoUri != null -> pendingPhotoUri
+                            pendingDeletePhoto -> null
+                            userData.fotoUrl.isNotEmpty() -> userData.fotoUrl
+                            else -> null
+                        }
+                        if (imageModel != null) {
+                            AsyncImage(model = imageModel, contentDescription = null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                        } else {
+                            Icon(Icons.Default.Person, null, modifier = Modifier.size(90.dp).align(Alignment.Center), tint = Color.White.copy(alpha = 0.7f))
+                        }
+
+                        if (isLoading) {
+                            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(color = Color.White, strokeWidth = 3.dp, modifier = Modifier.size(40.dp))
+                            }
                         }
                     }
 
+                    // Badge editar (fuera del clip, completamente visible)
                     if (isOnline) {
                         Surface(
+                            onClick = { if (!isLoading) showImageSourceDialog = true },
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
-                                .offset(x = (-4).dp, y = (-4).dp)
-                                .size(44.dp),
+                                .size(48.dp),
                             shape = CircleShape,
                             color = accentColor,
-                            shadowElevation = 4.dp,
+                            shadowElevation = 6.dp,
                             border = BorderStroke(3.dp, if (customColors.isDark) Color(0xFF1B263B) else Color.White)
                         ) {
                             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                 Icon(
                                     imageVector = if (userData.fotoUrl.isEmpty() && pendingPhotoUri == null) Icons.Default.CameraAlt else Icons.Default.Edit,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp),
+                                    contentDescription = stringResource(R.string.edit_profile_change_photo_title),
+                                    modifier = Modifier.size(22.dp),
                                     tint = Color.White
                                 )
                             }
@@ -349,7 +347,7 @@ fun EditProfileScreen(
             ) {
                 Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
                     
-                    EditSectionHeader(icon = Icons.Default.Person, title = stringResource(R.string.edit_profile_section_personal), accentColor = accentColor)
+                    EditSectionHeader(icon = Icons.Default.Person, title = stringResource(R.string.edit_profile_section_personal), subtitle = stringResource(R.string.edit_profile_subsection_personal), accentColor = accentColor)
                     
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         EditFieldWrapper(label = stringResource(R.string.register_first_name), error = if (!isNombreValid && nombre.isNotEmpty()) stringResource(R.string.edit_profile_error_min_2) else null) {
@@ -364,7 +362,7 @@ fun EditProfileScreen(
                             )
                         }
 
-                        EditFieldWrapper(label = stringResource(R.string.register_second_name)) {
+                        EditFieldWrapper(label = stringResource(R.string.register_second_name), optional = true) {
                             CuidaleTextField(
                                 value = nombreS, 
                                 onValueChange = { nombreS = it }, 
@@ -374,38 +372,33 @@ fun EditProfileScreen(
                             )
                         }
 
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Box(modifier = Modifier.weight(1f)) {
-                                EditFieldWrapper(label = stringResource(R.string.register_last_name_paternal), error = if (!isApellidoPaValid && apellidoPa.isNotEmpty()) stringResource(R.string.edit_profile_error_min_2_short) else null) {
-                                    CuidaleTextField(
-                                        value = apellidoPa, 
-                                        onValueChange = { apellidoPa = it }, 
-                                        placeholder = stringResource(R.string.edit_profile_placeholder_paternal), 
-                                        isError = !isApellidoPaValid && apellidoPa.isNotEmpty(), 
-                                        modifier = Modifier.offset { IntOffset(apellidoShake.value.roundToInt(), 0) },
-                                        enabled = !isLoading && isOnline
-                                    )
-                                }
-                            }
-                            Box(modifier = Modifier.weight(1f)) {
-                                EditFieldWrapper(label = stringResource(R.string.register_last_name_maternal)) {
-                                    CuidaleTextField(
-                                        value = apellidoMa, 
-                                        onValueChange = { apellidoMa = it }, 
-                                        placeholder = stringResource(R.string.edit_profile_placeholder_maternal), 
-                                        enabled = !isLoading && isOnline
-                                    )
-                                }
-                            }
+                        EditFieldWrapper(label = stringResource(R.string.register_last_name_paternal), error = if (!isApellidoPaValid && apellidoPa.isNotEmpty()) stringResource(R.string.edit_profile_error_min_2_short) else null) {
+                            CuidaleTextField(
+                                value = apellidoPa,
+                                onValueChange = { apellidoPa = it },
+                                placeholder = stringResource(R.string.edit_profile_placeholder_paternal),
+                                isError = !isApellidoPaValid && apellidoPa.isNotEmpty(),
+                                modifier = Modifier.offset { IntOffset(apellidoShake.value.roundToInt(), 0) },
+                                enabled = !isLoading && isOnline
+                            )
+                        }
+
+                        EditFieldWrapper(label = stringResource(R.string.register_last_name_maternal), optional = true) {
+                            CuidaleTextField(
+                                value = apellidoMa,
+                                onValueChange = { apellidoMa = it },
+                                placeholder = stringResource(R.string.edit_profile_placeholder_maternal),
+                                enabled = !isLoading && isOnline
+                            )
                         }
                     }
 
                     HorizontalDivider(color = textColor.copy(alpha = 0.08f))
 
-                    EditSectionHeader(icon = Icons.Default.LocationOn, title = stringResource(R.string.edit_profile_section_contact), accentColor = accentColor)
+                    EditSectionHeader(icon = Icons.Default.LocationOn, title = stringResource(R.string.edit_profile_section_contact), subtitle = stringResource(R.string.edit_profile_subsection_contact), accentColor = accentColor)
 
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        EditFieldWrapper(label = stringResource(R.string.edit_profile_phone_label), error = if (!isPhoneValid && telefono.isNotEmpty()) stringResource(R.string.edit_profile_error_phone) else null) {
+                        EditFieldWrapper(label = stringResource(R.string.edit_profile_phone_label), error = if (!isPhoneValid && telefono.isNotEmpty()) stringResource(R.string.edit_profile_error_phone) else null, optional = true) {
                             CuidaleTextField(
                                 value = telefono, 
                                 onValueChange = { if(it.length <= 9) telefono = it }, 
@@ -439,7 +432,7 @@ fun EditProfileScreen(
 
                     HorizontalDivider(color = textColor.copy(alpha = 0.08f))
 
-                    EditSectionHeader(icon = Icons.Default.FormatQuote, title = stringResource(R.string.edit_profile_section_about), accentColor = accentColor)
+                    EditSectionHeader(icon = Icons.Default.FormatQuote, title = stringResource(R.string.edit_profile_section_about), subtitle = stringResource(R.string.edit_profile_subsection_about), accentColor = accentColor)
 
                     Column {
                         CuidaleTextField(
@@ -461,10 +454,10 @@ fun EditProfileScreen(
 
                     if (userData.rol == "cuidador") {
                         HorizontalDivider(color = textColor.copy(alpha = 0.08f))
-                        EditSectionHeader(icon = Icons.Default.Badge, title = stringResource(R.string.edit_profile_section_caregiver), accentColor = accentColor)
+                        EditSectionHeader(icon = Icons.Default.Badge, title = stringResource(R.string.edit_profile_section_caregiver), subtitle = stringResource(R.string.edit_profile_subsection_caregiver), accentColor = accentColor)
 
                         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            EditFieldWrapper(label = stringResource(R.string.edit_profile_label_birthdate)) {
+                            EditFieldWrapper(label = stringResource(R.string.edit_profile_label_birthdate), optional = true) {
                                 CuidaleTextField(
                                     value = fechaNacimiento,
                                     onValueChange = { if (it.length <= 10) fechaNacimiento = it },
@@ -484,7 +477,7 @@ fun EditProfileScreen(
                                 CuidaleTextField(value = tiempoDiscapacidad, onValueChange = { tiempoDiscapacidad = it }, placeholder = stringResource(R.string.edit_profile_placeholder_disability_time), enabled = !isLoading && isOnline)
                             }
 
-                            EditFieldWrapper(label = stringResource(R.string.edit_profile_label_hourly_rate)) {
+                            EditFieldWrapper(label = stringResource(R.string.edit_profile_label_hourly_rate), optional = true) {
                                 CuidaleTextField(
                                     value = if (valorHoraReferencial > 0) valorHoraReferencial.toString() else "",
                                     onValueChange = { valorHoraReferencial = it.filter(Char::isDigit).take(6).toIntOrNull() ?: 0 },
@@ -493,7 +486,7 @@ fun EditProfileScreen(
                                 )
                             }
 
-                            EditFieldWrapper(label = stringResource(R.string.edit_profile_label_education)) {
+                            EditFieldWrapper(label = stringResource(R.string.edit_profile_label_education), optional = true) {
                                 CuidaleTextField(
                                     value = formacionTexto,
                                     onValueChange = { formacionTexto = it },
@@ -502,9 +495,15 @@ fun EditProfileScreen(
                                     modifier = Modifier.height(110.dp),
                                     enabled = !isLoading && isOnline
                                 )
+                                Text(
+                                    stringResource(R.string.edit_profile_hint_lines),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = textColor.copy(alpha = 0.45f),
+                                    modifier = Modifier.padding(top = 6.dp)
+                                )
                             }
 
-                            EditFieldWrapper(label = stringResource(R.string.edit_profile_label_experience)) {
+                            EditFieldWrapper(label = stringResource(R.string.edit_profile_label_experience), optional = true) {
                                 CuidaleTextField(
                                     value = experienciaTexto,
                                     onValueChange = { experienciaTexto = it },
@@ -513,9 +512,15 @@ fun EditProfileScreen(
                                     modifier = Modifier.height(120.dp),
                                     enabled = !isLoading && isOnline
                                 )
+                                Text(
+                                    stringResource(R.string.edit_profile_hint_lines),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = textColor.copy(alpha = 0.45f),
+                                    modifier = Modifier.padding(top = 6.dp)
+                                )
                             }
 
-                            EditFieldWrapper(label = stringResource(R.string.edit_profile_label_references)) {
+                            EditFieldWrapper(label = stringResource(R.string.edit_profile_label_references), optional = true) {
                                 CuidaleTextField(
                                     value = referenciasTexto,
                                     onValueChange = { referenciasTexto = it },
@@ -524,96 +529,128 @@ fun EditProfileScreen(
                                     modifier = Modifier.height(110.dp),
                                     enabled = !isLoading && isOnline
                                 )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    val errorMessage = (remoteState as? ProfileViewModel.RemoteState.Error)?.message
-                    if (errorMessage != null) {
-                        AnimatedVisibility(visible = true, enter = fadeIn(), exit = fadeOut()) {
-                            Surface(
-                                color = MaterialTheme.colorScheme.errorContainer,
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        Icons.Default.ErrorOutline,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = ErrorMessages.get(context, errorMessage),
-                                        color = MaterialTheme.colorScheme.onErrorContainer,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    HardShadowButton(
-                        text = if (isLoading) stringResource(R.string.edit_profile_saving) else stringResource(R.string.edit_profile_save_upper),
-                        onClick = {
-                            if (isFormValid) {
-                                viewModel.updateProfileWithPhoto(
-                                    userData.copy(
-                                        nombre = nombre,
-                                        nombre_s = nombreS,
-                                        apellido_pa = apellidoPa,
-                                        apellido_ma = apellidoMa,
-                                        telefono = telefono,
-                                        region = region,
-                                        comuna = comuna,
-                                        descripcion = descripcion,
-                                        fechaNacimiento = fechaNacimiento.trim(),
-                                        discapacidad = discapacidadBool,
-                                        tipoDiscapacidad = tipoDiscapacidad.trim(),
-                                        tiempoDiscapacidad = tiempoDiscapacidad.trim(),
-                                        valorHoraReferencial = valorHoraReferencial,
-                                        formacionAcademica = parseFormaciones(formacionTexto),
-                                        experienciasLaborales = parseExperiencias(experienciaTexto),
-                                        referenciasLaborales = parseReferencias(referenciasTexto)
-                                    ), 
-                                    pendingPhotoUri, 
-                                    pendingDeletePhoto
+                                Text(
+                                    stringResource(R.string.edit_profile_hint_lines),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = textColor.copy(alpha = 0.45f),
+                                    modifier = Modifier.padding(top = 6.dp)
                                 )
                             }
-                        },
-                        containerColor = if (isFormValid && isOnline) accentColor else Color.Gray.copy(alpha = 0.5f),
-                        enabled = isFormValid && isOnline && !isLoading,
-                        icon = if (isLoading) null else Icons.Default.Save,
-                        cornerRadius = 16.dp
-                    )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
             }
-            
-            Spacer(modifier = Modifier.height(48.dp))
+
+            Spacer(modifier = Modifier.height(120.dp))
+        }
+
+        if (!isImeVisible) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .imePadding()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                val bottomError = (remoteState as? ProfileViewModel.RemoteState.Error)?.message
+                if (bottomError != null) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.ErrorOutline,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = ErrorMessages.get(context, bottomError),
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                HardShadowButton(
+                    text = if (isLoading) stringResource(R.string.edit_profile_saving) else stringResource(R.string.edit_profile_save_upper),
+                    onClick = {
+                        if (isFormValid) {
+                            viewModel.updateProfileWithPhoto(
+                                userData.copy(
+                                    nombre = nombre,
+                                    nombre_s = nombreS,
+                                    apellido_pa = apellidoPa,
+                                    apellido_ma = apellidoMa,
+                                    telefono = telefono,
+                                    region = region,
+                                    comuna = comuna,
+                                    descripcion = descripcion,
+                                    fechaNacimiento = fechaNacimiento.trim(),
+                                    discapacidad = discapacidadBool,
+                                    tipoDiscapacidad = tipoDiscapacidad.trim(),
+                                    tiempoDiscapacidad = tiempoDiscapacidad.trim(),
+                                    valorHoraReferencial = valorHoraReferencial,
+                                    formacionAcademica = parseFormaciones(formacionTexto),
+                                    experienciasLaborales = parseExperiencias(experienciaTexto),
+                                    referenciasLaborales = parseReferencias(referenciasTexto)
+                                ),
+                                pendingPhotoUri,
+                                pendingDeletePhoto
+                            )
+                        }
+                    },
+                    containerColor = if (isFormValid && isOnline) accentColor else Color.Gray.copy(alpha = 0.5f),
+                    enabled = isFormValid && isOnline && !isLoading,
+                    icon = if (isLoading) null else Icons.Default.Save,
+                    cornerRadius = 16.dp
+                )
+            }
         }
     }
 }
 
 @Composable
-fun EditSectionHeader(icon: ImageVector, title: String, accentColor: Color) {
+fun EditSectionHeader(icon: ImageVector, title: String, accentColor: Color, subtitle: String? = null) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        Icon(icon, null, tint = accentColor, modifier = Modifier.size(20.dp))
+        Surface(
+            color = accentColor.copy(alpha = 0.12f),
+            shape = CircleShape,
+            modifier = Modifier.size(40.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(icon, null, tint = accentColor, modifier = Modifier.size(22.dp))
+            }
+        }
         Spacer(modifier = Modifier.width(12.dp))
-        Text(
-            text = title.uppercase(),
-            style = MaterialTheme.typography.labelLarge.copy(
-                fontWeight = FontWeight.Black,
-                letterSpacing = 1.sp
-            ),
-            color = accentColor
-        )
+        Column {
+            Text(
+                text = title.uppercase(),
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.sp
+                ),
+                color = accentColor
+            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                )
+            }
+        }
     }
 }
 
@@ -621,11 +658,33 @@ fun EditSectionHeader(icon: ImageVector, title: String, accentColor: Color) {
 fun EditFieldWrapper(
     label: String,
     error: String? = null,
+    optional: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column(modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus()) {
         InputFieldLabel(label)
-        content()
+        Box(modifier = Modifier.fillMaxWidth()) {
+            content()
+            if (optional) {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = (-12).dp, y = (-10).dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    shape = RoundedCornerShape(50),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+                    shadowElevation = 1.dp
+                ) {
+                    Text(
+                        text = stringResource(R.string.edit_profile_optional_badge),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                    )
+                }
+            }
+        }
         AnimatedVisibility(visible = error != null) {
             Text(
                 text = error ?: "",
@@ -651,6 +710,15 @@ private fun referenciasATexto(list: List<com.example.cuidaleapp.models.Referenci
     list.joinToString("\n") { r ->
         listOf(r.nombre, r.empresa, r.telefono, r.cargo, r.detalle).joinToString(" | ")
     }
+
+@Composable
+private fun Modifier.bringIntoViewOnFocus(): Modifier {
+    val requester = remember { BringIntoViewRequester() }
+    val scope = rememberCoroutineScope()
+    return this
+        .bringIntoViewRequester(requester)
+        .onFocusChanged { if (it.isFocused) scope.launch { requester.bringIntoView() } }
+}
 
 private fun parseFormaciones(text: String): List<com.example.cuidaleapp.models.FormacionAcademica> =
     text.lines().filter { it.isNotBlank() }.map { line ->

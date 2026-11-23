@@ -191,7 +191,9 @@ fun CreateSolicitudScreen(
                     is FichaState.Loading -> CircularProgressIndicator()
                     is FichaState.View -> {
                         val patientName = fs.data["nombre_completo"]?.toString() ?: stringResource(R.string.crear_solicitud_mi_paciente)
-                        val patientPhoto = (fs.data["fotos"] as? List<*>)?.firstOrNull()?.toString() ?: ""
+                        val patientPhoto = (fs.data["fotos"] as? List<*>)?.firstOrNull()?.toString()
+    ?: fs.data["fotoUrl"]?.toString()
+    ?: ""
                         val defaultStartHour = stringResource(R.string.crear_solicitud_hora_inicio_defecto)
                         val defaultEndHour = stringResource(R.string.crear_solicitud_hora_fin_defecto)
 

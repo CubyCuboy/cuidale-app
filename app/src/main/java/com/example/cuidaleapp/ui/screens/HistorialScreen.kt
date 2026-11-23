@@ -41,6 +41,8 @@ fun HistorialScreen(
     var sortOrder by remember { mutableStateOf("fecha_desc") }
     var showSortMenu by remember { mutableStateOf(false) }
 
+    LaunchedEffect(Unit) { viewModel.migrarCalificacionesHistoricas() }
+
     val sortedHistorial = remember(historial, sortOrder) {
         when (sortOrder) {
             "fecha_desc" -> historial.sortedByDescending { it.fechaTermino }

@@ -185,6 +185,7 @@ class MenuActivity : ComponentActivity() {
                                   else postulacionesRecibidas.values.flatten().count { it.estado == "pendiente" }
 
             var currentScreen by remember { mutableStateOf<MenuNavigation>(Main) }
+            var resaltarCalificaciones by remember { mutableStateOf(false) }
             val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
             LaunchedEffect(userData.rol, userData.region) {
@@ -242,6 +243,10 @@ class MenuActivity : ComponentActivity() {
                         val cobroId = intent.getStringExtra("cobroId") ?: intent.getStringExtra("COBRO_ID")
                         if (!cobroId.isNullOrBlank()) currentScreen = CobroDetalle(cobroId)
                         else currentScreen = Billetera
+                    }
+                    "PROFILE_CALIFICACIONES" -> {
+                        resaltarCalificaciones = true
+                        currentScreen = Profile
                     }
                     "CHAT_DETAIL" -> {
                         var targetUid = uid
@@ -489,6 +494,11 @@ class MenuActivity : ComponentActivity() {
                                                                 fichaState = fichaState,
                                                                 onViewFicha = { currentScreen = Ficha(startInEditMode = false, returnTo = Main) },
                                                                 onUserClick = { uid -> currentScreen = OtherFicha(uid, returnTo = Main) },
+                                                                onGoToChat = { cuidadorUid ->
+                                                                    val myUid = userData.uid
+                                                                    val chatId = if (myUid < cuidadorUid) "${myUid}_$cuidadorUid" else "${cuidadorUid}_$myUid"
+                                                                    currentScreen = Chat(chatId, cuidadorUid, returnTo = Main)
+                                                                },
                                                                 onMapClick = { currentScreen = MapaCuidadores }
                                                             )
                                                         }
@@ -517,8 +527,12 @@ class MenuActivity : ComponentActivity() {
                                                                 },
                                                                 unreadCount = unreadCount,
                                                                 pendingNotifs = pendingNotifs,
-                                                                solicitudViewModel = solicitudViewModel
+                                                                solicitudViewModel = solicitudViewModel,
+                                                                resaltarCalificaciones = resaltarCalificaciones
                                                             )
+                                                            LaunchedEffect(Unit) {
+                                                                if (resaltarCalificaciones) resaltarCalificaciones = false
+                                                            }
                                                         }
                                                         EditProfile -> {
                                                             EditProfileScreen(
@@ -598,6 +612,10 @@ class MenuActivity : ComponentActivity() {
                                                                             val cobroId = notification.data["cobroId"] ?: ""
                                                                             if (cobroId.isNotEmpty()) currentScreen = CobroDetalle(cobroId, returnTo = Billetera)
                                                                             else currentScreen = Billetera
+                                                                        }
+                                                                        "nueva_calificacion" -> {
+                                                                            resaltarCalificaciones = true
+                                                                            currentScreen = Profile
                                                                         }
                                                                         else -> {
                                                                             currentScreen = Requests
@@ -844,6 +862,10 @@ class MenuActivity : ComponentActivity() {
                                         uid = notification.payload["uid"] ?: notification.payload["emisor"] ?: "",
                                         returnTo = Main
                                     )
+                                    "PROFILE_CALIFICACIONES" -> {
+                                        resaltarCalificaciones = true
+                                        currentScreen = Profile
+                                    }
                                     else -> currentScreen = Main
                                 }
                             },

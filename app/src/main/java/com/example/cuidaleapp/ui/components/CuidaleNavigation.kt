@@ -186,7 +186,7 @@ fun CuidaleDrawerContent(
             colors = NavigationDrawerItemDefaults.colors(unselectedContainerColor = Color.Transparent)
         )
         NavigationDrawerItem(
-            label = { Text(stringResource(R.string.nav_ficha), fontWeight = FontWeight.Bold) }, 
+            label = { Text(stringResource(if (rol == "cuidador") R.string.nav_ficha else R.string.nav_ficha_familiar), fontWeight = FontWeight.Bold) }, 
             selected = false, 
             onClick = onFichaClick, 
             icon = { Icon(Icons.Default.Badge, contentDescription = null) }, 

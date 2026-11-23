@@ -4,7 +4,6 @@ package com.example.cuidaleapp.ui.screens
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -155,6 +154,7 @@ fun ChatScreen(
     var showShareRequests by remember { mutableStateOf(false) }
     var showShareTasks by remember { mutableStateOf(false) }
     var showMediaSheet by remember { mutableStateOf(false) }
+    var showCustomMediaPicker by remember { mutableStateOf(false) }
     var isUploadingMedia by remember { mutableStateOf(false) }
     var mediaError by remember { mutableStateOf<String?>(null) }
     val pendingMediaItems = remember { mutableStateListOf<PendingMediaItem>() }
@@ -495,16 +495,13 @@ fun ChatScreen(
         if (granted) openCamera() else cameraPermissionLauncher.launch(permission)
     }
 
-    val mediaPickerLauncher = key(pendingMediaItems.size) {
-        rememberLauncherForActivityResult(
-            ActivityResultContracts.PickMultipleVisualMedia(maxItems = (10 - pendingMediaItems.size).coerceIn(2, 10))
-        ) { uris ->
-            var added = 0
-            var countLimit = false
-            var sizeLimit = false
-            var totalLimit = false
-            val overSized = mutableListOf<Pair<String, String>>()
-            try {
+    fun handlePickedUris(uris: List<Uri>) {
+        var added = 0
+        var countLimit = false
+        var sizeLimit = false
+        var totalLimit = false
+        val overSized = mutableListOf<Pair<String, String>>()
+        try {
             uris.forEach { uri ->
                 if (pendingMediaItems.size >= 10) { countLimit = true; return@forEach }
                 val kind = if (MediaCompressor.isVideo(context, uri)) "video" else "image"
@@ -529,15 +526,14 @@ fun ChatScreen(
                         " " + context.getString(R.string.chat_error_media_size_overall_extra)
                 }
                 totalLimit -> context.getString(R.string.chat_error_media_total_limit, totalAdjuntos) +
-      " " + context.getString(R.string.chat_error_media_total_limit_extra)
+                    " " + context.getString(R.string.chat_error_media_total_limit_extra)
                 countLimit -> context.getString(R.string.chat_error_media_count_limit, totalAdjuntos)
                 added == 0 && uris.isNotEmpty() -> context.getString(R.string.chat_error_media_add_failed)
                 else -> null
             }
-            } catch (t: Throwable) {
-                Log.e("ChatScreen", "media picker falló", t)
-                mediaError = ErrorMessages.resolve(context, ErrorCodes.Storage.GENERIC)
-            }
+        } catch (t: Throwable) {
+            Log.e("ChatScreen", "media picker falló", t)
+            mediaError = ErrorMessages.resolve(context, ErrorCodes.Storage.GENERIC)
         }
     }
 
@@ -563,12 +559,7 @@ fun ChatScreen(
     }
     
     var highlightedMessageId by remember { mutableStateOf<String?>(null) }
-  var showFirstChatDisclaimer by remember {
-      mutableStateOf(
-          !context.getSharedPreferences("cuidale_prefs", android.content.Context.MODE_PRIVATE)
-              .getBoolean("first_chat_disclaimer_done", false)
-      )
-  }
+  var showFirstChatDisclaimer by remember { mutableStateOf(false) }
     var fullImageUrl by remember { mutableStateOf<String?>(null) }
     var fullVideoUrl by remember { mutableStateOf<String?>(null) }
     var galleryMessage by remember { mutableStateOf<ChatMessage?>(null) }
@@ -784,7 +775,7 @@ fun ChatScreen(
                                         )
                                         if (isFavorite) {
                                             Spacer(Modifier.width(4.dp))
-                                            Icon(Icons.Default.Star, null, tint = Color(0xFFFFD700), modifier = Modifier.size(14.dp))
+                                            Icon(Icons.Default.Favorite, null, tint = Color(0xFFE53935), modifier = Modifier.size(14.dp))
                                         }
                                     }
                                     val statusTextColor = when {
@@ -869,7 +860,7 @@ fun ChatScreen(
                             IconButton(onClick = { showTopMenu = true }) { Icon(Icons.Default.MoreVert, null) }
                             DropdownMenu(expanded = showTopMenu, onDismissRequest = { showTopMenu = false }) {
                                 DropdownMenuItem(text = { Text(stringResource(R.string.chat_menu_view_profile)) }, onClick = { showTopMenu = false; onViewOtherProfile(otherUser.uid) }, leadingIcon = { Icon(Icons.Default.Person, null) })
-                                DropdownMenuItem(text = { Text(if (isFavorite) stringResource(R.string.chat_menu_remove_fav) else stringResource(R.string.chat_menu_add_fav)) }, onClick = { showTopMenu = false; favoritosViewModel?.toggleFavorito(otherUser.uid) }, enabled = isOnline, leadingIcon = { Icon(Icons.Default.Star, null, tint = if (isFavorite) Color.Yellow else Color.Gray) })
+                                DropdownMenuItem(text = { Text(if (isFavorite) stringResource(R.string.chat_menu_remove_fav) else stringResource(R.string.chat_menu_add_fav)) }, onClick = { showTopMenu = false; favoritosViewModel?.toggleFavorito(otherUser.uid) }, enabled = isOnline, leadingIcon = { Icon(if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, null, tint = if (isFavorite) Color(0xFFE53935) else Color.Gray) })
                                 DropdownMenuItem(text = { Text(if (iHaveBlocked) stringResource(R.string.chat_unblock) else stringResource(R.string.chat_block), color = if (iHaveBlocked) Color.Unspecified else Color.Red) }, onClick = { showTopMenu = false; favoritosViewModel?.toggleBloqueo(otherUser.uid) }, enabled = isOnline, leadingIcon = { Icon(if (iHaveBlocked) Icons.Default.CheckCircle else Icons.Default.Block, null, tint = if (iHaveBlocked) Color(0xFF4CAF50) else Color.Red) })
                                 DropdownMenuItem(text = { Text(if (iHaveUnwanted) stringResource(R.string.chat_menu_show_in_search) else stringResource(R.string.chat_menu_hide_from_search)) }, onClick = { showTopMenu = false; favoritosViewModel?.toggleNoDeseado(otherUser.uid) }, enabled = isOnline, leadingIcon = { Icon(if (iHaveUnwanted) Icons.Default.Visibility else Icons.Default.VisibilityOff, null) })
                             }
@@ -1768,7 +1759,18 @@ fun ChatScreen(
             }
         }
     }
-    
+
+    if (showCustomMediaPicker) {
+        CuidaleMediaPicker(
+            maxItems = (10 - pendingMediaItems.size).coerceAtLeast(1),
+            onDismiss = { showCustomMediaPicker = false },
+            onConfirm = { uris ->
+                showCustomMediaPicker = false
+                handlePickedUris(uris)
+            }
+        )
+    }
+
     if (showMediaSheet) {
         ModalBottomSheet(onDismissRequest = { showMediaSheet = false }) {
             Column(Modifier.padding(16.dp).fillMaxWidth()) {
@@ -1879,7 +1881,7 @@ fun ChatScreen(
                         label = stringResource(R.string.source_gallery),
                         enabled = !isUploadingMedia && !limitReached,
                         modifier = Modifier.weight(1f),
-                        onClick = { requestMediaLaunch { showMediaSheet = false; mediaPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) } }
+                        onClick = { requestMediaLaunch { showMediaSheet = false; showCustomMediaPicker = true } }
                     )
                     MediaAttachOption(
                         icon = Icons.Default.Description,

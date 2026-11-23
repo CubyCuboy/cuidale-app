@@ -36,7 +36,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.animation.core.animateFloatAsState
@@ -44,7 +44,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.WifiOff
@@ -86,6 +86,9 @@ import com.example.cuidaleapp.utils.ConnectivityObserver
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.platform.LocalLifecycleOwner
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -136,6 +139,9 @@ fun OtherFichaScreen(
         "representante" -> customColors.mint
         else -> customColors.lime
     }
+
+    val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+    val isProfileOwner = otherUserData != null && currentUid != null && otherUserData!!.uid == currentUid
 
     LaunchedEffect(otherUserData?.uid, isOnline) {
         val uid = otherUserData?.uid ?: return@LaunchedEffect
@@ -356,7 +362,8 @@ fun OtherFichaScreen(
                                     user = user,
                                     ficha = (otherFichaState as? FichaState.View)?.data,
                                     accentColor = if (isOnline) accentColor else Color.Gray,
-                                    tareasPlantilla = otherTareasPlantilla
+                                    tareasPlantilla = otherTareasPlantilla,
+                                    showTips = isProfileOwner
                                 )
                             }
                         } else {
@@ -424,7 +431,7 @@ fun OtherFichaScreen(
                                 containerColor = if (!isOnline) Color.Gray else if (isFavorito) accentColor else Color.White,
                                 contentColor = if (isFavorito) Color.White else MaterialTheme.colorScheme.onSurface,
                                 shadowColor = (if (isOnline) accentColor else Color.Gray).copy(alpha = 0.3f),
-                                icon = if (isFavorito) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                icon = if (isFavorito) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                                 enabled = favoritosUiState !is FavoritosUiState.Loading && isOnline,
                                 onClick = {
                                     otherUserData?.let { favoritosViewModel.toggleFavorito(it.uid) }
@@ -706,7 +713,8 @@ private fun CaregiverPublicProfile(
     user: UserData,
     ficha: Map<String, Any>?,
     accentColor: Color,
-    tareasPlantilla: List<Tarea> = emptyList()
+    tareasPlantilla: List<Tarea> = emptyList(),
+    showTips: Boolean = true
 ) {
     val customColors = CuidaleThemeExtras.customColors
     val shadows = CuidaleThemeExtras.shadows
@@ -845,7 +853,7 @@ private fun CaregiverPublicProfile(
             }
         }
 
-        if (user.fotoUrl.isNullOrBlank()) {
+        if (showTips && user.fotoUrl.isNullOrBlank()) {
             com.example.cuidaleapp.ui.components.ConsejoFotoPerfil()
         }
 
@@ -889,7 +897,7 @@ private fun CaregiverPublicProfile(
         }
 
         val resenasState = remember { mutableStateOf<List<com.example.cuidaleapp.models.CalificacionPublica>>(emptyList()) }
-        LaunchedEffect(user.uid) {
+        val cargarResenas: suspend () -> Unit = {
             runCatching {
                 val snap = com.google.firebase.firestore.FirebaseFirestore.getInstance()
                     .collection("fichas").document(user.uid)
@@ -904,6 +912,33 @@ private fun CaregiverPublicProfile(
                     )
                 }
             }
+        }
+        DisposableEffect(user.uid) {
+            val registration = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                .collection("fichas").document(user.uid)
+                .collection("resenas")
+                .addSnapshotListener { snapshot, _ ->
+                    resenasState.value = snapshot?.documents?.mapNotNull { doc ->
+                        com.example.cuidaleapp.models.CalificacionPublica(
+                            autorNombre = doc.getString("autorNombre") ?: "",
+                            calificacion = doc.getDouble("calificacion") ?: 0.0,
+                            observacion = doc.getString("comentario") ?: "",
+                            fecha = doc.getTimestamp("fecha")
+                        )
+                    } ?: emptyList()
+                }
+            onDispose { registration.remove() }
+        }
+        val scope = rememberCoroutineScope()
+        val lifecycleOwner = LocalLifecycleOwner.current
+        DisposableEffect(lifecycleOwner) {
+            val observer = LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    scope.launch { cargarResenas() }
+                }
+            }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
         }
         com.example.cuidaleapp.ui.components.CalificacionesSection(resenasState.value)
     }

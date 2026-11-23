@@ -94,6 +94,11 @@ object NotificationTemplates {
                 context.getString(R.string.notification_generic_body),
                 "BILLETERA"
             )
+            "nueva_calificacion" -> Triple(
+                "Nueva calificación",
+                "Te han dejado una nueva calificación.",
+                "PROFILE_CALIFICACIONES"
+            )
             else -> Triple(
                 context.getString(R.string.notification_generic),
                 context.getString(R.string.notification_generic_body),

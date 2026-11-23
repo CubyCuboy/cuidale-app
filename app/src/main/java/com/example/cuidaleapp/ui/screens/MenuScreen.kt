@@ -9,7 +9,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -37,10 +36,15 @@ import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.data.ChileData
 import com.example.cuidaleapp.utils.ConnectivityObserver
 import com.example.cuidaleapp.utils.ErrorMessages
+import com.example.cuidaleapp.utils.OcultadosRecientes
 import com.example.cuidaleapp.viewmodel.FichaState
+import com.example.cuidaleapp.viewmodel.FavoritosViewModel
+import com.example.cuidaleapp.viewmodel.VinculosViewModel
 import com.example.cuidaleapp.viewmodel.SearchState
 import com.example.cuidaleapp.viewmodel.SearchViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,9 +54,15 @@ fun MenuScreen(
     fichaState: FichaState,
     onViewFicha: () -> Unit,
     onUserClick: (String) -> Unit,
-    onMapClick: () -> Unit = {}
+    onMapClick: () -> Unit = {},
+    onGoToChat: (String) -> Unit = { onUserClick(it) },
+    favoritosViewModel: FavoritosViewModel = viewModel(),
+    vinculosViewModel: VinculosViewModel = viewModel()
 ) {
     val isOnline by ConnectivityObserver.isOnline.collectAsState()
+    val guardados by favoritosViewModel.guardados.collectAsState()
+    val noDeseados by favoritosViewModel.noDeseados.collectAsState()
+    val misVinculos by vinculosViewModel.misVinculos.collectAsState()
     val context = LocalContext.current
 
     val searchState by searchViewModel.state.collectAsState()
@@ -188,6 +198,29 @@ fun MenuScreen(
                                     val isLoadingMore = state.isLoadingMore
                                     val isLastPage = state.isLastPage
 
+                                    val noDeseadosIds = noDeseados.toSet()
+                                    val visibles = resultsList.filter { it.id !in noDeseadosIds }
+                                    val fantasma = resultsList.filter {
+                                        it.id in noDeseadosIds && it.id in OcultadosRecientes.uids
+                                    }
+                                    val itemsParaMostrar = visibles + fantasma
+
+                                    val menuSaliendo = remember { mutableStateListOf<String>() }
+                                    val menuFantasmaIds = fantasma.map { it.id }
+                                    LaunchedEffect(menuFantasmaIds) {
+                                        menuFantasmaIds.forEach { uid ->
+                                            if (uid !in menuSaliendo) menuSaliendo.add(uid)
+                                        }
+                                        delay(400)
+                                        menuFantasmaIds.forEach { uid ->
+                                            OcultadosRecientes.limpiar(uid)
+                                        }
+                                    }
+                                    LaunchedEffect(itemsParaMostrar.map { it.id }) {
+                                        val presentes = itemsParaMostrar.map { it.id }.toSet()
+                                        menuSaliendo.removeAll { it !in presentes }
+                                    }
+
                                     if (resultsList.isEmpty()) {
                                         EmptySearchResults(
                                             title = if (selectedRegion.isNotEmpty() || selectedCommunes.isNotEmpty())
@@ -203,23 +236,37 @@ fun MenuScreen(
                                                 state = listState,
                                                 verticalArrangement = Arrangement.spacedBy(16.dp),
                                                 contentPadding = PaddingValues(bottom = 120.dp),
-                                                modifier = Modifier.fillMaxSize()
+                                                modifier = Modifier.fillMaxSize().boundaryShake(listState)
                                             ) {
-                                                items(resultsList, key = { it.id }) { result ->
-                                                    CuidaleUserCard(
-                                                        nombre = result.nombre,
-                                                        apellido = result.apellido_pa,
-                                                        fotoUrl = result.fotoUrl,
-                                                        comuna = result.comuna,
-                                                        comunas = result.comunas,
-                                                        tipo = result.tipo,
-                                                        edad = result.edad,
-                                                        nivelDependencia = result.nivel_dependencia,
-                                                        especializacion = result.especializacion,
-                                                        horarios = result.horarios,
-                                                        isNew = result.isNew,
-                                                        onClick = { onUserClick(result.id) }
-                                                    )
+                                                items(itemsParaMostrar, key = { it.id }) { result ->
+                                                    SalidaItemWrapper(
+                                                        uid = result.id,
+                                                        saliendo = menuSaliendo
+                                                    ) {
+                                                        CuidaleUserCard(
+                                                            nombre = result.nombre,
+                                                            apellido = result.apellido_pa,
+                                                            fotoUrl = result.fotoUrl,
+                                                            representanteFotoUrl = result.representanteFotoUrl,
+                                                            comuna = result.comuna,
+                                                            comunas = result.comunas,
+                                                            tipo = result.tipo,
+                                                            edad = result.edad,
+                                                            nivelDependencia = result.nivel_dependencia,
+                                                            especializacion = result.especializacion,
+                                                            horarios = result.horarios,
+                                                            isNew = result.isNew,
+                                                            calificacion = result.calificacion,
+                                                            nroCalificaciones = result.nroCalificaciones,
+                                                            valorHora = result.valorHora,
+                                                            isSaved = result.id in guardados,
+                                                            onToggleSave = { if (isOnline) favoritosViewModel.toggleGuardado(result.id) },
+                                                            onSendSolicitud = { onUserClick(result.id) },
+                                                            hasChat = misVinculos.any { it.uids.contains(result.id) && it.estado == "aceptado" },
+                                                            onGoToChat = { onGoToChat(result.id) },
+                                                            onClick = { onUserClick(result.id) }
+                                                        )
+                                                    }
                                                 }
 
                                                 if (isLoadingMore) {
@@ -416,6 +463,8 @@ fun MenuScreen(
     }
 }
 
+
+
 @Composable
 fun CuidaleVerticalScrollbar(
     lazyListState: androidx.compose.foundation.lazy.LazyListState,
@@ -553,7 +602,7 @@ fun FichaPlaceholder(
             )
             Spacer(modifier = Modifier.height(32.dp))
             HardShadowButton(
-                text = stringResource(R.string.menu_create_ficha_technical),
+                text = stringResource(if (rol == "cuidador") R.string.menu_create_ficha_technical else R.string.menu_create_ficha_familiar),
                 onClick = onClick,
                 containerColor = accentColor,
                 contentColor = Color.White,

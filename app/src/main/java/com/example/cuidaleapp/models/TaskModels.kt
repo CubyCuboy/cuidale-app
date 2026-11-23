@@ -4,7 +4,7 @@ import com.google.firebase.Timestamp
 import java.util.UUID
 
 enum class TipoTarea {
-    COMIDA, MEDICACION, HIGIENE, ACTIVIDAD, OTRO
+    COMIDA, MEDICACION, HIGIENE, ACTIVIDAD, INYECCION, CAMBIO_SUERO, CAMBIO_POSTURA, OTRO
 }
 
 enum class FrecuenciaTarea {
@@ -22,6 +22,9 @@ data class Tarea(
     val frecuencia: FrecuenciaTarea = FrecuenciaTarea.DIARIA,
     val diasSeleccionados: List<Int> = emptyList(),
     val mesesSeleccionados: List<Int> = emptyList(),
+    val dosis: String = "",
+    val unidades: String = "",
+    val viaAdministracion: String = "",
     val fechaEspecifica: String? = null,
     val exigirFoto: Boolean = false,
     val activa: Boolean = true,
@@ -49,7 +52,10 @@ data class RegistroTarea(
     val frecuencia: FrecuenciaTarea = FrecuenciaTarea.DIARIA,
     val horarioPrevisto: String = "",
     val titulo: String = "",
-    val tipo: TipoTarea = TipoTarea.OTRO
+    val tipo: TipoTarea = TipoTarea.OTRO,
+    val dosis: String = "",
+    val unidades: String = "",
+    val viaAdministracion: String = ""
 )
 
 data class InformeTurno(

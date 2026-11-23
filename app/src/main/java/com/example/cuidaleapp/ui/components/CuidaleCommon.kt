@@ -5,12 +5,15 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
@@ -232,6 +235,20 @@ fun Modifier.fadingEdge(brush: Brush) = this
     }
 
 @Composable
+fun Modifier.pressScale(interactionSource: MutableInteractionSource = remember { MutableInteractionSource() }): Modifier {
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.93f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+        label = "pressScale"
+    )
+    return this.graphicsLayer {
+        scaleX = scale
+        scaleY = scale
+    }
+}
+
+@Composable
 fun CuidaleAppLogo(
     isDark: Boolean,
     modifier: Modifier = Modifier
@@ -244,4 +261,21 @@ fun CuidaleAppLogo(
         modifier = modifier,
         contentScale = ContentScale.Fit
     )
+}
+
+@Composable
+fun SalidaItemWrapper(
+    uid: String,
+    saliendo: SnapshotStateList<String>,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    Box(modifier = modifier) {
+        AnimatedVisibility(
+            visible = uid !in saliendo,
+            exit = fadeOut(tween(250)) + shrinkVertically(animationSpec = tween(300))
+        ) {
+            content()
+        }
+    }
 }

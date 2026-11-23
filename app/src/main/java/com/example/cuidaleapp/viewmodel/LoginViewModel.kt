@@ -35,13 +35,14 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow<LoginUiState>(LoginUiState.CheckingAuth)
     val uiState: StateFlow<LoginUiState> = _uiState
 
-    private val _isDarkMode = MutableStateFlow(prefs.getBoolean("dark_mode", false))
-    val isDarkMode: StateFlow<Boolean> = _isDarkMode
+    init {
+        com.example.cuidaleapp.ui.theme.ThemeManager.ensureInit(application)
+    }
+
+    val isDarkMode: StateFlow<Boolean> get() = com.example.cuidaleapp.ui.theme.ThemeManager.isDarkMode
 
     fun toggleTheme() {
-        val newValue = !_isDarkMode.value
-        _isDarkMode.value = newValue
-        prefs.edit().putBoolean("dark_mode", newValue).apply()
+        com.example.cuidaleapp.ui.theme.ThemeManager.toggleTheme()
     }
 
     private fun parseDocumentToUserData(doc: com.google.firebase.firestore.DocumentSnapshot, fallbackUid: String = ""): UserData? {

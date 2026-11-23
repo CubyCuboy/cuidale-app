@@ -1,5 +1,6 @@
 package com.example.cuidaleapp.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -70,7 +72,6 @@ fun ChatsScreen(
     val favoritos by favoritosViewModel.favoritos.collectAsState()
     val bloqueados by favoritosViewModel.bloqueados.collectAsState()
     val managedUsers by favoritosViewModel.managedUsers.collectAsState()
-    val primaryColor = MaterialTheme.colorScheme.primary
 
     var selectedTab by remember { mutableIntStateOf(0) }
     var chatSearchQuery by remember { mutableStateOf("") }
@@ -97,8 +98,23 @@ fun ChatsScreen(
 
 
 
-        CenterAlignedTopAppBar(
-            title = { Text(stringResource(R.string.chats_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = Color.White) },
+        TopAppBar(
+            title = {
+                Column {
+                    Text(
+                        text = stringResource(R.string.chats_title),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Black,
+                        color = Color.White
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = stringResource(R.string.chats_subtitle),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF90E0EF)
+                    )
+                }
+            },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
         )
 
@@ -145,21 +161,49 @@ fun ChatsScreen(
         }
 
         if (selectedTab == 0) {
-            OutlinedTextField(
-                value = chatSearchQuery,
-                onValueChange = { chatSearchQuery = it },
-                placeholder = { Text(stringResource(R.string.chats_search_placeholder)) },
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                shape = RoundedCornerShape(16.dp),
-                leadingIcon = { Icon(Icons.Default.Search, null) },
-                colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedContainerColor = if (isDark) Color.White.copy(alpha = 0.05f) else Color.White,
-                    focusedContainerColor = if (isDark) Color.White.copy(alpha = 0.05f) else Color.White,
-                    unfocusedBorderColor = Color.Transparent,
-                    focusedBorderColor = primaryColor.copy(alpha = 0.5f)
-                ),
-                singleLine = true
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 14.dp)
+                    .padding(end = 4.dp, bottom = 4.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .offset(x = 4.dp, y = 4.dp)
+                        .clip(RoundedCornerShape(28.dp))
+                        .background(CuidaleThemeExtras.shadows.hardShadowPrimary.copy(alpha = 0.28f))
+                )
+                OutlinedTextField(
+                    value = chatSearchQuery,
+                    onValueChange = { chatSearchQuery = it },
+                    placeholder = { Text(stringResource(R.string.chats_search_placeholder), color = Color(0xFF546E7A)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(28.dp),
+                    leadingIcon = {
+                        Icon(Icons.Default.Search, null, tint = MaterialTheme.colorScheme.primary)
+                    },
+                    trailingIcon = {
+                        if (chatSearchQuery.isNotEmpty()) {
+                            IconButton(onClick = { chatSearchQuery = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cd_close), tint = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        unfocusedContainerColor = Color.White.copy(alpha = 0.92f),
+                        focusedContainerColor = Color.White.copy(alpha = 0.96f),
+                        cursorColor = MaterialTheme.colorScheme.primary,
+                        focusedTextColor = Color(0xFF0D1B2A),
+                        unfocusedTextColor = Color(0xFF0D1B2A),
+                        unfocusedBorderColor = Color(0xFF90E0EF),
+                        focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                        unfocusedPlaceholderColor = Color(0xFF546E7A),
+                        focusedPlaceholderColor = Color(0xFF546E7A)
+                    ),
+                    singleLine = true
+                )
+            }
         }
 
         Box(Modifier.weight(1f)) {
@@ -170,6 +214,7 @@ fun ChatsScreen(
                     favoritos = favoritos,
                     bloqueados = bloqueados,
                     isDark = isDark,
+                    searchQuery = chatSearchQuery,
                     onChatClick = onChatClick,
                     onLongClick = {
                         chatToMenu = it
@@ -222,7 +267,7 @@ fun ChatsScreen(
                         showChatMenu = false
                     }) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(if (isFav) Icons.Default.StarOutline else Icons.Default.Star, null, tint = if (isFav) Color.Unspecified else Color.Yellow)
+                            Icon(if (isFav) Icons.Default.Favorite else Icons.Default.FavoriteBorder, null, tint = if (isFav) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(Modifier.width(12.dp))
                             Text(if (isFav) stringResource(R.string.chats_remove_favorite) else stringResource(R.string.chats_add_favorite))
                         }
@@ -242,9 +287,9 @@ fun ChatsScreen(
                         showChatMenu = false
                     }) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(if (isBlocked) Icons.Default.CheckCircle else Icons.Default.Block, null, tint = if (isBlocked) Color.Green else Color.Red)
+                            Icon(if (isBlocked) Icons.Default.CheckCircle else Icons.Default.Block, null, tint = if (isBlocked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
                             Spacer(Modifier.width(12.dp))
-                            Text(if (isBlocked) stringResource(R.string.chat_unblock) else stringResource(R.string.chat_block), color = if (isBlocked) Color.Unspecified else Color.Red)
+                            Text(if (isBlocked) stringResource(R.string.chat_unblock) else stringResource(R.string.chat_block), color = if (isBlocked) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error)
                         }
                     }
                 }
@@ -260,12 +305,17 @@ fun ChatListSection(
     favoritos: List<String>,
     bloqueados: List<String>,
     isDark: Boolean,
+    searchQuery: String = "",
     onChatClick: (String, UserData) -> Unit,
     onLongClick: (ChatViewModel.ChatPreview) -> Unit,
     onMarkRead: (String) -> Unit
 ) {
     if (chatList.isEmpty()) {
-        EmptyState(stringResource(R.string.chats_empty), Icons.Default.ChatBubbleOutline)
+        EmptyState(
+            text = if (searchQuery.isNotBlank()) stringResource(R.string.chats_no_results, searchQuery)
+            else stringResource(R.string.chats_empty),
+            icon = if (searchQuery.isNotBlank()) Icons.Default.SearchOff else Icons.Default.ChatBubbleOutline
+        )
     } else {
         LazyColumn(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 100.dp),
@@ -304,19 +354,47 @@ fun ChatCard(
     val customColors = CuidaleThemeExtras.customColors
     HardShadowPanel(
         modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick),
-        backgroundColor = if (isDark) (if (chat.unreadCount > 0) Color(0xFF2B2D31) else Color(0xFF1B263B)) 
+        backgroundColor = if (isDark) (if (chat.unreadCount > 0) Color(0xFF2B2D31) else Color(0xFF1B263B))
                 else (if (chat.unreadCount > 0) Color(0xFFE3E5E8) else Color.White),
-        shadowColor = Color.Black.copy(alpha = 0.05f),
-        cornerRadius = 16.dp,
-        shadowOffset = 2.dp,
+        shadowColor = CuidaleThemeExtras.shadows.hardShadowPrimary.copy(alpha = 0.28f),
+        cornerRadius = 20.dp,
+        shadowOffset = 4.dp,
         contentPadding = PaddingValues(0.dp)
     ) {
         Row(
-            modifier = Modifier.padding(12.dp).alpha(if (isBlocked) 0.5f else 1f),
+            modifier = Modifier
+                .padding(start = 14.dp, end = 10.dp, top = 14.dp, bottom = 14.dp)
+                .alpha(if (isBlocked) 0.5f else 1f),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(modifier = Modifier.size(52.dp)) {
-                Surface(modifier = Modifier.fillMaxSize(), shape = CircleShape, color = Color.White.copy(alpha = 0.2f)) {
+            val statusColor = when {
+                isBlocked -> MaterialTheme.colorScheme.error
+                chat.unreadCount > 0 -> MaterialTheme.colorScheme.primary
+                isFavorite -> Color(0xFFF9A825)
+                else -> Color.Transparent
+            }
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp))
+                    .background(statusColor)
+            )
+            Spacer(Modifier.width(12.dp))
+            Box(modifier = Modifier.size(56.dp)) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    shape = CircleShape,
+                    color = when {
+                        isBlocked -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)
+                        isFavorite -> Color(0xFFF9A825).copy(alpha = 0.22f)
+                        chat.unreadCount > 0 -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                        else -> if (isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFECEFF1)
+                    },
+                    border = if (isFavorite && !isBlocked) {
+                        BorderStroke(2.dp, Brush.linearGradient(listOf(Color(0xFFF9A825), Color(0xFFE53935))))
+                    } else null
+                ) {
                     if (chat.otherUser.fotoUrl.isNotBlank() && chat.otherUser.fotoUrl != "n/a") {
                         AsyncImage(
                             model = ImageRequest.Builder(context)
@@ -330,33 +408,43 @@ fun ChatCard(
                             placeholder = androidx.compose.ui.graphics.painter.ColorPainter(customColors.avatarBackground)
                         )
                     } else {
-                        Icon(Icons.Default.Person, null, modifier = Modifier.align(Alignment.Center), tint = Color.White)
+                        Icon(
+                            Icons.Default.Person,
+                            null,
+                            modifier = Modifier.align(Alignment.Center),
+                            tint = when {
+                                isBlocked -> MaterialTheme.colorScheme.error
+                                isFavorite -> Color(0xFFB8860B)
+                                else -> if (isDark) Color.White.copy(alpha = 0.7f) else Color(0xFF546E7A)
+                            }
+                        )
                     }
                 }
-                
                 if (isFavorite && !isBlocked) {
                     Icon(
-                        Icons.Default.Star, null, tint = Color(0xFFFFD700),
-                        modifier = Modifier.size(14.dp).align(Alignment.BottomEnd).background(if (isDark) Color(0xFF1B263B) else Color.White, CircleShape).padding(1.dp)
+                        Icons.Default.Favorite, null, tint = Color(0xFFE53935),
+                        modifier = Modifier
+                            .size(18.dp)
+                            .align(Alignment.BottomEnd)
+                            .background(if (isDark) Color(0xFF1B263B) else Color.White, CircleShape)
+                            .padding(2.dp)
                     )
                 }
             }
-            
+
             Spacer(Modifier.width(16.dp))
-            
+
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    val fullName = listOf(chat.otherUser.nombre, chat.otherUser.apellido_pa).filter { it.isNotBlank() && it != "n/a" }.joinToString(" ")
-                    
+                    val fullName = listOf(chat.otherUser.nombre, chat.otherUser.apellido_pa)
+                        .filter { it.isNotBlank() && it != "n/a" }.joinToString(" ")
+
                     Text(
-                        text = fullName, 
-                        style = MaterialTheme.typography.titleMedium, 
-                        fontWeight = if (chat.unreadCount > 0) FontWeight.ExtraBold else FontWeight.Bold,
+                        text = fullName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = if (chat.unreadCount > 0) FontWeight.ExtraBold else FontWeight.SemiBold,
                         modifier = Modifier.weight(1f).fadingEdge(
-                            Brush.horizontalGradient(
-                                0.85f to Color.Black,
-                                1f to Color.Transparent
-                            )
+                            Brush.horizontalGradient(0.85f to Color.Black, 1f to Color.Transparent)
                         ),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -366,13 +454,14 @@ fun ChatCard(
                         Text(
                             text = formatMessageDate(context, chat.lastMessage.timestamp),
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (chat.unreadCount > 0) MaterialTheme.colorScheme.primary else Color.Gray
+                            color = if (chat.unreadCount > 0) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-                
-                Spacer(Modifier.height(2.dp))
-                
+
+                Spacer(Modifier.height(4.dp))
+
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val lastMsgText = when {
                         isBlocked -> stringResource(R.string.chats_user_blocked)
@@ -411,8 +500,8 @@ fun ChatCard(
                             }
                         }
                     }
-                    val textColor = if (isTyping) MaterialTheme.colorScheme.primary else Color.Gray
-                    
+                    val textColor = if (isTyping) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+
                     Text(
                         text = lastMsgText,
                         style = MaterialTheme.typography.bodySmall,
@@ -421,22 +510,22 @@ fun ChatCard(
                         modifier = Modifier.weight(1f),
                         fontWeight = if (chat.unreadCount > 0 && !isBlocked) FontWeight.Bold else FontWeight.Normal
                     )
-                    
+
                     if (chat.unreadCount > 0 && !isBlocked) {
                         val badgeScale by animateFloatAsState(
                             targetValue = if (chat.unreadCount > 0) 1f else 0.7f,
                             animationSpec = spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMediumLow),
                             label = "unreadBadge"
                         )
-                        Box(
-                            modifier = Modifier.size(20.dp)
-                                .graphicsLayer { scaleX = badgeScale; scaleY = badgeScale }
-                                .background(MaterialTheme.colorScheme.primary, CircleShape),
-                            contentAlignment = Alignment.Center
+                        Badge(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.graphicsLayer { scaleX = badgeScale; scaleY = badgeScale }
                         ) {
-                            Text(chat.unreadCount.toString(), color = Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            Text(chat.unreadCount.toString(), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                         }
-                        IconButton(onClick = { onMarkRead(chat.chatId) }) {
+                        Spacer(Modifier.width(4.dp))
+                        IconButton(onClick = { onMarkRead(chat.chatId) }, modifier = Modifier.size(40.dp)) {
                             Icon(
                                 Icons.Default.MarkEmailUnread,
                                 contentDescription = stringResource(R.string.chats_unread_cd),
@@ -446,6 +535,12 @@ fun ChatCard(
                     }
                 }
             }
+
+            Icon(
+                Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = if (isDark) Color.White.copy(alpha = 0.30f) else Color.Black.copy(alpha = 0.25f)
+            )
         }
     }
 }
@@ -478,9 +573,9 @@ fun ChatCardLikeRequest(user: UserData?, isDark: Boolean, onAccept: () -> Unit, 
     val customColors = CuidaleThemeExtras.customColors
     HardShadowPanel(
         backgroundColor = if (isDark) Color(0xFF1B263B) else Color.White,
-        shadowColor = Color.Black.copy(alpha = 0.05f),
-        cornerRadius = 16.dp,
-        shadowOffset = 2.dp,
+        shadowColor = CuidaleThemeExtras.shadows.hardShadowPrimary.copy(alpha = 0.28f),
+        cornerRadius = 20.dp,
+        shadowOffset = 4.dp,
         contentPadding = PaddingValues(0.dp)
     ) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -515,8 +610,28 @@ fun ChatCardLikeRequest(user: UserData?, isDark: Boolean, onAccept: () -> Unit, 
                 )
                 Text(stringResource(R.string.chats_wants_connect), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
             }
-            IconButton(onClick = onAccept) { Icon(Icons.Default.Check, null, tint = Color(0xFF4CAF50)) }
-            IconButton(onClick = onDecline) { Icon(Icons.Default.Close, null, tint = Color.Red) }
+            Spacer(Modifier.width(6.dp))
+            FilledIconButton(
+                onClick = onAccept,
+                modifier = Modifier.size(44.dp),
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                )
+            ) {
+                Icon(Icons.Default.Check, contentDescription = stringResource(R.string.chats_accept))
+            }
+            Spacer(Modifier.width(4.dp))
+            FilledIconButton(
+                onClick = onDecline,
+                modifier = Modifier.size(44.dp),
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError
+                )
+            ) {
+                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.chats_decline))
+            }
         }
     }
 }
@@ -529,10 +644,12 @@ fun BlockedListSection(bloqueados: List<String>, managedUsers: List<UserData>, i
     } else {
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             items(users) { user ->
-                Surface(
-                    shape = RoundedCornerShape(12.dp), 
-                    color = if (isDark) Color(0xFF1B263B) else Color.White,
-                    shadowElevation = 1.dp
+                HardShadowPanel(
+                    backgroundColor = if (isDark) Color(0xFF1B263B) else Color.White,
+                    shadowColor = CuidaleThemeExtras.shadows.hardShadowPrimary.copy(alpha = 0.28f),
+                    cornerRadius = 20.dp,
+                    shadowOffset = 4.dp,
+                    contentPadding = PaddingValues(0.dp)
                 ) {
                     Column(Modifier.padding(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -557,7 +674,7 @@ fun BlockedListSection(bloqueados: List<String>, managedUsers: List<UserData>, i
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            TextButton(onClick = { onRemove(user.uid) }) { Text(stringResource(R.string.chats_unblock_upper), color = Color.Red, fontWeight = FontWeight.Black) }
+                            TextButton(onClick = { onRemove(user.uid) }) { Text(stringResource(R.string.chats_unblock_upper), color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Black) }
                         }
                         Spacer(Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -568,7 +685,7 @@ fun BlockedListSection(bloqueados: List<String>, managedUsers: List<UserData>, i
                                     onChatClick(chatId, user)
                                 },
                                 modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(8.dp)
+                                shape = RoundedCornerShape(12.dp)
                             ) {
                                 Icon(Icons.AutoMirrored.Filled.Chat, null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(4.dp))
@@ -577,7 +694,7 @@ fun BlockedListSection(bloqueados: List<String>, managedUsers: List<UserData>, i
                             OutlinedButton(
                                 onClick = { onUserClick(user.uid) },
                                 modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(8.dp)
+                                shape = RoundedCornerShape(12.dp)
                             ) {
                                 Icon(Icons.Default.Person, null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(4.dp))
@@ -595,9 +712,31 @@ fun BlockedListSection(bloqueados: List<String>, managedUsers: List<UserData>, i
 fun EmptyState(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(icon, null, modifier = Modifier.size(64.dp), tint = Color.White)
-            Spacer(Modifier.height(16.dp))
-            Text(text, color = Color.White)
+            Box(
+                modifier = Modifier
+                    .size(96.dp)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                Color(0xFF48CAE4).copy(alpha = 0.30f),
+                                Color(0xFF0077B6).copy(alpha = 0.10f)
+                            )
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, null, modifier = Modifier.size(48.dp), tint = Color.White)
+            }
+            Spacer(Modifier.height(20.dp))
+            Text(
+                text,
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 24.dp)
+            )
         }
     }
 }

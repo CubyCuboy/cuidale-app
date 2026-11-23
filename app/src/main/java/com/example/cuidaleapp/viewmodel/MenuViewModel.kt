@@ -28,12 +28,12 @@ class MenuViewModel(application: Application) : AndroidViewModel(application) {
     private val _isLoggedOut = MutableStateFlow(false)
     val isLoggedOut: StateFlow<Boolean> = _isLoggedOut.asStateFlow()
 
-    private val _isDarkMode = MutableStateFlow(prefs.getBoolean("dark_mode", false))
-    val isDarkMode: StateFlow<Boolean> = _isDarkMode.asStateFlow()
+    val isDarkMode: StateFlow<Boolean> get() = com.example.cuidaleapp.ui.theme.ThemeManager.isDarkMode
 
     private var myProfileListener: ListenerRegistration? = null
 
     init {
+        com.example.cuidaleapp.ui.theme.ThemeManager.ensureInit(application)
         startMyProfileListener()
     }
 
@@ -67,9 +67,7 @@ class MenuViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun toggleTheme() {
-        val newValue = !_isDarkMode.value
-        _isDarkMode.value = newValue
-        prefs.edit().putBoolean("dark_mode", newValue).apply()
+        com.example.cuidaleapp.ui.theme.ThemeManager.toggleTheme()
     }
 
     fun updateUserData() {

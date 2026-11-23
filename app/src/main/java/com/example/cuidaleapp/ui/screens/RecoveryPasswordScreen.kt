@@ -5,7 +5,6 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -50,7 +49,7 @@ fun RecoveryPasswordScreen(
     onFinish: () -> Unit,
     fromProfile: Boolean = false
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = com.example.cuidaleapp.ui.theme.CuidaleThemeExtras.customColors.isDark
     val uiState by viewModel.uiState.collectAsState()
     val email by viewModel.email.collectAsState()
     
