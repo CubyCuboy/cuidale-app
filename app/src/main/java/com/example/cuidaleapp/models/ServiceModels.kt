@@ -27,6 +27,11 @@ data class SolicitudCuidado(
     val cuidadorFoto: String = "",
     val aceptadoAt: Timestamp? = null,
     val exigirFotoTareas: Boolean = false,
+    val tarifaHora: Long = 0L,
+    val tarifaHoraReferencia: Long? = null,
+    val estadoAcuerdo: String = "acordado",
+    val horarioAcuerdo: Map<String, Boolean> = emptyMap(),
+    val cobroEstado: String? = null,
     val createdAt: Timestamp? = null
 )
 
@@ -58,6 +63,9 @@ data class HistorialServicio(
     val aceptadoAt: Timestamp? = null,
     val calificacion: Double? = null,
     val observacionCalificacion: String = "",
+    val montoPagado: Long? = null,
+    val cobroId: String? = null,
+    val turnoId: String? = null,
     val eliminadoPorRepresentante: Boolean = false,
     val eliminadoPorCuidador: Boolean = false
 )

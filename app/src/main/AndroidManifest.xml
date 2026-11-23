@@ -133,6 +133,20 @@
             android:label="Gestión de Usuarios"
             android:theme="@style/Theme.CuidaleApp" />
 
+        <activity
+            android:name=".activities.PagoRetornoActivity"
+            android:exported="true"
+            android:label="Retorno de Pago"
+            android:theme="@android:style/Theme.NoDisplay"
+            android:noHistory="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="cuidaleapp" android:host="pago" />
+            </intent-filter>
+        </activity>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

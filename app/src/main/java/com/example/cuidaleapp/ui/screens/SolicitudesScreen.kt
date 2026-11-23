@@ -37,6 +37,9 @@ import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.R
 import com.example.cuidaleapp.viewmodel.SolicitudViewModel
+import com.example.cuidaleapp.viewmodel.BilleteraViewModel
+import com.example.cuidaleapp.viewmodel.OperacionEstado
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.cuidaleapp.utils.ConnectivityObserver
 import androidx.compose.ui.res.stringResource
 
@@ -59,30 +62,37 @@ fun SolicitudesScreen(
     val postulacionesRecibidas by viewModel.postulacionesRecibidas.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val representantesFotos by viewModel.representantesFotos.collectAsState()
-    
-    val pullToRefreshState = rememberPullToRefreshState()
+    val billeteraViewModel: BilleteraViewModel = viewModel()
+    var solicitudCobro by remember { mutableStateOf<SolicitudCuidado?>(null) }
+    val context = LocalContext.current
+    val operacion by billeteraViewModel.operacion.collectAsState()
 
-    var requestToFinish by remember { mutableStateOf<SolicitudCuidado?>(null) }
-
-    if (requestToFinish != null) {
-        AlertDialog(
-            onDismissRequest = { requestToFinish = null },
-            title = { Text(stringResource(R.string.solicitudes_finalizar_servicio_titulo)) },
-            text = { Text(stringResource(R.string.solicitudes_finalizar_servicio_mensaje)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    requestToFinish?.let { sol ->
-                        viewModel.finalizarServicio(sol) {
-                            requestToFinish = null
-                        }
-                    }
-                }) { Text(stringResource(R.string.solicitudes_si_finalizar), color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { requestToFinish = null }) { Text(stringResource(R.string.solicitudes_no)) }
+    LaunchedEffect(operacion) {
+        when (val op = operacion) {
+            is OperacionEstado.Error -> {
+                android.widget.Toast.makeText(context, op.message, android.widget.Toast.LENGTH_SHORT).show()
+                billeteraViewModel.limpiarOperacion()
             }
+            OperacionEstado.Exito -> {
+                android.widget.Toast.makeText(context, context.getString(R.string.cobro_enviado), android.widget.Toast.LENGTH_SHORT).show()
+                billeteraViewModel.limpiarOperacion()
+            }
+            else -> Unit
+        }
+    }
+
+    solicitudCobro?.let { sol ->
+        IniciarCobroTurnoDialog(
+            solicitud = sol,
+            onConfirm = { horas, comentario ->
+                billeteraViewModel.iniciarCobroTurno(sol, horas, comentario)
+                solicitudCobro = null
+            },
+            onDismiss = { solicitudCobro = null }
         )
     }
+    
+    val pullToRefreshState = rememberPullToRefreshState()
 
     Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
 
@@ -134,8 +144,7 @@ fun SolicitudesScreen(
                         onReject = { if (isOnline) viewModel.rechazarPostulacion(it) },
                         onViewCaregiverProfile = onViewCaregiverProfile,
                         onViewPatientDetails = onViewPatientDetails,
-                        onViewTasks = onViewTasks,
-                        onFinish = { if (isOnline) requestToFinish = it }
+                        onViewTasks = onViewTasks
                     )
                 } else {
                     CuidadorRequestsContent(
@@ -145,7 +154,7 @@ fun SolicitudesScreen(
                         isOnline = isOnline,
                         onViewDetails = onViewPatientDetails,
                         onViewTasks = onViewTasks,
-                        onFinish = { if (isOnline) requestToFinish = it },
+                        onFinalizarYCobrar = { solicitudCobro = it },
                         onCancelPostulacion = { if (isOnline) viewModel.eliminarPostulacionPorId(it) }
                     )
                 }
@@ -166,8 +175,7 @@ fun RepresentanteRequestsContent(
     onReject: (PostulacionCuidado) -> Unit,
     onViewCaregiverProfile: (String) -> Unit,
     onViewPatientDetails: (String) -> Unit,
-    onViewTasks: (SolicitudCuidado) -> Unit,
-    onFinish: (SolicitudCuidado) -> Unit
+    onViewTasks: (SolicitudCuidado) -> Unit
 ) {
     Column {
         HardShadowButton(
@@ -212,23 +220,21 @@ fun RepresentanteRequestsContent(
                         
                         if (sol.estado == "cerrada") {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                ActionButton(text = stringResource(R.string.solicitudes_tareas), icon = Icons.Default.ListAlt, color = Color(0xFF4CAF50), modifier = Modifier.fillMaxWidth()) { onViewTasks(sol) }
+                                val acuerdoOk = sol.estadoAcuerdo.isBlank() || sol.estadoAcuerdo == "acordado"
+                                ActionButton(text = stringResource(R.string.solicitudes_tareas), icon = Icons.Default.ListAlt, color = Color(0xFF4CAF50), modifier = Modifier.fillMaxWidth(), enabled = isOnline && acuerdoOk) { onViewTasks(sol) }
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     ActionButton(text = stringResource(R.string.solicitudes_detalles), icon = Icons.Default.Info, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f)) { onViewPatientDetails(sol.pacienteFichaId) }
                                     ActionButton(text = stringResource(R.string.solicitudes_editar), icon = Icons.Default.Edit, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.weight(1f), enabled = isOnline) { onEdit(sol.id) }
                                 }
+                                if (!acuerdoOk) {
+                                    Text(
+                                        stringResource(R.string.solicitudes_acuerdo_pendiente),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
                             }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            HardShadowButton(
-                                text = stringResource(R.string.solicitudes_finalizar_servicio),
-                                containerColor = if (isOnline) MaterialTheme.colorScheme.secondary else Color.Gray,
-                                contentColor = Color.White,
-                                shadowColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f),
-                                icon = Icons.Default.Check,
-                                modifier = Modifier.fillMaxWidth().height(48.dp),
-                                enabled = isOnline,
-                                onClick = { onFinish(sol) }
-                            )
                         } else {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 ActionButton(text = stringResource(R.string.solicitudes_editar), icon = Icons.Default.Edit, color = MaterialTheme.colorScheme.secondary, enabled = isOnline) { onEdit(sol.id) }
@@ -258,7 +264,7 @@ fun CuidadorRequestsContent(
     isOnline: Boolean = true,
     onViewDetails: (String) -> Unit,
     onViewTasks: (SolicitudCuidado) -> Unit,
-    onFinish: (SolicitudCuidado) -> Unit,
+    onFinalizarYCobrar: (SolicitudCuidado) -> Unit,
     onCancelPostulacion: (String) -> Unit
 ) {
     LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 100.dp)) {
@@ -274,20 +280,29 @@ fun CuidadorRequestsContent(
                     statusColor = MaterialTheme.colorScheme.primary
                 ) {
                     Spacer(modifier = Modifier.height(20.dp))
+                    val acuerdoOk = sol.estadoAcuerdo.isBlank() || sol.estadoAcuerdo == "acordado"
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ActionButton(text = stringResource(R.string.solicitudes_tareas), icon = Icons.Default.ListAlt, color = Color(0xFF4CAF50)) { onViewTasks(sol) }
+                        ActionButton(text = stringResource(R.string.solicitudes_tareas), icon = Icons.Default.ListAlt, color = Color(0xFF4CAF50), enabled = isOnline && acuerdoOk) { onViewTasks(sol) }
                         ActionButton(text = stringResource(R.string.solicitudes_detalles), icon = Icons.Default.Info, color = MaterialTheme.colorScheme.primary) { onViewDetails(sol.pacienteFichaId) }
+                    }
+                    if (!acuerdoOk) {
+                        Text(
+                            stringResource(R.string.solicitudes_acuerdo_pendiente),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.error
+                        )
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     HardShadowButton(
-                        text = stringResource(R.string.solicitudes_finalizar_turno),
+                        text = stringResource(R.string.cobro_finalizar_y_cobrar),
                         containerColor = if (isOnline) MaterialTheme.colorScheme.secondary else Color.Gray,
                         contentColor = Color.White,
                         shadowColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f),
                         icon = Icons.Default.Check,
                         modifier = Modifier.fillMaxWidth().height(48.dp),
-                        enabled = isOnline,
-                        onClick = { onFinish(sol) }
+                        enabled = isOnline && sol.tarifaHora > 0L && (sol.estadoAcuerdo.isBlank() || sol.estadoAcuerdo == "acordado"),
+                        onClick = { onFinalizarYCobrar(sol) }
                     )
                 }
             }

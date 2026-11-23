@@ -87,6 +87,13 @@ object NotificationTemplates {
                 "Se ha registrado un nuevo usuario cerca de ti.",
                 "OTHER_FICHA"
             )
+            "cobro_recibido", "cobro_con_cambios", "cobro_cambios_aceptados",
+            "cobro_rechazado", "pago_realizado", "pago_saldo_insuficiente",
+            "pago_pendiente", "recarga_aprobada" -> Triple(
+                context.getString(R.string.notification_generic),
+                context.getString(R.string.notification_generic_body),
+                "BILLETERA"
+            )
             else -> Triple(
                 context.getString(R.string.notification_generic),
                 context.getString(R.string.notification_generic_body),

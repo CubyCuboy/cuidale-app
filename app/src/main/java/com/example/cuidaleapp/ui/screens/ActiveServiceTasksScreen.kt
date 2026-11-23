@@ -28,6 +28,9 @@ import com.example.cuidaleapp.models.*
 import com.example.cuidaleapp.ui.components.*
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.viewmodel.TareasViewModel
+import com.example.cuidaleapp.viewmodel.BilleteraViewModel
+import com.example.cuidaleapp.viewmodel.OperacionEstado
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.cuidaleapp.utils.ConnectivityObserver
 import com.example.cuidaleapp.utils.ErrorCodes
 import com.example.cuidaleapp.utils.ErrorMessages
@@ -57,7 +60,7 @@ fun ActiveServiceTasksScreen(
     var taskToConfirm by remember { mutableStateOf<RegistroTarea?>(null) }
     var taskToPostpone by remember { mutableStateOf<RegistroTarea?>(null) }
     var postponeReason by remember { mutableStateOf("") }
-    var showSummary by remember { mutableStateOf(false) }
+    var showCobroDialog by remember { mutableStateOf(false) }
     
     var isSelectionMode by remember { mutableStateOf(false) }
     val selectedIds = remember { mutableStateListOf<String>() }
@@ -67,6 +70,23 @@ fun ActiveServiceTasksScreen(
     val scope = rememberCoroutineScope()
 
     val context = androidx.compose.ui.platform.LocalContext.current
+    val billeteraViewModel: BilleteraViewModel = viewModel()
+    val cobroEnviado = stringResource(R.string.cobro_enviado)
+    val operacion by billeteraViewModel.operacion.collectAsState()
+
+    LaunchedEffect(operacion) {
+        when (val op = operacion) {
+            is OperacionEstado.Error -> {
+                snackbarHostState.showSnackbar(op.message)
+                billeteraViewModel.limpiarOperacion()
+            }
+            OperacionEstado.Exito -> {
+                snackbarHostState.showSnackbar(cobroEnviado)
+                billeteraViewModel.limpiarOperacion()
+            }
+            else -> Unit
+        }
+    }
     val msgCompletarTodas = stringResource(R.string.tareas_error_completar_todas)
     val estadoCompletada = stringResource(R.string.tareas_estado_completada)
     val estadoPospuesta = stringResource(R.string.tareas_estado_pospuesta)
@@ -171,7 +191,7 @@ fun ActiveServiceTasksScreen(
                 if (!isRepresentative && !isSelectionMode && isOnline) {
                     ExtendedFloatingActionButton(
                         onClick = { 
-                            if (allProcessed) showSummary = true 
+                            if (allProcessed) showCobroDialog = true 
                             else {
                                 scope.launch {
                                     snackbarHostState.showSnackbar(msgCompletarTodas)
@@ -568,41 +588,17 @@ fun ActiveServiceTasksScreen(
             )
         }
 
-        if (showSummary) {
-            var observaciones by remember { mutableStateOf("") }
-            AlertDialog(
-                onDismissRequest = { showSummary = false },
-                title = { Text(stringResource(R.string.tareas_resumen_turno_titulo)) },
-                text = {
-                    Column {
-                        val completadas = tareasHoy.count { it.completada }
-                        val total = tareasHoy.size
-                        Text(stringResource(R.string.tareas_resumen_realizadas, completadas, total), fontWeight = FontWeight.Bold)
-                        
-                        if (tareasHoy.any { it.postergada }) {
-                            Text(stringResource(R.string.tareas_resumen_postergadas, tareasHoy.count { it.postergada }), color = Color.Red)
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(stringResource(R.string.tareas_resumen_observaciones))
-                        OutlinedTextField(
-                            value = observaciones,
-                            onValueChange = { observaciones = it },
-                            modifier = Modifier.fillMaxWidth().height(100.dp)
-                        )
+        if (showCobroDialog) {
+            IniciarCobroTurnoDialog(
+                solicitud = solicitud,
+                onConfirm = { horas, comentario ->
+                    tareasViewModel.generarInformeFinal(solicitud.id, currentUserId, comentario, otherUid) {
+                        billeteraViewModel.iniciarCobroTurno(solicitud, horas, comentario)
+                        showCobroDialog = false
+                        onNavigateBack()
                     }
                 },
-                confirmButton = {
-                    Button(onClick = {
-                        tareasViewModel.generarInformeFinal(solicitud.id, currentUserId, observaciones, otherUid) {
-                            showSummary = false
-                            onNavigateBack()
-                        }
-                    }) { Text(stringResource(R.string.tareas_enviar_y_terminar)) }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showSummary = false }) { Text(stringResource(R.string.action_back)) }
-                }
+                onDismiss = { showCobroDialog = false }
             )
         }
 

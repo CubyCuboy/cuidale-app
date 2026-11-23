@@ -31,6 +31,7 @@ import com.example.cuidaleapp.viewmodel.SolicitudViewModel
 import com.example.cuidaleapp.utils.DateUtils
 import com.example.cuidaleapp.utils.ErrorCodes
 import com.example.cuidaleapp.utils.ErrorMessages
+import com.example.cuidaleapp.utils.MontoUtils
 import com.example.cuidaleapp.models.SolicitudCuidado
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
@@ -57,6 +58,7 @@ fun CreateSolicitudScreen(
     var selectedPeriods by remember { mutableStateOf(setOf<String>()) }
     var esIndefinido by remember { mutableStateOf(true) }
     var exigirFotoTareas by remember { mutableStateOf(false) }
+    var tarifaStr by remember { mutableStateOf("") }
     
     var startDate by remember { mutableStateOf<Long?>(null) }
     var endDate by remember { mutableStateOf<Long?>(null) }
@@ -97,6 +99,7 @@ fun CreateSolicitudScreen(
                     selectedPeriods = sol.periodos.toSet()
                     esIndefinido = sol.esIndefinido
                     exigirFotoTareas = sol.exigirFotoTareas
+                    tarifaStr = if (sol.tarifaHora > 0) MontoUtils.formatClp(sol.tarifaHora) else ""
                     startDate = sol.fechaInicio?.toDate()?.time
                     endDate = sol.fechaFin?.toDate()?.time
                     
@@ -144,7 +147,7 @@ fun CreateSolicitudScreen(
         CuidaleTimePickerDialog(
             onDismiss = { showStartTimePicker = false },
             onConfirm = {
-                startHourStr = String.format("%02d:%02d", startTimeState.hour, startTimeState.minute)
+                startHourStr = String.format(Locale.US, "%02d:%02d", startTimeState.hour, startTimeState.minute)
                 showStartTimePicker = false
             }
         ) { TimePicker(state = startTimeState) }
@@ -331,12 +334,26 @@ fun CreateSolicitudScreen(
                             }
                         }
 
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        InputFieldLabel(stringResource(R.string.crear_solicitud_valor_hora))
+                        OutlinedTextField(
+                            value = tarifaStr,
+                            onValueChange = { tarifaStr = it.filter { c -> c.isDigit() || c == '.' } },
+                            placeholder = { Text(stringResource(R.string.crear_solicitud_valor_hora_placeholder)) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
                         Spacer(modifier = Modifier.height(32.dp))
 
                         val missingFields = mutableListOf<String>()
                         if (startHourStr.isEmpty() || endHourStr.isEmpty()) missingFields.add(stringResource(R.string.crear_solicitud_campo_horario))
                         if (selectedPeriods.isEmpty()) missingFields.add(stringResource(R.string.crear_solicitud_campo_etiquetas))
                         if (!esIndefinido && (startDate == null || endDate == null)) missingFields.add(stringResource(R.string.crear_solicitud_campo_fechas))
+                        val tarifa = MontoUtils.parseMonto(tarifaStr)
+                        val tarifaValida = tarifa?.let { MontoUtils.validarTarifaHora(it) } == true
+                        if (!tarifaValida) missingFields.add(stringResource(R.string.crear_solicitud_campo_valor_hora))
 
                         if (missingFields.isNotEmpty()) {
                             Surface(
@@ -377,6 +394,7 @@ fun CreateSolicitudScreen(
                                         horarioStr = hoursStr,
                                         periodos = selectedPeriods.toList(),
                                         exigirFotoTareas = exigirFotoTareas,
+                                        tarifaHora = tarifa ?: 0L,
                                         onSuccess = {
                                             isSaving = false
                                             onNavigateBack()
@@ -387,22 +405,24 @@ fun CreateSolicitudScreen(
                                         }
                                     )
                                 } else {
-                                    FirebaseFirestore.getInstance().collection("solicitudes").document(requestId).update(
-                                        mapOf(
-                                            "horarioStr" to hoursStr,
-                                            "periodos" to selectedPeriods.toList(),
-                                            "esIndefinido" to esIndefinido,
-                                            "exigirFotoTareas" to exigirFotoTareas,
-                                            "fechaInicio" to startDate?.let { Timestamp(Date(it)) },
-                                            "fechaFin" to endDate?.let { Timestamp(Date(it)) }
-                                        )
-                                    ).addOnSuccessListener { 
-                                        isSaving = false
-                                        onNavigateBack() 
-                                    }.addOnFailureListener { e ->
-                                        isSaving = false
-                                        scope.launch { snackbarHostState.showSnackbar(ErrorMessages.get(context, e.message)) }
-                                    }
+                                    viewModel.actualizarSolicitud(
+                                        requestId = requestId,
+                                        horarioStr = hoursStr,
+                                        periodos = selectedPeriods.toList(),
+                                        esIndefinido = esIndefinido,
+                                        fechaInicio = startDate?.let { Timestamp(Date(it)) },
+                                        fechaFin = endDate?.let { Timestamp(Date(it)) },
+                                        exigirFotoTareas = exigirFotoTareas,
+                                        tarifaHora = tarifa ?: 0L,
+                                        onSuccess = {
+                                            isSaving = false
+                                            onNavigateBack()
+                                        },
+                                        onError = { error ->
+                                            isSaving = false
+                                            scope.launch { snackbarHostState.showSnackbar(ErrorMessages.get(context, error)) }
+                                        }
+                                    )
                                 }
                             }
                         )

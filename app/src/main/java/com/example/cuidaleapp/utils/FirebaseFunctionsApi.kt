@@ -39,4 +39,49 @@ object FirebaseFunctionsApi {
             rutKey = data["rutKey"] as? String ?: ""
         )
     }
+
+    /**
+     * Inicia el cobro del turno de un contrato (Cloud Function `iniciarCobroTurno`).
+     * La función crea el turno y el cobro borrador; la app solo lee.
+     */
+    suspend fun iniciarCobroTurno(
+        solicitudId: String,
+        horas: Double,
+        comentario: String
+    ): Result<Map<String, String>> {
+        return try {
+            val result = functions.getHttpsCallable("iniciarCobroTurno")
+                .call(mapOf(
+                    "solicitudId" to solicitudId,
+                    "horas" to horas,
+                    "comentario" to comentario
+                ))
+                .await()
+            val data = result.data as? Map<*, *> ?: emptyMap<String, Any>()
+            Result.success(data.entries.associate { it.key.toString() to (it.value?.toString() ?: "") })
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Crea una recarga de billetera (Cloud Function `crearRecarga`).
+     * Devuelve la URL del Checkout Pro de Mercado Pago.
+     */
+    suspend fun crearRecarga(monto: Long): Result<String> {
+        return try {
+            val result = functions.getHttpsCallable("crearRecarga")
+                .call(mapOf("monto" to monto))
+                .await()
+            val data = result.data as? Map<*, *>
+            val url = data?.get("url") as? String
+            if (url.isNullOrBlank()) {
+                Result.failure(IllegalStateException("Respuesta inválida de crearRecarga"))
+            } else {
+                Result.success(url)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

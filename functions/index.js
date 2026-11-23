@@ -648,7 +648,12 @@ exports.notifyMatchingUsers = onDocumentCreated(
 );
 
 exports.cleanupTrashScheduler = onSchedule(
-  { schedule: "every 12 hours", timeZone: "America/Santiago" },
+  {
+    schedule: "every 12 hours",
+    timeZone: "America/Santiago",
+    // Cloud Scheduler no está disponible en southamerica-west1; se usa east1.
+    region: "southamerica-east1"
+  },
   async () => {
     const now = Date.now();
     const snap = await db.collectionGroup("basura").get();
@@ -666,3 +671,24 @@ exports.cleanupTrashScheduler = onSchedule(
     if (changes > 0) await batch.commit();
   }
 );
+
+// Módulo de billetera/pagos. Se reexportan TODAS las funciones para que un
+// despliegue global (firebase deploy --only functions) no elimine las que ya
+// están activas en la nube (webhook, retorno, recargas y cobros).
+const {
+  iniciarCobroTurno,
+  webhookMercadoPago,
+  retornoPago,
+  crearRecarga,
+  iniciarCobro,
+  responderCambiosCobro,
+  pagarCobro
+} = require("./pagos");
+
+exports.iniciarCobroTurno = iniciarCobroTurno;
+exports.webhookMercadoPago = webhookMercadoPago;
+exports.retornoPago = retornoPago;
+exports.crearRecarga = crearRecarga;
+exports.iniciarCobro = iniciarCobro;
+exports.responderCambiosCobro = responderCambiosCobro;
+exports.pagarCobro = pagarCobro;

@@ -55,6 +55,8 @@ sealed class MenuNavigation {
     data class ActiveTasks(val solicitud: SolicitudCuidado) : MenuNavigation()
     data class ServiceReport(val informe: com.example.cuidaleapp.models.InformeTurno) : MenuNavigation()
     object History : MenuNavigation()
+    object Billetera : MenuNavigation()
+    data class CobroDetalle(val cobroId: String, val returnTo: MenuNavigation = Main) : MenuNavigation()
     object SocialManagement : MenuNavigation()
     object MapaCuidadores : MenuNavigation()
     data class OtherFicha(val uid: String, val returnTo: MenuNavigation = Main) : MenuNavigation()
@@ -77,6 +79,12 @@ class MenuActivity : ComponentActivity() {
     }
 
     private var intentTrigger by mutableIntStateOf(0)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        intentTrigger++
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -116,6 +124,7 @@ class MenuActivity : ComponentActivity() {
             val solicitudViewModel: SolicitudViewModel = viewModel()
             val chatViewModel: ChatViewModel = viewModel()
             val notificationsViewModel: NotificationsViewModel = viewModel()
+            val billeteraViewModel: BilleteraViewModel = viewModel()
 
             // Presence: reflect app-wide visibility and detect inactivity.
             LaunchedEffect(Unit) {
@@ -202,6 +211,8 @@ class MenuActivity : ComponentActivity() {
                     is Chat -> "CHAT"
                     Requests -> "REQUESTS"
                     is CreateRequest -> "CREATE_REQUEST"
+                    Billetera -> "BILLETERA"
+                    is CobroDetalle -> "COBRO_DETALLE"
                     is ManageApplications -> "MANAGE_APPLICATIONS"
                     is ReviewRequest -> "REVIEW_REQUEST"
                     is ActiveTasks -> "ACTIVE_TASKS"
@@ -220,6 +231,18 @@ class MenuActivity : ComponentActivity() {
                     "CHATS" -> currentScreen = Chats
                     "NOTIFICATIONS" -> currentScreen = Notifications
                     "SOLICITUDES" -> currentScreen = Requests
+                    "BILLETERA" -> {
+                        val pagoEstado = intent.getStringExtra("PAGO_ESTADO")
+                        if (!pagoEstado.isNullOrBlank()) AppNavigationState.setPagoEstado(pagoEstado)
+                        val cobroId = intent.getStringExtra("cobroId") ?: intent.getStringExtra("COBRO_ID")
+                        if (!cobroId.isNullOrBlank()) currentScreen = CobroDetalle(cobroId, returnTo = Billetera)
+                        else currentScreen = Billetera
+                    }
+                    "COBRO_DETALLE" -> {
+                        val cobroId = intent.getStringExtra("cobroId") ?: intent.getStringExtra("COBRO_ID")
+                        if (!cobroId.isNullOrBlank()) currentScreen = CobroDetalle(cobroId)
+                        else currentScreen = Billetera
+                    }
                     "CHAT_DETAIL" -> {
                         var targetUid = uid
                         if (targetUid.isBlank() && chatId.isNotBlank()) {
@@ -253,6 +276,8 @@ class MenuActivity : ComponentActivity() {
                     is ReviewRequest -> cs.returnTo
                     is ActiveTasks -> Requests
                     is ServiceReport -> Requests
+                    Billetera -> Main
+                    is CobroDetalle -> cs.returnTo
                     is Chat -> cs.returnTo
                     is OtherFicha -> cs.returnTo
                     SocialManagement -> Profile
@@ -326,6 +351,10 @@ class MenuActivity : ComponentActivity() {
                                                 onFichaClick = {
                                                     scope.launch { drawerState.close() }
                                                     currentScreen = Ficha(startInEditMode = false, returnTo = currentScreen)
+                                                },
+                                                onBilleteraClick = {
+                                                    scope.launch { drawerState.close() }
+                                                    currentScreen = Billetera
                                                 },
                                                 onSocialClick = {
                                                     scope.launch { drawerState.close() }
@@ -563,6 +592,13 @@ class MenuActivity : ComponentActivity() {
                                                                             val intent = Intent(this@MenuActivity, AccountHistoryActivity::class.java)
                                                                             startActivity(intent)
                                                                         }
+                                                                        "cobro_recibido", "cobro_con_cambios", "cobro_cambios_aceptados",
+                                                                        "cobro_rechazado", "pago_realizado", "pago_saldo_insuficiente",
+                                                                        "pago_pendiente", "recarga_aprobada" -> {
+                                                                            val cobroId = notification.data["cobroId"] ?: ""
+                                                                            if (cobroId.isNotEmpty()) currentScreen = CobroDetalle(cobroId, returnTo = Billetera)
+                                                                            else currentScreen = Billetera
+                                                                        }
                                                                         else -> {
                                                                             currentScreen = Requests
                                                                         }
@@ -707,6 +743,20 @@ class MenuActivity : ComponentActivity() {
                                                                 onViewProfile = { uid -> currentScreen = OtherFicha(uid, returnTo = History) }
                                                             )
                                                         }
+                                                        Billetera -> {
+                                                            BilleteraScreen(
+                                                                viewModel = billeteraViewModel,
+                                                                onVerCobro = { cobroId -> currentScreen = CobroDetalle(cobroId, returnTo = Billetera) },
+                                                                onNavigateBack = { currentScreen = Main }
+                                                            )
+                                                        }
+                                                        is CobroDetalle -> {
+                                                            CobroScreen(
+                                                                cobroId = cs.cobroId,
+                                                                viewModel = billeteraViewModel,
+                                                                onNavigateBack = { currentScreen = cs.returnTo }
+                                                            )
+                                                        }
                                                     }
                                                 }
                                             }
@@ -780,6 +830,16 @@ class MenuActivity : ComponentActivity() {
                                     "CHATS" -> currentScreen = Chats
                                     "NOTIFICATIONS" -> currentScreen = Notifications
                                     "SOLICITUDES" -> currentScreen = Requests
+                                    "BILLETERA" -> {
+                                        val cobroId = notification.payload["cobroId"] ?: ""
+                                        if (cobroId.isNotBlank()) currentScreen = CobroDetalle(cobroId, returnTo = Billetera)
+                                        else currentScreen = Billetera
+                                    }
+                                    "COBRO_DETALLE" -> {
+                                        val cobroId = notification.payload["cobroId"] ?: ""
+                                        if (cobroId.isNotBlank()) currentScreen = CobroDetalle(cobroId)
+                                        else currentScreen = Billetera
+                                    }
                                     "OTHER_FICHA" -> currentScreen = OtherFicha(
                                         uid = notification.payload["uid"] ?: notification.payload["emisor"] ?: "",
                                         returnTo = Main

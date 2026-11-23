@@ -1303,4 +1303,66 @@ María González | Residencia Luz | +56912345678 | Encargada | Buena conducta</s
     <string name="account_management_change_success_placeholder">cambio exitoso</string>
     <string name="account_management_removed_incomplete_record">Se detectó y eliminó un registro incompleto previo de la cuenta %1$s. Vuelve a presionar \'Vincular\' para asociarla a tu cuenta actual.</string>
     <string name="account_management_email_already_registered">La cuenta %1$s ya pertenece a un usuario registrado y completado.</string>
+
+    <!-- Pagos / billetera / cobros -->
+    <string name="error_pay_generic">Ocurrió un error en el proceso de pago.</string>
+    <string name="error_pay_saldo_insuficiente">Saldo insuficiente en tu billetera. Recarga para completar el pago.</string>
+    <string name="error_pay_conflicto">El cobro está en conflicto. Resuélvelo con la otra parte para continuar.</string>
+    <string name="error_pay_duplicado">Esta operación ya fue realizada.</string>
+    <string name="error_pay_no_encontrado">No se encontró el cobro solicitado.</string>
+    <string name="error_pay_permiso">Este cobro no te corresponde.</string>
+    <string name="error_pay_acuerdo_pendiente">Hay un acuerdo pendiente. Ambos deben confirmar antes de iniciar un turno.</string>
+
+    <!-- Solicitudes: valor hora -->
+    <string name="crear_solicitud_valor_hora">VALOR HORA (CLP)</string>
+    <string name="crear_solicitud_valor_hora_placeholder">Ej: 9.000</string>
+    <string name="crear_solicitud_campo_valor_hora">Valor hora</string>
+
+    <!-- Cobro de turno -->
+    <string name="cobro_finalizar_y_cobrar">FINALIZAR Y COBRAR</string>
+    <string name="cobro_resumen_turno">RESUMEN DEL TURNO</string>
+    <string name="cobro_horas">Horas</string>
+    <string name="cobro_horas_placeholder">Ej: 8</string>
+    <string name="cobro_tarifa">Tarifa</string>
+    <string name="cobro_monto">Monto</string>
+    <string name="cobro_comentario_opcional">Comentario (opcional)</string>
+    <string name="cobro_aviso_cambios">Si modificas las horas o el monto, el representante deberá confirmar antes del pago.</string>
+    <string name="cobro_confirmar">CONFIRMAR</string>
+    <string name="cobro_enviado">Solicitud de cobro enviada al representante.</string>
+
+    <!-- Billetera -->
+    <string name="billetera_titulo">MI BILLETERA</string>
+    <string name="billetera_saldo">Saldo disponible</string>
+    <string name="billetera_recargar">Recargar</string>
+    <string name="billetera_monto">Monto a recargar (CLP)</string>
+    <string name="billetera_monto_invalido">El monto debe estar entre $1.000 y $1.000.000.</string>
+    <string name="billetera_confirmar_pagar">CONFIRMAR Y PAGAR</string>
+    <string name="billetera_pagar_deuda">PAGAR DEUDA (%1$s)</string>
+    <string name="billetera_aviso_mp">El pago se procesa de forma segura en Mercado Pago. Cuidale no almacena los datos de tu tarjeta.</string>
+    <string name="billetera_cobros_activos">COBROS ACTIVOS</string>
+    <string name="billetera_sin_cobros">No hay cobros pendientes.</string>
+    <string name="billetera_movimientos">MOVIMIENTOS</string>
+    <string name="billetera_sin_movimientos">Aún no tienes movimientos.</string>
+    <string name="billetera_no_disponible">La billetera aún no está disponible. Inténtalo más tarde.</string>
+
+    <!-- Cobro / detalle -->
+    <string name="cobro_titulo">COBRO</string>
+    <string name="cobro_paciente">Paciente</string>
+    <string name="cobro_cuidador">Cuidador</string>
+    <string name="cobro_estado">Estado</string>
+    <string name="cobro_estado_pendiente">Pendiente de confirmación del representante</string>
+    <string name="cobro_estado_acordado">Acordado — listo para pagar</string>
+    <string name="cobro_estado_pagado">Pagado</string>
+    <string name="cobro_estado_rechazado">Rechazado</string>
+    <string name="cobro_estado_disputa">En disputa</string>
+    <string name="cobro_estado_conflicto">En conflicto</string>
+    <string name="cobro_no_encontrado">No se encontró el cobro.</string>
+    <string name="cobro_aviso_acciones">Las acciones de confirmación y pago estarán disponibles cuando se despliegue el backend de acuerdos.</string>
+
+    <!-- Acuerdo pendiente -->
+    <string name="acuerdo_titulo">ACUERDO PENDIENTE</string>
+    <string name="acuerdo_mensaje">Hay un acuerdo pendiente. Ambos deben confirmar la tarifa y el horario antes de iniciar un turno.</string>
+    <string name="acuerdo_ir_chat">HABLAR CON LA OTRA PARTE</string>
+    <string name="nav_billetera">Mi Billetera</string>
+    <string name="solicitudes_acuerdo_pendiente">Acuerdo pendiente — ambos deben confirmar antes de iniciar turnos</string>
 </resources>

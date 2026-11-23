@@ -74,6 +74,7 @@ dependencies {
     implementation(libs.androidx.constraintlayout)
     implementation(libs.androidx.activity)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.browser)
 
     // Jetpack Compose
     implementation(libs.androidx.compose.ui)

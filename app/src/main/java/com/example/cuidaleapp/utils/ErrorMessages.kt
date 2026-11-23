@@ -73,6 +73,15 @@ object ErrorMessages {
         ErrorCodes.Service.CHAT_NOT_FOUND to R.string.error_svc_chat_not_found,
         ErrorCodes.Service.SELF_REQUEST to R.string.error_svc_self_request,
 
+        // Payments
+        ErrorCodes.Payments.GENERIC to R.string.error_pay_generic,
+        ErrorCodes.Payments.SALDO_INSUFICIENTE to R.string.error_pay_saldo_insuficiente,
+        ErrorCodes.Payments.CONFLICTO to R.string.error_pay_conflicto,
+        ErrorCodes.Payments.DUPLICADO to R.string.error_pay_duplicado,
+        ErrorCodes.Payments.NOT_FOUND to R.string.error_pay_no_encontrado,
+        ErrorCodes.Payments.PERMISSION_DENIED to R.string.error_pay_permiso,
+        ErrorCodes.Payments.ACUERDO_PENDIENTE to R.string.error_pay_acuerdo_pendiente,
+
         // Unknown
         ErrorCodes.Unknown.GENERIC to R.string.error_unknown_generic,
         ErrorCodes.Unknown.CONVERSION_FAILED to R.string.error_unknown_conversion_failed,

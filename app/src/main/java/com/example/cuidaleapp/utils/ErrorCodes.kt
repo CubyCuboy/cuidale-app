@@ -87,6 +87,17 @@ object ErrorCodes {
         const val SELF_REQUEST = "SVC_008"
     }
 
+    /** Errores de pagos / billetera / cobros. */
+    object Payments {
+        const val GENERIC = "PAY_000"
+        const val SALDO_INSUFICIENTE = "PAY_001"
+        const val CONFLICTO = "PAY_002"
+        const val DUPLICADO = "PAY_003"
+        const val NOT_FOUND = "PAY_004"
+        const val PERMISSION_DENIED = "PAY_005"
+        const val ACUERDO_PENDIENTE = "PAY_006"
+    }
+
     /** Errores inesperados / desconocidos. */
     object Unknown {
         const val GENERIC = "UNKNOWN_000"

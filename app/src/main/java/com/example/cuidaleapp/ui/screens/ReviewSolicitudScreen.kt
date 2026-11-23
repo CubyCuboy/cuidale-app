@@ -1,6 +1,5 @@
 package com.example.cuidaleapp.ui.screens
 
-import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -47,7 +46,6 @@ fun ReviewSolicitudScreen(
     var patientFicha by remember { mutableStateOf<Map<String, Any>?>(null) }
     var patientTareas by remember { mutableStateOf<List<com.example.cuidaleapp.models.Tarea>>(emptyList()) }
     var isLoadingFicha by remember { mutableStateOf(true) }
-    var showFinishConfirm by remember { mutableStateOf(false) }
     var showCancelPostulationConfirm by remember { mutableStateOf(false) }
 
     val customColors = CuidaleThemeExtras.customColors
@@ -90,25 +88,6 @@ fun ReviewSolicitudScreen(
         }
     }
 
-    if (showFinishConfirm) {
-        AlertDialog(
-            onDismissRequest = { showFinishConfirm = false },
-            title = { Text("¿Finalizar servicio?") },
-            text = { Text("¿Estás seguro de terminar el servicio? Esta acción cerrará la solicitud y la moverá al historial.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.finalizarServicio(solicitud) { 
-                        showFinishConfirm = false
-                        onRedirectToRequests()
-                    }
-                }) { Text("SÍ, FINALIZAR", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showFinishConfirm = false }) { Text("NO") }
-            }
-        )
-    }
-
     if (showCancelPostulationConfirm) {
         AlertDialog(
             onDismissRequest = { showCancelPostulationConfirm = false },
@@ -138,14 +117,19 @@ fun ReviewSolicitudScreen(
                     .padding(horizontal = 24.dp, vertical = 16.dp)
             ) {
                 if (isAccepted) {
-                    HardShadowButton(
-                        text = "FINALIZAR SERVICIO",
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = Color.White,
-                        shadowColor = MaterialTheme.colorScheme.error.copy(alpha = 0.3f),
-                        icon = Icons.Default.CheckCircle,
-                        onClick = { showFinishConfirm = true }
-                    )
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            "El servicio finaliza cuando se paga el último turno del contrato.",
+                            modifier = Modifier.padding(16.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = secondaryTextColor,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
                 } else if (currentUid == solicitud.representanteUid) {
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),

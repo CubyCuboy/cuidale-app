@@ -44,8 +44,6 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
 
-    private val finalizingIds = mutableSetOf<String>()
-
     private var solicitudesListener: ListenerRegistration? = null
     private var postulacionesListener: ListenerRegistration? = null
     private var cuidadorSolicitudesListener: ListenerRegistration? = null
@@ -100,7 +98,6 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                 if (error != null) return@addSnapshotListener
                 if (snapshot != null) {
                     val list = snapshot.toObjects(SolicitudCuidado::class.java)
-                        .filter { it.id !in finalizingIds }
                         .sortedByDescending { it.createdAt }
                     _misSolicitudes.value = list
                     cargarFotosRepresentantes(list.map { it.representanteUid })
@@ -202,7 +199,6 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
             .addSnapshotListener { snapshot, _ ->
                 if (snapshot != null) {
                     val aceptadas = snapshot.toObjects(SolicitudCuidado::class.java)
-                        .filter { it.id !in finalizingIds }
                     _solicitudesAceptadas.value = aceptadas
                     cargarFotosRepresentantes(aceptadas.map { it.representanteUid })
                 }
@@ -248,6 +244,7 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
         horarioStr: String,
         periodos: List<String>,
         exigirFotoTareas: Boolean = false,
+        tarifaHora: Long = 0L,
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {
@@ -283,6 +280,7 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                     horarioStr = horarioStr,
                     periodos = periodos,
                     exigirFotoTareas = exigirFotoTareas,
+                    tarifaHora = tarifaHora,
                     estado = "abierta",
                     createdAt = Timestamp.now()
                 )
@@ -291,6 +289,40 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                 onSuccess()
             } catch (e: Exception) {
                 onError(e.localizedMessage ?: "Error desconocido al crear solicitud")
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    fun actualizarSolicitud(
+        requestId: String,
+        horarioStr: String,
+        periodos: List<String>,
+        esIndefinido: Boolean,
+        fechaInicio: Timestamp?,
+        fechaFin: Timestamp?,
+        exigirFotoTareas: Boolean = false,
+        tarifaHora: Long = 0L,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                val updates = hashMapOf<String, Any>(
+                    "horarioStr" to horarioStr,
+                    "periodos" to periodos,
+                    "esIndefinido" to esIndefinido,
+                    "exigirFotoTareas" to exigirFotoTareas,
+                    "tarifaHora" to tarifaHora
+                )
+                if (fechaInicio != null) updates["fechaInicio"] = fechaInicio
+                if (fechaFin != null) updates["fechaFin"] = fechaFin
+                db.collection("solicitudes").document(requestId).update(updates).await()
+                onSuccess()
+            } catch (e: Exception) {
+                onError(e.localizedMessage ?: "Error al actualizar solicitud")
             } finally {
                 _isLoading.value = false
             }
@@ -438,81 +470,6 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
 
                 onReady()
             } catch (e: Exception) { } finally {
-                _isLoading.value = false
-            }
-        }
-    }
-
-    fun finalizarServicio(solicitud: SolicitudCuidado, onReady: () -> Unit) {
-        if (finalizingIds.contains(solicitud.id)) return
-        finalizingIds.add(solicitud.id)
-        _isLoading.value = true
-        
-        viewModelScope.launch {
-            try {
-                val check = db.collection("solicitudes").document(solicitud.id).get().await()
-                if (!check.exists()) {
-                    finalizingIds.remove(solicitud.id)
-                    onReady()
-                    return@launch
-                }
-
-                val histId = UUID.randomUUID().toString()
-                
-                val cuidadorDoc = db.collection("fichas").document(solicitud.cuidadorUid ?: "").get().await()
-                val especialidad = cuidadorDoc.getString("especializacion") ?: "No especificada"
-                val pacienteDoc = db.collection("fichas").document(solicitud.pacienteFichaId).get().await()
-                val pacienteEdad = pacienteDoc.get("edad")?.toString() ?: ""
-
-                val historial = HistorialServicio(
-                    id = histId,
-                    solicitudId = solicitud.id,
-                    representanteUid = solicitud.representanteUid,
-                    representanteNombre = solicitud.representanteNombre,
-                    representanteTelefono = solicitud.representanteTelefono,
-                    pacienteNombre = solicitud.nombrePaciente,
-                    pacienteEdad = pacienteEdad,
-                    cuidadorUid = solicitud.cuidadorUid ?: "",
-                    cuidadorNombre = solicitud.cuidadorNombre,
-                    cuidadorEspecialidad = especialidad,
-                    fechaInicio = solicitud.fechaInicio,
-                    fechaTermino = Timestamp.now(),
-                    aceptadoAt = solicitud.aceptadoAt
-                )
-                db.collection("historial_servicios").document(histId).set(historial).await()
-
-                db.collection("solicitudes").document(solicitud.id).delete().await()
-                
-                try {
-                    val postSnapshot = db.collection("postulaciones").whereEqualTo("solicitudId", solicitud.id).get().await()
-                    for (doc in postSnapshot.documents) {
-                        doc.reference.delete().await()
-                    }
-                } catch (e: Exception) {
-                }
-
-                val receptor = if (currentUid == solicitud.representanteUid) solicitud.cuidadorUid else solicitud.representanteUid
-                if (receptor != null) {
-                    db.collection("usuarios").whereEqualTo("uid", receptor).get().addOnSuccessListener { targetQuery ->
-                        if (!targetQuery.isEmpty) {
-                            val notifRef = targetQuery.documents[0].reference.collection("notificaciones").document()
-                            val notif = Notification(
-                                id = notifRef.id,
-                                tipo = "servicio_finalizado",
-                                emisor = currentUid ?: "",
-                                receptor = receptor,
-                                timestamp = System.currentTimeMillis(),
-                                data = mapOf("solicitudId" to solicitud.id)
-                            )
-                            notifRef.set(notif)
-                        }
-                    }
-                }
-                
-                onReady()
-            } catch (e: Exception) { 
-                finalizingIds.remove(solicitud.id)
-            } finally {
                 _isLoading.value = false
             }
         }

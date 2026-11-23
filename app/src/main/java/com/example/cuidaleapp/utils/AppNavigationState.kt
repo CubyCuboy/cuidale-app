@@ -16,6 +16,9 @@ object AppNavigationState {
     private val _isScreenScrolled = MutableStateFlow(false)
     val isScreenScrolled = _isScreenScrolled.asStateFlow()
 
+    private val _pagoEstado = MutableStateFlow<String?>(null)
+    val pagoEstado = _pagoEstado.asStateFlow()
+
     fun setScreen(screen: String) {
         _currentScreen.value = screen
     }
@@ -30,5 +33,10 @@ object AppNavigationState {
 
     fun setScreenScrolled(scrolled: Boolean) {
         _isScreenScrolled.value = scrolled
+    }
+
+    /** Estado del retorno del checkout (aprobado | pendiente | rechazado). */
+    fun setPagoEstado(estado: String?) {
+        _pagoEstado.value = estado
     }
 }

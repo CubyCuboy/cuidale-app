@@ -49,6 +49,7 @@ fun CuidaleDrawerContent(
     onToggleTheme: () -> Unit, 
     onProfileClick: () -> Unit, 
     onFichaClick: () -> Unit, 
+    onBilleteraClick: () -> Unit = {},
     onMapClick: () -> Unit = {},
     onSettingsClick: () -> Unit,
     onSocialClick: () -> Unit,
@@ -189,6 +190,13 @@ fun CuidaleDrawerContent(
             selected = false, 
             onClick = onFichaClick, 
             icon = { Icon(Icons.Default.Badge, contentDescription = null) }, 
+            colors = NavigationDrawerItemDefaults.colors(unselectedContainerColor = Color.Transparent)
+        )
+        NavigationDrawerItem(
+            label = { Text(stringResource(R.string.nav_billetera), fontWeight = FontWeight.Bold) },
+            selected = false,
+            onClick = onBilleteraClick,
+            icon = { Icon(Icons.Default.AccountBalanceWallet, contentDescription = null) },
             colors = NavigationDrawerItemDefaults.colors(unselectedContainerColor = Color.Transparent)
         )
         
