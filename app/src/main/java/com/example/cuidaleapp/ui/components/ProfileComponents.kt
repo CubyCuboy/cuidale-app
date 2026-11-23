@@ -25,7 +25,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import androidx.compose.ui.res.stringResource
+import com.example.cuidaleapp.R
 import com.example.cuidaleapp.models.Tarea
+import androidx.compose.ui.graphics.Brush
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 
 @Composable
@@ -95,7 +98,7 @@ fun FichaSummaryCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = if (role == "cuidador") "MI EXPERIENCIA" else "DATOS DEL PACIENTE",
+                    text = if (role == "cuidador") stringResource(R.string.profile_mi_experiencia) else stringResource(R.string.ficha_patient_data),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = accentColor
                 )
@@ -104,25 +107,41 @@ fun FichaSummaryCard(
             Spacer(modifier = Modifier.height(16.dp))
 
             if (role == "representante" || data["tipo"] == "familiar") {
+                val summaryPatientFoto = run {
+                    val direct = data["fotoUrl"]?.toString()
+                    if (!direct.isNullOrBlank() && direct != "n/a") direct
+                    else (data["fotos"] as? List<*>)?.filterIsInstance<String>()?.firstOrNull { it.isNotBlank() } ?: ""
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Surface(
-                        modifier = Modifier.size(48.dp),
+                        modifier = Modifier.size(56.dp),
                         shape = CircleShape,
-                        color = accentColor.copy(alpha = 0.1f)
+                        color = accentColor.copy(alpha = 0.1f),
+                        border = BorderStroke(2.dp, accentColor.copy(alpha = 0.4f))
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.Person, null, tint = accentColor)
+                        if (summaryPatientFoto.isNotEmpty()) {
+                            coil3.compose.SubcomposeAsyncImage(
+                                model = summaryPatientFoto,
+                                contentDescription = stringResource(R.string.historial_paciente),
+                                modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                contentScale = ContentScale.Crop,
+                                loading = { Box(Modifier.fillMaxSize().background(shimmerBrush())) }
+                            )
+                        } else {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.Person, null, tint = accentColor, modifier = Modifier.size(28.dp))
+                            }
                         }
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = data["nombre_completo"]?.toString() ?: "No especificado",
+                            text = data["nombre_completo"]?.toString() ?: stringResource(R.string.common_not_specified),
                             style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
                             color = textColor
                         )
                         Text(
-                            text = "${data["edad"] ?: "--"} años • ${data["genero"] ?: "No especificado"}",
+                            text = stringResource(R.string.profile_age_gender_format, data["edad"] ?: "--", data["genero"] ?: stringResource(R.string.common_not_specified)),
                             style = MaterialTheme.typography.bodySmall,
                             color = secondaryTextColor
                         )
@@ -147,8 +166,8 @@ fun FichaSummaryCard(
 
             SummaryItem(
                 icon = Icons.Default.Place,
-                label = if (role == "cuidador") "Trabaja en" else "Busca en",
-                value = preferences.first.joinToString(", ").ifEmpty { "No especificado" },
+                label = if (role == "cuidador") stringResource(R.string.caregiver_view_trabaja_en) else stringResource(R.string.profile_busca_en),
+                value = preferences.first.joinToString(", ").ifEmpty { stringResource(R.string.common_not_specified) },
                 accentColor = accentColor,
                 textColor = textColor,
                 secondaryTextColor = secondaryTextColor
@@ -156,8 +175,8 @@ fun FichaSummaryCard(
 
             SummaryItem(
                 icon = Icons.Default.Schedule,
-                label = "Disponibilidad",
-                value = preferences.second.joinToString(", ").ifEmpty { "No especificado" },
+                label = stringResource(R.string.caregiver_view_disponibilidad),
+                value = preferences.second.joinToString(", ").ifEmpty { stringResource(R.string.common_not_specified) },
                 accentColor = accentColor,
                 textColor = textColor,
                 secondaryTextColor = secondaryTextColor
@@ -166,8 +185,8 @@ fun FichaSummaryCard(
             if (role == "cuidador") {
                 SummaryItem(
                     icon = Icons.Default.School,
-                    label = "Especialidad",
-                    value = data["especializacion"]?.toString() ?: "No especificado",
+                    label = stringResource(R.string.caregiver_view_especialidad),
+                    value = data["especializacion"]?.toString() ?: stringResource(R.string.common_not_specified),
                     accentColor = accentColor,
                     textColor = textColor,
                     secondaryTextColor = secondaryTextColor
@@ -175,8 +194,8 @@ fun FichaSummaryCard(
             } else {
                 SummaryItem(
                     icon = Icons.Default.Accessibility,
-                    label = "Dependencia",
-                    value = data["nivel_dependencia"]?.toString() ?: "No especificado",
+                    label = stringResource(R.string.profile_dependencia),
+                    value = data["nivel_dependencia"]?.toString() ?: stringResource(R.string.common_not_specified),
                     accentColor = accentColor,
                     textColor = textColor,
                     secondaryTextColor = secondaryTextColor
@@ -191,7 +210,7 @@ fun FichaSummaryCard(
                 contentPadding = PaddingValues(0.dp)
             ) {
                 Text(
-                    "VER FICHA COMPLETA", 
+                    stringResource(R.string.profile_ver_ficha_completa),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
                     color = accentColor
                 )
@@ -266,14 +285,14 @@ fun FullProfileDetailView(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "DETALLES DE FICHA",
+                        text = stringResource(R.string.profile_detalles_ficha),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = accentColor
                     )
                     Row {
                         if (onExpand != null) {
                             TextButton(onClick = onExpand) {
-                                Text("Ver menos", color = accentColor, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.profile_ver_menos), color = accentColor, fontWeight = FontWeight.Bold)
                             }
                         }
                         if (!isEditMode && showEditButton) {
@@ -281,7 +300,7 @@ fun FullProfileDetailView(
                                 onClick = onEdit,
                                 modifier = Modifier.background(accentColor.copy(alpha = 0.15f), CircleShape).size(36.dp)
                             ) {
-                                Icon(Icons.Default.Edit, contentDescription = "Editar", tint = accentColor, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.profile_edit_content_desc), tint = accentColor, modifier = Modifier.size(18.dp))
                             }
                         }
                     }
@@ -315,32 +334,53 @@ fun FullProfileDetailView(
                         val index = preferredOrder.indexOf(key)
                         if (index == -1) Int.MAX_VALUE else index
                     }
-                    sortedKeys.forEach { key ->
+                    FichaSectionCard(Icons.Default.School, stringResource(R.string.caregiver_view_especialidad), accentColor) {
+                        sortedKeys.filter { it in setOf("especializacion", "experiencia") }.forEach { key ->
+                            ProfileDataItem(key, dataToShow[key]!!, accentColor, textColor, secondaryTextColor, customColors.isDark)
+                        }
+                    }
+                    if (dataToShow.containsKey("comunas")) {
+                        FichaSectionCard(Icons.Default.Place, stringResource(R.string.caregiver_view_trabaja_en), accentColor) {
+                            ProfileDataItem("comunas", dataToShow["comunas"]!!, accentColor, textColor, secondaryTextColor, customColors.isDark)
+                        }
+                    }
+                    if (dataToShow.containsKey("descripcion")) {
+                        FichaSectionCard(Icons.Default.FormatQuote, stringResource(R.string.caregiver_view_sobre_mi), accentColor) {
+                            ProfileDataItem("descripcion", dataToShow["descripcion"]!!, accentColor, textColor, secondaryTextColor, customColors.isDark)
+                        }
+                    }
+                    sortedKeys.filter { it !in setOf("especializacion", "experiencia", "comunas", "descripcion") }.forEach { key ->
                         ProfileDataItem(key, dataToShow[key]!!, accentColor, textColor, secondaryTextColor, customColors.isDark)
                     }
                 } else {
-                    ProfileSectionHeader("IDENTIFICACIÓN", accentColor)
+                    ProfileSectionHeader(stringResource(R.string.profile_identificacion), accentColor)
                     
-                    val patientFoto = data["fotoUrl"]?.toString() ?: ""
+                    val patientFoto = run {
+                        val direct = data["fotoUrl"]?.toString()
+                        if (!direct.isNullOrBlank() && direct != "n/a") direct
+                        else (data["fotos"] as? List<*>)?.filterIsInstance<String>()?.firstOrNull { it.isNotBlank() } ?: ""
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                         horizontalArrangement = Arrangement.Center
                     ) {
                         Surface(
-                            modifier = Modifier.size(100.dp),
+                            modifier = Modifier.size(140.dp),
                             shape = CircleShape,
-                            border = BorderStroke(2.dp, accentColor.copy(alpha = 0.5f)),
-                            color = customColors.avatarBackground
+                            border = BorderStroke(3.dp, Brush.linearGradient(listOf(accentColor, Color(0xFF48CAE4)))),
+                            color = customColors.avatarBackground,
+                            shadowElevation = 4.dp
                         ) {
                             if (patientFoto.isNotEmpty()) {
-                                AsyncImage(
+                                coil3.compose.SubcomposeAsyncImage(
                                     model = patientFoto,
-                                    contentDescription = "Paciente",
+                                    contentDescription = stringResource(R.string.historial_paciente),
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .clip(CircleShape)
                                         .blur(if (isBlurry) 25.dp else 0.dp),
-                                    contentScale = ContentScale.Crop
+                                    contentScale = ContentScale.Crop,
+                                    loading = { Box(Modifier.fillMaxSize().background(shimmerBrush())) }
                                 )
                             } else {
                                 Icon(
@@ -353,26 +393,28 @@ fun FullProfileDetailView(
                         }
                     }
 
-                    listOf("nombre_completo", "edad", "genero").forEach { key ->
-                        dataToShow[key]?.let { ProfileDataItem(key, it, accentColor, textColor, secondaryTextColor, customColors.isDark) }
-                    }
-                    
-                    Spacer(modifier = Modifier.height(12.dp))
-                    ProfileSectionHeader("SALUD Y DEPENDENCIA", accentColor)
-                    listOf("nivel_dependencia", "movilidad", "comunicacion", "enfermedades", "discapacidades").forEach { key ->
-                        dataToShow[key]?.let { ProfileDataItem(key, it, accentColor, textColor, secondaryTextColor, customColors.isDark) }
+                    FichaSectionCard(Icons.Default.Person, stringResource(R.string.profile_identificacion), accentColor) {
+                        listOf("nombre_completo", "edad", "genero").forEach { key ->
+                            dataToShow[key]?.let { ProfileDataItem(key, it, accentColor, textColor, secondaryTextColor, customColors.isDark) }
+                        }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
-                    ProfileSectionHeader("UBICACIÓN", accentColor)
-                    listOf("region", "comuna", "calle", "numero", "depto").forEach { key ->
-                        dataToShow[key]?.let { ProfileDataItem(key, it, accentColor, textColor, secondaryTextColor, customColors.isDark) }
+                    FichaSectionCard(Icons.Default.HealthAndSafety, stringResource(R.string.profile_salud_dependencia), accentColor) {
+                        listOf("nivel_dependencia", "movilidad", "comunicacion", "enfermedades", "discapacidades").forEach { key ->
+                            dataToShow[key]?.let { ProfileDataItem(key, it, accentColor, textColor, secondaryTextColor, customColors.isDark) }
+                        }
+                    }
+
+                    FichaSectionCard(Icons.Default.Place, stringResource(R.string.ficha_location), accentColor) {
+                        listOf("region", "comuna", "calle", "numero", "depto").forEach { key ->
+                            dataToShow[key]?.let { ProfileDataItem(key, it, accentColor, textColor, secondaryTextColor, customColors.isDark) }
+                        }
                     }
 
                     if (dataToShow.containsKey("condiciones")) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        ProfileSectionHeader("OBSERVACIONES ADICIONALES", accentColor)
-                        ProfileDataItem("condiciones", dataToShow["condiciones"]!!, accentColor, textColor, secondaryTextColor, customColors.isDark)
+                        FichaSectionCard(Icons.Default.Info, stringResource(R.string.ficha_extra_observations), accentColor) {
+                            ProfileDataItem("condiciones", dataToShow["condiciones"]!!, accentColor, textColor, secondaryTextColor, customColors.isDark)
+                        }
                     }
                 }
 
@@ -389,14 +431,14 @@ fun FullProfileDetailView(
                             Icon(Icons.AutoMirrored.Filled.ListAlt, null, tint = accentColor, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "RÉGIMEN DE TAREAS",
+                                text = stringResource(R.string.caregiver_view_regimen_tareas),
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                                 color = secondaryTextColor,
                                 modifier = Modifier.weight(1f)
                             )
                             if (!isEditMode && showEditButton) {
                                 IconButton(onClick = { if (onEditTasks != null) onEditTasks() else onEdit() }, modifier = Modifier.size(24.dp)) {
-                                    Icon(Icons.Default.Edit, "Editar Tareas", tint = accentColor, modifier = Modifier.size(16.dp))
+                                    Icon(Icons.Default.Edit, stringResource(R.string.profile_editar_tareas_cd), tint = accentColor, modifier = Modifier.size(16.dp))
                                 }
                             }
                         }
@@ -405,7 +447,7 @@ fun FullProfileDetailView(
                         
                         if (tareasPlantilla.isEmpty()) {
                             Text(
-                                "No hay tareas programadas aún.",
+                                stringResource(R.string.profile_no_tareas),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = secondaryTextColor.copy(alpha = 0.6f),
                                 modifier = Modifier.padding(bottom = 8.dp)
@@ -452,6 +494,47 @@ fun TaskItemCardInView(tarea: Tarea, accentColor: Color, textColor: Color, secon
 }
 
 @Composable
+fun FichaSectionCard(
+    icon: ImageVector,
+    title: String,
+    accentColor: Color,
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit
+) {
+    val bg = CuidaleThemeExtras.customColors.panelBackground
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(bg)
+            .border(1.dp, accentColor.copy(alpha = 0.15f), RoundedCornerShape(16.dp))
+            .padding(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                color = accentColor.copy(alpha = 0.12f),
+                shape = CircleShape,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(icon, null, tint = accentColor, modifier = Modifier.size(18.dp))
+                }
+            }
+            Spacer(Modifier.width(10.dp))
+            Text(
+                title,
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        content()
+    }
+}
+
+@Composable
 fun ProfileSectionHeader(title: String, color: Color) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
@@ -476,43 +559,46 @@ fun ProfileDataItem(
     secondaryTextColor: Color,
     isDark: Boolean
 ) {
-    val label = when(key) {
-        "especializacion" -> "Especialidad o formación"
-        "experiencia" -> "Experiencia previa"
-        "comunas" -> "Comunas de preferencia"
-        "descripcion" -> "Descripción sobre mí"
-        "nombre_completo" -> "Nombre del paciente"
-        "edad" -> "Edad"
-        "genero" -> "Género"
-        "vives_con_familiar" -> "Vive con el solicitante"
-        "region" -> "Región"
-        "comuna" -> "Comuna"
-        "calle" -> "Calle / Pasaje"
-        "numero" -> "Número"
-        "depto" -> "Depto / Block"
-        "comunas_preferencia" -> "Comunas de interés"
-        "horarios_preferencia" -> "Horarios de preferencia"
-        "nivel_dependencia" -> "Nivel de Dependencia"
-        "movilidad" -> "Movilidad"
-        "comunicacion" -> "Comunicación"
-        "discapacidades" -> "Discapacidades"
-        "discapacidad_otro" -> "Otra discapacidad"
-        "enfermedades" -> "Enfermedades crónicas"
-        "enfermedad_otro" -> "Otra enfermedad"
-        "dieta" -> "Plan de alimentación"
-        "medicamentos" -> "Medicamentos"
-        "condiciones" -> "Otras observaciones"
-        else -> key.replace("_", " ").replaceFirstChar { it.uppercase() }
+    val labelRes = when(key) {
+        "especializacion" -> R.string.profile_label_especialidad_formacion
+        "experiencia" -> R.string.profile_label_experiencia_previa
+        "comunas" -> R.string.profile_label_comunas_preferencia
+        "descripcion" -> R.string.profile_label_descripcion_mi
+        "nombre_completo" -> R.string.profile_label_nombre_paciente
+        "edad" -> R.string.caregiver_profile_edad
+        "genero" -> R.string.profile_label_gender
+        "vives_con_familiar" -> R.string.profile_label_vive_solicitante
+        "region" -> R.string.profile_label_region
+        "comuna" -> R.string.profile_label_comuna
+        "calle" -> R.string.ficha_street_placeholder
+        "numero" -> R.string.profile_label_numero
+        "depto" -> R.string.profile_label_depto_block
+        "comunas_preferencia" -> R.string.profile_label_comunas_interes
+        "horarios_preferencia" -> R.string.profile_label_horarios_preferencia
+        "nivel_dependencia" -> R.string.profile_label_nivel_dependencia
+        "movilidad" -> R.string.profile_label_movilidad
+        "comunicacion" -> R.string.profile_label_comunicacion
+        "discapacidades" -> R.string.profile_label_discapacidades
+        "discapacidad_otro" -> R.string.profile_label_otra_discapacidad
+        "enfermedades" -> R.string.profile_label_enfermedades_cronicas
+        "enfermedad_otro" -> R.string.profile_label_otra_enfermedad
+        "dieta" -> R.string.profile_label_plan_alimentacion
+        "medicamentos" -> R.string.profile_label_medicamentos
+        "condiciones" -> R.string.profile_label_otras_observaciones
+        else -> null
     }
+    val label = labelRes?.let { stringResource(it) } ?: key.replace("_", " ").replaceFirstChar { it.uppercase() }
     
+    val yesText = stringResource(R.string.profile_yes)
+    val noText = stringResource(R.string.profile_no)
     val displayValue = when {
         value is List<*> -> if (value.all { it is Map<*, *> }) "" else value.joinToString(", ")
         value is Map<*, *> -> ""
-        value is Boolean -> if (value) "Sí" else "No"
+        value is Boolean -> if (value) yesText else noText
         else -> value.toString()
     }
     
-    if ((displayValue.isNotBlank() || value is List<*> || value is Map<*, *>) && displayValue != "No") {
+    if ((displayValue.isNotBlank() || value is List<*> || value is Map<*, *>) && displayValue != noText) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -541,7 +627,15 @@ fun ProfileDataItem(
                             else -> null
                         }
                         if (sectionIcon != null) {
-                            Icon(sectionIcon, contentDescription = null, tint = accentColor, modifier = Modifier.size(16.dp))
+                            Surface(
+                                color = accentColor.copy(alpha = 0.10f),
+                                shape = CircleShape,
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(sectionIcon, contentDescription = null, tint = accentColor, modifier = Modifier.size(15.dp))
+                                }
+                            }
                             Spacer(modifier = Modifier.width(8.dp))
                         }
                         Text(
@@ -641,8 +735,8 @@ fun SearchPreferencesCard(
                     Icon(Icons.Default.Search, null, tint = if (isOnline) accentColor else Color.Gray, modifier = Modifier.size(24.dp))
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        "PREFERENCIAS DE BÚSQUEDA", 
-                        style = MaterialTheme.typography.titleMedium, 
+                        stringResource(R.string.profile_preferencias_busqueda),
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold, 
                         color = if (isOnline) textColor else textColor.copy(alpha = 0.5f)
                     )
@@ -653,7 +747,7 @@ fun SearchPreferencesCard(
                         enabled = isOnline,
                         modifier = Modifier.background(if (isOnline) accentColor.copy(alpha = 0.15f) else Color.Gray.copy(alpha = 0.1f), CircleShape).size(36.dp)
                     ) {
-                        Icon(Icons.Default.Edit, contentDescription = "Editar Preferencias", tint = if (isOnline) accentColor else Color.Gray, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.profile_editar_preferencias_cd), tint = if (isOnline) accentColor else Color.Gray, modifier = Modifier.size(18.dp))
                     }
                 }
             }
@@ -662,7 +756,7 @@ fun SearchPreferencesCard(
 
             if (!isOnline && !isEditing) {
                 Text(
-                    "Modo offline: No se pueden modificar las preferencias.",
+                    stringResource(R.string.profile_offline_preferencias),
                     style = MaterialTheme.typography.labelSmall,
                     color = Color.Gray,
                     modifier = Modifier.padding(bottom = 8.dp)
@@ -681,7 +775,7 @@ fun SearchPreferencesCard(
                 Spacer(modifier = Modifier.height(24.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     HardShadowButton(
-                        text = "CANCELAR",
+                        text = stringResource(R.string.profile_cancelar_upper),
                         onClick = { isEditing = false },
                         modifier = Modifier.weight(1f).height(48.dp),
                         containerColor = if (CuidaleThemeExtras.customColors.isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFE2E8F0),
@@ -690,7 +784,7 @@ fun SearchPreferencesCard(
                         isDark = CuidaleThemeExtras.customColors.isDark
                     )
                     HardShadowButton(
-                        text = if (isLoading) "GUARDANDO..." else "GUARDAR",
+                        text = if (isLoading) stringResource(R.string.profile_guardando) else stringResource(R.string.caregiver_profile_guardar),
                         onClick = {
                             if (isOnline) {
                                 onUpdate(tempCommunes, tempHorarios)
@@ -708,16 +802,16 @@ fun SearchPreferencesCard(
             } else {
                 SummaryItem(
                     icon = Icons.Default.Place,
-                    label = if (role == "cuidador") "Comunas de trabajo" else "Comunas de interés",
-                    value = currentCommunes.joinToString(", ").ifEmpty { "No especificadas" },
+                    label = if (role == "cuidador") stringResource(R.string.profile_comunas_trabajo) else stringResource(R.string.profile_label_comunas_interes),
+                    value = currentCommunes.joinToString(", ").ifEmpty { stringResource(R.string.profile_comunas_no_especificadas) },
                     accentColor = accentColor,
                     textColor = textColor,
                     secondaryTextColor = secondaryTextColor
                 )
                 SummaryItem(
                     icon = Icons.Default.Schedule,
-                    label = if (role == "cuidador") "Horarios disponibles" else "Horarios de interés",
-                    value = currentHorarios.joinToString(", ").ifEmpty { "No especificados" },
+                    label = if (role == "cuidador") stringResource(R.string.profile_horarios_disponibles) else stringResource(R.string.profile_horarios_interes),
+                    value = currentHorarios.joinToString(", ").ifEmpty { stringResource(R.string.profile_horarios_no_especificados) },
                     accentColor = accentColor,
                     textColor = textColor,
                     secondaryTextColor = secondaryTextColor
@@ -738,7 +832,7 @@ fun SearchPreferencesFields(
 ) {
     Column {
         CuidaleMultiSelectDropdown(
-            label = if (role == "cuidador") "COMUNAS DE TRABAJO" else "COMUNAS DE INTERÉS",
+            label = if (role == "cuidador") stringResource(R.string.profile_comunas_trabajo_upper) else stringResource(R.string.profile_comunas_interes_upper),
             options = availableCommunes,
             selectedOptions = communes,
             maxSelection = 3,
@@ -751,8 +845,13 @@ fun SearchPreferencesFields(
         )
         Spacer(modifier = Modifier.height(20.dp))
         CuidaleMultiSelectDropdown(
-            label = if (role == "cuidador") "HORARIOS DE DISPONIBILIDAD" else "HORARIOS DE INTERÉS",
-            options = listOf("Mañana", "Tarde", "Noche", "Fines de Semana"),
+            label = if (role == "cuidador") stringResource(R.string.profile_horarios_disponibilidad_upper) else stringResource(R.string.profile_horarios_interes_upper),
+            options = listOf(
+                stringResource(R.string.crear_solicitud_periodo_manana),
+                stringResource(R.string.crear_solicitud_periodo_tarde),
+                stringResource(R.string.crear_solicitud_periodo_noche),
+                stringResource(R.string.profile_fines_semana)
+            ),
             selectedOptions = horarios,
             onOptionToggled = { option: String ->
                 val newList = if (horarios.contains(option)) horarios - option

@@ -12,6 +12,7 @@ import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -541,12 +542,134 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun calificarServicio(historialId: String, calificacion: Double, observacion: String) {
-        db.collection("historial_servicios").document(historialId).update(
-            mapOf(
-                "calificacion" to calificacion,
-                "observacionCalificacion" to observacion
-            )
-        )
+        viewModelScope.launch {
+            try {
+                val histDoc = db.collection("historial_servicios").document(historialId).get().await()
+                if (!histDoc.exists()) return@launch
+
+                val cuidadorUid = histDoc.getString("cuidadorUid") ?: ""
+                val autor = histDoc.getString("representanteNombre") ?: "Representante"
+
+                histDoc.reference.update(
+                    mapOf(
+                        "calificacion" to calificacion,
+                        "observacionCalificacion" to observacion
+                    )
+                ).await()
+
+                if (cuidadorUid.isNotBlank()) {
+                    val resenaId = UUID.randomUUID().toString()
+                    db.collection("fichas").document(cuidadorUid).collection("resenas").document(resenaId).set(
+                        mapOf(
+                            "autorNombre" to autor,
+                            "calificacion" to calificacion,
+                            "comentario" to observacion,
+                            "fecha" to Timestamp.now(),
+                            "historialId" to historialId
+                        )
+                    ).await()
+
+                    val resenasSnapshot = db.collection("fichas").document(cuidadorUid)
+                        .collection("resenas").get().await()
+                    val notas = resenasSnapshot.documents.mapNotNull { it.getDouble("calificacion") }
+                    val promedio = if (notas.isNotEmpty()) notas.average().toFloat() else 0.0f
+                    val total = resenasSnapshot.size()
+
+                    val fichaRef = db.collection("fichas").document(cuidadorUid)
+                    try {
+                        fichaRef.update(
+                            mapOf(
+                                "rating_promedio" to promedio,
+                                "total_resenas" to total
+                            )
+                        ).await()
+                    } catch (e: Exception) {
+                        fichaRef.set(
+                            mapOf(
+                                "rating_promedio" to promedio,
+                                "total_resenas" to total
+                            ),
+                            SetOptions.merge()
+                        ).await()
+                    }
+
+                    // Notificar al cuidador sobre la nueva calificación
+                    val emisorUid = auth.currentUser?.uid ?: ""
+                    val data = mutableMapOf(
+                        "titulo" to "Nueva calificación",
+                        "body" to "$autor te calificó con ${calificacion} ★",
+                        "calificacion" to calificacion.toString()
+                    )
+                    val notif = Notification(
+                        id = UUID.randomUUID().toString(),
+                        tipo = "nueva_calificacion",
+                        emisor = emisorUid,
+                        receptor = cuidadorUid,
+                        timestamp = System.currentTimeMillis(),
+                        data = data
+                    )
+                    db.collection("usuarios").whereEqualTo("uid", cuidadorUid).get().addOnSuccessListener { query ->
+                        if (!query.isEmpty) {
+                            query.documents[0].reference.collection("notificaciones").document(notif.id).set(notif)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                // Ignorar errores para mantener el comportamiento seguro
+            }
+        }
+    }
+
+    fun migrarCalificacionesHistoricas() {
+        val uid = auth.currentUser?.uid ?: return
+        viewModelScope.launch {
+            try {
+                val snapshot = db.collection("historial_servicios")
+                    .whereEqualTo("representanteUid", uid)
+                    .get().await()
+                val fichasActualizar = mutableMapOf<String, MutableList<Pair<Double, String>>>()
+                for (doc in snapshot.documents) {
+                    val calif = doc.getDouble("calificacion") ?: continue
+                    val cuidadorUid = doc.getString("cuidadorUid") ?: continue
+                    val historialId = doc.id
+                    val autor = doc.getString("representanteNombre") ?: "Representante"
+                    val comentario = doc.getString("observacionCalificacion") ?: ""
+                    // idempotence: skip if review already exists for this historialId
+                    val existente = db.collection("fichas").document(cuidadorUid)
+                        .collection("resenas")
+                        .whereEqualTo("historialId", historialId)
+                        .get().await()
+                    if (!existente.isEmpty) continue
+                    val fecha = doc.getTimestamp("fechaTermino") ?: doc.getTimestamp("fechaInicio") ?: Timestamp.now()
+                    db.collection("fichas").document(cuidadorUid)
+                        .collection("resenas").document(UUID.randomUUID().toString())
+                        .set(mapOf(
+                            "autorNombre" to autor,
+                            "calificacion" to calif,
+                            "comentario" to comentario,
+                            "fecha" to fecha,
+                            "historialId" to historialId
+                        )).await()
+                    val list = fichasActualizar.getOrPut(cuidadorUid) { mutableListOf() }
+                    list.add(calif to comentario)
+                }
+                // recompute aggregates
+                for ((cuidadorUid, _) in fichasActualizar) {
+                    val resenas = db.collection("fichas").document(cuidadorUid)
+                        .collection("resenas").get().await()
+                    val notas = resenas.documents.mapNotNull { it.getDouble("calificacion") }
+                    val promedio = if (notas.isNotEmpty()) notas.average().toFloat() else 0f
+                    val total = notas.size
+                    try {
+                        db.collection("fichas").document(cuidadorUid)
+                            .update(mapOf("rating_promedio" to promedio, "total_resenas" to total)).await()
+                    } catch (e: Exception) {
+                        db.collection("fichas").document(cuidadorUid)
+                            .set(mapOf("rating_promedio" to promedio, "total_resenas" to total), SetOptions.merge()).await()
+                    }
+                }
+            } catch (e: Exception) { }
+        }
     }
 
     override fun onCleared() {

@@ -4,6 +4,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import android.app.Activity
 import android.content.Intent
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -17,22 +18,30 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Badge
+import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Work
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.cuidaleapp.activities.AddEmailPasswordActivity
 import com.example.cuidaleapp.activities.EmailVerificationActivity
 import com.example.cuidaleapp.ui.components.HardShadowPanel
 import com.example.cuidaleapp.ui.components.HardShadowButton
 import com.example.cuidaleapp.ui.components.ProviderBrandIcon
+import androidx.compose.material.icons.filled.ChevronRight
 import com.example.cuidaleapp.R
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.utils.ErrorCodes
@@ -73,6 +82,13 @@ fun AccountManagementScreen(
     val shadowPalette = CuidaleThemeExtras.shadows
     val userData by viewModel.userData.collectAsState()
     val gradient = CuidaleThemeExtras.gradient
+
+    val distinctEmailCount = buildSet {
+        userData.correo.takeIf { it.isNotBlank() }?.let { add(it) }
+        userData.linkedAccounts.forEach { acc ->
+            acc.accountName.takeIf { it.contains("@") }?.let { add(it) }
+        }
+    }.size
 
     val currentUser = FirebaseAuth.getInstance().currentUser
     var userProviders by remember {
@@ -670,29 +686,70 @@ fun AccountManagementScreen(
                 ) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back), tint = Color.White)
                 }
-                Text(
-                    text = stringResource(R.string.settings_account_management),
-                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
-                    color = Color.White,
-                    modifier = Modifier.padding(start = 16.dp)
-                )
+                Column(modifier = Modifier.padding(start = 16.dp)) {
+                    Text(
+                        text = stringResource(R.string.settings_account_management),
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
+                        color = Color.White
+                    )
+                    Text(
+                        text = if (distinctEmailCount > 1) stringResource(R.string.settings_account_management_subtitle_plural) else stringResource(R.string.account_management_subtitle),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.7f)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            HardShadowButton(
-                text = stringResource(R.string.account_management_view_change_history),
-                containerColor = MaterialTheme.colorScheme.secondary,
-                contentColor = Color.White,
-                shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
-                icon = androidx.compose.material.icons.Icons.Default.History,
-                isDark = isDark,
-                onClick = {
-                    val intent = Intent(context, com.example.cuidaleapp.activities.AccountHistoryActivity::class.java)
-                    context.startActivity(intent)
+            HardShadowPanel(
+                backgroundColor = customColors.panelBackground,
+                shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.15f),
+                cornerRadius = 24.dp
+            ) {
+                Surface(
+                    onClick = {
+                        val intent = Intent(context, com.example.cuidaleapp.activities.AccountHistoryActivity::class.java)
+                        context.startActivity(intent)
+                    },
+                    color = Color.Transparent,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f),
+                            shape = CircleShape,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = androidx.compose.material.icons.Icons.Default.History,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.secondary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.account_management_view_change_history),
+                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = stringResource(R.string.account_history_see_subtitle),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.secondary.copy(alpha = 0.6f))
+                    }
                 }
-            )
-
+            }
             Spacer(modifier = Modifier.height(16.dp))
 
             HardShadowPanel(
@@ -706,18 +763,14 @@ fun AccountManagementScreen(
                         .padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Text(
-                        text = stringResource(R.string.account_management_user_info),
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    AccountGroupTitle(stringResource(R.string.account_management_user_info), MaterialTheme.colorScheme.primary)
 
-                    AccountDetailItem(stringResource(R.string.account_management_name), "${userData.nombre} ${userData.apellido_pa}")
-                    AccountDetailItem(stringResource(R.string.account_management_email), userData.correo.ifEmpty { currentUser?.email ?: stringResource(R.string.account_management_not_available) })
-                    AccountDetailItem(stringResource(R.string.profile_label_rut), userData.rut.ifEmpty { stringResource(R.string.account_management_not_available) })
-                    AccountDetailItem(stringResource(R.string.profile_label_phone), userData.telefono.ifEmpty { stringResource(R.string.account_management_not_available) })
-                    AccountDetailItem(stringResource(R.string.profile_label_role), userData.rol.uppercase().ifEmpty { stringResource(R.string.account_management_not_available) })
-                    AccountDetailItem(stringResource(R.string.account_management_region_comuna), "${userData.region} / ${userData.comuna}")
+                    AccountDetailItem(Icons.Default.Person, stringResource(R.string.account_management_name), "${userData.nombre} ${userData.apellido_pa}")
+                    AccountDetailItem(Icons.Default.Email, stringResource(R.string.account_management_email), userData.correo.ifEmpty { currentUser?.email ?: stringResource(R.string.account_management_not_available) })
+                    AccountDetailItem(Icons.Default.Badge, stringResource(R.string.profile_label_rut), userData.rut.ifEmpty { stringResource(R.string.account_management_not_available) })
+                    AccountDetailItem(Icons.Default.Phone, stringResource(R.string.profile_label_phone), userData.telefono.ifEmpty { stringResource(R.string.account_management_not_available) })
+                    AccountDetailItem(Icons.Default.Work, stringResource(R.string.profile_label_role), userData.rol.uppercase().ifEmpty { stringResource(R.string.account_management_not_available) })
+                    AccountDetailItem(Icons.Default.Place, stringResource(R.string.account_management_region_comuna), "${userData.region} / ${userData.comuna}")
                 }
             }
 
@@ -734,11 +787,7 @@ fun AccountManagementScreen(
                         .padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Text(
-                        text = stringResource(R.string.account_management_linked_accounts),
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    AccountGroupTitle(stringResource(R.string.account_management_linked_accounts), MaterialTheme.colorScheme.secondary)
 
                     val appCreationTime = userData.createdAt?.toDate()?.time
                         ?.takeIf { it > 0L }
@@ -820,11 +869,14 @@ fun AccountManagementScreen(
                             Button(
                                 onClick = { linkProvider("google.com") },
                                 modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.White)
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isDark) MaterialTheme.colorScheme.surfaceContainerHigh else Color.White,
+                                    contentColor = if (isDark) MaterialTheme.colorScheme.onSurface else Color.Black
+                                )
                             ) {
                                 ProviderBrandIcon("google.com")
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text(stringResource(R.string.account_management_link_google), color = Color.Black, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.account_management_link_google), color = if (isDark) MaterialTheme.colorScheme.onSurface else Color.Black, fontWeight = FontWeight.Bold)
                             }
                         }
 
@@ -832,11 +884,14 @@ fun AccountManagementScreen(
                             Button(
                                 onClick = { linkProvider("microsoft.com") },
                                 modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2F2F2F))
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isDark) MaterialTheme.colorScheme.surfaceContainerHigh else Color(0xFF2F2F2F),
+                                    contentColor = if (isDark) MaterialTheme.colorScheme.onSurface else Color.White
+                                )
                             ) {
                                 ProviderBrandIcon("microsoft.com")
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text(stringResource(R.string.account_management_link_microsoft), color = Color.White, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.account_management_link_microsoft), color = if (isDark) MaterialTheme.colorScheme.onSurface else Color.White, fontWeight = FontWeight.Bold)
                             }
                         }
 
@@ -878,13 +933,39 @@ fun AccountManagementScreen(
 }
 
 @Composable
-fun AccountDetailItem(label: String, value: String) {
+private fun AccountGroupTitle(text: String, color: Color = MaterialTheme.colorScheme.primary) {
+    Text(
+        text = text.uppercase(),
+        style = MaterialTheme.typography.labelLarge.copy(
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 0.4.sp
+        ),
+        color = color,
+        modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+    )
+}
+
+@Composable
+fun AccountDetailItem(icon: ImageVector, label: String, value: String) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        verticalAlignment = Alignment.Top
     ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
+        Surface(
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+            shape = CircleShape,
+            modifier = Modifier.size(34.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+            }
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(value, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
+        }
     }
 }
 
@@ -903,8 +984,9 @@ fun LinkedAccountCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-        shape = RoundedCornerShape(12.dp)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     ) {
         Column(
             modifier = Modifier.padding(12.dp),

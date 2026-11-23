@@ -1,7 +1,6 @@
 package com.example.cuidaleapp.viewmodel
 
 import android.app.Application
-import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.cuidaleapp.data.UserSession
@@ -28,11 +27,13 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     private val db = FirebaseFirestore.getInstance()
     private val storage = FirebaseStorage.getInstance()
     private val rtdb = FirebaseDatabase.getInstance().reference
-    private val prefs = application.getSharedPreferences("cuidale_prefs", Context.MODE_PRIVATE)
     private val userSession = UserSession(application)
 
-    private val _isDarkMode = MutableStateFlow(prefs.getBoolean("dark_mode", false))
-    val isDarkMode: StateFlow<Boolean> = _isDarkMode.asStateFlow()
+    init {
+        com.example.cuidaleapp.ui.theme.ThemeManager.ensureInit(application)
+    }
+
+    val isDarkMode: StateFlow<Boolean> get() = com.example.cuidaleapp.ui.theme.ThemeManager.isDarkMode
 
     private val _userData = MutableStateFlow(userSession.getUser())
     val userData: StateFlow<UserData> = _userData.asStateFlow()
@@ -165,9 +166,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun toggleTheme() {
-        val newValue = !_isDarkMode.value
-        _isDarkMode.value = newValue
-        prefs.edit().putBoolean("dark_mode", newValue).apply()
+        com.example.cuidaleapp.ui.theme.ThemeManager.toggleTheme()
     }
 
     fun resetRemoteState() {

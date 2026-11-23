@@ -64,6 +64,8 @@ fun ActiveServiceTasksScreen(
     var showMassPostponeDialog by remember { mutableStateOf(false) }
     var showMassConfirmDialog by remember { mutableStateOf(false) }
 
+    val isCreatingTask = showCreateDialog != null || editingRegistro != null
+
     val scope = rememberCoroutineScope()
 
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -119,8 +121,24 @@ fun ActiveServiceTasksScreen(
                 CenterAlignedTopAppBar(
                     title = { 
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(if (isSelectionMode) stringResource(R.string.tareas_seleccionadas_count, selectedIds.size) else stringResource(R.string.tareas_titulo_seguimiento_diario), fontWeight = FontWeight.Bold, color = Color.White)
-                            if (!isSelectionMode) Text(solicitud.nombrePaciente, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.7f))
+                            Text(
+                                when {
+                                    isCreatingTask -> (if (editingRegistro != null) stringResource(R.string.task_edit_title) else stringResource(R.string.task_new_title))
+                                    isSelectionMode -> stringResource(R.string.tareas_seleccionadas_count, selectedIds.size)
+                                    else -> stringResource(R.string.tareas_titulo_seguimiento_diario)
+                                },
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            if (isCreatingTask) {
+                                Text(
+                                    if (editingRegistro != null) "Edita los detalles de la tarea" else "Nueva tarea para ${solicitud.nombrePaciente}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.White.copy(alpha = 0.7f)
+                                )
+                            } else if (!isSelectionMode) {
+                                Text(solicitud.nombrePaciente, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.7f))
+                            }
                         }
                     },
                     navigationIcon = {
@@ -136,7 +154,7 @@ fun ActiveServiceTasksScreen(
                         }
                     },
                     actions = {
-                        if (isRepresentative && !isSelectionMode && tareasHoy.isNotEmpty() && isOnline) {
+                        if (isRepresentative && !isSelectionMode && tareasHoy.isNotEmpty() && isOnline && !isCreatingTask) {
                             IconButton(onClick = { isSelectionMode = true }) {
                                 Icon(Icons.Default.Checklist, stringResource(R.string.tareas_cd_seleccionar), tint = Color.White)
                             }
@@ -168,7 +186,7 @@ fun ActiveServiceTasksScreen(
         floatingActionButton = {
             val allProcessed = tareasHoy.all { it.completada || it.postergada }
             Column(horizontalAlignment = Alignment.End) {
-                if (!isRepresentative && !isSelectionMode && isOnline) {
+                if (!isRepresentative && !isSelectionMode && isOnline && !isCreatingTask) {
                     ExtendedFloatingActionButton(
                         onClick = { 
                             if (allProcessed) showSummary = true 
@@ -185,7 +203,7 @@ fun ActiveServiceTasksScreen(
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                 }
-                if (isRepresentative && !isSelectionMode && isOnline) {
+                if (isRepresentative && !isSelectionMode && isOnline && !isCreatingTask) {
                     FloatingActionButton(
                         onClick = { showCreateDialog = TipoTarea.OTRO },
                         containerColor = MaterialTheme.colorScheme.primary,
@@ -207,7 +225,42 @@ fun ActiveServiceTasksScreen(
 
 
 
-            if (!isOnline && tareasHoy.isEmpty()) {
+            if (isCreatingTask) {
+                val initialTarea = editingRegistro?.let {
+                    Tarea(id = it.tareaId, titulo = it.titulo, tipo = it.tipo, horarioInicio = it.horarioPrevisto, descripcion = it.descripcion, frecuencia = it.frecuencia)
+                }
+                val plantillas by tareasViewModel.tareasPlantilla.collectAsState()
+                TaskCreationScreen(
+                    onCancel = { showCreateDialog = null; editingRegistro = null },
+                    onConfirm = { nuevaTarea ->
+                        if (editingRegistro != null) {
+                            val tareaParaActualizar = nuevaTarea.copy(id = editingRegistro!!.tareaId)
+                            val updates = mapOf(
+                                "titulo" to tareaParaActualizar.titulo,
+                                "tipo" to tareaParaActualizar.tipo.name,
+                                "horarioPrevisto" to tareaParaActualizar.horarioInicio,
+                                "descripcion" to tareaParaActualizar.descripcion,
+                                "frecuencia" to tareaParaActualizar.frecuencia.name
+                            )
+                            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                .collection("solicitudes").document(solicitud.id)
+                                .collection("registros_tareas").document(editingRegistro!!.id)
+                                .update(updates)
+                            if (tareaParaActualizar.id.isNotEmpty()) {
+                                tareasViewModel.agregarTareaAServicio(solicitud.id, tareaParaActualizar)
+                            }
+                        } else {
+                            tareasViewModel.agregarTareaAServicio(solicitud.id, nuevaTarea)
+                        }
+                        showCreateDialog = null
+                        editingRegistro = null
+                    },
+                    accentColor = MaterialTheme.colorScheme.primary,
+                    defaultType = showCreateDialog ?: editingRegistro?.tipo ?: TipoTarea.OTRO,
+                    initialTarea = initialTarea,
+                    existingTasks = plantillas
+                )
+            } else if (!isOnline && tareasHoy.isEmpty()) {
                 OfflinePlaceholder(subtitle = stringResource(R.string.tareas_offline_subtitle))
             } else if (tareasHoy.isEmpty()) {
                 EmptyPlaceholder(stringResource(R.string.tareas_vacio_hoy))
@@ -606,54 +659,6 @@ fun ActiveServiceTasksScreen(
             )
         }
 
-        if (showCreateDialog != null || editingRegistro != null) {
-            val initialTarea = editingRegistro?.let { 
-                Tarea(
-                    id = it.tareaId,
-                    titulo = it.titulo,
-                    tipo = it.tipo,
-                    horarioInicio = it.horarioPrevisto,
-                    descripcion = it.descripcion,
-                    frecuencia = it.frecuencia
-                )
-            }
-            val plantillas by tareasViewModel.tareasPlantilla.collectAsState()
-            TaskCreationDialog(
-                onDismiss = { 
-                    showCreateDialog = null
-                    editingRegistro = null
-                },
-                onConfirm = { nuevaTarea ->
-                    if (editingRegistro != null) {
-                        val tareaParaActualizar = nuevaTarea.copy(id = editingRegistro!!.tareaId)
-                        
-                        val updates = mapOf(
-                            "titulo" to tareaParaActualizar.titulo,
-                            "tipo" to tareaParaActualizar.tipo.name,
-                            "horarioPrevisto" to tareaParaActualizar.horarioInicio,
-                            "descripcion" to tareaParaActualizar.descripcion,
-                            "frecuencia" to tareaParaActualizar.frecuencia.name
-                        )
-                        com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                            .collection("solicitudes").document(solicitud.id)
-                            .collection("registros_tareas").document(editingRegistro!!.id)
-                            .update(updates)
-                        
-                        if (tareaParaActualizar.id.isNotEmpty()) {
-                            tareasViewModel.agregarTareaAServicio(solicitud.id, tareaParaActualizar)
-                        }
-                    } else {
-                        tareasViewModel.agregarTareaAServicio(solicitud.id, nuevaTarea)
-                    }
-                    showCreateDialog = null
-                    editingRegistro = null
-                },
-                accentColor = MaterialTheme.colorScheme.primary,
-                defaultType = showCreateDialog ?: editingRegistro?.tipo ?: TipoTarea.OTRO,
-                initialTarea = initialTarea,
-                existingTasks = plantillas
-            )
-        }
     }
 }
 

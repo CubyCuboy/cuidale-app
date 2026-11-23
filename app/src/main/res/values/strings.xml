@@ -131,7 +131,7 @@
     <string name="profile_cuidador_title">Ficha Cuidador</string>
     <string name="profile_cuidador_subtitle">Completa tu información profesional</string>
     <string name="profile_familiar_title">Ficha Representante</string>
-    <string name="profile_familiar_subtitle">Información del paciente a cuidar</string>
+    <string name="profile_familiar_subtitle">Información del familiar a cuidar</string>
 
     <string name="profile_label_specialization">¿Cuál es tu especialidad o formación?</string>
     <string name="profile_label_experience">Cuéntanos sobre tu experiencia previa</string>
@@ -263,7 +263,7 @@
     <string name="notif_title_service_end">Servicio finalizado</string>
     <string name="notif_title_chat">%1$s</string>
     <string name="notif_title_new_user">Nuevo %1$s en tu zona</string>
-    <string name="notif_paciente">paciente</string>
+    <string name="notif_paciente">familiar</string>
     <string name="notif_cuidador">cuidador</string>
     <string name="notif_title_task">Recordatorio de tarea</string>
     <string name="notif_title_task_late">Tarea atrasada</string>
@@ -324,11 +324,11 @@
     <!-- Registro -->
     <string name="register_first_name">Primer Nombre</string>
     <string name="register_first_name_placeholder">Ej: Juan</string>
-    <string name="register_second_name">Segundo Nombre (Opcional)</string>
+    <string name="register_second_name">Segundo Nombre</string>
     <string name="register_second_name_placeholder">Ej: Antonio</string>
     <string name="register_last_name_paternal">Apellido Paterno</string>
     <string name="register_last_name_paternal_placeholder">Ej: Pérez</string>
-    <string name="register_last_name_maternal">Apellido Materno (Opcional)</string>
+    <string name="register_last_name_maternal">Apellido Materno</string>
     <string name="register_last_name_maternal_placeholder">Ej: González</string>
     <string name="register_phone_label">Teléfono (9 dígitos)</string>
     <string name="register_phone_placeholder">Ej: 9 8765 4321</string>
@@ -365,7 +365,7 @@
     <string name="cd_filters">Filtros</string>
 
     <!-- Menú principal -->
-    <string name="menu_title_patients">Pacientes</string>
+    <string name="menu_title_patients">Familiares</string>
     <string name="menu_title_caregivers">Cuidadores</string>
     <string name="menu_connect_discover">Conéctate para descubrir nuevos %1$s.</string>
     <string name="search_no_results_filters">Sin resultados para estos filtros</string>
@@ -385,6 +385,7 @@
     <string name="menu_ficha_placeholder_desc_caregiver">Necesitas una ficha técnica para que las familias puedan encontrarte y confiar en tu experiencia.</string>
     <string name="menu_ficha_placeholder_desc_rep">Para buscar cuidadores, primero necesitamos saber un poco más sobre la persona que recibirá el cuidado.</string>
     <string name="menu_create_ficha_technical">CREAR FICHA TÉCNICA</string>
+    <string name="menu_create_ficha_familiar">CREAR FICHA FAMILIAR</string>
 
     <!-- Perfil -->
     <string name="profile_my_profile_upper">MI PERFIL</string>
@@ -396,12 +397,40 @@
     <string name="info_role">ROL</string>
     <string name="profile_not_verified">NO VERIFICADO</string>
     <string name="profile_my_ficha_technical">MI FICHA TÉCNICA</string>
+    <string name="profile_my_ficha_familiar">MI FICHA FAMILIAR</string>
     <string name="profile_familiar_ficha">FICHA DEL FAMILIAR</string>
     <string name="profile_ficha_placeholder_title_caregiver">Parece ser que aún no sabemos mucho de ti</string>
     <string name="profile_ficha_placeholder_title_rep">Aún no tenemos información de tu familiar</string>
     <string name="profile_ficha_placeholder_desc_caregiver">Ingresa tus datos en la ficha técnica para que las familias puedan conocer tu experiencia.</string>
-    <string name="profile_ficha_placeholder_desc_rep">Ingresa sus datos en la ficha técnica para que podamos ayudarte mejor a encontrar el cuidado ideal.</string>
+    <string name="profile_ficha_placeholder_desc_rep">Ingresa sus datos en la ficha familiar para que podamos ayudarte mejor a encontrar el cuidado ideal.</string>
     <string name="profile_create_ficha">CREAR FICHA</string>
+    <string name="profile_section_identity">Identidad y contacto</string>
+    <string name="profile_section_profession">Profesión</string>
+    <string name="profile_section_ficha">Mi ficha</string>
+    <string name="profile_stat_formacion">Formación</string>
+    <string name="profile_stat_experiencia">Experiencia</string>
+    <string name="profile_stat_certificados">Certificados</string>
+    <string name="profile_verified_cd">Teléfono verificado</string>
+    <string name="profile_ficha_tap_to_expand">Toca tu ficha más abajo para ver el detalle</string>
+    <string name="profile_completion_title">Completitud del perfil</string>
+    <string name="profile_section_about">Acerca de mí</string>
+    <string name="edit_profile_subtitle">Mantén tus datos al día</string>
+    <string name="edit_profile_hint_lines">Escribe un elemento por línea</string>
+    <string name="profile_rec_foto_cuidador">Ponte una foto de perfil: los cuidadores con foto reciben más contactos</string>
+    <string name="profile_rec_phone">Verifica tu teléfono para tener un método extra de restablecimiento de cuenta</string>
+    <string name="profile_rec_description">Agrega una descripción para que otros te conozcan</string>
+    <string name="profile_rec_location">Indica tu comuna y región</string>
+    <string name="profile_rec_rut">Completa tu RUT</string>
+    <string name="profile_rec_ficha_cuidador">Crea tu ficha técnica</string>
+    <string name="profile_rec_ficha_familiar">Crea la ficha de tu familiar</string>
+    <string name="edit_profile_subsection_personal">Nombre e identificación</string>
+    <string name="edit_profile_subsection_contact">Teléfono y ubicación</string>
+    <string name="edit_profile_subsection_about">Cuéntanos sobre ti</string>
+    <string name="edit_profile_subsection_caregiver">Información profesional adicional</string>
+    <string name="photo_source_camera_sub">Toma una foto ahora</string>
+    <string name="photo_source_gallery_sub">Elige desde tu galería</string>
+    <string name="photo_source_remove_sub">Quita la foto actual</string>
+    <string name="ficha_sin_telefono">Sin teléfono registrado</string>
 
     <!-- Editar perfil -->
     <string name="edit_profile_confirm_photo">Confirmar foto</string>
@@ -421,6 +450,27 @@
     <string name="edit_profile_placeholder_maternal">Materno</string>
     <string name="edit_profile_section_contact">Contacto y Ubicación</string>
     <string name="edit_profile_phone_label">Teléfono</string>
+  <string name="edit_profile_optional_badge">Opcional</string>
+  <string name="settings_account_security_subtitle">Administra tu perfil y métodos de acceso</string>
+  <string name="settings_account_management_subtitle">Correo, vínculos y proveedores</string>
+  <string name="settings_reset_pass_subtitle">Actualiza tu contraseña</string>
+  <string name="settings_session_subtitle">Termina la sesión en este dispositivo</string>
+  <string name="settings_logout_subtitle">Cerrar sesión de tu cuenta</string>
+  <string name="settings_storage_subtitle">Administra el espacio en tu dispositivo</string>
+  <string name="settings_account_settings">Configuración de cuenta</string>
+  <string name="settings_account_settings_subtitle">Todas las acciones de tu cuenta en un solo lugar</string>
+  <string name="account_pending_badge">Pendiente</string>
+  <string name="account_history_see_subtitle">Revisa los cambios realizados en tu cuenta</string>
+  <string name="account_management_subtitle">Vínculos, proveedores y métodos de acceso</string>
+  <string name="settings_account_management_subtitle_plural">Correos, vínculos y proveedores</string>
+  <string name="settings_verify_email_done">Correo verificado</string>
+  <string name="settings_verify_email_done_sub">Tu correo electrónico está verificado</string>
+  <string name="settings_device_options">Opciones del dispositivo</string>
+  <string name="settings_device_options_subtitle">Tema y almacenamiento local</string>
+  <string name="settings_device_theme">Tema</string>
+  <string name="settings_device_theme_subtitle">Modo oscuro</string>
+  <string name="settings_device_cache">Caché local</string>
+  <string name="settings_cache_subtitle">Administra el espacio y los datos guardados</string>
     <string name="edit_profile_error_phone">Formato inválido (9 dígitos)</string>
     <string name="edit_profile_region_label">Región</string>
     <string name="edit_profile_commune_label">Comuna</string>
@@ -431,7 +481,7 @@
 
     <!-- Ficha técnica -->
     <string name="ficha_title_caregiver">FICHA DE CUIDADOR</string>
-    <string name="ficha_title_patient">FICHA DEL PACIENTE</string>
+    <string name="ficha_title_patient">FICHA DEL FAMILIAR</string>
     <string name="ficha_offline_mode">MODO OFFLINE</string>
     <string name="ficha_completing_info">Completando información</string>
     <string name="ficha_info_saved">Información registrada</string>
@@ -449,10 +499,10 @@
     <string name="ficha_personal_presentation">PRESENTACIÓN PERSONAL</string>
     <string name="ficha_about_you">SOBRE TI</string>
     <string name="ficha_vocation_placeholder">Cuéntanos más sobre tu vocación...</string>
-    <string name="ficha_confirm_photo_question">¿Deseas usar esta imagen para el paciente?</string>
-    <string name="ficha_patient_photo">Foto del paciente</string>
-    <string name="ficha_patient_data">DATOS DEL PACIENTE</string>
-    <string name="ficha_patient_name">NOMBRE DEL PACIENTE</string>
+    <string name="ficha_confirm_photo_question">¿Deseas usar esta imagen para el familiar?</string>
+    <string name="ficha_patient_photo">Foto del familiar</string>
+    <string name="ficha_patient_data">DATOS DEL FAMILIAR</string>
+    <string name="ficha_patient_name">NOMBRE DEL FAMILIAR</string>
     <string name="ficha_patient_name_placeholder">Nombre Completo</string>
     <string name="ficha_age">EDAD</string>
     <string name="ficha_age_placeholder">Ej: 70</string>
@@ -464,10 +514,10 @@
     <string name="ficha_region">REGIÓN</string>
     <string name="ficha_commune">COMUNA</string>
     <string name="ficha_uses_current_address">Se usará tu dirección actual: %1$s, %2$s</string>
-    <string name="ficha_patient_address">DIRECCIÓN DEL PACIENTE</string>
+    <string name="ficha_patient_address">DIRECCIÓN DEL FAMILIAR</string>
     <string name="ficha_street_placeholder">Calle / Pasaje</string>
     <string name="ficha_number_placeholder">N°</string>
-    <string name="ficha_dept_placeholder">Depto/Block (Opcional)</string>
+    <string name="ficha_dept_placeholder">Dpto/Block</string>
     <string name="ficha_health_status">ESTADO DE SALUD</string>
     <string name="ficha_dependency">DEPENDENCIA</string>
     <string name="ficha_dependency_independent">Independiente</string>
@@ -498,7 +548,7 @@
     <string name="ficha_observations_photo">OBSERVACIONES Y FOTO</string>
     <string name="ficha_extra_observations">OBSERVACIONES ADICIONALES</string>
     <string name="ficha_conditions_placeholder">Indique cualquier otra condición o cuidado especial...</string>
-    <string name="ficha_patient_photo_label">FOTO DEL PACIENTE</string>
+    <string name="ficha_patient_photo_label">FOTO DEL FAMILIAR</string>
     <string name="ficha_photo_will_delete">Se eliminará la foto</string>
     <string name="ficha_no_photo">Sin foto</string>
     <string name="ficha_manage_photo">GESTIONAR FOTO</string>
@@ -562,6 +612,7 @@
     <string name="nav_my_account">Mi Cuenta</string>
     <string name="nav_my_profile">Mi Perfil</string>
     <string name="nav_ficha">Ficha Técnica</string>
+    <string name="nav_ficha_familiar">Ficha Familiar</string>
     <string name="nav_management">Gestión</string>
     <string name="nav_social">Red de Contactos</string>
     <string name="nav_heatmap">Mapa de Calor</string>
@@ -608,6 +659,21 @@
     <string name="task_ph_hygiene_desc">Ej: Usar jabón neutro, secar bien pliegues</string>
     <string name="task_ph_activity_desc">Ej: 15 minutos en el jardín, usar andador</string>
     <string name="task_ph_other_desc">Ej: Ventilar habitación, cambiar sábanas</string>
+    <string name="task_tipo_inyeccion">INYECCION</string>
+    <string name="task_tipo_suero">CAMBIO DE SUERO</string>
+    <string name="task_tipo_postura">CAMBIO DE POSTURA</string>
+    <string name="task_ph_inyeccion_title">Ej: Pichazo lumbar</string>
+    <string name="task_ph_inyeccion_desc">Ej: Aplicar inyección en zona lumbar</string>
+    <string name="task_ph_suero_title">Ej: Cambio de suero</string>
+    <string name="task_ph_suero_desc">Ej: Revisar y reemplazar suero/vía</string>
+    <string name="task_ph_postura_title">Ej: Cambio de postura</string>
+    <string name="task_ph_postura_desc">Ej: Girar al familiar para evitar úlceras</string>
+    <string name="task_detail_section_title">Detalles del tratamiento</string>
+    <string name="task_detail_dosis">Dosis</string>
+    <string name="task_detail_unidades">Unidades / cápsulas</string>
+    <string name="task_detail_via">Forma de administración</string>
+    <string name="task_detail_via_placeholder">Selecciona una forma</string>
+    <string name="task_dias_mensuales">Días del mes</string>
 
     <!-- Chat y mensajería -->
     <!-- ChatScreen -->
@@ -753,6 +819,10 @@
     <string name="chats_unblock_upper">DESBLOQUEAR</string>
     <string name="chats_chat_upper">CHAT</string>
     <string name="chats_profile_upper">PERFIL</string>
+    <string name="chats_subtitle">Tus conversaciones y solicitudes</string>
+    <string name="chats_no_results">Sin resultados para "%1$s"</string>
+    <string name="chats_accept">Aceptar</string>
+    <string name="chats_decline">Rechazar</string>
 
     <!-- NotificationsScreen -->
     <string name="notif_tray_title">Bandeja de notificaciones</string>
@@ -1021,7 +1091,7 @@ Estado: %3$s</string>
     <string name="tareas_cambiar_foto">CAMBIAR FOTO</string>
     <string name="tareas_postergar_tarea_titulo">Postergar Tarea</string>
     <string name="tareas_postergar_tarea_mensaje">Indica el motivo de la postergación:</string>
-    <string name="tareas_postergar_placeholder_ejemplo">Ej: El paciente está durmiendo</string>
+    <string name="tareas_postergar_placeholder_ejemplo">Ej: El familiar está durmiendo</string>
     <string name="tareas_postergar">POSTERGAR</string>
     <string name="tareas_resumen_turno_titulo">RESUMEN DE TURNO</string>
     <string name="tareas_resumen_realizadas">Tareas realizadas: %1$d de %2$d</string>
@@ -1127,7 +1197,7 @@ María González | Residencia Luz | +56912345678 | Encargada | Buena conducta</s
     <string name="crear_solicitud_guardar_cambios">GUARDAR CAMBIOS</string>
     <string name="crear_solicitud_cancelar">CANCELAR</string>
     <string name="crear_solicitud_regresar">REGRESAR</string>
-    <string name="crear_solicitud_mi_paciente">Mi Paciente</string>
+    <string name="crear_solicitud_mi_paciente">Mi Familiar</string>
     <string name="crear_solicitud_solicitud_para">Solicitud para: %1$s</string>
     <string name="crear_solicitud_duracion_servicio">DURACIÓN DEL SERVICIO</string>
     <string name="crear_solicitud_indefinido">Indefinido</string>
@@ -1148,7 +1218,7 @@ María González | Residencia Luz | +56912345678 | Encargada | Buena conducta</s
     <string name="crear_solicitud_campo_horario">Horario</string>
     <string name="crear_solicitud_campo_etiquetas">Etiquetas</string>
     <string name="crear_solicitud_campo_fechas">Fechas</string>
-    <string name="crear_solicitud_requiere_ficha">Primero debes completar tu ficha de familiar/paciente.</string>
+    <string name="crear_solicitud_requiere_ficha">Primero debes completar tu ficha de familiar.</string>
     <string name="crear_solicitud_volver">Volver</string>
     <string name="crear_solicitud_advertencia">Advertencia</string>
 
@@ -1172,13 +1242,13 @@ María González | Residencia Luz | +56912345678 | Encargada | Buena conducta</s
     <string name="historial_orden_recientes">Más recientes primero</string>
     <string name="historial_orden_antiguos">Más antiguos primero</string>
     <string name="historial_orden_calificacion">Por calificación</string>
-    <string name="historial_orden_paciente">Paciente (A-Z)</string>
+    <string name="historial_orden_paciente">Familiar (A-Z)</string>
     <string name="historial_orden_aceptacion">Por fecha de aceptación</string>
     <string name="historial_borrar_todo">Borrar todo</string>
     <string name="historial_vacio">No hay servicios finalizados en el historial.</string>
     <string name="historial_periodo_servicio">Periodo de servicio</string>
     <string name="historial_periodo_formato">%1$s — %2$s</string>
-    <string name="historial_paciente">Paciente</string>
+    <string name="historial_paciente">Familiar</string>
     <string name="historial_paciente_con_edad">%1$s (%2$s años)</string>
     <string name="historial_representante">Representante</string>
     <string name="historial_cuidador">Cuidador</string>
@@ -1232,6 +1302,9 @@ María González | Residencia Luz | +56912345678 | Encargada | Buena conducta</s
     <string name="social_action_ocultar">Ocultar</string>
     <string name="social_action_desbloquear">Desbloquear</string>
     <string name="social_action_bloquear">Bloquear</string>
+    <string name="social_cd_open_profile">Ver perfil</string>
+    <string name="social_count_contactos">%1$d contactos</string>
+    <string name="social_count_verificados">%1$d verificados</string>
 
     <!-- SearchProfileScreen -->
     <string name="search_users_title">Buscar Usuarios</string>
@@ -1303,4 +1376,215 @@ María González | Residencia Luz | +56912345678 | Encargada | Buena conducta</s
     <string name="account_management_change_success_placeholder">cambio exitoso</string>
     <string name="account_management_removed_incomplete_record">Se detectó y eliminó un registro incompleto previo de la cuenta %1$s. Vuelve a presionar \'Vincular\' para asociarla a tu cuenta actual.</string>
     <string name="account_management_email_already_registered">La cuenta %1$s ya pertenece a un usuario registrado y completado.</string>
+
+    <!-- LoginScreen -->
+    <string name="login_loading_dots_1">.</string>
+    <string name="login_loading_dots_2">..</string>
+    <string name="login_loading_dots_3">...</string>
+
+    <!-- ProfileScreen -->
+    <string name="profile_full_name">%1$s %2$s</string>
+    <string name="profile_location_format">%1$s, %2$s</string>
+
+    <!-- MapaCuidadoresScreen -->
+    <string name="mapa_cargando_mapa">Cargando mapa de cuidadores...</string>
+    <string name="mapa_volver">Volver</string>
+    <string name="mapa_buscar_placeholder">Buscar calle, dirección o comuna...</string>
+    <string name="mapa_limpiar">Limpiar</string>
+    <string name="mapa_filtros_desc">Filtros de Búsqueda</string>
+    <string name="mapa_gps_desc">GPS Rápido</string>
+    <string name="mapa_orientar_norte_desc">Orientar al Norte</string>
+    <string name="mapa_modo_calor_desc">Modo Zona de Calor</string>
+    <string name="mapa_subtitulo_sugerencia">Región Metropolitana, Chile</string>
+    <string name="mapa_cuidador_en_ubicacion">Cuidador en esta ubicación</string>
+    <string name="mapa_cerrar">Cerrar</string>
+    <string name="mapa_ver_cuidadores">VER CUIDADORES (%1$d)</string>
+    <string name="mapa_comunas_ficha_title">Aún no tienes comunas en tu ficha técnica</string>
+    <string name="mapa_comunas_ficha_desc">Asigna tus comunas preferidas para aplicar este filtro.</string>
+    <string name="mapa_configurar">CONFIGURAR</string>
+    <string name="mapa_cuidadores_zona">Cuidadores por Zona (%1$d)</string>
+    <string name="mapa_restablecer">Restablecer</string>
+    <string name="mapa_sin_resultados">No hay cuidadores en este sector con los filtros actuales.</string>
+    <string name="mapa_distancia_km">%1$.1f km</string>
+    <string name="mapa_distancia_m">%1$d m</string>
+    <string name="mapa_separador_distancia"> • %1$s</string>
+    <string name="mapa_enviar_solicitud">Enviar solicitud</string>
+    <string name="mapa_ir_al_chat">Ir al chat</string>
+  <string name="user_card_comunas_interes">Comunas de interés: %1$s</string>
+    <string name="mapa_guardar">Guardar</string>
+    <string name="mapa_guardado">Guardado</string>
+    <string name="mapa_sin_calificaciones">Sin calificaciones</string>
+    <string name="mapa_valor_a_convenir">Valor a convenir</string>
+    <string name="mapa_verificado">Verificado</string>
+    <string name="mapa_valor_hora">$%1$s/hora</string>
+
+    <!-- ReviewSolicitudScreen -->
+    <string name="review_solicitud_cancelar_postulacion_titulo">¿Cancelar postulación?</string>
+    <string name="review_solicitud_cancelar_postulacion_mensaje">¿Estás seguro de cancelar tu postulación para este servicio?</string>
+    <string name="review_solicitud_si_cancelar">SÍ, CANCELAR</string>
+    <string name="review_solicitud_creada_por_ti">Esta solicitud fue creada por ti.</string>
+    <string name="review_solicitud_cancelar_postulacion">CANCELAR POSTULACIÓN</string>
+    <string name="review_solicitud_postular_a_servicio">POSTULAR A SERVICIO</string>
+    <string name="review_solicitud_servicio_activo">SERVICIO ACTIVO</string>
+    <string name="review_solicitud_detalles_de_solicitud">DETALLES DE SOLICITUD</string>
+    <string name="review_solicitud_revisa_requerimientos">Revisa los requerimientos del familiar</string>
+    <string name="review_solicitud_paciente_badge">FAMILIAR</string>
+    <string name="review_solicitud_ver_ficha">VER FICHA</string>
+    <string name="review_solicitud_representante">REPRESENTANTE</string>
+    <string name="review_solicitud_contacto_protegido">Datos de contacto protegidos</string>
+    <string name="review_solicitud_contacto_protegido_desc">Serán visibles una vez el representante acepte tu postulación.</string>
+    <string name="review_solicitud_condicion_medica">CONDICIÓN MÉDICA</string>
+    <string name="review_solicitud_ninguna">Ninguna</string>
+    <string name="review_solicitud_sin_observaciones">Sin observaciones adicionales</string>
+    <string name="review_solicitud_enfermedades">Enfermedades</string>
+    <string name="review_solicitud_movilidad">Movilidad</string>
+    <string name="review_solicitud_observaciones_generales">OBSERVACIONES GENERALES</string>
+    <string name="review_solicitud_requerimientos_turno">REQUERIMIENTOS DEL TURNO</string>
+    <string name="review_solicitud_direccion_con_depto">%1$s %2$s Depto %3$s, %4$s</string>
+    <string name="review_solicitud_direccion_sin_depto">%1$s %2$s, %3$s</string>
+    <string name="review_solicitud_direccion">Dirección</string>
+    <string name="review_solicitud_ubicacion_protegida">Ubicación exacta protegida</string>
+    <string name="review_solicitud_referencia_comuna">Referencia: Comuna de %1$s</string>
+    <string name="review_solicitud_duracion">Duración</string>
+    <string name="review_solicitud_contrato_indefinido">Contrato Indefinido</string>
+    <string name="review_solicitud_servicio_temporal">Servicio Temporal</string>
+    <string name="review_solicitud_inicio">Inicio: %1$s</string>
+    <string name="review_solicitud_termino">Termino: %1$s</string>
+    <string name="review_solicitud_error_cargar_info">No se pudo cargar la información del familiar.</string>
+
+    <!-- TaskComponents -->
+    <string name="task_frecuencia_diaria">Diaria</string>
+    <string name="task_frecuencia_semanal">Semanal (%1$s)</string>
+    <string name="task_frecuencia_mensual">Mensual (Día %1$s)</string>
+    <string name="task_frecuencia_mensual_con_meses">Mensual (Día %1$s en %2$s)</string>
+    <string name="task_frecuencia_una_vez">Una vez (%1$s)</string>
+    <string name="task_dia_lun">Lun</string>
+    <string name="task_dia_mar">Mar</string>
+    <string name="task_dia_mie">Mié</string>
+    <string name="task_dia_jue">Jue</string>
+    <string name="task_dia_vie">Vie</string>
+    <string name="task_dia_sab">Sáb</string>
+    <string name="task_dia_dom">Dom</string>
+    <string name="task_mes_ene">Ene</string>
+    <string name="task_mes_feb">Feb</string>
+    <string name="task_mes_mar">Mar</string>
+    <string name="task_mes_abr">Abr</string>
+    <string name="task_mes_may">May</string>
+    <string name="task_mes_jun">Jun</string>
+    <string name="task_mes_jul">Jul</string>
+    <string name="task_mes_ago">Ago</string>
+    <string name="task_mes_sep">Sep</string>
+    <string name="task_mes_oct">Oct</string>
+    <string name="task_mes_nov">Nov</string>
+    <string name="task_mes_dic">Dic</string>
+    <string name="task_tipo_comida">COMIDA</string>
+    <string name="task_tipo_medicacion">MEDICACION</string>
+    <string name="task_tipo_higiene">HIGIENE</string>
+    <string name="task_tipo_actividad">ACTIVIDAD</string>
+    <string name="task_tipo_otro">OTRO</string>
+    <string name="task_frecuencia_opcion_diaria">DIARIA</string>
+    <string name="task_frecuencia_opcion_semanal">SEMANAL</string>
+    <string name="task_frecuencia_opcion_mensual">MENSUAL</string>
+    <string name="task_frecuencia_opcion_una_vez">UNA VEZ</string>
+
+    <!-- ProfileComponents -->
+    <string name="profile_mi_experiencia">MI EXPERIENCIA</string>
+    <string name="profile_age_gender_format">%1$s años • %2$s</string>
+    <string name="profile_busca_en">Busca en</string>
+    <string name="profile_dependencia">Dependencia</string>
+    <string name="profile_ver_ficha_completa">VER FICHA COMPLETA</string>
+    <string name="profile_detalles_ficha">DETALLES DE FICHA</string>
+    <string name="profile_ver_menos">Ver menos</string>
+    <string name="profile_edit_content_desc">Editar</string>
+    <string name="profile_identificacion">IDENTIFICACIÓN</string>
+    <string name="profile_salud_dependencia">SALUD Y DEPENDENCIA</string>
+    <string name="profile_editar_tareas_cd">Editar Tareas</string>
+    <string name="profile_no_tareas">No hay tareas programadas aún.</string>
+    <string name="profile_label_especialidad_formacion">Especialidad o formación</string>
+    <string name="profile_label_experiencia_previa">Experiencia previa</string>
+    <string name="profile_label_comunas_preferencia">Comunas de preferencia</string>
+    <string name="profile_label_descripcion_mi">Descripciónción sobre mí</string>
+    <string name="profile_label_nombre_paciente">Nombre del familiar</string>
+    <string name="profile_label_vive_solicitante">Vive con el solicitante</string>
+    <string name="profile_label_region">Región</string>
+    <string name="profile_label_comuna">Comuna</string>
+    <string name="profile_label_numero">Número</string>
+    <string name="profile_label_depto_block">Depto / Block</string>
+    <string name="profile_label_comunas_interes">Comunas de interés</string>
+    <string name="profile_label_horarios_preferencia">Horarios de preferencia</string>
+    <string name="profile_label_nivel_dependencia">Nivel de Dependencia</string>
+    <string name="profile_label_movilidad">Movilidad</string>
+    <string name="profile_label_comunicacion">Comunicación</string>
+    <string name="profile_label_discapacidades">Discapacidades</string>
+    <string name="profile_label_otra_discapacidad">Otra discapacidad</string>
+    <string name="profile_label_enfermedades_cronicas">Enfermedades crónicas</string>
+    <string name="profile_label_otra_enfermedad">Otra enfermedad</string>
+    <string name="profile_label_plan_alimentacion">Plan de alimentación</string>
+    <string name="profile_label_medicamentos">Medicamentos</string>
+    <string name="profile_label_otras_observaciones">Otras observaciones</string>
+    <string name="profile_yes">Sí</string>
+    <string name="profile_no">No</string>
+    <string name="profile_preferencias_busqueda">PREFERENCIAS DE BÚSQUEDA</string>
+    <string name="profile_editar_preferencias_cd">Editar Preferencias</string>
+    <string name="profile_offline_preferencias">Modo offline: No se pueden modificar las preferencias.</string>
+    <string name="profile_cancelar_upper">CANCELAR</string>
+    <string name="profile_guardando">GUARDANDO...</string>
+    <string name="profile_comunas_trabajo">Comunas de trabajo</string>
+    <string name="profile_comunas_no_especificadas">No especificadas</string>
+    <string name="profile_horarios_disponibles">Horarios disponibles</string>
+    <string name="profile_horarios_interes">Horarios de interés</string>
+    <string name="profile_horarios_no_especificados">No especificados</string>
+    <string name="profile_comunas_trabajo_upper">COMUNAS DE TRABAJO</string>
+    <string name="profile_comunas_interes_upper">COMUNAS DE INTERÉS</string>
+    <string name="profile_horarios_disponibilidad_upper">HORARIOS DE DISPONIBILIDAD</string>
+    <string name="profile_horarios_interes_upper">HORARIOS DE INTERÉS</string>
+    <string name="profile_fines_semana">Fines de Semana</string>
+
+    <!-- CaregiverVerificationComponents -->
+    <string name="caregiver_profile_subir">SUBIR</string>
+    <string name="caregiver_profile_resena_una">%1$d reseña</string>
+    <string name="caregiver_profile_resenas_varias">%1$d reseñas</string>
+    <string name="caregiver_profile_de_5_0">de 5.0</string>
+    <string name="caregiver_profile_anonimo">Anónimo</string>
+    <string name="caregiver_profile_registro_uno">%1$d registro</string>
+    <string name="caregiver_profile_registros_varios">%1$d registros</string>
+    <string name="caregiver_profile_sin_titulo">Sin título</string>
+    <string name="caregiver_profile_actualidad">Actualidad</string>
+    <string name="caregiver_profile_experiencia_una">%1$d experiencia</string>
+    <string name="caregiver_profile_experiencias_varias">%1$d experiencias</string>
+    <string name="caregiver_profile_cargo">Cargo</string>
+    <string name="caregiver_profile_documento_uno">%1$d documento</string>
+    <string name="caregiver_profile_documentos_varios">%1$d documentos</string>
+    <string name="caregiver_profile_documento">Documento</string>
+    <string name="caregiver_profile_referencia_una">%1$d referencia</string>
+    <string name="caregiver_profile_referencias_varias">%1$d referencias</string>
+    <string name="caregiver_profile_referencia">Referencia</string>
+    <string name="caregiver_profile_valor_hora_referencial">Valor hora referencial</string>
+    <string name="caregiver_profile_valor_hora_con_valor">$%1$s/hora</string>
+
+    <!-- CuidaleMediaPicker -->
+    <string name="media_picker_title">Multimedia</string>
+    <string name="media_picker_select_hint">Selecciona fotos o videos</string>
+    <string name="media_picker_selected_count">%1$d/%2$d seleccionados</string>
+    <string name="media_picker_back_cd">Volver</string>
+    <string name="media_picker_send">ENVIAR</string>
+    <string name="media_picker_selected_cd">Seleccionado</string>
+    <string name="media_picker_permission_required">Permiso necesario</string>
+    <string name="media_picker_permission_desc">Para seleccionar fotos y videos necesitamos acceso a tu galería.</string>
+    <string name="media_picker_allow_permission">PERMITIR ACCESO</string>
+    <string name="media_picker_empty">No hay multimedia en tu dispositivo.</string>
+    <string name="media_picker_filter_all">Todos</string>
+    <string name="media_picker_filter_photos">Fotos</string>
+    <string name="media_picker_filter_videos">Videos</string>
+    <string name="media_picker_loading">Cargando multimedia...</string>
+    <string name="media_picker_load_error">No se pudieron cargar tus fotos y videos.</string>
+    <string name="media_picker_retry">REINTENTAR</string>
+    <string name="media_picker_permission_denied_settings">Permiso denegado. Habilítalo desde los ajustes del sistema.</string>
+    <string name="media_picker_open_settings">ABRIR AJUSTES</string>
+    <string name="media_picker_limit_reached">Alcanzaste el límite de %1$d. Deselecciona un elemento para agregar otro.</string>
+    <string name="media_picker_video_cd">Video</string>
+    <string name="media_picker_locked_cd">Límite de selección alcanzado</string>
+    <string name="media_picker_empty_all">No hay ninguna imagen multimedia para enviar</string>
+    <string name="media_picker_empty_photos">No hay ninguna foto para enviar</string>
+    <string name="media_picker_empty_videos">No hay ningún video para enviar</string>
 </resources>

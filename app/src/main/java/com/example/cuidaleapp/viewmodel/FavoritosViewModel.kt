@@ -93,10 +93,6 @@ class FavoritosViewModel(application: Application) : AndroidViewModel(applicatio
                 userRef.update("favoritos", action).await()
                 loadSocialData()
                 _uiState.value = FavoritosUiState.Success(if (isFav) "Eliminado de favoritos" else "Añadido a favoritos")
-                
-                if (!isFav && !_guardados.value.contains(targetUid)) {
-                    userRef.update("guardados", FieldValue.arrayUnion(targetUid)).await()
-                }
             } catch (e: Exception) {
                 _uiState.value = FavoritosUiState.Error("Error al actualizar favoritos")
             }
@@ -124,6 +120,10 @@ class FavoritosViewModel(application: Application) : AndroidViewModel(applicatio
     fun toggleNoDeseado(targetUid: String) {
         val myUid = auth.currentUser?.uid ?: return
         val isHidden = _noDeseados.value.contains(targetUid)
+
+        if (!isHidden) {
+            com.example.cuidaleapp.utils.OcultadosRecientes.marcar(targetUid)
+        }
 
         viewModelScope.launch {
             _uiState.value = FavoritosUiState.Loading

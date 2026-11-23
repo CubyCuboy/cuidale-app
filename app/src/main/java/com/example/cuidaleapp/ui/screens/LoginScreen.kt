@@ -64,8 +64,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.cuidaleapp.R
+import com.example.cuidaleapp.utils.ErrorCodes
+import com.example.cuidaleapp.utils.ErrorMessages
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -138,6 +141,7 @@ fun LoginForm(
     var keepSession by rememberSaveable { mutableStateOf(true) }
     var isPasswordVisible by rememberSaveable { mutableStateOf(false) }
 
+    val context = LocalContext.current
     val gradient = CuidaleThemeExtras.gradient
     val shadows = CuidaleThemeExtras.shadows
     val colors = MaterialTheme.colorScheme
@@ -249,7 +253,10 @@ fun LoginForm(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                val needsVerification = (state as? LoginUiState.Error)?.message?.contains("verificar") == true
+                val needsVerification = (state as? LoginUiState.Error)?.message?.contains(
+                    ErrorMessages.resolve(context, ErrorCodes.Auth.EMAIL_NOT_VERIFIED),
+                    ignoreCase = true
+                ) == true
 
                 if (!needsVerification) {
                     InputFieldLabel(stringResource(R.string.login_password_label))
@@ -278,8 +285,15 @@ fun LoginForm(
                 }
 
                 AnimatedVisibility(visible = isError) {
+                    val raw = (state as? LoginUiState.Error)?.message
+                    val errorText = if (raw.isNullOrBlank()) {
+                        ""
+                    } else {
+                        val resolved = ErrorMessages.get(context, raw)
+                        if (resolved == ErrorMessages.resolve(context, ErrorCodes.Unknown.GENERIC)) raw else resolved
+                    }
                     Text(
-                        text = (state as? LoginUiState.Error)?.message ?: "",
+                        text = errorText,
                         color = if (needsVerification) colors.primary else colors.onErrorContainer,
                         style = typography.labelMedium,
                         modifier = Modifier.padding(top = 8.dp)
@@ -307,23 +321,33 @@ fun LoginForm(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            val needsVerification = (state as? LoginUiState.Error)?.message?.contains("verificar") == true
+            val needsVerification = (state as? LoginUiState.Error)?.message?.contains(
+                ErrorMessages.resolve(context, ErrorCodes.Auth.EMAIL_NOT_VERIFIED),
+                ignoreCase = true
+            ) == true
 
-            var loadingDots by remember { mutableStateOf("") }
+            var loadingDotCount by remember { mutableStateOf(0) }
             LaunchedEffect(isLoading) {
                 while (isLoading) {
-                    loadingDots = when (loadingDots.length) {
-                        0 -> "."
-                        1 -> ".."
-                        else -> "..."
+                    loadingDotCount = when (loadingDotCount) {
+                        0 -> 1
+                        1 -> 2
+                        else -> 3
                     }
                     delay(450)
                 }
-                loadingDots = ""
+                loadingDotCount = 0
+            }
+
+            val loadingSuffix = when (loadingDotCount) {
+                1 -> stringResource(R.string.login_loading_dots_1)
+                2 -> stringResource(R.string.login_loading_dots_2)
+                3 -> stringResource(R.string.login_loading_dots_3)
+                else -> ""
             }
 
             HardShadowButton(
-                text = if (isLoading) stringResource(R.string.login_logging_in) + loadingDots
+                text = if (isLoading) stringResource(R.string.login_logging_in) + loadingSuffix
                 else if (needsVerification) stringResource(R.string.login_verify_account)
                 else if (isError) stringResource(R.string.login_button_retry)
                 else stringResource(R.string.login_button_enter),

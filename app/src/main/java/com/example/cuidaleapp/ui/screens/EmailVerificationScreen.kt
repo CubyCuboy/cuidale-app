@@ -2,7 +2,6 @@ package com.example.cuidaleapp.ui.screens
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -345,7 +344,7 @@ fun FailureExhaustedContent(onRetry: () -> Unit, isDark: Boolean) {
 
 @Composable
 fun SuccessContent(onFinish: () -> Unit) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = com.example.cuidaleapp.ui.theme.CuidaleThemeExtras.customColors.isDark
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(
             imageVector = Icons.Default.CheckCircle,

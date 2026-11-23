@@ -73,6 +73,9 @@ data class CuidaleCustomColors(
     val aqua: Color,
     val lime: Color,
     val mint: Color,
+    val favorite: Color,
+    val saved: Color,
+    val hidden: Color,
     val isDark: Boolean
 )
 
@@ -106,6 +109,9 @@ private val LocalCuidaleCustomColors = staticCompositionLocalOf {
         aqua = CuidaleAqua,
         lime = CuidaleLime,
         mint = CuidaleMint,
+        favorite = CuidaleFavoriteLight,
+        saved = CuidaleSavedLight,
+        hidden = CuidaleHiddenLight,
         isDark = false
     )
 }
@@ -169,6 +175,9 @@ fun CuidaleAppTheme(
             aqua = CuidaleAquaDark,
             lime = CuidaleLimeDark,
             mint = CuidaleMintDark,
+            favorite = CuidaleFavoriteDark,
+            saved = CuidaleSavedDark,
+            hidden = CuidaleHiddenDark,
             isDark = true
         )
     } else {
@@ -186,6 +195,9 @@ fun CuidaleAppTheme(
             aqua = CuidaleAqua,
             lime = CuidaleLime,
             mint = CuidaleMint,
+            favorite = CuidaleFavoriteLight,
+            saved = CuidaleSavedLight,
+            hidden = CuidaleHiddenLight,
             isDark = false
         )
     }

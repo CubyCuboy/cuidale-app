@@ -20,6 +20,7 @@ data class SearchResult(
     val nombre: String = "",
     val apellido_pa: String = "",
     val fotoUrl: String = "",
+    val representanteFotoUrl: String = "",
     val region: String = "",
     val comuna: String = "",
     val comunas: List<String> = emptyList(),
@@ -28,7 +29,10 @@ data class SearchResult(
     val nivel_dependencia: String = "",
     val especializacion: String = "",
     val horarios: List<String> = emptyList(),
-    val isNew: Boolean = false
+    val isNew: Boolean = false,
+    val calificacion: Double = 0.0,
+    val nroCalificaciones: Int = 0,
+    val valorHora: Int = 0
 )
 
 sealed class SearchState {
@@ -221,11 +225,15 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                         var nombre = ""
                         var apellido = ""
                         var foto = ""
+                        var representanteFotoUrl = ""
                         var edad = ""
                         var nivel_dependencia = ""
                         var especializacion = ""
                         var horarios: List<String> = emptyList()
                         var comunas_trabajo: List<String> = emptyList()
+                        var valorHora = 0
+                        var promedio = 0.0
+                        var nroCalif = 0
                         var region = doc.getString("region") ?: ""
                         var comuna = doc.getString("comuna") ?: ""
 
@@ -241,6 +249,9 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                                     especializacion = fichaDoc.getString("especializacion") ?: ""
                                     horarios = @Suppress("UNCHECKED_CAST") (fichaDoc.get("horarios") as? List<String> ?: emptyList())
                                     comunas_trabajo = @Suppress("UNCHECKED_CAST") (fichaDoc.get("comunas") as? List<String> ?: emptyList())
+                                    valorHora = fichaDoc.getLong("valorHoraReferencial")?.toInt() ?: 0
+                                    promedio = (fichaDoc.get("rating_promedio") as? Number)?.toDouble() ?: 0.0
+                                    nroCalif = (fichaDoc.get("total_resenas") as? Number)?.toInt() ?: 0
                                 }
                             } catch (e: Exception) {
                             }
@@ -251,6 +262,25 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                             foto = doc.getString("fotoUrl") ?: (doc.get("fotos") as? List<String>)?.firstOrNull() ?: ""
                             edad = doc.get("edad")?.toString() ?: ""
                             nivel_dependencia = doc.getString("nivel_dependencia") ?: ""
+
+                            // Intenta obtener la foto del representante (si existe)
+                            val repUid = doc.getString("representanteUid")
+                                ?: doc.getString("representante_uid")
+                                ?: actualId
+                            if (repUid.isNotBlank()) {
+                                try {
+                                    val repDocs = db.collection("usuarios")
+                                        .whereEqualTo("uid", repUid)
+                                        .get()
+                                        .await()
+                                    val repDoc = repDocs.documents.firstOrNull()
+                                    representanteFotoUrl = repDoc?.getString("fotoUrl")
+                                        ?: repDoc?.getString("foto")
+                                        ?: ""
+                                } catch (e: Exception) {
+                                    representanteFotoUrl = ""
+                                }
+                            }
                         }
 
                         val timestamp = if (targetTipo == "cuidador") {
@@ -265,6 +295,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                             nombre = nombre.ifEmpty { "Usuario" },
                             apellido_pa = apellido,
                             fotoUrl = foto,
+                            representanteFotoUrl = representanteFotoUrl,
                             region = region,
                             comuna = comuna,
                             comunas = if (targetTipo == "cuidador") comunas_trabajo else emptyList(),
@@ -273,7 +304,10 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                             nivel_dependencia = nivel_dependencia,
                             especializacion = especializacion,
                             horarios = horarios,
-                            isNew = isNew
+                            isNew = isNew,
+                            calificacion = promedio,
+                            nroCalificaciones = nroCalif,
+                            valorHora = valorHora
                         )
                     }
                 }.awaitAll().distinctBy { it.id }.filter { it.id !in currentNoDeseados }

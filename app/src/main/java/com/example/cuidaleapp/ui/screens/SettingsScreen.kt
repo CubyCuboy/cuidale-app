@@ -1,6 +1,8 @@
 package com.example.cuidaleapp.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -13,12 +15,18 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material.icons.filled.LockReset
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.ChatBubbleOutline
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -62,7 +70,10 @@ fun SettingsScreen(
     val customColors = CuidaleThemeExtras.customColors
     val shadowPalette = CuidaleThemeExtras.shadows
     val userData by viewModel.userData.collectAsState()
+    val darkTheme by viewModel.isDarkMode.collectAsState()
     var showCacheMenu by remember { mutableStateOf(false) }
+    var showAccountMenu by remember { mutableStateOf(false) }
+    var showDeviceMenu by remember { mutableStateOf(false) }
 
 
     val gradient = CuidaleThemeExtras.gradient
@@ -81,6 +92,21 @@ fun SettingsScreen(
                 userData = userData,
                 chatViewModel = chatViewModel,
                 onBack = { showCacheMenu = false }
+            )
+        } else if (showAccountMenu) {
+            AccountSettingsScreen(
+                userData = userData,
+                onBack = { showAccountMenu = false },
+                onResetPass = onResetPass,
+                onLogout = { viewModel.logout { onLogoutClick() } }
+            )
+        } else if (showDeviceMenu) {
+            DeviceSettingsScreen(
+                isDark = darkTheme,
+                cacheSummary = AppCacheManager.formatBytes(AppCacheManager.cacheSizeBytes(context)),
+                onToggleTheme = { viewModel.toggleTheme() },
+                onOpenCache = { showCacheMenu = true },
+                onBack = { showDeviceMenu = false }
             )
         } else {
         Column(
@@ -117,107 +143,7 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            if (userData.telefono.isNotEmpty() && !userData.telefonoVerificado) {
-                HardShadowPanel(
-                    backgroundColor = customColors.warningContainer,
-                    shadowColor = customColors.warning.copy(alpha = 0.2f),
-                    cornerRadius = 24.dp
-                ) {
-                    Row(
-                        modifier = Modifier.padding(20.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            color = customColors.warning,
-                            shape = CircleShape,
-                            modifier = Modifier.size(44.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(Icons.Default.VerifiedUser, null, tint = Color.White, modifier = Modifier.size(24.dp))
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                stringResource(R.string.settings_verify_phone_title),
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = customColors.warning
-                            )
-                            Text(
-                                stringResource(R.string.settings_verify_phone_body, userData.telefono),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = customColors.warning.copy(alpha = 0.8f)
-                            )
-                        }
-                    }
-                    
-                    Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
-                        Button(
-                            onClick = { context.startActivity(Intent(context, PhoneVerificationActivity::class.java)) },
-                            colors = ButtonDefaults.buttonColors(containerColor = customColors.warning),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(stringResource(R.string.settings_verify_now_upper), fontWeight = FontWeight.Black, color = Color.White)
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(24.dp))
-            }
 
-            val emailToCheck = userData.correo
-            if (emailToCheck.isNotEmpty() && !userData.verificado) {
-                HardShadowPanel(
-                    backgroundColor = customColors.warningContainer,
-                    shadowColor = customColors.warning.copy(alpha = 0.2f),
-                    cornerRadius = 24.dp
-                ) {
-                    Row(
-                        modifier = Modifier.padding(20.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            color = customColors.warning,
-                            shape = CircleShape,
-                            modifier = Modifier.size(44.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(Icons.Default.VerifiedUser, null, tint = Color.White, modifier = Modifier.size(24.dp))
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                stringResource(R.string.settings_verify_email_title),
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = customColors.warning
-                            )
-                            Text(
-                                stringResource(R.string.settings_verify_email_body, emailToCheck),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = customColors.warning.copy(alpha = 0.8f)
-                            )
-                        }
-                    }
-                    
-                    Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
-                        Button(
-                            onClick = {
-                                val intent = Intent(context, com.example.cuidaleapp.activities.EmailVerificationActivity::class.java).apply {
-                                    putExtra("email", emailToCheck)
-                                }
-                                context.startActivity(intent)
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = customColors.warning),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(stringResource(R.string.settings_verify_email_now_upper), fontWeight = FontWeight.Black, color = Color.White)
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(24.dp))
-            }
 
             HardShadowPanel(
                 backgroundColor = customColors.panelBackground,
@@ -225,166 +151,76 @@ fun SettingsScreen(
                 cornerRadius = 24.dp
             ) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    modifier = Modifier.fillMaxWidth().padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(
-                        text = stringResource(R.string.settings_account_security),
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(horizontal = 4.dp)
-                    )
-
                     val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
                     val isPasswordLinked = (currentUser?.providerData ?: emptyList()).any { it.providerId == "password" }
+                    val emailVerified = userData.verificado ||
+                        userData.linkedAccounts.any { it.verificado } ||
+                        (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.isEmailVerified ?: false)
+                    val pendingAccountActions =
+                        (if (userData.telefono.isNotEmpty() && !userData.telefonoVerificado) 1 else 0) +
+                        (if (userData.correo.isNotEmpty() && !emailVerified) 1 else 0)
 
-                    if (isPasswordLinked) {
-                        HardShadowButton(
-                            text = stringResource(R.string.profile_reset_pass_button),
-                            containerColor = MaterialTheme.colorScheme.secondary,
-                            contentColor = Color.White,
-                            shadowColor = MaterialTheme.colorScheme.secondaryContainer,
-                            icon = Icons.Default.LockReset,
-                            isDark = isDark,
-                            onClick = onResetPass
-                        )
+                    // ── Cuenta y Seguridad ──
+                    SettingsGroupLabel(stringResource(R.string.settings_account_security), MaterialTheme.colorScheme.primary)
 
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
-
-                    HardShadowButton(
-                        text = stringResource(R.string.settings_account_management),
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = Color.White,
-                        shadowColor = MaterialTheme.colorScheme.primaryContainer,
+                    SettingsRow(
                         icon = Icons.Default.AccountBox,
-                        isDark = isDark,
+                        title = stringResource(R.string.settings_account_settings),
+                        subtitle = stringResource(R.string.settings_account_settings_subtitle),
+                        tint = MaterialTheme.colorScheme.primary,
+                        trailing = {
+                            if (pendingAccountActions > 0) {
+                                Badge(containerColor = MaterialTheme.colorScheme.error) {
+                                    Text(pendingAccountActions.toString(), color = MaterialTheme.colorScheme.onError)
+                                }
+                            }
+                        },
+                        onClick = { showAccountMenu = true }
+                    )
+
+                    SettingsRow(
+                        icon = Icons.Default.AccountBox,
+                        title = stringResource(R.string.settings_account_management),
+                        subtitle = stringResource(R.string.settings_account_management_subtitle),
+                        tint = MaterialTheme.colorScheme.primary,
                         onClick = {
                             context.startActivity(Intent(context, com.example.cuidaleapp.activities.AccountManagementActivity::class.java))
                         }
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
-                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = stringResource(R.string.settings_session),
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(horizontal = 4.dp)
-                    )
-
-                    HardShadowButton(
-                        text = stringResource(R.string.profile_logout_button),
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = Color.White,
-                        shadowColor = MaterialTheme.colorScheme.errorContainer,
-                        icon = Icons.AutoMirrored.Filled.Logout,
-                        isDark = isDark,
-                        onClick = {
-                            viewModel.logout {
-                                onLogoutClick()
-                            }
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Text(
-                        text = stringResource(R.string.settings_version_footer, stringResource(R.string.app_version), stringResource(R.string.app_name)),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            HardShadowPanel(
-                backgroundColor = customColors.panelBackground,
-                shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.15f),
-                cornerRadius = 24.dp
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.settings_storage_cache),
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(horizontal = 4.dp)
-                    )
-
-                    val currentUid = userData.uid.ifBlank {
-                        com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
-                    }
-                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Storage,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(22.dp)
+                    if (isPasswordLinked) {
+                        SettingsRow(
+                            icon = Icons.Default.LockReset,
+                            title = stringResource(R.string.profile_reset_pass_button),
+                            subtitle = stringResource(R.string.settings_reset_pass_subtitle),
+                            tint = MaterialTheme.colorScheme.secondary,
+                            onClick = onResetPass
                         )
-                        Spacer(Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = stringResource(R.string.settings_local_cache),
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = stringResource(R.string.settings_cache_summary, AppCacheManager.formatBytes(AppCacheManager.cacheSizeBytes(context)), AppCacheManager.formatBytes(com.example.cuidaleapp.utils.ChatCacheStore.sizeForUser(currentUid))),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
                     }
 
-                    HardShadowButton(
-                        text = stringResource(R.string.settings_manage_cache),
-                        containerColor = MaterialTheme.colorScheme.tertiary,
-                        contentColor = Color.White,
-                        shadowColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f),
-                        icon = Icons.Default.Storage,
-                        isDark = isDark,
-                        onClick = { showCacheMenu = true }
-                    )
-                    Text(
-                        text = stringResource(R.string.settings_cache_description),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    )
-                }
-            }
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
 
-            Spacer(modifier = Modifier.height(24.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
 
-            if (chatViewModel != null) {
-                val manualStatus by chatViewModel.myManualStatus.collectAsState()
-                HardShadowPanel(
-                    backgroundColor = customColors.panelBackground,
-                    shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.15f),
-                    cornerRadius = 24.dp
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.settings_connection_status),
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(horizontal = 4.dp)
-                        )
+                    SettingsGroupLabel(stringResource(R.string.settings_device_options), MaterialTheme.colorScheme.primary)
+
+                    SettingsRow(
+                        icon = Icons.Default.Settings,
+                        title = stringResource(R.string.settings_device_options),
+                        subtitle = stringResource(R.string.settings_device_options_subtitle),
+                        tint = MaterialTheme.colorScheme.primary,
+                        onClick = { showDeviceMenu = true }
+                    )
+
+                    if (chatViewModel != null) {
+                        val manualStatus by chatViewModel.myManualStatus.collectAsState()
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+                        SettingsGroupLabel(stringResource(R.string.settings_connection_status), MaterialTheme.colorScheme.primary)
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -413,9 +249,344 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                         )
                     }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+                    // ── Sesión (al final) ──
+                    SettingsGroupLabel(stringResource(R.string.settings_session), MaterialTheme.colorScheme.error)
+
+                    SettingsRow(
+                        icon = Icons.AutoMirrored.Filled.Logout,
+                        title = stringResource(R.string.profile_logout_button),
+                        subtitle = stringResource(R.string.settings_logout_subtitle),
+                        tint = MaterialTheme.colorScheme.error,
+                        destructive = true,
+                        onClick = {
+                            viewModel.logout {
+                                onLogoutClick()
+                            }
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = stringResource(R.string.settings_version_footer, stringResource(R.string.app_version), stringResource(R.string.app_name)),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    )
                 }
             }
         }
+        }
+    }
+}
+
+@Composable
+private fun SettingsGroupLabel(text: String, color: Color) {
+    Text(
+        text = text.uppercase(),
+        style = MaterialTheme.typography.labelMedium.copy(
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 0.6.sp
+        ),
+        color = color,
+        modifier = Modifier.padding(start = 4.dp, top = 12.dp, bottom = 2.dp)
+    )
+}
+
+@Composable
+private fun SettingsRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String? = null,
+    tint: Color,
+    destructive: Boolean = false,
+    titleBadge: @Composable (() -> Unit)? = null,
+    trailing: @Composable (() -> Unit)? = null,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(
+            shape = CircleShape,
+            color = tint.copy(alpha = 0.12f),
+            modifier = Modifier.size(38.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp))
+            }
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = if (destructive) tint else MaterialTheme.colorScheme.onSurface
+                )
+                if (titleBadge != null) {
+                    Spacer(Modifier.width(6.dp))
+                    titleBadge()
+                }
+            }
+            if (subtitle != null) {
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        if (trailing != null) {
+            trailing()
+            Spacer(Modifier.width(8.dp))
+        }
+        Icon(Icons.Default.ChevronRight, null, tint = tint.copy(alpha = 0.6f))
+    }
+}
+
+@Composable
+private fun AccountSettingsScreen(
+    userData: com.example.cuidaleapp.models.UserData,
+    onBack: () -> Unit,
+    onResetPass: () -> Unit,
+    onLogout: () -> Unit
+) {
+    val context = LocalContext.current
+    val gradient = CuidaleThemeExtras.gradient
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(listOf(gradient.top, gradient.bottom)))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onBack, modifier = Modifier.background(Color.Black.copy(alpha = 0.15f), CircleShape)) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back), tint = Color.White)
+                }
+                Text(
+                    text = stringResource(R.string.settings_account_settings),
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
+                    color = Color.White,
+                    modifier = Modifier.padding(start = 16.dp)
+                )
+            }
+
+            val pendingPhone = userData.telefono.isNotEmpty() && !userData.telefonoVerificado
+            val emailVerified = userData.verificado ||
+        userData.linkedAccounts.any { it.verificado } ||
+        (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.isEmailVerified ?: false)
+            val pendingEmail = userData.correo.isNotEmpty() && !emailVerified
+            val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+            val isPasswordLinked = (currentUser?.providerData ?: emptyList()).any { it.providerId == "password" }
+
+            HardShadowPanel(
+                backgroundColor = CuidaleThemeExtras.customColors.panelBackground,
+                shadowColor = CuidaleThemeExtras.shadows.hardShadowPrimary.copy(alpha = 0.15f),
+                cornerRadius = 24.dp
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    SettingsGroupLabel(stringResource(R.string.settings_account_security), MaterialTheme.colorScheme.primary)
+
+                    SettingsRow(
+                        icon = Icons.Default.Phone,
+                        title = stringResource(R.string.settings_verify_phone_title),
+                        subtitle = stringResource(R.string.settings_verify_phone_body, userData.telefono.ifBlank { "-" }),
+                        tint = MaterialTheme.colorScheme.primary,
+                        titleBadge = {
+                            if (pendingPhone) {
+                                Badge(containerColor = MaterialTheme.colorScheme.error) {
+                                    Text(stringResource(R.string.account_pending_badge), color = MaterialTheme.colorScheme.onError)
+                                }
+                            }
+                        },
+                        onClick = { context.startActivity(Intent(context, PhoneVerificationActivity::class.java)) }
+                    )
+
+                    val successTint = CuidaleThemeExtras.customColors.successStrong
+                    SettingsRow(
+                        icon = Icons.Default.Email,
+                        title = stringResource(if (emailVerified) R.string.settings_verify_email_done else R.string.settings_verify_email_title),
+                        subtitle = stringResource(
+                            if (emailVerified) R.string.settings_verify_email_done_sub
+                            else R.string.settings_verify_email_body, userData.correo.ifBlank { "-" }
+                        ),
+                        tint = if (emailVerified) successTint else MaterialTheme.colorScheme.primary,
+                        titleBadge = {
+                            if (emailVerified) {
+                                Badge(containerColor = successTint.copy(alpha = 0.15f)) {
+                                    Icon(Icons.Default.CheckCircle, null, tint = successTint, modifier = Modifier.size(14.dp))
+                                }
+                            } else if (pendingEmail) {
+                                Badge(containerColor = MaterialTheme.colorScheme.error) {
+                                    Text(stringResource(R.string.account_pending_badge), color = MaterialTheme.colorScheme.onError)
+                                }
+                            }
+                        },
+                        onClick = {
+                            if (!emailVerified) {
+                                val intent = Intent(context, com.example.cuidaleapp.activities.EmailVerificationActivity::class.java).apply {
+                                    putExtra("email", userData.correo)
+                                }
+                                context.startActivity(intent)
+                            }
+                        }
+                    )
+
+                    SettingsRow(
+                        icon = Icons.Default.AccountBox,
+                        title = stringResource(R.string.settings_account_management),
+                        subtitle = stringResource(R.string.settings_account_management_subtitle),
+                        tint = MaterialTheme.colorScheme.secondary,
+                        onClick = {
+                            context.startActivity(Intent(context, com.example.cuidaleapp.activities.AccountManagementActivity::class.java))
+                        }
+                    )
+
+                    SettingsRow(
+                        icon = Icons.Default.History,
+                        title = stringResource(R.string.account_management_view_change_history),
+                        subtitle = stringResource(R.string.account_history_see_subtitle),
+                        tint = MaterialTheme.colorScheme.tertiary,
+                        onClick = {
+                            context.startActivity(Intent(context, com.example.cuidaleapp.activities.AccountHistoryActivity::class.java))
+                        }
+                    )
+
+                    if (isPasswordLinked) {
+                        SettingsRow(
+                            icon = Icons.Default.LockReset,
+                            title = stringResource(R.string.profile_reset_pass_button),
+                            subtitle = stringResource(R.string.settings_reset_pass_subtitle),
+                            tint = MaterialTheme.colorScheme.tertiary,
+                            onClick = onResetPass
+                        )
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+                    SettingsGroupLabel(stringResource(R.string.settings_session), MaterialTheme.colorScheme.error)
+
+                    SettingsRow(
+                        icon = Icons.AutoMirrored.Filled.Logout,
+                        title = stringResource(R.string.profile_logout_button),
+                        subtitle = stringResource(R.string.settings_logout_subtitle),
+                        tint = MaterialTheme.colorScheme.error,
+                        destructive = true,
+                        onClick = onLogout
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = stringResource(R.string.settings_version_footer, stringResource(R.string.app_version), stringResource(R.string.app_name)),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeviceSettingsScreen(
+    isDark: Boolean,
+    cacheSummary: String,
+    onToggleTheme: () -> Unit,
+    onOpenCache: () -> Unit,
+    onBack: () -> Unit
+) {
+    val gradient = CuidaleThemeExtras.gradient
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(listOf(gradient.top, gradient.bottom)))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onBack, modifier = Modifier.background(Color.Black.copy(alpha = 0.15f), CircleShape)) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back), tint = Color.White)
+                }
+                Text(
+                    text = stringResource(R.string.settings_device_options),
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
+                    color = Color.White,
+                    modifier = Modifier.padding(start = 16.dp)
+                )
+            }
+
+            HardShadowPanel(
+                backgroundColor = CuidaleThemeExtras.customColors.panelBackground,
+                shadowColor = CuidaleThemeExtras.shadows.hardShadowPrimary.copy(alpha = 0.15f),
+                cornerRadius = 24.dp
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    SettingsGroupLabel(stringResource(R.string.settings_device_theme), MaterialTheme.colorScheme.primary)
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.DarkMode, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                            }
+                        }
+                        Spacer(Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(stringResource(R.string.settings_device_theme), style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
+                            Text(stringResource(R.string.settings_device_theme_subtitle), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Switch(checked = isDark, onCheckedChange = { onToggleTheme() })
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+                    SettingsGroupLabel(stringResource(R.string.settings_storage_cache), MaterialTheme.colorScheme.tertiary)
+
+                    SettingsRow(
+                        icon = Icons.Default.Storage,
+                        title = stringResource(R.string.settings_device_cache),
+                        subtitle = cacheSummary,
+                        tint = MaterialTheme.colorScheme.tertiary,
+                        onClick = onOpenCache
+                    )
+                }
+            }
         }
     }
 }
@@ -480,12 +651,18 @@ private fun CacheSettingsScreen(
                 ) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back), tint = Color.White)
                 }
-                Text(
-                    text = stringResource(R.string.settings_cache_title),
-                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
-                    color = Color.White,
-                    modifier = Modifier.padding(start = 16.dp)
-                )
+                Column(modifier = Modifier.padding(start = 16.dp)) {
+                    Text(
+                        text = stringResource(R.string.settings_cache_title),
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
+                        color = Color.White
+                    )
+                    Text(
+                        text = stringResource(R.string.settings_cache_subtitle),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.7f)
+                    )
+                }
             }
 
             HardShadowPanel(
@@ -495,29 +672,31 @@ private fun CacheSettingsScreen(
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Storage,
-                            null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(22.dp)
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                stringResource(R.string.settings_used_locally),
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                stringResource(R.string.settings_sizes_summary, AppCacheManager.formatBytes(mediaBytes), AppCacheManager.formatBytes(imagesBytes), AppCacheManager.formatBytes(chatBytes)),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                    SettingsGroupLabel(stringResource(R.string.settings_used_locally), MaterialTheme.colorScheme.primary)
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.Storage, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                            }
                         }
+                        Spacer(Modifier.width(14.dp))
+                        Text(
+                            stringResource(R.string.settings_sizes_summary, AppCacheManager.formatBytes(mediaBytes), AppCacheManager.formatBytes(imagesBytes), AppCacheManager.formatBytes(chatBytes)),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f)
+                        )
                     }
 
                     CacheActionRow(
@@ -584,11 +763,7 @@ private fun CacheSettingsScreen(
                     modifier = Modifier.fillMaxWidth().padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text(
-                        stringResource(R.string.settings_cache_per_chat),
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    SettingsGroupLabel(stringResource(R.string.settings_cache_per_chat), MaterialTheme.colorScheme.tertiary)
                     if (chatsCached.isEmpty()) {
                         Text(
                             stringResource(R.string.settings_no_cached_chats),
@@ -645,24 +820,12 @@ private fun CacheSettingsScreen(
                     modifier = Modifier.fillMaxWidth().padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Schedule,
-                            null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Text(
-                            stringResource(R.string.settings_offline_retention),
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
+                    SettingsGroupLabel(stringResource(R.string.settings_offline_retention), MaterialTheme.colorScheme.secondary)
                     Text(
                         stringResource(R.string.settings_retention_desc),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 4.dp)
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(1, 3, 7, 30).forEach { days ->

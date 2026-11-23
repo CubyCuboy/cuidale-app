@@ -23,11 +23,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -43,8 +45,13 @@ import com.example.cuidaleapp.ui.components.CuidaleSearchContent
 import com.example.cuidaleapp.ui.components.HardShadowButton
 import com.example.cuidaleapp.ui.components.HardShadowPanel
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
+import com.example.cuidaleapp.R
+import com.example.cuidaleapp.utils.ErrorCodes
+import com.example.cuidaleapp.utils.ErrorMessages
 import com.example.cuidaleapp.utils.LocationUtils
+import com.example.cuidaleapp.utils.ConnectivityObserver
 import com.example.cuidaleapp.utils.SugerenciaUbicacion
+import com.example.cuidaleapp.viewmodel.FavoritosViewModel
 import com.example.cuidaleapp.viewmodel.MapaCuidadoresViewModel
 import com.example.cuidaleapp.viewmodel.MapaUiState
 import com.google.accompanist.systemuicontroller.rememberSystemUiController
@@ -76,7 +83,6 @@ import com.mapbox.maps.plugin.compass.compass
 import com.mapbox.maps.plugin.gestures.addOnMapClickListener
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -84,7 +90,8 @@ fun MapaCuidadoresScreen(
     onNavigateBack: () -> Unit,
     onUserClick: (String) -> Unit,
     onNavigateToFicha: () -> Unit = {},
-    viewModel: MapaCuidadoresViewModel = viewModel()
+    viewModel: MapaCuidadoresViewModel = viewModel(),
+    favoritosViewModel: FavoritosViewModel = viewModel()
 ) {
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -97,9 +104,11 @@ fun MapaCuidadoresScreen(
     val useProfilePreferences by viewModel.useProfilePreferences.collectAsState()
     val sinComunasEnFicha by viewModel.sinComunasEnFicha.collectAsState()
 
+    val isOnline by ConnectivityObserver.isOnline.collectAsState()
+    val favoritos by favoritosViewModel.favoritos.collectAsState()
+
     val hasActiveFilters = selectedRegion.isNotEmpty() || selectedCommunes.isNotEmpty() || useProfilePreferences
 
-    // Configurar la barra de estado completamente transparente
     val systemUiController = rememberSystemUiController()
     SideEffect {
         systemUiController.setStatusBarColor(
@@ -111,24 +120,24 @@ fun MapaCuidadoresScreen(
     var textoBusqueda by remember { mutableStateOf("") }
     var sugerenciasUbicacion by remember { mutableStateOf<List<SugerenciaUbicacion>>(emptyList()) }
     var resetNorthTrigger by remember { mutableLongStateOf(0L) }
-    var modoMapaDeCalor by remember { mutableStateOf(true) } // Por defecto modo mapa de calor
+    var modoMapaDeCalor by remember { mutableStateOf(true) }
     var showFilterSheet by remember { mutableStateOf(false) }
-    var cuidadorBurbuja by remember { mutableStateOf<Cuidador?>(null) } // Burbuja sobre el punto tocado
+    var cuidadorBurbuja by remember { mutableStateOf<Cuidador?>(null) }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     val filterSheetState = rememberModalBottomSheetState()
     var showBottomSheet by remember { mutableStateOf(false) }
 
-    // Lista completa de comunas de Chile como respaldo local offline
     val todasLasComunas = remember {
         ChileData.regions.flatMap { it.comunas }.distinct().sorted()
     }
 
-    // Consulta de sugerencias en vivo mediante Mapbox Places API
+    val subtituloSugerencia = stringResource(R.string.mapa_subtitulo_sugerencia)
+
     LaunchedEffect(textoBusqueda) {
         val q = textoBusqueda.trim()
         if (q.length >= 2) {
-            delay(250) // Debounce 250 ms
+            delay(250)
             val sugerenciasApi = LocationUtils.buscarSugerenciasMapbox(context, q)
             if (sugerenciasApi.isNotEmpty()) {
                 sugerenciasUbicacion = sugerenciasApi
@@ -138,7 +147,7 @@ fun MapaCuidadoresScreen(
                 }.take(5).map { comuna ->
                     SugerenciaUbicacion(
                         titulo = comuna,
-                        subtitulo = "Región Metropolitana, Chile",
+                        subtitulo = subtituloSugerencia,
                         punto = viewModel.puntoGeneralRM
                     )
                 }
@@ -149,7 +158,6 @@ fun MapaCuidadoresScreen(
         }
     }
 
-    // Launcher de Permisos de Ubicación (UH1)
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -197,7 +205,7 @@ fun MapaCuidadoresScreen(
                         CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "Cargando mapa de cuidadores...",
+                            text = stringResource(R.string.mapa_cargando_mapa),
                             color = MaterialTheme.colorScheme.onSurface,
                             style = MaterialTheme.typography.bodyMedium
                         )
@@ -224,14 +232,14 @@ fun MapaCuidadoresScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = state.mensaje,
+                            text = ErrorMessages.get(context, state.mensaje),
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodyLarge,
                             textAlign = TextAlign.Center
                         )
                         Spacer(modifier = Modifier.height(24.dp))
                         HardShadowButton(
-                            text = "REINTENTAR",
+                            text = stringResource(R.string.action_retry),
                             onClick = { viewModel.cargarCuidadoresFirestore() },
                             containerColor = MaterialTheme.colorScheme.primary,
                             contentColor = Color.White
@@ -246,7 +254,6 @@ fun MapaCuidadoresScreen(
                 val centroBusqueda = state.centroBusqueda ?: viewModel.puntoGeneralRM
                 val cameraEventId = state.cameraEventId
 
-                // Mapbox HeatmapView con toque inteligente (Burbuja directa sobre punto o lista general)
                 MapboxHeatmapView(
                     geoJsonData = geoJson,
                     centro = centroBusqueda,
@@ -257,7 +264,6 @@ fun MapaCuidadoresScreen(
                         val latTocado = punto.latitude()
                         val lngTocado = punto.longitude()
 
-                        // Buscar si se tocó directamente un punto de cuidador (menos de 800m del toque)
                         val cuidadorCercano = cuidadores.minByOrNull { c ->
                             LocationUtils.calcularDistanciaMetros(latTocado, lngTocado, c.latitud, c.longitud)
                         }
@@ -273,7 +279,6 @@ fun MapaCuidadoresScreen(
                     }
                 )
 
-                // Barra Superior Flotante de Búsqueda y Sugerencias en Vivo
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -294,16 +299,15 @@ fun MapaCuidadoresScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Volver",
+                                contentDescription = stringResource(R.string.mapa_volver),
                                 tint = MaterialTheme.colorScheme.onSurface
                             )
                         }
 
-                        // Input para búsqueda manual por dirección / comuna / calles
                         OutlinedTextField(
                             value = textoBusqueda,
                             onValueChange = { textoBusqueda = it },
-                            placeholder = { Text("Buscar calle, dirección o comuna...") },
+                            placeholder = { Text(stringResource(R.string.mapa_buscar_placeholder)) },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                             keyboardActions = KeyboardActions(
@@ -328,11 +332,10 @@ fun MapaCuidadoresScreen(
                                             sugerenciasUbicacion = emptyList()
                                             viewModel.limpiarTextoBusquedaSinMoverCamara()
                                         }) {
-                                            Icon(Icons.Default.Clear, contentDescription = "Limpiar")
+                                            Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.mapa_limpiar))
                                         }
                                     }
 
-                                    // Botón de Filtros Estilizado (Pill/Card Container)
                                     Surface(
                                         onClick = { showFilterSheet = true },
                                         color = if (hasActiveFilters) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
@@ -346,7 +349,7 @@ fun MapaCuidadoresScreen(
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.Tune,
-                                                contentDescription = "Filtros de Búsqueda",
+                                                contentDescription = stringResource(R.string.mapa_filtros_desc),
                                                 tint = if (hasActiveFilters) Color.White else MaterialTheme.colorScheme.primary,
                                                 modifier = Modifier.size(18.dp)
                                             )
@@ -368,12 +371,10 @@ fun MapaCuidadoresScreen(
                             )
                         )
 
-                        // Columna de Botones Flotantes de Acción: GPS, Norte y Modo Zonas de Calor (Ícono de Fuego)
                         Column(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            // 1. Botón de GPS rápido
                             IconButton(
                                 onClick = {
                                     sugerenciasUbicacion = emptyList()
@@ -394,13 +395,12 @@ fun MapaCuidadoresScreen(
                                 } else {
                                     Icon(
                                         imageVector = Icons.Default.MyLocation,
-                                        contentDescription = "GPS Rápido",
+                                        contentDescription = stringResource(R.string.mapa_gps_desc),
                                         tint = Color.White
                                     )
                                 }
                             }
 
-                            // 2. Botón Orientar Mapa al Norte (debajo del GPS)
                             IconButton(
                                 onClick = { resetNorthTrigger = System.currentTimeMillis() },
                                 modifier = Modifier
@@ -409,12 +409,11 @@ fun MapaCuidadoresScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Explore,
-                                    contentDescription = "Orientar al Norte",
+                                    contentDescription = stringResource(R.string.mapa_orientar_norte_desc),
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                             }
 
-                            // 3. Botón para Alternar Modo Zonas de Calor (Ícono de Fuego)
                             IconButton(
                                 onClick = { modoMapaDeCalor = !modoMapaDeCalor },
                                 modifier = Modifier
@@ -426,14 +425,13 @@ fun MapaCuidadoresScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.LocalFireDepartment,
-                                    contentDescription = "Modo Zona de Calor",
+                                    contentDescription = stringResource(R.string.mapa_modo_calor_desc),
                                     tint = if (modoMapaDeCalor) Color(0xFFFF6D00) else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
                     }
 
-                    // Sugerencias de Calles/Lugares/Comunas en Vivo desde Mapbox Places API
                     AnimatedVisibility(
                         visible = sugerenciasUbicacion.isNotEmpty(),
                         enter = fadeIn() + expandVertically(),
@@ -495,7 +493,6 @@ fun MapaCuidadoresScreen(
                     }
                 }
 
-                // BURBUJA INFORMATIVA FLOTANTE AL TOCAR UN CUIDADOR ESPECÍFICO
                 AnimatedVisibility(
                     visible = cuidadorBurbuja != null,
                     enter = fadeIn() + scaleIn(initialScale = 0.85f),
@@ -526,7 +523,7 @@ fun MapaCuidadoresScreen(
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = "Cuidador en esta ubicación",
+                                            text = stringResource(R.string.mapa_cuidador_en_ubicacion),
                                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                             color = MaterialTheme.colorScheme.primary
                                         )
@@ -537,7 +534,7 @@ fun MapaCuidadoresScreen(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Close,
-                                            contentDescription = "Cerrar",
+                                            contentDescription = stringResource(R.string.mapa_cerrar),
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
@@ -595,7 +592,7 @@ fun MapaCuidadoresScreen(
                                                 shape = RoundedCornerShape(50)
                                             ) {
                                                 Text(
-                                                    "Sin verificación oficial",
+                                                    stringResource(R.string.caregiver_profile_sin_verificacion),
                                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                                                     style = MaterialTheme.typography.labelSmall,
                                                     color = Color(0xFFE65100),
@@ -626,7 +623,7 @@ fun MapaCuidadoresScreen(
                                 Spacer(modifier = Modifier.height(16.dp))
 
                                 HardShadowButton(
-                                    text = "VER PERFIL COMPLETO",
+                                    text = stringResource(R.string.solicitudes_ver_perfil_completo),
                                     onClick = {
                                         cuidadorBurbuja = null
                                         onUserClick(cuidador.id)
@@ -639,7 +636,6 @@ fun MapaCuidadoresScreen(
                     }
                 }
 
-                // Botón flotante para desplegar el BottomSheet con la lista de cuidadores
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -647,7 +643,7 @@ fun MapaCuidadoresScreen(
                     contentAlignment = Alignment.BottomCenter
                 ) {
                     HardShadowButton(
-                        text = "VER CUIDADORES (${cuidadores.size})",
+                        text = stringResource(R.string.mapa_ver_cuidadores, cuidadores.size),
                         onClick = {
                             cuidadorBurbuja = null
                             showBottomSheet = true
@@ -658,7 +654,6 @@ fun MapaCuidadoresScreen(
                     )
                 }
 
-                // ModalBottomSheet con los Filtros de Búsqueda Embebidos
                 if (showFilterSheet) {
                     ModalBottomSheet(
                         onDismissRequest = { showFilterSheet = false },
@@ -666,7 +661,6 @@ fun MapaCuidadoresScreen(
                         containerColor = CuidaleThemeExtras.customColors.panelBackground
                     ) {
                         Column {
-                            // Aviso si el usuario activó la preferencia pero no tiene comunas guardadas en la ficha
                             if (sinComunasEnFicha) {
                                 Surface(
                                     color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.95f),
@@ -687,12 +681,12 @@ fun MapaCuidadoresScreen(
                                         Spacer(modifier = Modifier.width(10.dp))
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
-                                                text = "Aún no tienes comunas en tu ficha técnica",
+                                                text = stringResource(R.string.mapa_comunas_ficha_title),
                                                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
                                                 color = MaterialTheme.colorScheme.onErrorContainer
                                             )
                                             Text(
-                                                text = "Asigna tus comunas preferidas para aplicar este filtro.",
+                                                text = stringResource(R.string.mapa_comunas_ficha_desc),
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f)
                                             )
@@ -709,7 +703,7 @@ fun MapaCuidadoresScreen(
                                             ),
                                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                                         ) {
-                                            Text("CONFIGURAR", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
+                                            Text(stringResource(R.string.mapa_configurar), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
                                         }
                                     }
                                 }
@@ -731,7 +725,6 @@ fun MapaCuidadoresScreen(
                     }
                 }
 
-                // BottomSheet desplegable con la lista de Cuidadores Filtrados
                 if (showBottomSheet) {
                     ModalBottomSheet(
                         onDismissRequest = { showBottomSheet = false },
@@ -749,12 +742,12 @@ fun MapaCuidadoresScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Cuidadores por Zona (${cuidadores.size})",
+                                    text = stringResource(R.string.mapa_cuidadores_zona, cuidadores.size),
                                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 TextButton(onClick = { viewModel.limpiarFiltroUbicacion() }) {
-                                    Text("Restablecer", color = MaterialTheme.colorScheme.primary)
+                                    Text(stringResource(R.string.mapa_restablecer), color = MaterialTheme.colorScheme.primary)
                                 }
                             }
 
@@ -768,7 +761,7 @@ fun MapaCuidadoresScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = "No hay cuidadores en este sector con los filtros actuales.",
+                                        text = stringResource(R.string.mapa_sin_resultados),
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         textAlign = TextAlign.Center
@@ -824,7 +817,6 @@ fun MapboxHeatmapView(
             val userSourceId = "user-location-geojson-source"
             val worldSourceId = "world-grey-mask-source"
 
-            // 1. Fuente y Capa de Máscara Gris Global sobre Todo el Mapa (Carreteras, Verdes, Aguas)
             val worldRing = listOf(
                 Point.fromLngLat(-180.0, -85.0),
                 Point.fromLngLat(180.0, -85.0),
@@ -844,13 +836,12 @@ fun MapboxHeatmapView(
 
             if (style.getLayer("world-grey-mask-layer") == null) {
                 val greyMaskLayer = fillLayer("world-grey-mask-layer", worldSourceId) {
-                    fillColor("#424242") // Gris neutro uniforme que cubre carreteras, áreas verdes y mares
-                    fillOpacity(0.82) // 82% de opacidad para que todo el mapa sea un lienzo gris
+                    fillColor("#424242")
+                    fillOpacity(0.82)
                 }
                 style.addLayer(greyMaskLayer)
             }
 
-            // 2. Fuente GeoJSON de Cuidadores
             if (style.getSource(sourceId) == null) {
                 val source = geoJsonSource(sourceId) {
                     geoJsonData?.let { featureCollection(it) }
@@ -861,7 +852,6 @@ fun MapboxHeatmapView(
                 style.addSource(source)
             }
 
-            // 3. Capa de Puntos de Calor Térmicos Vibrantes (Cyan -> Amarillo -> Naranja -> Rojo Fuego)
             if (style.getLayer("cuidadores-heat-points-layer") == null) {
                 val heatPoints = heatmapLayer("cuidadores-heat-points-layer", sourceId) {
                     heatmapWeight(1.0)
@@ -871,23 +861,23 @@ fun MapboxHeatmapView(
                             heatmapDensity()
                             stop {
                                 literal(0.0)
-                                color(Color(0x00000000).toArgb()) // Transparente afuera
+                                color(Color(0x00000000).toArgb())
                             }
                             stop {
                                 literal(0.15)
-                                color(Color(0xDD00E5FF).toArgb()) // Cyan brillante de alto impacto
+                                color(Color(0xDD00E5FF).toArgb())
                             }
                             stop {
                                 literal(0.45)
-                                color(Color(0xE6FFEB3B).toArgb()) // Amarillo brillante
+                                color(Color(0xE6FFEB3B).toArgb())
                             }
                             stop {
                                 literal(0.75)
-                                color(Color(0xF1FF6D00).toArgb()) // Naranja fuego
+                                color(Color(0xF1FF6D00).toArgb())
                             }
                             stop {
                                 literal(1.00)
-                                color(Color(0xFFD50000).toArgb()) // Rojo intenso
+                                color(Color(0xFFD50000).toArgb())
                             }
                         }
                     )
@@ -914,7 +904,6 @@ fun MapboxHeatmapView(
                 style.addLayer(heatPoints)
             }
 
-            // 4. Capa Puntos Individuales Sólidos de Cuidadores (para Modo Normal)
             if (style.getLayer("unclustered-caregivers-layer") == null) {
                 val unclusteredPoints = circleLayer("unclustered-caregivers-layer", sourceId) {
                     filter(Expression.not(Expression.has("point_count")))
@@ -926,7 +915,6 @@ fun MapboxHeatmapView(
                 style.addLayer(unclusteredPoints)
             }
 
-            // 5. Capa Círculos Agrupados (Clusters para Modo Normal)
             if (style.getLayer("cluster-circles-layer") == null) {
                 val clusterCircles = circleLayer("cluster-circles-layer", sourceId) {
                     filter(Expression.has("point_count"))
@@ -972,7 +960,6 @@ fun MapboxHeatmapView(
                 style.addLayer(clusterCircles)
             }
 
-            // 6. Capa Conteo Numérico de Agrupaciones
             if (style.getLayer("cluster-count-layer") == null) {
                 val clusterCountText = symbolLayer("cluster-count-layer", sourceId) {
                     filter(Expression.has("point_count"))
@@ -985,7 +972,6 @@ fun MapboxHeatmapView(
                 style.addLayer(clusterCountText)
             }
 
-            // 7. Indicación de Posición Actual del Usuario / Centro de Búsqueda
             val userPointFeature = Feature.fromGeometry(centro)
             val userFeatureCollection = FeatureCollection.fromFeatures(listOf(userPointFeature))
 
@@ -1022,24 +1008,20 @@ fun MapboxHeatmapView(
         }
     }
 
-    // Alternar Visibilidad entre Modo Zona de Calor (Filtro Gris + Puntos de Calor) y Modo Estándar
     LaunchedEffect(modoMapaDeCalor) {
         mapView.mapboxMap.getStyle { style ->
             val heatVis = if (modoMapaDeCalor) Visibility.VISIBLE else Visibility.NONE
             val normalVis = if (!modoMapaDeCalor) Visibility.VISIBLE else Visibility.NONE
 
-            // Máscara gris global y puntos de calor
             style.getLayer("world-grey-mask-layer")?.visibility(heatVis)
             style.getLayer("cuidadores-heat-points-layer")?.visibility(heatVis)
 
-            // Puntos sólidos y clusters estándar
             style.getLayer("unclustered-caregivers-layer")?.visibility(normalVis)
             style.getLayer("cluster-circles-layer")?.visibility(normalVis)
             style.getLayer("cluster-count-layer")?.visibility(normalVis)
         }
     }
 
-    // Actualizar reactivamente la fuente GeoJSON de cuidadores
     LaunchedEffect(geoJsonData) {
         if (geoJsonData != null) {
             mapView.mapboxMap.getStyle { style ->
@@ -1049,7 +1031,6 @@ fun MapboxHeatmapView(
         }
     }
 
-    // Actualizar reactivamente el punto indicador de la posición del usuario
     LaunchedEffect(centro) {
         mapView.mapboxMap.getStyle { style ->
             val userSource = style.getSource("user-location-geojson-source") as? GeoJsonSource
@@ -1058,7 +1039,6 @@ fun MapboxHeatmapView(
         }
     }
 
-    // Centrado suave de la cámara sólo cuando cameraEventId se modifica
     LaunchedEffect(centro, cameraEventId) {
         mapView.mapboxMap.flyTo(
             CameraOptions.Builder()
@@ -1071,7 +1051,6 @@ fun MapboxHeatmapView(
         )
     }
 
-    // Reset Orientación al Norte
     LaunchedEffect(resetNorthTrigger) {
         if (resetNorthTrigger > 0L) {
             mapView.mapboxMap.flyTo(
@@ -1094,6 +1073,7 @@ fun MapboxHeatmapView(
 
 /**
  * Tarjeta individual de Cuidador para el ModalBottomSheet.
+ * Diseño vertical expandable: foto arriba, datos, acciones y área expandible.
  */
 @Composable
 fun CuidadorCardItem(
@@ -1107,9 +1087,9 @@ fun CuidadorCardItem(
 
     val distanciaTexto = if (distanciaM != null) {
         if (distanciaM >= 1000) {
-            String.format(Locale.getDefault(), "%.1f km", distanciaM / 1000f)
+            stringResource(R.string.mapa_distancia_km, distanciaM / 1000f)
         } else {
-            "${distanciaM.toInt()} m"
+            stringResource(R.string.mapa_distancia_m, distanciaM.toInt())
         }
     } else ""
 
@@ -1160,7 +1140,6 @@ fun CuidadorCardItem(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-
                 Text(
                     text = cuidador.especialidad,
                     style = MaterialTheme.typography.bodySmall,
@@ -1168,9 +1147,7 @@ fun CuidadorCardItem(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-
                 Spacer(modifier = Modifier.height(4.dp))
-
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Default.LocationOn,
@@ -1184,10 +1161,9 @@ fun CuidadorCardItem(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-
                     if (distanciaTexto.isNotEmpty()) {
                         Text(
-                            text = " • $distanciaTexto",
+                            text = stringResource(R.string.mapa_separador_distancia, distanciaTexto),
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -1206,7 +1182,7 @@ fun CuidadorCardItem(
                 ),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
             ) {
-                Text("VER PERFIL", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
+                Text(stringResource(R.string.solicitudes_ver_perfil), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
             }
         }
     }

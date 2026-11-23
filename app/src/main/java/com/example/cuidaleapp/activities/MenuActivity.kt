@@ -176,6 +176,7 @@ class MenuActivity : ComponentActivity() {
                                   else postulacionesRecibidas.values.flatten().count { it.estado == "pendiente" }
 
             var currentScreen by remember { mutableStateOf<MenuNavigation>(Main) }
+            var resaltarCalificaciones by remember { mutableStateOf(false) }
             val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
             LaunchedEffect(userData.rol, userData.region) {
@@ -220,6 +221,10 @@ class MenuActivity : ComponentActivity() {
                     "CHATS" -> currentScreen = Chats
                     "NOTIFICATIONS" -> currentScreen = Notifications
                     "SOLICITUDES" -> currentScreen = Requests
+                    "PROFILE_CALIFICACIONES" -> {
+                        resaltarCalificaciones = true
+                        currentScreen = Profile
+                    }
                     "CHAT_DETAIL" -> {
                         var targetUid = uid
                         if (targetUid.isBlank() && chatId.isNotBlank()) {
@@ -460,6 +465,11 @@ class MenuActivity : ComponentActivity() {
                                                                 fichaState = fichaState,
                                                                 onViewFicha = { currentScreen = Ficha(startInEditMode = false, returnTo = Main) },
                                                                 onUserClick = { uid -> currentScreen = OtherFicha(uid, returnTo = Main) },
+                                                                onGoToChat = { cuidadorUid ->
+                                                                    val myUid = userData.uid
+                                                                    val chatId = if (myUid < cuidadorUid) "${myUid}_$cuidadorUid" else "${cuidadorUid}_$myUid"
+                                                                    currentScreen = Chat(chatId, cuidadorUid, returnTo = Main)
+                                                                },
                                                                 onMapClick = { currentScreen = MapaCuidadores }
                                                             )
                                                         }
@@ -488,8 +498,12 @@ class MenuActivity : ComponentActivity() {
                                                                 },
                                                                 unreadCount = unreadCount,
                                                                 pendingNotifs = pendingNotifs,
-                                                                solicitudViewModel = solicitudViewModel
+                                                                solicitudViewModel = solicitudViewModel,
+                                                                resaltarCalificaciones = resaltarCalificaciones
                                                             )
+                                                            LaunchedEffect(Unit) {
+                                                                if (resaltarCalificaciones) resaltarCalificaciones = false
+                                                            }
                                                         }
                                                         EditProfile -> {
                                                             EditProfileScreen(
@@ -562,6 +576,10 @@ class MenuActivity : ComponentActivity() {
                                                                         "configuracion_cuenta" -> {
                                                                             val intent = Intent(this@MenuActivity, AccountHistoryActivity::class.java)
                                                                             startActivity(intent)
+                                                                        }
+                                                                        "nueva_calificacion" -> {
+                                                                            resaltarCalificaciones = true
+                                                                            currentScreen = Profile
                                                                         }
                                                                         else -> {
                                                                             currentScreen = Requests
@@ -784,6 +802,10 @@ class MenuActivity : ComponentActivity() {
                                         uid = notification.payload["uid"] ?: notification.payload["emisor"] ?: "",
                                         returnTo = Main
                                     )
+                                    "PROFILE_CALIFICACIONES" -> {
+                                        resaltarCalificaciones = true
+                                        currentScreen = Profile
+                                    }
                                     else -> currentScreen = Main
                                 }
                             },

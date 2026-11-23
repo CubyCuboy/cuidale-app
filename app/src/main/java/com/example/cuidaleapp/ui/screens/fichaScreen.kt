@@ -96,7 +96,9 @@ fun FichaScreen(
         modifier = Modifier.fillMaxSize()
     ) {
         Box(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
         ) {
 
 
@@ -357,7 +359,12 @@ fun ModernPersonalDataCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Phone, null, modifier = Modifier.size(12.dp), tint = secondaryText.copy(alpha = 0.6f))
                     Spacer(Modifier.width(4.dp))
-                    Text(text = stringResource(R.string.ficha_tel, telefono), style = MaterialTheme.typography.bodySmall, color = secondaryText)
+                    Text(
+                        text = if (telefono.isBlank()) stringResource(R.string.ficha_sin_telefono)
+                        else stringResource(R.string.ficha_tel, telefono),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (telefono.isBlank()) secondaryText.copy(alpha = 0.5f) else secondaryText
+                    )
                 }
             }
         }
@@ -1367,8 +1374,7 @@ fun FamilyEditFlow(
     val shadowPalette = CuidaleThemeExtras.shadows
     val textColor = MaterialTheme.colorScheme.onSurface
     val isDark = customColors.isDark
-    
-    var step by remember { mutableIntStateOf(1) }
+
     val currentUserData by profileViewModel.userData.collectAsState()
     
     var nombreCompleto by remember { mutableStateOf(initialData?.get("nombre_completo") as? String ?: "") }
@@ -1476,78 +1482,27 @@ fun FamilyEditFlow(
     }
 
     if (showImageSourceDialog) {
-        AlertDialog(
-            onDismissRequest = { showImageSourceDialog = false },
-            title = { Text(stringResource(R.string.ficha_patient_photo), fontWeight = FontWeight.Bold) },
-            text = {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Button(
-                        onClick = {
-                            val permissionCheckResult = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
-                            if (permissionCheckResult == PackageManager.PERMISSION_GRANTED) {
-                                val file = File(context.cacheDir, "temp_patient_${System.currentTimeMillis()}.jpg")
-                                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                                tempPhotoUri = uri
-                                cameraLauncher.launch(uri)
-                                showImageSourceDialog = false
-                            } else {
-                                permissionLauncher.launch(Manifest.permission.CAMERA)
-                                showImageSourceDialog = false
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Default.CameraAlt, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.source_camera))
-                    }
-
-                    Button(
-                        onClick = {
-                            galleryLauncher.launch("image/*")
-                            showImageSourceDialog = false
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Default.Collections, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.source_gallery))
-                    }
-
-                    val currentPhoto = initialData?.get("fotoUrl")?.toString() ?: ""
-                    if (currentPhoto.isNotEmpty() || pendingPhoto != null) {
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                        Button(
-                            onClick = {
-                                pendingDeletePhoto = true
-                                viewModel.setPendingPatientPhoto(null)
-                                showImageSourceDialog = false
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer,
-                                contentColor = MaterialTheme.colorScheme.onErrorContainer
-                            ),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Icon(Icons.Default.Delete, null)
-                            Spacer(Modifier.width(8.dp))
-                            Text(stringResource(R.string.edit_profile_remove_photo))
-                        }
-                    }
+        val currentPhoto = initialData?.get("fotoUrl")?.toString() ?: ""
+        PhotoSourcePickerDialog(
+            title = stringResource(R.string.ficha_patient_photo),
+            hasCurrentPhoto = currentPhoto.isNotEmpty() || pendingPhoto != null,
+            onCamera = {
+                val permissionCheckResult = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
+                if (permissionCheckResult == PackageManager.PERMISSION_GRANTED) {
+                    val file = File(context.cacheDir, "temp_patient_${System.currentTimeMillis()}.jpg")
+                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                    tempPhotoUri = uri
+                    cameraLauncher.launch(uri)
+                } else {
+                    permissionLauncher.launch(Manifest.permission.CAMERA)
                 }
             },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { showImageSourceDialog = false }) {
-                    Text(stringResource(R.string.common_cancel))
-                }
-            }
+            onGallery = { galleryLauncher.launch("image/*") },
+            onRemove = {
+                pendingDeletePhoto = true
+                viewModel.setPendingPatientPhoto(null)
+            },
+            onDismiss = { showImageSourceDialog = false }
         )
     }
 
@@ -1565,356 +1520,304 @@ fun FamilyEditFlow(
         region.isNotBlank() && comuna.isNotBlank() && calle.isNotBlank() && numero.isNotBlank()
 
     Column {
-        when (step) {
-            1 -> {
-                HardShadowPanel(
-                    backgroundColor = cardColor,
-                    shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
-                    cornerRadius = 24.dp,
-                    contentPadding = PaddingValues(20.dp)
-                ) {
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Person, null, tint = accentColor, modifier = Modifier.size(24.dp))
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(stringResource(R.string.ficha_patient_data), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = textColor)
-                        }
-                        Spacer(modifier = Modifier.height(20.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            HardShadowPanel(
+                backgroundColor = cardColor,
+                shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
+                cornerRadius = 24.dp,
+                contentPadding = PaddingValues(20.dp)
+            ) {
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Person, null, tint = accentColor, modifier = Modifier.size(24.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(stringResource(R.string.ficha_patient_data), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = textColor)
+                    }
+                    Spacer(modifier = Modifier.height(20.dp))
 
-                        InputFieldLabel(text = stringResource(R.string.ficha_patient_name), color = textColor)
-                        CuidaleTextField(
-                            value = nombreCompleto,
-                            onValueChange = { input -> 
-                                nombreCompleto = input.lowercase().split(" ").joinToString(" ") { it.replaceFirstChar { char -> if (char.isLowerCase()) char.titlecase() else char.toString() } }
-                            },
-                            placeholder = stringResource(R.string.ficha_patient_name_placeholder),
-                            containerColor = customColors.inputBackground,
-                            textColor = textColor
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        var showFechaPickerPaciente by remember { mutableStateOf(false) }
-                        var pacienteFechaNacimiento by remember { mutableStateOf("") }
-                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                InputFieldLabel(text = stringResource(R.string.ficha_age), color = textColor)
-                                CuidaleTextField(
-                                    value = edad,
-                                    onValueChange = { if ((it.isEmpty() || it.all { char -> char.isDigit() }) && it.length <= 3) edad = it },
-                                    placeholder = stringResource(R.string.ficha_age_placeholder),
-                                    containerColor = customColors.inputBackground,
-                                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
-                                    textColor = textColor,
-                                    textAlign = TextAlign.Center
-                                )
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    TextButton(onClick = { showFechaPickerPaciente = true }) {
-                                        Icon(Icons.Default.CalendarMonth, null, modifier = Modifier.size(16.dp), tint = accentColor)
-                                        Spacer(Modifier.width(4.dp))
-                                        Text(stringResource(R.string.family_edit_usar_calendario), style = MaterialTheme.typography.labelSmall, color = accentColor)
-                                    }
-                                    if (pacienteFechaNacimiento.isNotBlank()) {
-                                        Text(formatFechaChilena(pacienteFechaNacimiento), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                }
-                                if (showFechaPickerPaciente) {
-                                    CuidaleDatePickerDialog(
-                                        initialDate = pacienteFechaNacimiento,
-                                        onDateSelected = { fecha ->
-                                            pacienteFechaNacimiento = fecha
-                                            val age = com.example.cuidaleapp.ui.components.calcularEdad(fecha).removeSuffix(" años")
-                                            edad = age.takeIf { it != "--" } ?: edad
-                                        },
-                                        onDismiss = { showFechaPickerPaciente = false }
-                                    )
-                                }
-                            }
-                            Column(modifier = Modifier.weight(1.5f)) {
-                                CuidaleExposedDropdown(label = stringResource(R.string.ficha_gender), options = listOf(stringResource(R.string.ficha_gender_male), stringResource(R.string.ficha_gender_female), stringResource(R.string.common_other)), selectedOption = genero, onOptionSelected = { genero = it })
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(20.dp))
-                        HorizontalDivider(color = textColor.copy(alpha = if (isDark) 0.15f else 0.1f))
-                        Spacer(modifier = Modifier.height(20.dp))
-
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Home, null, tint = accentColor, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(stringResource(R.string.ficha_location), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = textColor)
-                            Spacer(modifier = Modifier.weight(1f))
-                            Text(stringResource(R.string.ficha_lives_with_you), style = MaterialTheme.typography.labelSmall, color = textColor.copy(alpha = 0.6f))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Switch(
-                                checked = vivesConFamiliar, 
-                                onCheckedChange = { vivesConFamiliar = it },
-                                colors = SwitchDefaults.colors(checkedThumbColor = accentColor, checkedTrackColor = accentColor.copy(alpha = 0.3f))
-                            )
-                        }
-                        
-                        if (!vivesConFamiliar) {
-                            Spacer(modifier = Modifier.height(16.dp))
-                            CuidaleExposedDropdown(label = stringResource(R.string.ficha_region), options = regionsList, selectedOption = region, onOptionSelected = { region = it })
-                            Spacer(modifier = Modifier.height(12.dp))
-                            CuidaleExposedDropdown(label = stringResource(R.string.ficha_commune), options = communesForRegion, selectedOption = comuna, onOptionSelected = { comuna = it }, enabled = region.isNotBlank())
-                        } else {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Surface(
-                                color = accentColor.copy(alpha = 0.1f),
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Info, null, tint = accentColor, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Text(
-                                        stringResource(R.string.ficha_uses_current_address, currentUserData.comuna, currentUserData.region),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = textColor.copy(alpha = 0.8f)
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-                        InputFieldLabel(text = stringResource(R.string.ficha_patient_address), color = textColor)
-                        CuidaleTextField(
-                            value = calle,
-                            onValueChange = { input -> 
-                                calle = input.lowercase().split(" ").joinToString(" ") { it.replaceFirstChar { char -> char.uppercase() } }
-                            },
-                            placeholder = stringResource(R.string.ficha_street_placeholder),
-                            containerColor = customColors.inputBackground,
-                            textColor = textColor
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    InputFieldLabel(text = stringResource(R.string.ficha_patient_name), color = textColor)
+                    CuidaleTextField(
+                        value = nombreCompleto,
+                        onValueChange = { input -> 
+                            nombreCompleto = input.lowercase().split(" ").joinToString(" ") { it.replaceFirstChar { char -> if (char.isLowerCase()) char.titlecase() else char.toString() } }
+                        },
+                        placeholder = stringResource(R.string.ficha_patient_name_placeholder),
+                        containerColor = customColors.inputBackground,
+                        textColor = textColor
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    var showFechaPickerPaciente by remember { mutableStateOf(false) }
+                    var pacienteFechaNacimiento by remember { mutableStateOf("") }
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            InputFieldLabel(text = stringResource(R.string.ficha_age), color = textColor)
                             CuidaleTextField(
-                                value = numero,
-                                onValueChange = { if (it.all { char -> char.isDigit() } && it.length <= 6) numero = it },
-                                placeholder = stringResource(R.string.ficha_number_placeholder),
-                                modifier = Modifier.weight(1f),
+                                value = edad,
+                                onValueChange = { if ((it.isEmpty() || it.all { char -> char.isDigit() }) && it.length <= 3) edad = it },
+                                placeholder = stringResource(R.string.ficha_age_placeholder),
                                 containerColor = customColors.inputBackground,
+                                keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
                                 textColor = textColor,
-                                keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                                textAlign = TextAlign.Center
                             )
-                            CuidaleTextField(
-                                value = depto,
-                                onValueChange = { input ->
-                                    depto = input.uppercase()
-                                },
-                                placeholder = stringResource(R.string.ficha_dept_placeholder),
-                                modifier = Modifier.weight(1f),
-                                containerColor = customColors.inputBackground,
-                                textColor = textColor
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(32.dp))
-                        HardShadowButton(
-                            text = stringResource(R.string.action_next),
-                            onClick = { step = 2 },
-                            enabled = isStep1Valid,
-                            containerColor = accentColor,
-                            contentColor = Color.White,
-                            shadowColor = shadowPalette.hardShadowPrimary,
-                            isDark = isDark
-                        )
-                    }
-                }
-            }
-            2 -> {
-                HardShadowPanel(
-                    backgroundColor = cardColor,
-                    shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
-                    cornerRadius = 24.dp,
-                    contentPadding = PaddingValues(20.dp)
-                ) {
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.HealthAndSafety, null, tint = accentColor, modifier = Modifier.size(24.dp))
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(stringResource(R.string.ficha_health_status), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = textColor)
-                        }
-                        Spacer(modifier = Modifier.height(20.dp))
-
-                        CuidaleExposedDropdown(label = stringResource(R.string.ficha_dependency), options = listOf(stringResource(R.string.ficha_dependency_independent), stringResource(R.string.ficha_dependency_mild), stringResource(R.string.ficha_dependency_moderate), stringResource(R.string.ficha_dependency_severe)), selectedOption = nivelDependencia, onOptionSelected = { nivelDependencia = it })
-                        Spacer(modifier = Modifier.height(16.dp))
-                        CuidaleExposedDropdown(label = stringResource(R.string.ficha_mobility), options = listOf(stringResource(R.string.ficha_mobility_normal), stringResource(R.string.ficha_mobility_reduced), stringResource(R.string.ficha_mobility_wheelchair), stringResource(R.string.ficha_mobility_bedridden)), selectedOption = movilidad, onOptionSelected = { movilidad = it })
-                        Spacer(modifier = Modifier.height(20.dp))
-
-                        CuidaleMultiSelectDropdown(
-                            label = stringResource(R.string.ficha_disabilities),
-                            options = listOf(stringResource(R.string.ficha_disability_visual), stringResource(R.string.ficha_disability_hearing), stringResource(R.string.ficha_disability_motor), stringResource(R.string.ficha_disability_intellectual), stringResource(R.string.ficha_disability_psychic), stringResource(R.string.common_other)),
-                            selectedOptions = discapacidades,
-                            onOptionToggled = {
-                                if (discapacidades.contains(it)) discapacidades -= it
-                                else discapacidades += it
-                            },
-                            placeholder = stringResource(R.string.ficha_disabilities_placeholder)
-                        )
-                        if (discapacidades.contains("Otro")) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            CuidaleTextField(value = discapacidadOtro, onValueChange = { discapacidadOtro = it }, placeholder = stringResource(R.string.ficha_disability_other_placeholder), containerColor = customColors.inputBackground, textColor = textColor)
-                        }
-                        Spacer(modifier = Modifier.height(20.dp))
-                        
-                        CuidaleMultiSelectDropdown(
-                            label = stringResource(R.string.ficha_chronic_diseases),
-                            options = listOf(stringResource(R.string.ficha_disease_diabetes), stringResource(R.string.ficha_disease_hypertension), stringResource(R.string.ficha_disease_alzheimer), stringResource(R.string.ficha_disease_parkinson), stringResource(R.string.ficha_disease_arthrosis), stringResource(R.string.common_other)),
-                            selectedOptions = enfermedades,
-                            onOptionToggled = {
-                                if (enfermedades.contains(it)) enfermedades -= it
-                                else enfermedades += it
-                            },
-                            placeholder = stringResource(R.string.ficha_diseases_placeholder)
-                        )
-                        if (enfermedades.contains("Otro")) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            CuidaleTextField(value = enfermedadOtro, onValueChange = { enfermedadOtro = it }, placeholder = stringResource(R.string.ficha_disease_other_placeholder), containerColor = customColors.inputBackground, textColor = textColor)
-                        }
-                        
-                        Spacer(modifier = Modifier.height(32.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            HardShadowButton(
-                                text = stringResource(R.string.action_back),
-                                onClick = { step = 1 },
-                                modifier = Modifier.weight(1f).height(58.dp),
-                                containerColor = if (isDark) Color.White.copy(alpha = 0.1f) else Color(0xFFF5F5F5),
-                                contentColor = if (isDark) Color.White else Color.DarkGray,
-                                shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = if (isDark) 0.15f else 0.1f),
-                                isDark = isDark
-                            )
-                            HardShadowButton(
-                                text = stringResource(R.string.action_next),
-                                onClick = { step = 3 },
-                                modifier = Modifier.weight(1f).height(58.dp),
-                                containerColor = accentColor,
-                                contentColor = Color.White,
-                                shadowColor = shadowPalette.hardShadowPrimary,
-                                isDark = isDark
-                            )
-                        }
-                    }
-                }
-            }
-            3 -> {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    HardShadowPanel(
-                        backgroundColor = cardColor,
-                        shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
-                        cornerRadius = 24.dp,
-                        contentPadding = PaddingValues(20.dp)
-                    ) {
-                        Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Info, null, tint = accentColor, modifier = Modifier.size(24.dp))
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(stringResource(R.string.ficha_observations_photo), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = textColor)
+                                TextButton(onClick = { showFechaPickerPaciente = true }) {
+                                    Icon(Icons.Default.CalendarMonth, null, modifier = Modifier.size(16.dp), tint = accentColor)
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(stringResource(R.string.family_edit_usar_calendario), style = MaterialTheme.typography.labelSmall, color = accentColor)
+                                }
+                                if (pacienteFechaNacimiento.isNotBlank()) {
+                                    Text(formatFechaChilena(pacienteFechaNacimiento), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
                             }
-                            Spacer(modifier = Modifier.height(20.dp))
-                            
-                            InputFieldLabel(text = stringResource(R.string.ficha_extra_observations), color = textColor)
-                            CuidaleTextField(
-                                value = condicionesExtra,
-                                onValueChange = { condicionesExtra = it },
-                                placeholder = stringResource(R.string.ficha_conditions_placeholder),
-                                singleLine = false,
-                                modifier = Modifier.height(100.dp),
-                                containerColor = customColors.inputBackground,
-                                textColor = textColor
-                            )
-                            
-                            Spacer(modifier = Modifier.height(24.dp))
-                            HorizontalDivider(color = textColor.copy(alpha = 0.1f))
-                            Spacer(modifier = Modifier.height(24.dp))
-                            
-                            InputFieldLabel(text = stringResource(R.string.ficha_patient_photo_label), color = textColor)
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(80.dp)
-                                        .clip(CircleShape)
-                                        .background(customColors.inputBackground)
-                                        .border(1.dp, accentColor.copy(alpha = 0.3f), CircleShape)
-                                        .clickable { showImageSourceDialog = true },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    val currentUrl = initialData?.get("fotoUrl")?.toString() ?: ""
-                                    val photoToShow = when {
-                                        pendingDeletePhoto -> null
-                                        pendingPhoto != null -> pendingPhoto
-                                        currentUrl.isNotEmpty() -> currentUrl
-                                        else -> null
-                                    }
+                            if (showFechaPickerPaciente) {
+                                CuidaleDatePickerDialog(
+                                    initialDate = pacienteFechaNacimiento,
+                                    onDateSelected = { fecha ->
+                                        pacienteFechaNacimiento = fecha
+                                        val age = com.example.cuidaleapp.ui.components.calcularEdad(fecha).removeSuffix(" años")
+                                        edad = age.takeIf { it != "--" } ?: edad
+                                    },
+                                    onDismiss = { showFechaPickerPaciente = false }
+                                )
+                            }
+                        }
+                        Column(modifier = Modifier.weight(1.5f)) {
+                            CuidaleExposedDropdown(label = stringResource(R.string.ficha_gender), options = listOf(stringResource(R.string.ficha_gender_male), stringResource(R.string.ficha_gender_female), stringResource(R.string.common_other)), selectedOption = genero, onOptionSelected = { genero = it })
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(20.dp))
+                    HorizontalDivider(color = textColor.copy(alpha = if (isDark) 0.15f else 0.1f))
+                    Spacer(modifier = Modifier.height(20.dp))
 
-                                    if (photoToShow != null) {
-                                        AsyncImage(
-                                            model = photoToShow,
-                                            contentDescription = null,
-                                            modifier = Modifier.fillMaxSize().clip(CircleShape),
-                                            contentScale = ContentScale.Crop
-                                        )
-                                    } else {
-                                        Icon(Icons.Default.AddAPhoto, null, tint = textColor.copy(alpha = 0.3f))
-                                    }
-                                }
-                                Spacer(modifier = Modifier.width(16.dp))
-                                Column {
-                                    Text(
-                                        text = if (pendingDeletePhoto) stringResource(R.string.ficha_photo_will_delete) else if (pendingPhoto != null || (initialData?.get("fotoUrl")?.toString()?.isNotEmpty() == true)) stringResource(R.string.ficha_patient_photo) else stringResource(R.string.ficha_no_photo),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = textColor
-                                    )
-                                    TextButton(
-                                        onClick = { showImageSourceDialog = true },
-                                        contentPadding = PaddingValues(0.dp)
-                                    ) {
-                                        Text(stringResource(R.string.ficha_manage_photo), color = accentColor, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black)
-                                    }
-                                }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Home, null, tint = accentColor, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(stringResource(R.string.ficha_location), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = textColor)
+                        Spacer(modifier = Modifier.weight(1f))
+                        Text(stringResource(R.string.ficha_lives_with_you), style = MaterialTheme.typography.labelSmall, color = textColor.copy(alpha = 0.6f))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Switch(
+                            checked = vivesConFamiliar, 
+                            onCheckedChange = { vivesConFamiliar = it },
+                            colors = SwitchDefaults.colors(checkedThumbColor = accentColor, checkedTrackColor = accentColor.copy(alpha = 0.3f))
+                        )
+                    }
+                    
+                    if (!vivesConFamiliar) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        CuidaleExposedDropdown(label = stringResource(R.string.ficha_region), options = regionsList, selectedOption = region, onOptionSelected = { region = it })
+                        Spacer(modifier = Modifier.height(12.dp))
+                        CuidaleExposedDropdown(label = stringResource(R.string.ficha_commune), options = communesForRegion, selectedOption = comuna, onOptionSelected = { comuna = it }, enabled = region.isNotBlank())
+                    } else {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Surface(
+                            color = accentColor.copy(alpha = 0.1f),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Info, null, tint = accentColor, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    stringResource(R.string.ficha_uses_current_address, currentUserData.comuna, currentUserData.region),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = textColor.copy(alpha = 0.8f)
+                                )
                             }
                         }
                     }
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        HardShadowButton(
-                            text = stringResource(R.string.action_back),
-                            onClick = { step = 2 },
-                            modifier = Modifier.weight(1f).height(58.dp),
-                            containerColor = if (isDark) Color.White.copy(alpha = 0.1f) else Color(0xFFF5F5F5),
-                            contentColor = if (isDark) Color.White else Color.DarkGray,
-                            shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = if (isDark) 0.15f else 0.1f),
-                            isDark = isDark
+                    Spacer(modifier = Modifier.height(16.dp))
+                    InputFieldLabel(text = stringResource(R.string.ficha_patient_address), color = textColor)
+                    CuidaleTextField(
+                        value = calle,
+                        onValueChange = { input -> 
+                            calle = input.lowercase().split(" ").joinToString(" ") { it.replaceFirstChar { char -> char.uppercase() } }
+                        },
+                        placeholder = stringResource(R.string.ficha_street_placeholder),
+                        containerColor = customColors.inputBackground,
+                        textColor = textColor
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        CuidaleTextField(
+                            value = numero,
+                            onValueChange = { if (it.all { char -> char.isDigit() } && it.length <= 6) numero = it },
+                            placeholder = stringResource(R.string.ficha_number_placeholder),
+                            modifier = Modifier.weight(1f),
+                            containerColor = customColors.inputBackground,
+                            textColor = textColor,
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
                         )
-                        HardShadowButton(
-                            text = stringResource(R.string.action_finish),
-                            onClick = {
-                                viewModel.createFamilyFicha(
-                                    nombreCompleto, edad, genero, vivesConFamiliar, 
-                                    region, comuna, calle, numero, depto, 
-                                    nivelDependencia, movilidad, comunicacion, 
-                                    discapacidades, discapacidadOtro, enfermedades, enfermedadOtro, 
-                                    condicionesExtra,
-                                    selectedCommunesPref, selectedHorariosPref,
-                                    shouldDeletePhoto = pendingDeletePhoto,
-                                    onSuccess = onFinishSuccess
-                                )
+                        CuidaleTextField(
+                            value = depto,
+                            onValueChange = { input ->
+                                depto = input.uppercase()
                             },
-                            modifier = Modifier.weight(1.5f).height(58.dp),
-                            containerColor = accentColor,
-                            contentColor = Color.White,
-                            shadowColor = shadowPalette.hardShadowPrimary,
-                            isDark = isDark
+                            placeholder = stringResource(R.string.ficha_dept_placeholder),
+                            modifier = Modifier.weight(1f),
+                            containerColor = customColors.inputBackground,
+                            textColor = textColor
                         )
                     }
                 }
             }
+
+            HardShadowPanel(
+                backgroundColor = cardColor,
+                shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
+                cornerRadius = 24.dp,
+                contentPadding = PaddingValues(20.dp)
+            ) {
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.HealthAndSafety, null, tint = accentColor, modifier = Modifier.size(24.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(stringResource(R.string.ficha_health_status), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = textColor)
+                    }
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    CuidaleExposedDropdown(label = stringResource(R.string.ficha_dependency), options = listOf(stringResource(R.string.ficha_dependency_independent), stringResource(R.string.ficha_dependency_mild), stringResource(R.string.ficha_dependency_moderate), stringResource(R.string.ficha_dependency_severe)), selectedOption = nivelDependencia, onOptionSelected = { nivelDependencia = it })
+                    Spacer(modifier = Modifier.height(16.dp))
+                    CuidaleExposedDropdown(label = stringResource(R.string.ficha_mobility), options = listOf(stringResource(R.string.ficha_mobility_normal), stringResource(R.string.ficha_mobility_reduced), stringResource(R.string.ficha_mobility_wheelchair), stringResource(R.string.ficha_mobility_bedridden)), selectedOption = movilidad, onOptionSelected = { movilidad = it })
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    CuidaleMultiSelectDropdown(
+                        label = stringResource(R.string.ficha_disabilities),
+                        options = listOf(stringResource(R.string.ficha_disability_visual), stringResource(R.string.ficha_disability_hearing), stringResource(R.string.ficha_disability_motor), stringResource(R.string.ficha_disability_intellectual), stringResource(R.string.ficha_disability_psychic), stringResource(R.string.common_other)),
+                        selectedOptions = discapacidades,
+                        onOptionToggled = {
+                            if (discapacidades.contains(it)) discapacidades -= it
+                            else discapacidades += it
+                        },
+                        placeholder = stringResource(R.string.ficha_disabilities_placeholder)
+                    )
+                    if (discapacidades.contains("Otro")) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        CuidaleTextField(value = discapacidadOtro, onValueChange = { discapacidadOtro = it }, placeholder = stringResource(R.string.ficha_disability_other_placeholder), containerColor = customColors.inputBackground, textColor = textColor)
+                    }
+                    Spacer(modifier = Modifier.height(20.dp))
+                    
+                    CuidaleMultiSelectDropdown(
+                        label = stringResource(R.string.ficha_chronic_diseases),
+                        options = listOf(stringResource(R.string.ficha_disease_diabetes), stringResource(R.string.ficha_disease_hypertension), stringResource(R.string.ficha_disease_alzheimer), stringResource(R.string.ficha_disease_parkinson), stringResource(R.string.ficha_disease_arthrosis), stringResource(R.string.common_other)),
+                        selectedOptions = enfermedades,
+                        onOptionToggled = {
+                            if (enfermedades.contains(it)) enfermedades -= it
+                            else enfermedades += it
+                        },
+                        placeholder = stringResource(R.string.ficha_diseases_placeholder)
+                    )
+                    if (enfermedades.contains("Otro")) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        CuidaleTextField(value = enfermedadOtro, onValueChange = { enfermedadOtro = it }, placeholder = stringResource(R.string.ficha_disease_other_placeholder), containerColor = customColors.inputBackground, textColor = textColor)
+                    }
+                }
+            }
+
+            HardShadowPanel(
+                backgroundColor = cardColor,
+                shadowColor = shadowPalette.hardShadowPrimary.copy(alpha = 0.2f),
+                cornerRadius = 24.dp,
+                contentPadding = PaddingValues(20.dp)
+            ) {
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Info, null, tint = accentColor, modifier = Modifier.size(24.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(stringResource(R.string.ficha_observations_photo), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = textColor)
+                    }
+                    Spacer(modifier = Modifier.height(20.dp))
+                    
+                    InputFieldLabel(text = stringResource(R.string.ficha_extra_observations), color = textColor)
+                    CuidaleTextField(
+                        value = condicionesExtra,
+                        onValueChange = { condicionesExtra = it },
+                        placeholder = stringResource(R.string.ficha_conditions_placeholder),
+                        singleLine = false,
+                        modifier = Modifier.height(100.dp),
+                        containerColor = customColors.inputBackground,
+                        textColor = textColor
+                    )
+                    
+                    Spacer(modifier = Modifier.height(24.dp))
+                    HorizontalDivider(color = textColor.copy(alpha = 0.1f))
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
+                    InputFieldLabel(text = stringResource(R.string.ficha_patient_photo_label), color = textColor)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(80.dp)
+                                .clip(CircleShape)
+                                .background(customColors.inputBackground)
+                                .border(1.dp, accentColor.copy(alpha = 0.3f), CircleShape)
+                                .clickable { showImageSourceDialog = true },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            val currentUrl = initialData?.get("fotoUrl")?.toString() ?: ""
+                            val photoToShow = when {
+                                pendingDeletePhoto -> null
+                                pendingPhoto != null -> pendingPhoto
+                                currentUrl.isNotEmpty() -> currentUrl
+                                else -> null
+                            }
+
+                            if (photoToShow != null) {
+                                AsyncImage(
+                                    model = photoToShow,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Icon(Icons.Default.AddAPhoto, null, tint = textColor.copy(alpha = 0.3f))
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column {
+                            Text(
+                                text = if (pendingDeletePhoto) stringResource(R.string.ficha_photo_will_delete) else if (pendingPhoto != null || (initialData?.get("fotoUrl")?.toString()?.isNotEmpty() == true)) stringResource(R.string.ficha_patient_photo) else stringResource(R.string.ficha_no_photo),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = textColor
+                            )
+                            TextButton(
+                                onClick = { showImageSourceDialog = true },
+                                contentPadding = PaddingValues(0.dp)
+                            ) {
+                                Text(stringResource(R.string.ficha_manage_photo), color = accentColor, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black)
+                            }
+                        }
+                    }
+                }
+            }
+
+            HardShadowButton(
+                text = stringResource(R.string.action_finish),
+                onClick = {
+                    viewModel.createFamilyFicha(
+                        nombreCompleto, edad, genero, vivesConFamiliar, 
+                        region, comuna, calle, numero, depto, 
+                        nivelDependencia, movilidad, comunicacion, 
+                        discapacidades, discapacidadOtro, enfermedades, enfermedadOtro, 
+                        condicionesExtra,
+                        selectedCommunesPref, selectedHorariosPref,
+                        shouldDeletePhoto = pendingDeletePhoto,
+                        onSuccess = onFinishSuccess
+                    )
+                },
+                modifier = Modifier.fillMaxWidth().height(58.dp),
+                enabled = isStep1Valid,
+                containerColor = accentColor,
+                contentColor = Color.White,
+                shadowColor = shadowPalette.hardShadowPrimary,
+                isDark = isDark
+            )
         }
     }
 }

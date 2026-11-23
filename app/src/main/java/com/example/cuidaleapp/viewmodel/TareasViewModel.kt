@@ -200,6 +200,9 @@ class TareasViewModel : ViewModel() {
                     tipo = tarea.tipo,
                     descripcion = tarea.descripcion,
                     frecuencia = tarea.frecuencia,
+                    dosis = tarea.dosis,
+                    unidades = tarea.unidades,
+                    viaAdministracion = tarea.viaAdministracion,
                     exigirFoto = tarea.exigirFoto
                 )
                 db.collection("solicitudes").document(solicitudId)

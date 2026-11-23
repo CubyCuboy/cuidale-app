@@ -87,6 +87,11 @@ object NotificationTemplates {
                 "Se ha registrado un nuevo usuario cerca de ti.",
                 "OTHER_FICHA"
             )
+            "nueva_calificacion" -> Triple(
+                "Nueva calificación",
+                "Te han dejado una nueva calificación.",
+                "PROFILE_CALIFICACIONES"
+            )
             else -> Triple(
                 context.getString(R.string.notification_generic),
                 context.getString(R.string.notification_generic_body),
