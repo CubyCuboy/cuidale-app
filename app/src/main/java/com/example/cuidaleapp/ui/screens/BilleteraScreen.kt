@@ -23,6 +23,7 @@ import com.example.cuidaleapp.models.EstadoCobro
 import com.example.cuidaleapp.ui.components.HardShadowButton
 import com.example.cuidaleapp.ui.components.HardShadowPanel
 import com.example.cuidaleapp.ui.components.RecargaDialog
+import com.example.cuidaleapp.ui.components.RedirigiendoMercadoPagoDialog
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
 import com.example.cuidaleapp.utils.CheckoutLauncher
 import com.example.cuidaleapp.utils.MontoUtils
@@ -45,13 +46,19 @@ fun BilleteraScreen(
     val operacion by viewModel.operacion.collectAsState()
     val recargaUrl by viewModel.recargaUrl.collectAsState()
     var showRecarga by remember { mutableStateOf(false) }
+    var redirigiendo by remember { mutableStateOf(false) }
+    var recargaCancelada by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val pagoEstado by AppNavigationState.pagoEstado.collectAsState()
 
     LaunchedEffect(recargaUrl) {
         recargaUrl?.let {
-            CheckoutLauncher.abrir(context, it)
+            redirigiendo = false
+            if (!recargaCancelada) {
+                CheckoutLauncher.abrir(context, it)
+            }
+            recargaCancelada = false
             viewModel.consumirRecargaUrl()
         }
     }
@@ -59,10 +66,15 @@ fun BilleteraScreen(
     LaunchedEffect(operacion) {
         when (val op = operacion) {
             is OperacionEstado.Error -> {
+                redirigiendo = false
+                recargaCancelada = false
                 android.widget.Toast.makeText(context, op.message, android.widget.Toast.LENGTH_SHORT).show()
                 viewModel.limpiarOperacion()
             }
-            OperacionEstado.Exito -> viewModel.limpiarOperacion()
+            OperacionEstado.Exito -> {
+                redirigiendo = false
+                viewModel.limpiarOperacion()
+            }
             else -> Unit
         }
     }
@@ -280,10 +292,21 @@ fun BilleteraScreen(
         RecargaDialog(
             deudas = deudas,
             onConfirm = { monto ->
+                recargaCancelada = false
+                redirigiendo = true
                 viewModel.crearRecarga(monto)
                 showRecarga = false
             },
             onDismiss = { showRecarga = false }
+        )
+    }
+
+    if (redirigiendo) {
+        RedirigiendoMercadoPagoDialog(
+            onCancel = {
+                redirigiendo = false
+                recargaCancelada = true
+            }
         )
     }
 }

@@ -1412,6 +1412,8 @@ María González | Residencia Luz | +56912345678 | Encargada | Buena conducta</s
     <string name="billetera_confirmar_pagar">CONFIRMAR Y PAGAR</string>
     <string name="billetera_pagar_deuda">PAGAR DEUDA (%1$s)</string>
     <string name="billetera_aviso_mp">El pago se procesa de forma segura en Mercado Pago. Cuidale no almacena los datos de tu tarjeta.</string>
+    <string name="billetera_redirigiendo_mp">Redirigiendo a Mercado Pago</string>
+    <string name="billetera_redirigiendo_mp_desc">Serás redirigido al portal seguro de pago. No cierres esta pantalla.</string>
     <string name="billetera_cobros_activos">COBROS ACTIVOS</string>
     <string name="billetera_sin_cobros">No hay cobros pendientes.</string>
     <string name="billetera_movimientos">MOVIMIENTOS</string>

@@ -1,6 +1,5 @@
 package com.example.cuidaleapp.ui.screens
 
-import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -35,7 +34,6 @@ import com.example.cuidaleapp.utils.ErrorMessages
 import com.example.cuidaleapp.viewmodel.SolicitudViewModel
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
-import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,7 +66,7 @@ fun ReviewSolicitudScreen(
     LaunchedEffect(solicitud.id, currentUid) {
         if (currentUid != null) {
             try {
-                val snapshot = com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("postulaciones")
+                val snapshot = FirebaseFirestore.getInstance().collection("postulaciones")
                     .whereEqualTo("solicitudId", solicitud.id)
                     .whereEqualTo("cuidadorUid", currentUid)
                     .whereEqualTo("estado", "pendiente")
@@ -98,25 +96,6 @@ fun ReviewSolicitudScreen(
         } finally {
             isLoadingFicha = false
         }
-    }
-
-    if (showFinishConfirm) {
-        AlertDialog(
-            onDismissRequest = { showFinishConfirm = false },
-            title = { Text(stringResource(R.string.solicitudes_finalizar_servicio_titulo)) },
-            text = { Text(stringResource(R.string.solicitudes_finalizar_servicio_mensaje)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.finalizarServicio(solicitud) {
-                        showFinishConfirm = false
-                        onRedirectToRequests()
-                    }
-                }) { Text(stringResource(R.string.solicitudes_si_finalizar), color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showFinishConfirm = false }) { Text(stringResource(R.string.solicitudes_no)) }
-            }
-        )
     }
 
     if (showCancelPostulationConfirm) {
@@ -149,14 +128,6 @@ fun ReviewSolicitudScreen(
                     .padding(horizontal = 24.dp, vertical = 16.dp)
             ) {
                 if (isAccepted) {
-                    HardShadowButton(
-                        text = stringResource(R.string.solicitudes_finalizar_servicio),
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = Color.White,
-                        shadowColor = MaterialTheme.colorScheme.error.copy(alpha = 0.3f),
-                        icon = Icons.Default.CheckCircle,
-                        onClick = { showFinishConfirm = true }
-                    )
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                         shape = RoundedCornerShape(14.dp),
@@ -312,7 +283,7 @@ fun ReviewSolicitudScreen(
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                         ) {
-                            Icon(Icons.Default.Chat, null, modifier = Modifier.size(18.dp))
+                            Icon(Icons.AutoMirrored.Filled.Chat, null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(stringResource(R.string.caregiver_profile_ir_al_chat), fontWeight = FontWeight.Bold, fontSize = 12.sp)
                         }
