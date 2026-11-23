@@ -23,8 +23,8 @@ android {
         applicationId = "com.example.cuidaleapp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 136
-        versionName = "1.3.6"
+        versionCode = 141
+        versionName = "1.4.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         resValue("string", "mapbox_access_token", mapboxToken)
