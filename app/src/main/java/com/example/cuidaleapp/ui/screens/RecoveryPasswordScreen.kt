@@ -31,7 +31,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.cuidaleapp.R
 import com.example.cuidaleapp.ui.components.*
-import com.example.cuidaleapp.utils.ErrorCodes
 import com.example.cuidaleapp.utils.ErrorMessages
 import com.example.cuidaleapp.ui.theme.CuidaleAppTheme
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
@@ -54,7 +53,7 @@ fun RecoveryPasswordScreen(
     val email by viewModel.email.collectAsState()
     
     var currentStep by rememberSaveable { mutableStateOf(RecoveryStep.EMAIL) }
-    
+
     LaunchedEffect(uiState) {
         when(uiState) {
             is RecoveryUiState.CodeSent -> currentStep = RecoveryStep.CODE
@@ -93,8 +92,9 @@ fun RecoveryPasswordScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .imePadding()
+                .windowInsetsPadding(WindowInsets.statusBars.only(WindowInsetsSides.Top))
                 .verticalScroll(rememberScrollState())
-                .windowInsetsPadding(WindowInsets.safeDrawing)
                 .padding(horizontal = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -134,7 +134,7 @@ fun RecoveryPasswordScreen(
 
             Crossfade(targetState = currentStep, animationSpec = tween(500), label = "stepTransition") { step ->
                 val message = if (uiState is RecoveryUiState.Error) (uiState as RecoveryUiState.Error).message else null
-                val error = message?.let { ErrorMessages.get(context, it) } ?: ErrorMessages.resolve(context, ErrorCodes.Unknown.GENERIC)
+                val error = message?.let { ErrorMessages.get(context, it) }
                 
                 when (step) {
                     RecoveryStep.EMAIL -> RecoveryEmailStep(
@@ -173,7 +173,7 @@ fun RecoveryPasswordScreen(
             
             Spacer(modifier = Modifier.height(40.dp))
             
-            if (currentStep != RecoveryStep.SUCCESS) {
+            if (currentStep != RecoveryStep.SUCCESS && !fromProfile) {
                 Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = stringResource(R.string.forgot_password_footer_prefix),

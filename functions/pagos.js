@@ -1,18 +1,25 @@
 /*
- * Cuidale App v2.0 – Billetera, recargas con Mercado Pago (Checkout Pro) y cobro de servicios.
+ * Cuidale App v2.1 – Billetera (colección `billetera`), recargas con Mercado Pago
+ * (Checkout Pro) y cobro de servicios.
  *
- * Colecciones (solo escritas por estas funciones; la app únicamente lee):
- *   billeteras/{uid}                    { uid, saldo, actualizadoAt }
- *   billeteras/{uid}/movimientos/{id}   { tipo, monto, saldoResultante, referencia, descripcion, timestamp }
- *   recargas/{recargaId}                { uid, monto, estado, preferenceId, paymentId, createdAt, aprobadaAt }
- *   cobros/{solicitudId}                { solicitudId, cuidadorUid, representanteUid, montoAcordado, horasAcordadas,
- *                                         monto, horas, comentario, estado, saldoSuficiente, ... }
+ * Modelo de datos:
+ *   billetera/{uid}  Documento único por usuario (id = uid del dueño de la billetera).
+ *                     { uid, saldo, actualizadoAt, movimientos: [ { id, tipoMovimiento,
+ *                       monto, saldoResultante, referencia, descripcion, timestamp,
+ *                       estado, emisorUid, receptorUid, paymentId, preferenceId } ] }
  *
- * Estados de un cobro: pendiente | requiere_confirmacion | pagado | rechazado
- * Criterios de aceptación cubiertos: C20-51 a C20-58.
+ *   tipoMovimiento:
+ *     - "recarga": abona saldo (Checkout Pro de Mercado Pago). Estado: pendiente → aprobada/rechazada.
+ *     - "pago":    transfiere saldo entre billeteras (pago del representante al cuidador).
+ *                  monto negativo para quien paga, positivo para quien recibe.
+ *     - "retiro":  retiro de saldo (monto negativo). Función lista; payout por implementar.
+ *
+ *   cobros/{solicitudId}  { solicitudId, cuidadorUid, representanteUid, monto, horas,
+ *                           comentario, estado, saldoSuficiente, ... }
+ *   Estados de un cobro: pendiente | requiere_confirmacion | pagado | rechazado
  *
  * Secretos requeridos (firebase functions:secrets:set NOMBRE):
- *   MP_ACCESS_TOKEN     Access Token de la aplicación en Mercado Pago Developers (de prueba).
+ *   MP_ACCESS_TOKEN     Access Token de la aplicación en Mercado Pago Developers.
  *   MP_WEBHOOK_SECRET   Clave secreta generada al configurar los Webhooks.
  */
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
@@ -23,15 +30,14 @@ const crypto = require("crypto");
 const MP_ACCESS_TOKEN = defineSecret("MP_ACCESS_TOKEN");
 const MP_WEBHOOK_SECRET = defineSecret("MP_WEBHOOK_SECRET");
 
-// Modo de prueba: mientras sea true, el checkout se abre en el sandbox de Mercado Pago (sin dinero real),
-// sin importar si el Access Token de prueba empieza con TEST- o con APP_USR-.
-// Cambiar a false solo al pasar a producción con credenciales productivas.
+// Modo de prueba: mientras sea true, el checkout se abre en el sandbox de Mercado Pago.
 const MP_MODO_PRUEBA = true;
 
 const REGION = "southamerica-west1";
 const MP_API = "https://api.mercadopago.com";
 const MONTO_MIN_RECARGA = 1000;
 const MONTO_MAX_RECARGA = 1000000;
+const MONTO_MIN_RETIRO = 1000;
 const COBRO_ACTIVO = ["pendiente", "requiere_confirmacion"];
 const RUN_OPTIONS = { memory: "512MiB", timeoutSeconds: 60 };
 
@@ -51,6 +57,10 @@ function toPesos(value, campo) {
     throw new HttpsError("invalid-argument", `${campo} debe ser un número entero mayor que cero (CLP).`);
   }
   return n;
+}
+
+function nuevoMovimientoId() {
+  return crypto.randomUUID();
 }
 
 function projectId() {
@@ -78,10 +88,26 @@ async function notificar(uid, tipo, emisor, data) {
   }
 }
 
-/* Agrega un movimiento a la billetera dentro de una transacción. */
-function registrarMovimiento(tx, uid, mov) {
-  const ref = db().collection("billeteras").doc(uid).collection("movimientos").doc();
-  tx.set(ref, { id: ref.id, ...mov, timestamp: FieldValue.serverTimestamp() });
+/* Lee la billetera de un usuario dentro de una transacción. */
+async function leerBilletera(tx, uid) {
+  const ref = db().collection("billetera").doc(uid);
+  const snap = await tx.get(ref);
+  const data = snap.exists ? snap.data() : {};
+  return {
+    ref,
+    saldo: Number(data.saldo || 0),
+    movimientos: Array.isArray(data.movimientos) ? data.movimientos : []
+  };
+}
+
+/* Actualiza saldo y agregra un movimiento embebido en la billetera. */
+function agregarMovimiento(tx, billetera, mov) {
+  tx.set(billetera.ref, {
+    uid: billetera.ref.id,
+    saldo: billetera.saldo,
+    movimientos: [...billetera.movimientos, mov],
+    actualizadoAt: FieldValue.serverTimestamp()
+  }, { merge: true });
 }
 
 function formatoCLP(n) {
@@ -132,7 +158,7 @@ async function mpFetch(path, options) {
 
 /*
  * Valida el encabezado x-signature de un webhook de Mercado Pago.
- * Plantilla firmada: "id:{data.id};request-id:{x-request-id};ts:{ts};" con HMAC-SHA256 y la clave secreta.
+ * Plantilla firmada: "id:{data.id};request-id:{x-request-id};ts:{ts};" con HMAC-SHA256.
  */
 function firmaValida(req, secret) {
   const header = String(req.get("x-signature") || "");
@@ -164,16 +190,27 @@ exports.crearRecarga = onCall({ ...RUN_OPTIONS, secrets: [MP_ACCESS_TOKEN] }, as
     throw new HttpsError("invalid-argument", `El monto debe estar entre ${formatoCLP(MONTO_MIN_RECARGA)} y ${formatoCLP(MONTO_MAX_RECARGA)}.`);
   }
 
-  const recargaRef = db().collection("recargas").doc();
-  await recargaRef.set({
-    id: recargaRef.id, uid, monto, estado: "pendiente",
-    createdAt: FieldValue.serverTimestamp()
+  const recargaId = nuevoMovimientoId();
+
+  // La recarga pendiente se guarda como movimiento embebido en la billetera del usuario.
+  await db().runTransaction(async (tx) => {
+    const billetera = await leerBilletera(tx, uid);
+    agregarMovimiento(tx, billetera, {
+      id: recargaId,
+      tipoMovimiento: "recarga",
+      monto,
+      saldoResultante: billetera.saldo,
+      referencia: recargaId,
+      descripcion: "Recarga con Mercado Pago",
+      estado: "pendiente",
+      timestamp: FieldValue.serverTimestamp()
+    });
   });
 
   const retorno = functionUrl("retornoPago");
   const preferencia = await mpFetch("/checkout/preferences", {
     method: "POST",
-    headers: { "X-Idempotency-Key": recargaRef.id },
+    headers: { "X-Idempotency-Key": recargaId },
     body: JSON.stringify({
       items: [{
         id: "recarga_billetera",
@@ -182,28 +219,42 @@ exports.crearRecarga = onCall({ ...RUN_OPTIONS, secrets: [MP_ACCESS_TOKEN] }, as
         currency_id: "CLP",
         unit_price: monto
       }],
-      external_reference: recargaRef.id,
+      // Permite débito y crédito de cualquier medio soportado por Mercado Pago
+      // (no se excluye ningún método/tipo y se habilitan cuotas para crédito).
+      payment_methods: {
+        excluded_payment_methods: [],
+        excluded_payment_types: [],
+        installments: 12
+      },
+      external_reference: `${uid}#${recargaId}`,
       notification_url: functionUrl("webhookMercadoPago"),
       back_urls: {
-        success: `${retorno}?estado=aprobado&recarga=${recargaRef.id}`,
-        pending: `${retorno}?estado=pendiente&recarga=${recargaRef.id}`,
-        failure: `${retorno}?estado=rechazado&recarga=${recargaRef.id}`
+        success: `${retorno}?estado=aprobado&recarga=${uid}%23${recargaId}`,
+        pending: `${retorno}?estado=pendiente&recarga=${uid}%23${recargaId}`,
+        failure: `${retorno}?estado=rechazado&recarga=${uid}%23${recargaId}`
       },
       auto_return: "approved",
-      metadata: { uid, recarga_id: recargaRef.id }
+      metadata: { uid, recarga_id: recargaId }
     })
   });
 
-  await recargaRef.update({ preferenceId: preferencia.id });
-  // En modo de prueba se usa el checkout de sandbox; si Mercado Pago no lo entrega, se usa init_point.
+  await db().runTransaction(async (tx) => {
+    const billetera = await leerBilletera(tx, uid);
+    const idx = billetera.movimientos.findIndex((m) => m.id === recargaId);
+    if (idx >= 0) {
+      billetera.movimientos[idx] = { ...billetera.movimientos[idx], preferenceId: preferencia.id };
+      tx.set(billetera.ref, { movimientos: billetera.movimientos }, { merge: true });
+    }
+  });
+
   const url = MP_MODO_PRUEBA && preferencia.sandbox_init_point ? preferencia.sandbox_init_point : preferencia.init_point;
-  return { recargaId: recargaRef.id, url };
+  return { recargaId, url };
 });
 
 /* Página a la que vuelve el navegador después del pago; devuelve al usuario a la app. */
 exports.retornoPago = onRequest({ memory: "256MiB" }, (req, res) => {
   const estado = String(req.query.estado || "pendiente").replace(/[^a-z_]/gi, "");
-  const recarga = String(req.query.recarga || "").replace(/[^a-z0-9]/gi, "");
+  const recarga = String(req.query.recarga || "").replace(/[^a-z0-9%23]/gi, "");
   const intent = `intent://pago?estado=${estado}&recarga=${recarga}#Intent;scheme=cuidaleapp;package=com.example.cuidaleapp;end`;
   const mensaje = estado === "aprobado" ? "¡Pago aprobado!" : estado === "rechazado" ? "El pago fue rechazado." : "Tu pago está en proceso.";
   res.set("Content-Type", "text/html; charset=utf-8");
@@ -213,7 +264,11 @@ exports.retornoPago = onRequest({ memory: "256MiB" }, (req, res) => {
 <script>setTimeout(function(){location.href=${JSON.stringify(intent)};},600);</script></body></html>`);
 });
 
-/* Webhook de Mercado Pago: acredita la recarga solo si el pago está aprobado. Idempotente. */
+/* Webhook de Mercado Pago: acredita la recarga solo si el pago está aprobado. Idempotente.
+ * Soporta dos formatos de external_reference:
+ *   - Nuevo: `${uid}#${recargaId}` (movimiento embebido en `billetera/{uid}`).
+ *   - Legacy: `${recargaId}` (documento en la colección `recargas`): migra y acredita.
+ */
 exports.webhookMercadoPago = onRequest({ ...RUN_OPTIONS, secrets: [MP_ACCESS_TOKEN, MP_WEBHOOK_SECRET] }, async (req, res) => {
   if (req.method !== "POST") {
     res.status(405).send("Método no permitido");
@@ -233,54 +288,189 @@ exports.webhookMercadoPago = onRequest({ ...RUN_OPTIONS, secrets: [MP_ACCESS_TOK
 
   try {
     const pago = await mpFetch(`/v1/payments/${encodeURIComponent(paymentId)}`, { method: "GET" });
-    const recargaId = String(pago.external_reference || "");
-    if (!recargaId) {
+    const ext = String(pago.external_reference || "");
+
+    let uid;
+    let recargaId;
+    let legacyRef = null;
+
+    if (ext.includes("#")) {
+      [uid, recargaId] = ext.split("#", 2);
+      if (!uid || !recargaId) {
+        res.status(200).send("Sin referencia");
+        return;
+      }
+    } else if (ext) {
+      // Compatibilidad: pago creado con el modelo anterior (solo id de recarga).
+      legacyRef = db().collection("recargas").doc(ext);
+      const legacySnap = await legacyRef.get();
+      if (!legacySnap.exists) {
+        res.status(200).send("Sin referencia");
+        return;
+      }
+      const legacy = legacySnap.data();
+      uid = legacy.uid;
+      recargaId = legacy.id || ext;
+      if (legacy.estado === "aprobada") {
+        res.status(200).send("OK");
+        return;
+      }
+    } else {
       res.status(200).send("Sin referencia");
       return;
     }
-    const recargaRef = db().collection("recargas").doc(recargaId);
+
+    const billeteraRef = db().collection("billetera").doc(uid);
 
     await db().runTransaction(async (tx) => {
-      const snap = await tx.get(recargaRef);
-      if (!snap.exists) return;
-      const recarga = snap.data();
-      if (recarga.estado === "aprobada") return; // ya acreditada: no se abona dos veces
+      const billetera = await leerBilletera(tx, uid);
+      const idx = billetera.movimientos.findIndex(
+        (m) => m.id === recargaId && m.tipoMovimiento === "recarga"
+      );
+      const mov = idx >= 0 ? billetera.movimientos[idx] : null;
+
+      // Si no existe el movimiento en el modelo nuevo pero hay una recarga legacy,
+      // se migra: se crea la billetera (si falta) con su saldo y movimiento.
+      let montoRecarga = mov ? Number(mov.monto) : 0;
+      if (!montoRecarga && legacyRef) {
+        const legacySnap = await tx.get(legacyRef);
+        if (legacySnap.exists) montoRecarga = Number(legacySnap.data().monto || 0);
+      }
+      if (!montoRecarga) return;
+
+      if (mov && mov.estado === "aprobada") return; // ya acreditada
 
       if (pago.status === "approved") {
-        if (Number(pago.transaction_amount) !== Number(recarga.monto) || pago.currency_id !== "CLP") {
-          tx.update(recargaRef, { estado: "revision", paymentId, detalle: "monto o moneda no coinciden" });
+        if (Number(pago.transaction_amount) !== montoRecarga || pago.currency_id !== "CLP") {
+          if (mov) {
+            billetera.movimientos[idx] = {
+              ...mov, estado: "revision", paymentId, detalle: "monto o moneda no coinciden"
+            };
+            tx.update(billeteraRef, { movimientos: billetera.movimientos });
+          } else if (legacyRef) {
+            tx.update(legacyRef, { estado: "revision", paymentId });
+          }
           return;
         }
-        const billeteraRef = db().collection("billeteras").doc(recarga.uid);
-        const bSnap = await tx.get(billeteraRef);
-        const saldoActual = bSnap.exists ? Number(bSnap.data().saldo || 0) : 0;
-        const nuevoSaldo = saldoActual + Number(recarga.monto);
-        tx.set(billeteraRef, { uid: recarga.uid, saldo: nuevoSaldo, actualizadoAt: FieldValue.serverTimestamp() }, { merge: true });
-        registrarMovimiento(tx, recarga.uid, {
-          tipo: "recarga", monto: Number(recarga.monto), saldoResultante: nuevoSaldo,
-          referencia: recargaId, descripcion: "Recarga con Mercado Pago"
-        });
-        tx.update(recargaRef, { estado: "aprobada", paymentId, aprobadaAt: FieldValue.serverTimestamp() });
+        const nuevoSaldo = billetera.saldo + montoRecarga;
+        if (mov) {
+          billetera.movimientos[idx] = {
+            ...mov, estado: "aprobada", paymentId,
+            saldoResultante: nuevoSaldo, aprobadaAt: FieldValue.serverTimestamp()
+          };
+        } else {
+          billetera.movimientos = [
+            {
+              id: recargaId,
+              tipoMovimiento: "recarga",
+              monto: montoRecarga,
+              saldoResultante: nuevoSaldo,
+              referencia: recargaId,
+              descripcion: "Recarga con Mercado Pago",
+              estado: "aprobada",
+              paymentId,
+              timestamp: FieldValue.serverTimestamp(),
+              aprobadaAt: FieldValue.serverTimestamp()
+            },
+            ...billetera.movimientos
+          ];
+        }
+        tx.set(billeteraRef, {
+          uid, saldo: nuevoSaldo, movimientos: billetera.movimientos,
+          actualizadoAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        if (legacyRef) {
+          tx.update(legacyRef, { estado: "aprobada", paymentId, aprobadaAt: FieldValue.serverTimestamp() });
+        }
       } else if (["rejected", "cancelled", "refunded", "charged_back"].includes(pago.status)) {
-        tx.update(recargaRef, { estado: "rechazada", paymentId, detalle: String(pago.status_detail || pago.status) });
+        if (mov) {
+          billetera.movimientos[idx] = {
+            ...mov, estado: "rechazada", paymentId,
+            detalle: String(pago.status_detail || pago.status)
+          };
+          tx.update(billeteraRef, { movimientos: billetera.movimientos });
+        } else if (legacyRef) {
+          tx.update(legacyRef, { estado: "rechazada", paymentId, detalle: String(pago.status_detail || pago.status) });
+        }
       } else {
-        tx.update(recargaRef, { estado: "pendiente", paymentId });
+        if (mov) {
+          billetera.movimientos[idx] = { ...mov, paymentId };
+          tx.update(billeteraRef, { movimientos: billetera.movimientos });
+        } else if (legacyRef) {
+          tx.update(legacyRef, { paymentId });
+        }
       }
     });
 
-    const final = await recargaRef.get();
-    if (final.exists && final.data().estado === "aprobada" && !final.data().notificada) {
-      await recargaRef.update({ notificada: true });
-      await notificar(final.data().uid, "recarga_aprobada", "sistema", {
-        titulo: "Recarga aprobada",
-        texto: `Se abonaron ${formatoCLP(final.data().monto)} a tu billetera.`
-      });
+    // Notificar una sola vez cuando la recarga queda aprobada.
+    const final = await billeteraRef.get();
+    if (final.exists) {
+      const mov = (final.data().movimientos || []).find((m) => m.id === recargaId);
+      if (mov && mov.estado === "aprobada" && !mov.notificada) {
+        const newMovimientos = final.data().movimientos.map((m) =>
+          m.id === recargaId ? { ...m, notificada: true } : m
+        );
+        await billeteraRef.update({ movimientos: newMovimientos });
+        await notificar(uid, "recarga_aprobada", "sistema", {
+          titulo: "Recarga aprobada",
+          texto: `Se abonaron ${formatoCLP(mov.monto)} a tu billetera.`
+        });
+      }
+    } else if (legacyRef) {
+      const legacySnap = await legacyRef.get();
+      if (legacySnap.exists && legacySnap.data().estado === "aprobada" && !legacySnap.data().notificada) {
+        await legacyRef.update({ notificada: true });
+        await notificar(uid, "recarga_aprobada", "sistema", {
+          titulo: "Recarga aprobada",
+          texto: `Se abonaron ${formatoCLP(legacySnap.data().monto || 0)} a tu billetera.`
+        });
+      }
     }
     res.status(200).send("OK");
   } catch (e) {
     console.error("webhookMercadoPago error:", e);
     res.status(500).send("Error"); // Mercado Pago reintentará
   }
+});
+
+// ---------------------------------------------------------------- RETIROS
+
+/*
+ * Retira saldo de la billetera. Mínimo $1.000 CLP.
+ * Actualiza el saldo y registra un movimiento tipo "retiro" en estado pendiente.
+ * NOTA: la integración real con Mercado Pago (payout a cuenta bancaria) queda
+ * marcada como TODO: esta función deja el proceso listo en el libro mayor.
+ */
+exports.retirarSaldo = onCall(RUN_OPTIONS, async (req) => {
+  const uid = requireAuth(req);
+  const monto = toPesos(req.data && req.data.monto, "El monto");
+  if (monto < MONTO_MIN_RETIRO) {
+    throw new HttpsError("invalid-argument", `El retiro mínimo es ${formatoCLP(MONTO_MIN_RETIRO)}.`);
+  }
+
+  const resultado = await db().runTransaction(async (tx) => {
+    const billetera = await leerBilletera(tx, uid);
+    if (billetera.saldo < monto) {
+      throw new HttpsError("failed-precondition", "Saldo insuficiente en tu billetera.");
+    }
+    const nuevoSaldo = billetera.saldo - monto;
+    const movimientoId = nuevoMovimientoId();
+    billetera.saldo = nuevoSaldo;
+    agregarMovimiento(tx, billetera, {
+      id: movimientoId,
+      tipoMovimiento: "retiro",
+      monto: -monto,
+      saldoResultante: nuevoSaldo,
+      referencia: movimientoId,
+      descripcion: "Retiro de billetera",
+      estado: "pendiente",
+      timestamp: FieldValue.serverTimestamp()
+    });
+    return { saldo: nuevoSaldo, movimientoId };
+  });
+
+  // TODO: integrar payout con Mercado Pago cuando el usuario tenga cuenta bancaria vinculada.
+  return { ok: true, saldo: resultado.saldo, movimientoId: resultado.movimientoId };
 });
 
 // ---------------------------------------------------------------- COBROS
@@ -323,8 +513,8 @@ exports.iniciarCobro = onCall(RUN_OPTIONS, async (req) => {
     // C20-52: datos diferentes a los pre-acordados requieren confirmación del representante
     const cambios = monto !== montoAcordado || horas !== horasAcordadas;
 
-    const billSnap = await tx.get(db().collection("billeteras").doc(sol.representanteUid));
-    const saldoRep = billSnap.exists ? Number(billSnap.data().saldo || 0) : 0;
+    const bill = await leerBilletera(tx, sol.representanteUid);
+    const saldoRep = bill.saldo;
 
     const cobro = {
       id: solicitudId, solicitudId,
@@ -396,11 +586,10 @@ exports.pagarCobro = onCall(RUN_OPTIONS, async (req) => {
     if (c.estado === "requiere_confirmacion") throw new HttpsError("failed-precondition", "Primero debes confirmar los cambios del cobro.");
     if (c.estado !== "pendiente") return { ok: false, motivo: "sin_cobro", c };
 
-    const repRef = db().collection("billeteras").doc(c.representanteUid);
-    const cuiRef = db().collection("billeteras").doc(c.cuidadorUid);
-    const [repSnap, cuiSnap] = await Promise.all([tx.get(repRef), tx.get(cuiRef)]);
-    const saldoRep = repSnap.exists ? Number(repSnap.data().saldo || 0) : 0;
-    const saldoCui = cuiSnap.exists ? Number(cuiSnap.data().saldo || 0) : 0;
+    const repBilletera = await leerBilletera(tx, c.representanteUid);
+    const cuiBilletera = await leerBilletera(tx, c.cuidadorUid);
+    const saldoRep = repBilletera.saldo;
+    const saldoCui = cuiBilletera.saldo;
 
     // C20-56 / C20-58: saldo insuficiente
     if (saldoRep < c.monto) {
@@ -408,20 +597,48 @@ exports.pagarCobro = onCall(RUN_OPTIONS, async (req) => {
       return { ok: false, motivo: "saldo_insuficiente", c, saldoRep };
     }
 
-    // C20-55: transferencia atómica
+    // C20-55: transferencia atómica entre billeteras (movimientos embebidos).
     const nuevoRep = saldoRep - c.monto;
     const nuevoCui = saldoCui + c.monto;
-    tx.set(repRef, { uid: c.representanteUid, saldo: nuevoRep, actualizadoAt: FieldValue.serverTimestamp() }, { merge: true });
-    tx.set(cuiRef, { uid: c.cuidadorUid, saldo: nuevoCui, actualizadoAt: FieldValue.serverTimestamp() }, { merge: true });
-    registrarMovimiento(tx, c.representanteUid, {
-      tipo: "pago_servicio", monto: -c.monto, saldoResultante: nuevoRep, referencia: cobroId,
-      descripcion: `Pago a ${c.cuidadorNombre || "cuidador"} por el cuidado de ${c.nombrePaciente || "paciente"}`
-    });
-    registrarMovimiento(tx, c.cuidadorUid, {
-      tipo: "cobro_servicio", monto: c.monto, saldoResultante: nuevoCui, referencia: cobroId,
-      descripcion: `Pago recibido de ${c.representanteNombre || "representante"}`
-    });
-    tx.update(cobroRef, { estado: "pagado", saldoSuficiente: true, pagadoAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    const timestamp = FieldValue.serverTimestamp();
+
+    const movRep = {
+      id: nuevoMovimientoId(),
+      tipoMovimiento: "pago",
+      monto: -c.monto,
+      saldoResultante: nuevoRep,
+      referencia: cobroId,
+      descripcion: `Pago a ${c.cuidadorNombre || "cuidador"} por el cuidado de ${c.nombrePaciente || "paciente"}`,
+      estado: "aprobado",
+      emisorUid: c.representanteUid,
+      receptorUid: c.cuidadorUid,
+      timestamp
+    };
+    const movCui = {
+      id: nuevoMovimientoId(),
+      tipoMovimiento: "pago",
+      monto: c.monto,
+      saldoResultante: nuevoCui,
+      referencia: cobroId,
+      descripcion: `Pago recibido de ${c.representanteNombre || "representante"}`,
+      estado: "aprobado",
+      emisorUid: c.representanteUid,
+      receptorUid: c.cuidadorUid,
+      timestamp
+    };
+
+    tx.set(repBilletera.ref, {
+      uid: c.representanteUid, saldo: nuevoRep,
+      movimientos: [...repBilletera.movimientos, movRep],
+      actualizadoAt: timestamp
+    }, { merge: true });
+    tx.set(cuiBilletera.ref, {
+      uid: c.cuidadorUid, saldo: nuevoCui,
+      movimientos: [...cuiBilletera.movimientos, movCui],
+      actualizadoAt: timestamp
+    }, { merge: true });
+
+    tx.update(cobroRef, { estado: "pagado", saldoSuficiente: true, pagadoAt: timestamp, updatedAt: timestamp });
     return { ok: true, c };
   });
 
@@ -538,8 +755,8 @@ exports.iniciarCobroTurno = onCall(RUN_OPTIONS, async (req) => {
     }
 
     const monto = Math.round(tarifa * horas);
-    const billSnap = await tx.get(db().collection("billeteras").doc(sol.representanteUid));
-    const saldoRep = billSnap.exists ? Number(billSnap.data().saldo || 0) : 0;
+    const bill = await leerBilletera(tx, sol.representanteUid);
+    const saldoRep = bill.saldo;
 
     const turnoRef = db().collection("turnos").doc();
     const turnoId = turnoRef.id;

@@ -8,6 +8,7 @@ object MontoUtils {
 
     const val MONTO_MIN_RECARGA = 1_000L
     const val MONTO_MAX_RECARGA = 1_000_000L
+    const val MONTO_MIN_RETIRO = 1_000L
     const val TARIFA_MAX = 10_000_000L
     const val HORAS_MAX = 1_000.0
 

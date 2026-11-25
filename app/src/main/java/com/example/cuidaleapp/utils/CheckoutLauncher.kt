@@ -19,18 +19,23 @@ object CheckoutLauncher {
         "mlstatic.com"
     )
 
-    fun abrir(context: Context, url: String) {
+    /**
+     * Abre el checkout de Mercado Pago con Chrome Custom Tabs.
+     * Devuelve true si se logró abrir y false si la URL no es válida o falló.
+     */
+    fun abrir(context: Context, url: String): Boolean {
         val uri = try {
             Uri.parse(url)
         } catch (_: Exception) {
-            return
+            return false
         }
-        if (uri.scheme != "https" || MP_HOSTS.none { uri.host?.endsWith(it) == true }) return
+        if (uri.scheme != "https" || MP_HOSTS.none { uri.host?.endsWith(it) == true }) return false
 
-        try {
+        return try {
             CustomTabsIntent.Builder().build().launchUrl(context, uri)
+            true
         } catch (_: Exception) {
-            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
+            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }.isSuccess
         }
     }
 }

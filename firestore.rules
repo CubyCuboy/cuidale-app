@@ -54,6 +54,12 @@ service cloud.firestore {
       }
     }
 
+    // --- BILLETERA (id del documento = uid del dueño; solo lectura en cliente) ---
+    match /billetera/{uid} {
+      allow read: if isOwner(uid);
+      // Las escrituras las hace únicamente el backend (Admin SDK).
+    }
+
     // --- FICHAS TÉCNICAS ---
     match /fichas/{userId} {
       allow read: if isAuthenticated();

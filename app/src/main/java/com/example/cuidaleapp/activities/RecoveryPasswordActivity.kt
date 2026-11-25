@@ -32,7 +32,7 @@ class RecoveryPasswordActivity : ComponentActivity() {
         setContent {
             val isDark by themeViewModel.isDarkMode.collectAsState()
             val fromProfile = intent.getBooleanExtra("FROM_PROFILE", false)
-            
+
             CuidaleAppRoot(darkTheme = isDark) {
                 RecoveryPasswordScreen(
                     viewModel = recoveryViewModel,

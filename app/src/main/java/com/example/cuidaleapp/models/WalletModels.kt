@@ -69,27 +69,72 @@ enum class EstadoAcuerdo {
     }
 }
 
-/** Billetera de un usuario: { uid, saldo, actualizadoAt }. Solo lectura. */
+/** Billetera de un usuario: { uid, saldo, movimientos, actualizadoAt }. Solo lectura. */
 @Immutable
 @IgnoreExtraProperties
 data class Billetera(
     val uid: String = "",
     val saldo: Long = 0L,
+    val movimientos: List<MovimientoBilletera> = emptyList(),
     val actualizadoAt: Timestamp? = null
 )
 
-/** Movimiento de billetera: { id, tipo, monto, saldoResultante, referencia, descripcion, timestamp }. Solo lectura. */
+/** Movimiento de billetera (embebido en el documento `billetera/{uid}`). Solo lectura. */
 @Immutable
 @IgnoreExtraProperties
 data class MovimientoBilletera(
     val id: String = "",
     val tipo: String = "",
+    val tipoMovimiento: String = "",
     val monto: Long = 0L,
     val saldoResultante: Long = 0L,
     val referencia: String = "",
     val descripcion: String = "",
-    val timestamp: Timestamp? = null
+    val timestamp: Timestamp? = null,
+    val estado: String = "",
+    val emisorUid: String = "",
+    val receptorUid: String = ""
 )
+
+/**
+ * Transferencia / recarga de billetera (colección `transferencias`).
+ * El backend escribe estos documentos; la app solo lee.
+ * Estados: pendiente | aprobada | rechazada | en revisión.
+ */
+@Immutable
+@IgnoreExtraProperties
+data class Transferencia(
+    val id: String = "",
+    val uid: String = "",
+    val monto: Long = 0L,
+    val estado: String = "",
+    val preferenceId: String = "",
+    val paymentId: String = "",
+    val detalle: String = "",
+    val createdAt: Timestamp? = null,
+    val aprobadaAt: Timestamp? = null,
+    val updatedAt: Timestamp? = null
+)
+
+/** Estados de un movimiento de billetera (el backend los escribe en recargas). */
+enum class EstadoMovimiento {
+    APROBADO,
+    COMPLETADO,
+    PENDIENTE,
+    RECHAZADO,
+    REVISION,
+    DESCONOCIDO;
+
+    companion object {
+        fun fromString(value: String?): EstadoMovimiento = when (value?.lowercase()) {
+            "aprobado", "aprobada", "completado", "completada", "pagado", "recibido" -> APROBADO
+            "pendiente" -> PENDIENTE
+            "rechazado", "rechazada", "cancelado", "cancelada" -> RECHAZADO
+            "revision", "en_revision" -> REVISION
+            else -> DESCONOCIDO
+        }
+    }
+}
 
 /**
  * Cobro de un turno. El backend lo escribe; la app solo lee.

@@ -108,15 +108,35 @@ object ErrorMessages {
             message.contains("offline", ignoreCase = true) || message.contains("network", ignoreCase = true) ||
                 message.contains("internet", ignoreCase = true) -> resolve(context, ErrorCodes.Network.OFFLINE)
             message.contains("timeout", ignoreCase = true) -> resolve(context, ErrorCodes.Network.TIMEOUT)
+            message.contains("no se pudo enviar", ignoreCase = true) ||
+                message.contains("enviar el correo", ignoreCase = true) -> resolve(context, ErrorCodes.Network.SERVER_ERROR)
+            message.contains("no registrado", ignoreCase = true) ||
+                message.contains("user not found", ignoreCase = true) -> resolve(context, ErrorCodes.Auth.USER_NOT_FOUND)
+            message.contains("no solicitado", ignoreCase = true) -> resolve(context, ErrorCodes.Auth.CODE_INVALID)
+            message.contains("incorrecto", ignoreCase = true) &&
+                (message.contains("código", ignoreCase = true) || message.contains("codigo", ignoreCase = true)) ->
+                resolve(context, ErrorCodes.Auth.CODE_INVALID)
+            message.contains("expirado", ignoreCase = true) || message.contains("caducado", ignoreCase = true) ||
+                message.contains("vencido", ignoreCase = true) -> resolve(context, ErrorCodes.Auth.CODE_EXPIRED)
+            message.contains("máximo de intentos", ignoreCase = true) ||
+                message.contains("maximo de intentos", ignoreCase = true) -> resolve(context, ErrorCodes.Auth.TOO_MANY_REQUESTS)
+            message.contains("correo electrónico no válido", ignoreCase = true) ||
+                message.contains("email inválido", ignoreCase = true) -> resolve(context, ErrorCodes.Validation.INVALID_EMAIL)
             message.contains("permission denied", ignoreCase = true) ||
                 message.contains("insufficient permissions", ignoreCase = true) -> resolve(context, ErrorCodes.Database.PERMISSION_DENIED)
             message.contains("not found", ignoreCase = true) -> resolve(context, ErrorCodes.Database.NOT_FOUND)
             message.contains("email already in use", ignoreCase = true) -> resolve(context, ErrorCodes.Auth.EMAIL_IN_USE)
             message.contains("weak password", ignoreCase = true) -> resolve(context, ErrorCodes.Auth.WEAK_PASSWORD)
-            message.contains("invalid credential", ignoreCase = true) || message.contains("wrong password", ignoreCase = true) ||
-                message.contains("user not found", ignoreCase = true) -> resolve(context, ErrorCodes.Auth.INVALID_CREDENTIALS)
+            message.contains("invalid credential", ignoreCase = true) || message.contains("wrong password", ignoreCase = true) ->
+                resolve(context, ErrorCodes.Auth.INVALID_CREDENTIALS)
             message.contains("too many requests", ignoreCase = true) -> resolve(context, ErrorCodes.Auth.TOO_MANY_REQUESTS)
             message.contains("storage", ignoreCase = true) -> resolve(context, ErrorCodes.Storage.GENERIC)
+            message.contains("debes esperar", ignoreCase = true) ||
+                message.contains("esperar un momento", ignoreCase = true) ||
+                message.contains("límite de", ignoreCase = true) ||
+                message.contains("limite de", ignoreCase = true) ||
+                message.contains("demasiadas solicitudes", ignoreCase = true) ->
+                resolve(context, ErrorCodes.Auth.TOO_MANY_REQUESTS)
             else -> resolve(context, ErrorCodes.Unknown.GENERIC)
         }
     }

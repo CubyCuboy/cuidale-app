@@ -95,7 +95,11 @@ class RecoveryViewModel : ViewModel() {
                 _attemptsRemaining.value = 5
                 _uiState.value = RecoveryUiState.CodeSent
             } catch (e: Exception) {
-                val message = if (e is FirebaseFunctionsException) e.message else e.localizedMessage
+                val message = if (e is FirebaseFunctionsException) {
+                    e.message
+                } else {
+                    "Error de conexión a internet. Revisa tu red e intenta nuevamente."
+                }
                 _uiState.value = RecoveryUiState.Error(message ?: "Error al enviar código")
                 delay(3000)
                 if (_uiState.value is RecoveryUiState.Error) {
@@ -133,7 +137,7 @@ class RecoveryViewModel : ViewModel() {
                     .getHttpsCallable("verifyRecoveryCode")
                     .call(data)
                     .await()
-                
+
                 stopTimer()
                 _uiState.value = RecoveryUiState.CodeVerified
             } catch (e: Exception) {
@@ -144,7 +148,11 @@ class RecoveryViewModel : ViewModel() {
                 }
                 _attemptsRemaining.value = remaining.coerceAtLeast(0)
 
-                val message = if (e is FirebaseFunctionsException) e.message else e.localizedMessage
+                val message = if (e is FirebaseFunctionsException) {
+                    e.message
+                } else {
+                    "Error de conexión a internet. Revisa tu red e intenta nuevamente."
+                }
                 _uiState.value = RecoveryUiState.Error(message ?: "Código incorrecto")
                 delay(3000)
                 if (_uiState.value is RecoveryUiState.Error) {
@@ -173,7 +181,11 @@ class RecoveryViewModel : ViewModel() {
                 
                 _uiState.value = RecoveryUiState.Success
             } catch (e: Exception) {
-                val message = if (e is FirebaseFunctionsException) e.message else e.localizedMessage
+                val message = if (e is FirebaseFunctionsException) {
+                    e.message
+                } else {
+                    "Error de conexión a internet. Revisa tu red e intenta nuevamente."
+                }
                 _uiState.value = RecoveryUiState.Error(message ?: "Error al actualizar contraseña")
                 delay(3000)
                 if (_uiState.value is RecoveryUiState.Error) {

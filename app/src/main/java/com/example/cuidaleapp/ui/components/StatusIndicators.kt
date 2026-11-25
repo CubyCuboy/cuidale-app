@@ -19,7 +19,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.zIndex
@@ -201,6 +204,7 @@ fun CuidaleStepProgressBar(steps: List<String>, currentStepIndex: Int) {
     val onGradient = customColors.onGradient
     val primaryColor = MaterialTheme.colorScheme.primary
     val onPrimaryColor = MaterialTheme.colorScheme.onPrimary
+    val textMeasurer = rememberTextMeasurer()
 
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
@@ -224,7 +228,7 @@ fun CuidaleStepProgressBar(steps: List<String>, currentStepIndex: Int) {
             }
 
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(32.dp).background(color = circleColor, shape = CircleShape)) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(28.dp).background(color = circleColor, shape = CircleShape)) {
                     if (isCompleted) {
                         Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = contentColor, modifier = Modifier.size(16.dp))
                     } else {
@@ -232,11 +236,32 @@ fun CuidaleStepProgressBar(steps: List<String>, currentStepIndex: Int) {
                     }
                 }
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(text = label, style = MaterialTheme.typography.labelSmall.copy(fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal), color = if (isActive) onGradient else onGradient.copy(alpha = 0.5f))
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    val labelStyle = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal
+                    )
+                    val measured = remember(label, labelStyle) {
+                        textMeasurer.measure(AnnotatedString(label), style = labelStyle)
+                    }
+                    val scale = if (constraints.maxWidth > 0 && measured.size.width > constraints.maxWidth) {
+                        constraints.maxWidth.toFloat() / measured.size.width
+                    } else {
+                        1f
+                    }
+                    Text(
+                        text = label,
+                        style = labelStyle.copy(fontSize = labelStyle.fontSize * scale),
+                        color = if (isActive) onGradient else onGradient.copy(alpha = 0.5f),
+                        textAlign = TextAlign.Center,
+                        softWrap = false,
+                        maxLines = 1,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
 
             if (index < steps.size - 1) {
-                Box(modifier = Modifier.weight(0.5f).height(2.dp).background(onGradient.copy(alpha = 0.3f))) {
+                Box(modifier = Modifier.weight(0.35f).height(2.dp).background(onGradient.copy(alpha = 0.3f))) {
                     if (index < currentStepIndex) {
                         Box(modifier = Modifier.fillMaxSize().background(onGradient))
                     }

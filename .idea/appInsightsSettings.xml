@@ -7,14 +7,6 @@
         <entry key="Firebase Crashlytics">
           <value>
             <InsightsFilterSettings>
-              <option name="connection">
-                <ConnectionSetting>
-                  <option name="appId" value="com.example.cuidaleapp" />
-                  <option name="mobileSdkAppId" value="1:397845476517:android:0174fdb017f258331c894c" />
-                  <option name="projectId" value="cuidale-app" />
-                  <option name="projectNumber" value="397845476517" />
-                </ConnectionSetting>
-              </option>
               <option name="signal" value="SIGNAL_UNSPECIFIED" />
               <option name="timeIntervalDays" value="THIRTY_DAYS" />
               <option name="visibilityType" value="ALL" />

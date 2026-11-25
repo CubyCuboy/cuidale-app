@@ -19,6 +19,15 @@ android {
     namespace = "com.example.cuidaleapp"
     compileSdk = 37
 
+    signingConfigs {
+        getByName("debug") {
+            storeFile = rootProject.file("app/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     defaultConfig {
         applicationId = "com.example.cuidaleapp"
         minSdk = 26

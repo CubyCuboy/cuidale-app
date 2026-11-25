@@ -56,6 +56,7 @@ sealed class MenuNavigation {
     data class ServiceReport(val informe: com.example.cuidaleapp.models.InformeTurno) : MenuNavigation()
     object History : MenuNavigation()
     object Billetera : MenuNavigation()
+    object Transferencias : MenuNavigation()
     data class CobroDetalle(val cobroId: String, val returnTo: MenuNavigation = Main) : MenuNavigation()
     object SocialManagement : MenuNavigation()
     object MapaCuidadores : MenuNavigation()
@@ -213,6 +214,7 @@ class MenuActivity : ComponentActivity() {
                     Requests -> "REQUESTS"
                     is CreateRequest -> "CREATE_REQUEST"
                     Billetera -> "BILLETERA"
+                    Transferencias -> "TRANSFERENCIAS"
                     is CobroDetalle -> "COBRO_DETALLE"
                     is ManageApplications -> "MANAGE_APPLICATIONS"
                     is ReviewRequest -> "REVIEW_REQUEST"
@@ -282,6 +284,7 @@ class MenuActivity : ComponentActivity() {
                     is ActiveTasks -> Requests
                     is ServiceReport -> Requests
                     Billetera -> Main
+                    Transferencias -> Billetera
                     is CobroDetalle -> cs.returnTo
                     is Chat -> cs.returnTo
                     is OtherFicha -> cs.returnTo
@@ -307,6 +310,9 @@ class MenuActivity : ComponentActivity() {
                         Requests -> 1
                         Main -> 2
                         Chats -> 3
+                        Billetera -> 4
+                        is Settings -> 5
+                        Transferencias -> 6
                         else -> 10
                     }
                 }
@@ -562,7 +568,11 @@ class MenuActivity : ComponentActivity() {
                                                                 onBack = { currentScreen = cs.returnTo },
                                                                 onLogoutClick = { menuViewModel.logout() },
                                                                 onResetPass = { 
-                                                                    startActivity(Intent(this@MenuActivity, RecoveryPasswordActivity::class.java))
+                                                                    startActivity(
+          Intent(this@MenuActivity, RecoveryPasswordActivity::class.java).apply {
+              putExtra("FROM_PROFILE", true)
+          }
+      )
                                                                 }
                                                             )
                                                         }
@@ -765,7 +775,14 @@ class MenuActivity : ComponentActivity() {
                                                             BilleteraScreen(
                                                                 viewModel = billeteraViewModel,
                                                                 onVerCobro = { cobroId -> currentScreen = CobroDetalle(cobroId, returnTo = Billetera) },
-                                                                onNavigateBack = { currentScreen = Main }
+                                                                onNavigateBack = { currentScreen = Main },
+                                                                onVerTransferencias = { currentScreen = Transferencias }
+                                                            )
+                                                        }
+                                                        Transferencias -> {
+                                                            TransferenciasScreen(
+                                                                viewModel = billeteraViewModel,
+                                                                onNavigateBack = { currentScreen = Billetera }
                                                             )
                                                         }
                                                         is CobroDetalle -> {

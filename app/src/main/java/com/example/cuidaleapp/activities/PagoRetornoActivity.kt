@@ -31,6 +31,9 @@ class PagoRetornoActivity : ComponentActivity() {
                 }
             )
         } else {
+            // Se escribe el estado antes de lanzar MenuActivity para que, al
+            // reanudarse, la billetera lo lea y no lo interprete como cancelación.
+            com.example.cuidaleapp.utils.AppNavigationState.setPagoEstado(estadoNormalizado)
             startActivity(
                 Intent(this, MenuActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP

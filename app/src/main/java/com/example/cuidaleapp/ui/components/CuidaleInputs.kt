@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextAlign
@@ -140,8 +141,9 @@ fun OtpInputField(otpText: String, onOtpTextChange: (String) -> Unit, modifier: 
             enabled = enabled,
             modifier = Modifier
                 .matchParentSize()
-                .alpha(0.01f),
-            singleLine = true
+                .alpha(0f),
+            singleLine = true,
+            cursorBrush = SolidColor(Color.Transparent)
         )
 
         Row(

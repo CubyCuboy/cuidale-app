@@ -84,4 +84,45 @@ object FirebaseFunctionsApi {
             Result.failure(e)
         }
     }
+
+    /**
+     * Solicita un retiro de billetera (Cloud Function `retirarSaldo`).
+     */
+    suspend fun retirarSaldo(monto: Long): Result<Boolean> {
+        return try {
+            val result = functions.getHttpsCallable("retirarSaldo")
+                .call(mapOf("monto" to monto))
+                .await()
+            val data = result.data as? Map<*, *>
+            val ok = data?.get("ok") as? Boolean ?: false
+            if (ok) {
+                Result.success(true)
+            } else {
+                Result.failure(IllegalStateException("No se pudo procesar el retiro."))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Paga un cobro pendiente desde la billetera (Cloud Function `pagarCobro`).
+     * Devuelve el estado resultante del cobro (p. ej. "pagado").
+     */
+    suspend fun pagarCobro(cobroId: String): Result<String> {
+        return try {
+            val result = functions.getHttpsCallable("pagarCobro")
+                .call(mapOf("cobroId" to cobroId))
+                .await()
+            val data = result.data as? Map<*, *>
+            val estado = data?.get("estado") as? String ?: ""
+            if (estado.isBlank()) {
+                Result.failure(IllegalStateException("No se pudo procesar el pago."))
+            } else {
+                Result.success(estado)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

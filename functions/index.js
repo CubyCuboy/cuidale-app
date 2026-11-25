@@ -27,14 +27,14 @@ const TRASH_TTL_MS = 48 * 60 * 60 * 1000;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const RUT_RE = /^\d{7,8}[0-9K]$/;
 
-async function enforceRateLimit(key, label) {
+async function enforceRateLimit(key, label, allowRenewal = false) {
   const ref = db.collection("rate_limits").doc(key);
   const snap = await ref.get();
   const now = Date.now();
   let timestamps = snap.exists ? (snap.data().timestamps || []) : [];
   timestamps = timestamps.filter((t) => now - t < 60 * 60 * 1000);
   const last = timestamps.length ? Math.max(...timestamps) : 0;
-  if (now - last < RATE_LIMIT_MIN_INTERVAL_MS) {
+  if (!allowRenewal && now - last < RATE_LIMIT_MIN_INTERVAL_MS) {
     throw new HttpsError("resource-exhausted", `Debes esperar un momento antes de realizar otra ${label}.`);
   }
   if (timestamps.length >= RATE_LIMIT_HOURLY_CAP) {
@@ -226,18 +226,22 @@ async function sendEmailCode(email, type, uid) {
   if (!EMAIL_RE.test(normalizedEmail)) {
     throw new HttpsError("invalid-argument", "Correo electrónico no válido.");
   }
-  await enforceRateLimit("code_" + normalizedEmail, "solicitud");
   const ttl = isRecovery ? RECOVERY_TTL_MS : VERIFICATION_TTL_MS;
   const prefix = isRecovery ? "recovery" : "verification";
   const subject = isRecovery ? "Código de recuperación" : "Código de verificación";
   const user = await findUserDocByEmailOrUid(email, uid);
   if (!user) throw new HttpsError("not-found", "Usuario no registrado");
 
+  // Reenvío: si ya existe un código del mismo tipo, se reemplaza (se elimina
+  // el viejo y se genera uno nuevo) sin chocar con el intervalo mínimo de 60s,
+  // pero respetando el límite horario.
+  const previous = getCode(user.data, prefix);
+  await enforceRateLimit("code_" + normalizedEmail, "solicitud", !!previous);
+
   const code = Math.floor(100000 + Math.random() * 900000).toString();
   const now = Date.now();
   const entry = buildCodeEntry(prefix, code, now, ttl);
 
-  const previous = getCode(user.data, prefix);
   if (previous) {
     await user.ref.update({ codigos: admin.firestore.FieldValue.arrayRemove(previous) });
   }
@@ -245,13 +249,18 @@ async function sendEmailCode(email, type, uid) {
 
   await user.ref.update(cleanupCodeFields(prefix)).catch(() => {});
 
-  await transporter(GMAIL_EMAIL.value(), GMAIL_PASS.value()).sendMail({
-    from: `"Cuidale App" <${GMAIL_EMAIL.value()}>`,
-    to: email,
-    subject: subject,
-    text: `Tu código es: ${code}`,
-    html: `<p>Tu código es: <b>${code}</b></p>`
-  });
+  try {
+    await transporter(GMAIL_EMAIL.value(), GMAIL_PASS.value()).sendMail({
+      from: `"Cuidale App" <${GMAIL_EMAIL.value()}>`,
+      to: email,
+      subject: subject,
+      text: `Tu código es: ${code}`,
+      html: `<p>Tu código es: <b>${code}</b></p>`
+    });
+  } catch (mailError) {
+    console.error("sendEmailCode mail error:", mailError);
+    throw new HttpsError("internal", "No se pudo enviar el correo. Intenta nuevamente en unos minutos.");
+  }
   return { success: true, expiresAt: now + ttl };
 }
 
@@ -314,17 +323,24 @@ exports.verifyVerificationCode = onCall(RUN_OPTIONS, async (req) => {
 });
 
 exports.confirmPasswordReset = onCall(RUN_OPTIONS, async (req) => {
-  const { email, newPassword } = req.data;
+  const { email, newPassword } = req.data || {};
   if (typeof newPassword !== "string" || newPassword.length < 8 ||
       !/[A-Z]/.test(newPassword) || !/[^A-Za-z0-9]/.test(newPassword)) {
     throw new HttpsError("invalid-argument", "La contraseña debe tener al menos 8 caracteres, una mayúscula y un carácter especial.");
   }
   const uid = String((req.data && req.data.uid) || "");
-  const user = await findUserDocByEmailOrUid(email, uid);
+  let targetEmail = String(email || "").trim().toLowerCase();
+  const user = await findUserDocByEmailOrUid(targetEmail, uid);
   if (!user) throw new HttpsError("not-found", "Usuario no encontrado");
+  if (!targetEmail) {
+    targetEmail = String(user.data.correo || "").trim().toLowerCase();
+  }
+  if (!targetEmail) {
+    throw new HttpsError("failed-precondition", "La cuenta no tiene un correo asociado.");
+  }
   if (!user.data.recovery_verified) throw new HttpsError("permission-denied", "No verificado");
 
-  const userAuth = await auth.getUserByEmail(email);
+  const userAuth = await auth.getUserByEmail(targetEmail);
   await auth.updateUser(userAuth.uid, { password: newPassword });
 
   const leftover = getCode(user.data, "recovery");

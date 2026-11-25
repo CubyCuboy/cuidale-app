@@ -12,7 +12,6 @@ import com.example.cuidaleapp.utils.PagoErrorMessages
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
-import com.google.firebase.firestore.Query
 import com.google.firebase.functions.FirebaseFunctionsException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,8 +35,9 @@ sealed class BilleteraUiState {
 
 /**
  * ViewModel de billetera y cobros.
- * Escucha la billetera, sus movimientos, los cobros del usuario y el detalle
- * de un cobro. Solo lectura; las escrituras las hace únicamente el backend.
+ * La billetera vive en la colección `billetera/{uid}` con el saldo y un arreglo
+ * de movimientos embebidos. Este ViewModel solo lee; las escrituras las hace el
+ * backend (Cloud Functions).
  */
 class BilleteraViewModel : ViewModel() {
 
@@ -48,8 +48,8 @@ class BilleteraViewModel : ViewModel() {
     private val _billeteraState = MutableStateFlow<BilleteraUiState>(BilleteraUiState.Cargando)
     val billeteraState: StateFlow<BilleteraUiState> = _billeteraState
 
-    private val _movimientos = MutableStateFlow<List<MovimientoBilletera>>(emptyList())
-    val movimientos: StateFlow<List<MovimientoBilletera>> = _movimientos
+    private val _transferencias = MutableStateFlow<List<MovimientoBilletera>>(emptyList())
+    val transferencias: StateFlow<List<MovimientoBilletera>> = _transferencias
 
     private val _cobros = MutableStateFlow<List<Cobro>>(emptyList())
     val cobros: StateFlow<List<Cobro>> = _cobros
@@ -66,12 +66,19 @@ class BilleteraViewModel : ViewModel() {
     private val _recargaUrl = MutableStateFlow<String?>(null)
     val recargaUrl: StateFlow<String?> = _recargaUrl
 
+    private val _cargandoLegacy = MutableStateFlow(false)
+
     private var billeteraListener: ListenerRegistration? = null
-    private var movimientosListener: ListenerRegistration? = null
     private var cobrosListener: ListenerRegistration? = null
     private var cobroDetalleListener: ListenerRegistration? = null
 
     init {
+        iniciarListeners()
+    }
+
+    /** Reintenta cargar la billetera y sus datos (para la vista de error). */
+    fun recargar() {
+        _billeteraState.value = BilleteraUiState.Cargando
         iniciarListeners()
     }
 
@@ -86,37 +93,71 @@ class BilleteraViewModel : ViewModel() {
             }
             _esRepresentante.value = rol == "representante"
             escucharBilletera(uid)
-            escucharMovimientos(uid)
             escucharCobros(uid, rol)
         }
     }
 
     private fun escucharBilletera(uid: String) {
         billeteraListener?.remove()
-        billeteraListener = db.collection("billeteras").document(uid)
+        billeteraListener = db.collection("billetera").document(uid)
             .addSnapshotListener { snap, error ->
                 if (error != null) {
                     _billeteraState.value = BilleteraUiState.Error("La billetera aún no está disponible.")
                     return@addSnapshotListener
                 }
-                val b = if ((snap != null) && snap.exists()) {
+                val existeNuevo = snap != null && snap.exists()
+                val b = if (existeNuevo) {
                     snap.toObject(Billetera::class.java) ?: Billetera(uid = uid)
                 } else {
                     Billetera(uid = uid)
                 }
-                _billeteraState.value = BilleteraUiState.Contenido(b)
+                val tieneDatos = b.saldo != 0L || b.movimientos.isNotEmpty()
+                if (existeNuevo && tieneDatos) {
+                    _billeteraState.value = BilleteraUiState.Contenido(b)
+                    _transferencias.value = ordenarMovimientos(b.movimientos)
+                } else {
+                    // El documento nuevo (billetera/{uid}) aún no tiene datos: se
+                    // intenta leer de las colecciones anteriores (billeteras / transferencias)
+                    // para no mostrar la billetera vacía durante la migración.
+                    cargarDatosLegacy(uid)
+                }
             }
     }
 
-    private fun escucharMovimientos(uid: String) {
-        movimientosListener?.remove()
-        movimientosListener = db.collection("billeteras").document(uid).collection("movimientos")
-            .orderBy("timestamp", Query.Direction.DESCENDING)
-            .limit(50)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) return@addSnapshotListener
-                _movimientos.value = snapshot?.toObjects(MovimientoBilletera::class.java) ?: emptyList()
+    private fun cargarDatosLegacy(uid: String) {
+        if (_cargandoLegacy.value) return
+        _cargandoLegacy.value = true
+        viewModelScope.launch {
+            try {
+                var saldo = 0L
+                runCatching {
+                    db.collection("billeteras").document(uid).get().await()
+                }.onSuccess { doc ->
+                    if (doc.exists()) saldo = doc.getLong("saldo") ?: 0L
+                }
+
+                val transSnap = runCatching {
+                    db.collection("transferencias").whereEqualTo("uid", uid).limit(100).get().await()
+                }.getOrNull()
+
+                val items = transSnap?.documents?.mapNotNull { d ->
+                    val mov = d.toObject(MovimientoBilletera::class.java) ?: return@mapNotNull null
+                    mov.copy(
+                        tipoMovimiento = "recarga",
+                        timestamp = d.getTimestamp("createdAt") ?: mov.timestamp
+                    )
+                } ?: emptyList()
+
+                val movs = ordenarMovimientos(items)
+                _billeteraState.value = BilleteraUiState.Contenido(
+                    Billetera(uid = uid, saldo = saldo, movimientos = movs)
+                )
+                _transferencias.value = movs
+            } catch (_: Exception) {
+            } finally {
+                _cargandoLegacy.value = false
             }
+        }
     }
 
     private fun escucharCobros(uid: String, rol: String) {
@@ -199,6 +240,46 @@ class BilleteraViewModel : ViewModel() {
         }
     }
 
+    /** Solicita un retiro de billetera (mínimo 1.000 CLP). */
+    fun retirarSaldo(monto: Long) {
+        if (monto < MontoUtils.MONTO_MIN_RETIRO) {
+            _operacion.value = OperacionEstado.Error(
+                "El retiro mínimo es ${MontoUtils.formatClp(MontoUtils.MONTO_MIN_RETIRO)}.",
+            )
+            return
+        }
+        if (_operacion.value is OperacionEstado.EnCurso) return
+        _operacion.value = OperacionEstado.EnCurso
+        viewModelScope.launch {
+            FirebaseFunctionsApi.retirarSaldo(monto)
+                .onSuccess {
+                    _operacion.value = OperacionEstado.Exito
+                }
+                .onFailure { e ->
+                    val codigo = (e as? FirebaseFunctionsException)?.code?.name?.lowercase()?.replace('_', '-')
+                    val server = (e as? FirebaseFunctionsException)?.message
+                    _operacion.value = OperacionEstado.Error(PagoErrorMessages.mensaje(codigo, server))
+                }
+        }
+    }
+
+    /** Paga un cobro pendiente desde la billetera (Cloud Function `pagarCobro`). */
+    fun pagarCobro(cobroId: String) {
+        if (_operacion.value is OperacionEstado.EnCurso) return
+        _operacion.value = OperacionEstado.EnCurso
+        viewModelScope.launch {
+            FirebaseFunctionsApi.pagarCobro(cobroId)
+                .onSuccess {
+                    _operacion.value = OperacionEstado.Exito
+                }
+                .onFailure { e ->
+                    val codigo = (e as? FirebaseFunctionsException)?.code?.name?.lowercase()?.replace('_', '-')
+                    val server = (e as? FirebaseFunctionsException)?.message
+                    _operacion.value = OperacionEstado.Error(PagoErrorMessages.mensaje(codigo, server))
+                }
+        }
+    }
+
     fun consumirRecargaUrl() {
         _recargaUrl.value = null
     }
@@ -207,10 +288,16 @@ class BilleteraViewModel : ViewModel() {
         _operacion.value = OperacionEstado.Idle
     }
 
+    private fun ordenarMovimientos(items: List<MovimientoBilletera>): List<MovimientoBilletera> {
+        return items.sortedWith(
+            compareByDescending<MovimientoBilletera> { it.timestamp?.seconds ?: -1L }
+                .thenByDescending { it.timestamp?.nanoseconds ?: 0L }
+        )
+    }
+
     override fun onCleared() {
         super.onCleared()
         billeteraListener?.remove()
-        movimientosListener?.remove()
         cobrosListener?.remove()
         cobroDetalleListener?.remove()
     }
