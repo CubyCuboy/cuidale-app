@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.cuidaleapp.models.Billetera
 import com.example.cuidaleapp.models.Cobro
+import com.example.cuidaleapp.models.CuentaDestino
 import com.example.cuidaleapp.models.MovimientoBilletera
 import com.example.cuidaleapp.models.SolicitudCuidado
 import com.example.cuidaleapp.utils.FirebaseFunctionsApi
@@ -31,6 +32,12 @@ sealed class BilleteraUiState {
     object Cargando : BilleteraUiState()
     data class Contenido(val billetera: Billetera) : BilleteraUiState()
     data class Error(val message: String) : BilleteraUiState()
+}
+
+/** Estado del flujo de retiro (creación del payout). */
+sealed class RetiroUi {
+    object Procesando : RetiroUi()
+    data class Final(val estado: String, val mensaje: String? = null) : RetiroUi()
 }
 
 /**
@@ -66,11 +73,23 @@ class BilleteraViewModel : ViewModel() {
     private val _recargaUrl = MutableStateFlow<String?>(null)
     val recargaUrl: StateFlow<String?> = _recargaUrl
 
+    private val _recargaActivaId = MutableStateFlow<String?>(null)
+    val recargaActivaId: StateFlow<String?> = _recargaActivaId
+
+    private val _cuentasDestino = MutableStateFlow<List<CuentaDestino>>(emptyList())
+    val cuentasDestino: StateFlow<List<CuentaDestino>> = _cuentasDestino
+
+    private val _retiroUi = MutableStateFlow<RetiroUi?>(null)
+    val retiroUi: StateFlow<RetiroUi?> = _retiroUi
+
+    private var _retiroPendienteMovimientoId: String? = null
+
     private val _cargandoLegacy = MutableStateFlow(false)
 
     private var billeteraListener: ListenerRegistration? = null
     private var cobrosListener: ListenerRegistration? = null
     private var cobroDetalleListener: ListenerRegistration? = null
+    private var cuentasListener: ListenerRegistration? = null
 
     init {
         iniciarListeners()
@@ -94,6 +113,7 @@ class BilleteraViewModel : ViewModel() {
             _esRepresentante.value = rol == "representante"
             escucharBilletera(uid)
             escucharCobros(uid, rol)
+            escucharCuentasDestino(uid)
         }
     }
 
@@ -115,6 +135,14 @@ class BilleteraViewModel : ViewModel() {
                 if (existeNuevo && tieneDatos) {
                     _billeteraState.value = BilleteraUiState.Contenido(b)
                     _transferencias.value = ordenarMovimientos(b.movimientos)
+                    val idPendiente = _retiroPendienteMovimientoId
+                    if (idPendiente != null) {
+                        val mov = b.movimientos.find { it.id == idPendiente }
+                        if (mov != null && mov.estado != "procesando") {
+                            _retiroUi.value = RetiroUi.Final(mov.estado)
+                            _retiroPendienteMovimientoId = null
+                        }
+                    }
                 } else {
                     // El documento nuevo (billetera/{uid}) aún no tiene datos: se
                     // intenta leer de las colecciones anteriores (billeteras / transferencias)
@@ -167,6 +195,16 @@ class BilleteraViewModel : ViewModel() {
             .addSnapshotListener { snapshot, error ->
                 if (error != null) return@addSnapshotListener
                 _cobros.value = snapshot?.toObjects(Cobro::class.java) ?: emptyList()
+            }
+    }
+
+    private fun escucharCuentasDestino(uid: String) {
+        cuentasListener?.remove()
+        cuentasListener = db.collection("cuentas_bancarias")
+            .whereEqualTo("uid", uid)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) return@addSnapshotListener
+                _cuentasDestino.value = snapshot?.toObjects(CuentaDestino::class.java) ?: emptyList()
             }
     }
 
@@ -228,8 +266,9 @@ class BilleteraViewModel : ViewModel() {
         _operacion.value = OperacionEstado.EnCurso
         viewModelScope.launch {
             FirebaseFunctionsApi.crearRecarga(monto)
-                .onSuccess { url ->
-                    _recargaUrl.value = url
+                .onSuccess { iniciada ->
+                    _recargaActivaId.value = iniciada.recargaId
+                    _recargaUrl.value = iniciada.url
                     _operacion.value = OperacionEstado.Exito
                 }
                 .onFailure { e ->
@@ -240,27 +279,76 @@ class BilleteraViewModel : ViewModel() {
         }
     }
 
-    /** Solicita un retiro de billetera (mínimo 1.000 CLP). */
-    fun retirarSaldo(monto: Long) {
-        if (monto < MontoUtils.MONTO_MIN_RETIRO) {
-            _operacion.value = OperacionEstado.Error(
-                "El retiro mínimo es ${MontoUtils.formatClp(MontoUtils.MONTO_MIN_RETIRO)}.",
-            )
-            return
-        }
+    /** Registra un destino de retiro (banco o Mercado Pago). */
+    fun guardarCuentaDestino(
+        tipoDestino: String,
+        banco: String? = null,
+        tipoCuenta: String? = null,
+        numeroCuenta: String? = null,
+        titular: String? = null,
+        rut: String? = null,
+        mpIdentificador: String? = null
+    ) {
         if (_operacion.value is OperacionEstado.EnCurso) return
         _operacion.value = OperacionEstado.EnCurso
         viewModelScope.launch {
-            FirebaseFunctionsApi.retirarSaldo(monto)
-                .onSuccess {
-                    _operacion.value = OperacionEstado.Exito
-                }
+            FirebaseFunctionsApi.registrarCuentaDestino(
+                tipoDestino = tipoDestino,
+                banco = banco,
+                tipoCuenta = tipoCuenta,
+                numeroCuenta = numeroCuenta,
+                titular = titular,
+                rut = rut,
+                mpIdentificador = mpIdentificador
+            )
+                .onSuccess { _operacion.value = OperacionEstado.Exito }
                 .onFailure { e ->
                     val codigo = (e as? FirebaseFunctionsException)?.code?.name?.lowercase()?.replace('_', '-')
                     val server = (e as? FirebaseFunctionsException)?.message
                     _operacion.value = OperacionEstado.Error(PagoErrorMessages.mensaje(codigo, server))
                 }
         }
+    }
+
+    /** Elimina un destino de retiro (solo si es del usuario; regla de Firestore). */
+    fun eliminarCuentaDestino(id: String) {
+        if (currentUid == null) return
+        viewModelScope.launch {
+            runCatching {
+                db.collection("cuentas_bancarias").document(id).delete().await()
+            }
+        }
+    }
+
+    /** Solicita un retiro de billetera hacia una cuenta destino (mínimo 1.000 CLP). */
+    fun retirarSaldo(monto: Long, cuentaId: String) {
+        if (monto < MontoUtils.MONTO_MIN_RETIRO) {
+            _operacion.value = OperacionEstado.Error(
+                "El retiro mínimo es ${MontoUtils.formatClp(MontoUtils.MONTO_MIN_RETIRO)}.",
+            )
+            return
+        }
+        if (_retiroUi.value != null) return
+        _retiroUi.value = RetiroUi.Procesando
+        _operacion.value = OperacionEstado.EnCurso
+        viewModelScope.launch {
+            FirebaseFunctionsApi.retirarSaldo(monto, cuentaId)
+                .onSuccess { iniciado ->
+                    _retiroPendienteMovimientoId = iniciado.movimientoId
+                    _operacion.value = OperacionEstado.Exito
+                }
+                .onFailure { e ->
+                    val codigo = (e as? FirebaseFunctionsException)?.code?.name?.lowercase()?.replace('_', '-')
+                    val server = (e as? FirebaseFunctionsException)?.message
+                    _retiroUi.value = RetiroUi.Final("error", PagoErrorMessages.mensaje(codigo, server))
+                    _operacion.value = OperacionEstado.Idle
+                }
+        }
+    }
+
+    fun limpiarRetiroUi() {
+        _retiroUi.value = null
+        _retiroPendienteMovimientoId = null
     }
 
     /** Paga un cobro pendiente desde la billetera (Cloud Function `pagarCobro`). */
@@ -284,6 +372,10 @@ class BilleteraViewModel : ViewModel() {
         _recargaUrl.value = null
     }
 
+    fun limpiarRecargaActiva() {
+        _recargaActivaId.value = null
+    }
+
     fun limpiarOperacion() {
         _operacion.value = OperacionEstado.Idle
     }
@@ -300,5 +392,6 @@ class BilleteraViewModel : ViewModel() {
         billeteraListener?.remove()
         cobrosListener?.remove()
         cobroDetalleListener?.remove()
+        cuentasListener?.remove()
     }
 }

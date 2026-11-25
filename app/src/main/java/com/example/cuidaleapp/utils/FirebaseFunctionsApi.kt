@@ -14,6 +14,25 @@ data class ResolvedAccount(
 )
 
 /**
+ * Recarga iniciada: id del movimiento creado por el backend y URL del
+ * Checkout Pro (sandbox en modo prueba).
+ */
+data class RecargaIniciada(
+    val recargaId: String,
+    val url: String
+)
+
+/**
+ * Retiro iniciado: estado inicial y datos del payout creado en Mercado Pago.
+ */
+data class RetiroIniciado(
+    val estado: String,
+    val movimientoId: String,
+    val payoutId: String? = null,
+    val comision: Long = 0L
+)
+
+/**
  * Envoltorio de las Cloud Functions usadas por la app.
  * Las functions viven en la región southamerica-west1.
  */
@@ -66,19 +85,20 @@ object FirebaseFunctionsApi {
 
     /**
      * Crea una recarga de billetera (Cloud Function `crearRecarga`).
-     * Devuelve la URL del Checkout Pro de Mercado Pago.
+     * Devuelve el id de la recarga y la URL del Checkout Pro de Mercado Pago.
      */
-    suspend fun crearRecarga(monto: Long): Result<String> {
+    suspend fun crearRecarga(monto: Long): Result<RecargaIniciada> {
         return try {
             val result = functions.getHttpsCallable("crearRecarga")
                 .call(mapOf("monto" to monto))
                 .await()
             val data = result.data as? Map<*, *>
             val url = data?.get("url") as? String
-            if (url.isNullOrBlank()) {
+            val recargaId = data?.get("recargaId") as? String
+            if (url.isNullOrBlank() || recargaId.isNullOrBlank()) {
                 Result.failure(IllegalStateException("Respuesta inválida de crearRecarga"))
             } else {
-                Result.success(url)
+                Result.success(RecargaIniciada(recargaId, url))
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -86,19 +106,58 @@ object FirebaseFunctionsApi {
     }
 
     /**
-     * Solicita un retiro de billetera (Cloud Function `retirarSaldo`).
+     * Registra un destino de retiro (cuenta bancaria o cuenta de Mercado Pago).
+     * Devuelve el id y una máscara para mostrar.
      */
-    suspend fun retirarSaldo(monto: Long): Result<Boolean> {
+    suspend fun registrarCuentaDestino(
+        tipoDestino: String,
+        banco: String? = null,
+        tipoCuenta: String? = null,
+        numeroCuenta: String? = null,
+        titular: String? = null,
+        rut: String? = null,
+        mpIdentificador: String? = null
+    ): Result<Map<String, String>> {
+        return try {
+            val payload = mutableMapOf<String, Any>("tipoDestino" to tipoDestino)
+            if (!banco.isNullOrBlank()) payload["banco"] = banco
+            if (!tipoCuenta.isNullOrBlank()) payload["tipoCuenta"] = tipoCuenta
+            if (!numeroCuenta.isNullOrBlank()) payload["numeroCuenta"] = numeroCuenta
+            if (!titular.isNullOrBlank()) payload["titular"] = titular
+            if (!rut.isNullOrBlank()) payload["rut"] = rut
+            if (!mpIdentificador.isNullOrBlank()) payload["mpIdentificador"] = mpIdentificador
+            val result = functions.getHttpsCallable("registrarCuentaDestino")
+                .call(payload)
+                .await()
+            val data = result.data as? Map<*, *> ?: emptyMap<String, Any>()
+            Result.success(data.entries.associate { it.key.toString() to (it.value?.toString() ?: "") })
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Solicita un retiro de billetera hacia una cuenta destino (Cloud Function `retirarSaldo`).
+     */
+    suspend fun retirarSaldo(monto: Long, cuentaId: String): Result<RetiroIniciado> {
         return try {
             val result = functions.getHttpsCallable("retirarSaldo")
-                .call(mapOf("monto" to monto))
+                .call(mapOf("monto" to monto, "cuentaId" to cuentaId))
                 .await()
             val data = result.data as? Map<*, *>
-            val ok = data?.get("ok") as? Boolean ?: false
-            if (ok) {
-                Result.success(true)
+            val estado = data?.get("estado") as? String
+            val movimientoId = data?.get("movimientoId") as? String
+            if (estado.isNullOrBlank() || movimientoId.isNullOrBlank()) {
+                Result.failure(IllegalStateException("Respuesta inválida de retirarSaldo"))
             } else {
-                Result.failure(IllegalStateException("No se pudo procesar el retiro."))
+                Result.success(
+                    RetiroIniciado(
+                        estado = estado,
+                        movimientoId = movimientoId,
+                        payoutId = data["payoutId"] as? String,
+                        comision = (data["comision"] as? Number)?.toLong() ?: 0L
+                    )
+                )
             }
         } catch (e: Exception) {
             Result.failure(e)

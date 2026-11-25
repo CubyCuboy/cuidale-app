@@ -1424,6 +1424,17 @@ María González | Residencia Luz | +56912345678 | Encargada | Buena conducta</s
     <string name="billetera_confirmar_retiro">CONFIRMAR RETIRO</string>
     <string name="billetera_monto">Monto a recargar (CLP)</string>
     <string name="billetera_monto_invalido">El monto debe estar entre $1.000 y $1.000.000.</string>
+    <string name="billetera_retiro_sin_cuentas">Aún no tienes un destino de retiro registrado.</string>
+    <string name="billetera_retiro_saldo_insuficiente">Tu saldo no cubre el monto más la comisión.</string>
+    <string name="billetera_gestionar_destinos">Administrar destinos de retiro</string>
+    <string name="billetera_destinos_titulo">Destinos de retiro</string>
+    <string name="billetera_agregar_destino">+ Agregar destino</string>
+    <string name="billetera_destino_datos_invalidos">Revisa los datos ingresados.</string>
+    <string name="billetera_guardar_destino">Guardar destino</string>
+    <string name="billetera_retiro_procesando">Procesando retiro…</string>
+    <string name="billetera_retiro_aprobado">¡Retiro aprobado! El dinero está en camino.</string>
+    <string name="billetera_retiro_rechazado">El retiro fue rechazado. Se devolvió el saldo.</string>
+    <string name="billetera_retiro_plazo">La transferencia puede tardar 1–2 días hábiles.</string>
     <string name="billetera_confirmar_pagar">CONFIRMAR Y PAGAR</string>
     <string name="billetera_pagar_deuda">PAGAR DEUDA (%1$s)</string>
     <string name="billetera_aviso_mp">El pago se procesa de forma segura en Mercado Pago. Cuidale no almacena los datos de tu tarjeta.</string>

@@ -169,6 +169,11 @@ test("Recarga: crea preferencia en Mercado Pago y devuelve la URL de sandbox", a
   await assert.rejects(call(P.crearRecarga, REP, { monto: 500 }), (e) => e.code === "invalid-argument");
 });
 
+test("Recarga: rechaza a un cuidador (solo representantes cargan saldo)", async () => {
+  global.fetch = async () => ({ ok: true, json: async () => ({ id: "prefX", init_point: "https://mp/init", sandbox_init_point: "https://mp/sandbox" }) });
+  await assert.rejects(call(P.crearRecarga, CUI, { monto: 20000 }), (e) => e.code === "permission-denied");
+});
+
 test("Recarga: con un token de prueba APP_USR- también abre el sandbox", async () => {
   const anterior = process.env.MP_ACCESS_TOKEN;
   process.env.MP_ACCESS_TOKEN = "APP_USR-token-de-prueba";
@@ -224,13 +229,18 @@ test("Retiro: valida el mínimo y rechaza saldo insuficiente", async () => {
 });
 
 test("Retiro: descuenta el saldo y registra el movimiento", async () => {
+  store.set(`cuentas_bancarias/c1`, {
+    uid: REP, tipoDestino: "banco", banco: "049", tipoCuenta: "corriente",
+    numeroCuenta: "12345678", titular: "Ana Perez", rut: "11111111-1"
+  });
   store.set(`billetera/${REP}`, { uid: REP, saldo: 10000, movimientos: [] });
-  const r = await call(P.retirarSaldo, REP, { monto: 3000 });
-  assert.equal(r.ok, true);
-  assert.equal(r.saldo, 7000);
-  assert.equal(saldo(REP), 7000);
+  global.fetch = async () => ({ ok: true, status: 200, json: async () => ({ id: "payout1" }) });
+  const r = await call(P.retirarSaldo, REP, { monto: 3000, cuentaId: "c1" });
+  assert.equal(r.estado, "procesando");
+  assert.equal(r.comision, 60); // 2% de 3000
+  assert.equal(saldo(REP), 6940); // 10000 - (3000 + 60)
   const m = movimientos(REP).find((x) => x.id === r.movimientoId);
   assert.equal(m.tipoMovimiento, "retiro");
-  assert.equal(m.monto, -3000);
-  assert.equal(m.estado, "pendiente");
+  assert.equal(m.monto, -3060);
+  assert.equal(m.estado, "procesando");
 });

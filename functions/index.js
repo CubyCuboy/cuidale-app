@@ -698,7 +698,9 @@ const {
   crearRecarga,
   iniciarCobro,
   responderCambiosCobro,
-  pagarCobro
+  pagarCobro,
+  registrarCuentaDestino,
+  webhookMercadoPagoPayout
 } = require("./pagos");
 
 exports.iniciarCobroTurno = iniciarCobroTurno;
@@ -708,3 +710,5 @@ exports.crearRecarga = crearRecarga;
 exports.iniciarCobro = iniciarCobro;
 exports.responderCambiosCobro = responderCambiosCobro;
 exports.pagarCobro = pagarCobro;
+exports.registrarCuentaDestino = registrarCuentaDestino;
+exports.webhookMercadoPagoPayout = webhookMercadoPagoPayout;

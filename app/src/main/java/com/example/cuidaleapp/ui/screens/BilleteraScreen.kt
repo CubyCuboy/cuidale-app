@@ -5,9 +5,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -37,7 +39,9 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import com.example.cuidaleapp.R
 import com.example.cuidaleapp.models.Billetera
+import com.example.cuidaleapp.models.BancosChile
 import com.example.cuidaleapp.models.Cobro
+import com.example.cuidaleapp.models.CuentaDestino
 import com.example.cuidaleapp.models.EstadoCobro
 import com.example.cuidaleapp.models.MovimientoBilletera
 import com.example.cuidaleapp.ui.components.HardShadowButton
@@ -54,6 +58,7 @@ import com.example.cuidaleapp.utils.RecargaUi
 import com.example.cuidaleapp.viewmodel.BilleteraUiState
 import com.example.cuidaleapp.viewmodel.BilleteraViewModel
 import com.example.cuidaleapp.viewmodel.OperacionEstado
+import com.example.cuidaleapp.viewmodel.RetiroUi
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -73,6 +78,7 @@ fun BilleteraScreen(
 
     var showRecarga by remember { mutableStateOf(false) }
     var showRetiro by remember { mutableStateOf(false) }
+    var showGestionCuentas by remember { mutableStateOf(false) }
     var showPagar by remember { mutableStateOf(false) }
     var saldoVisible by remember { mutableStateOf(true) }
     var ultimoMontoRecarga by remember { mutableStateOf<Long?>(null) }
@@ -85,6 +91,9 @@ fun BilleteraScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val pagoEstado by AppNavigationState.pagoEstado.collectAsState()
     val recargaUi by AppNavigationState.recargaUi.collectAsState()
+    val recargaActivaId by viewModel.recargaActivaId.collectAsState()
+    val cuentasDestino by viewModel.cuentasDestino.collectAsState()
+    val retiroUi by viewModel.retiroUi.collectAsState()
 
     val currentTabAbierta by rememberUpdatedState(tabAbierta)
 
@@ -99,7 +108,15 @@ fun BilleteraScreen(
                 val uiActual = AppNavigationState.recargaUi.value
                 val pagoActual = AppNavigationState.pagoEstado.value
                 if (uiActual is RecargaUi.Procesando && pagoActual == null) {
-                    AppNavigationState.finalizarRecarga("cancelado")
+                    // Antes de marcar como cancelado, verificamos si el webhook ya
+                    // acreditó el pago (el saldo refleja la recarga aprobada).
+                    val activaId = viewModel.recargaActivaId.value
+                    val bs = viewModel.billeteraState.value
+                    val aprobada = activaId != null && bs is BilleteraUiState.Contenido &&
+                        bs.billetera.movimientos.any {
+                            it.id == activaId && it.estado == "aprobada"
+                        }
+                    AppNavigationState.finalizarRecarga(if (aprobada) "aprobado" else "cancelado")
                 }
             }
         }
@@ -220,12 +237,30 @@ fun BilleteraScreen(
         AppNavigationState.setPagoEstado(null)
     }
 
+    // Respaldo: aunque el navegador no regrese solo al checkout, si el webhook
+    // ya acreditó el pago (movimiento aprobada) la pantalla pasa a éxito.
+    LaunchedEffect(state, recargaUi, recargaActivaId) {
+        val ui = recargaUi
+        if (ui is RecargaUi.Procesando) {
+            val activaId = recargaActivaId
+            val cont = state as? BilleteraUiState.Contenido
+            val aprobada = activaId != null && cont != null &&
+                cont.billetera.movimientos.any {
+                    it.id == activaId && it.estado == "aprobada"
+                }
+            if (aprobada) {
+                AppNavigationState.finalizarRecarga("aprobado")
+            }
+        }
+    }
+
     // Estado final aprobado: se autociella tras mostrar el check animado.
     LaunchedEffect(recargaUi) {
         val ui = recargaUi
         if (ui is RecargaUi.Final && ui.estado == "aprobado") {
             delay(2200)
             AppNavigationState.limpiarRecarga()
+            viewModel.limpiarRecargaActiva()
         }
     }
 
@@ -255,12 +290,35 @@ fun BilleteraScreen(
 
     if (showRetiro) {
         RetiroDialog(
-            onConfirm = { monto ->
-                mostrarExitoRetiro = true
-                viewModel.retirarSaldo(monto)
+            cuentas = cuentasDestino,
+            saldoActual = saldoActual,
+            onConfirm = { monto, cuentaId ->
                 showRetiro = false
+                viewModel.retirarSaldo(monto, cuentaId)
+            },
+            onGestionarCuentas = {
+                showRetiro = false
+                showGestionCuentas = true
             },
             onDismiss = { showRetiro = false }
+        )
+    }
+
+    if (showGestionCuentas) {
+        CuentaBancariaDialog(
+            cuentas = cuentasDestino,
+            onGuardar = { tipo, banco, tipoCuenta, numero, titular, rut, mp ->
+                viewModel.guardarCuentaDestino(tipo, banco, tipoCuenta, numero, titular, rut, mp)
+            },
+            onEliminar = { id -> viewModel.eliminarCuentaDestino(id) },
+            onDismiss = { showGestionCuentas = false }
+        )
+    }
+
+    retiroUi?.let { ui ->
+        RetiroEstadoOverlay(
+            ui = ui,
+            onCerrar = { viewModel.limpiarRetiroUi() }
         )
     }
 
@@ -286,6 +344,7 @@ fun BilleteraScreen(
             onCancel = {
                 recargaCancelada = true
                 AppNavigationState.limpiarRecarga()
+                viewModel.limpiarRecargaActiva()
             },
             onReintentar = {
                 val monto = ultimoMontoRecarga
@@ -300,7 +359,10 @@ fun BilleteraScreen(
                     showRecarga = true
                 }
             },
-            onCerrar = { AppNavigationState.limpiarRecarga() }
+            onCerrar = {
+                AppNavigationState.limpiarRecarga()
+                viewModel.limpiarRecargaActiva()
+            }
         )
     }
 }
@@ -400,19 +462,33 @@ private fun ContenidoBilletera(
                 )
                 Spacer(Modifier.height(10.dp))
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                HardShadowButton(
-                    text = stringResource(R.string.billetera_recargar),
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = Color.White,
-                    shadowColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
-                    icon = Icons.Default.AddCircle,
-                    modifier = Modifier.weight(1f).height(50.dp),
-                    onClick = onRecargar
-                )
+            // Regla de negocio: solo el representante carga saldo; el cuidador
+            // únicamente puede retirar (el pago de turnos lo hace el representante).
+            if (esRepresentante) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    HardShadowButton(
+                        text = stringResource(R.string.billetera_recargar),
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = Color.White,
+                        shadowColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                        icon = Icons.Default.AddCircle,
+                        modifier = Modifier.weight(1f).height(50.dp),
+                        onClick = onRecargar
+                    )
+                    OutlinedButton(
+                        onClick = onRetirar,
+                        modifier = Modifier.weight(1f).height(50.dp),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Icon(Icons.Default.ArrowUpward, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.billetera_retirar), fontWeight = FontWeight.Bold)
+                    }
+                }
+            } else {
                 OutlinedButton(
                     onClick = onRetirar,
-                    modifier = Modifier.weight(1f).height(50.dp),
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
                     shape = RoundedCornerShape(14.dp)
                 ) {
                     Icon(Icons.Default.ArrowUpward, null, modifier = Modifier.size(18.dp))
@@ -723,56 +799,113 @@ fun textoEstadoCobro(estado: String): String = when (estado) {
     else -> estado.uppercase()
 }
 
+private const val COMISION_RETIRO_PCT = 0.02
+private const val COMISION_RETIRO_TOPE = 5000L
+
+private fun calcularComisionLocal(monto: Long): Long =
+    minOf(kotlin.math.round(monto * COMISION_RETIRO_PCT).toLong(), COMISION_RETIRO_TOPE)
+
 /**
- * Diálogo de retiro de billetera. Mínimo $1.000 CLP con montos rápidos.
+ * Diálogo de retiro: selecciona el destino y muestra la comisión (2%, tope
+ * $5.000) y el total a debitar.
  */
 @Composable
 private fun RetiroDialog(
-    onConfirm: (Long) -> Unit,
+    cuentas: List<CuentaDestino>,
+    saldoActual: Long,
+    onConfirm: (Long, String) -> Unit,
+    onGestionarCuentas: () -> Unit,
     onDismiss: () -> Unit
 ) {
     var montoStr by remember { mutableStateOf("") }
+    var cuentaSeleccionada by remember { mutableStateOf<CuentaDestino?>(cuentas.firstOrNull()) }
     val monto = MontoUtils.parseMonto(montoStr)
-    val valido = monto != null && monto >= MontoUtils.MONTO_MIN_RETIRO
+    val valido = monto != null && monto >= MontoUtils.MONTO_MIN_RETIRO && cuentaSeleccionada != null
     val presets = listOf(1_000L, 5_000L, 10_000L, 20_000L, 50_000L, 100_000L)
+    val comision = monto?.let(::calcularComisionLocal) ?: 0L
+    val totalDebito = (monto ?: 0L) + comision
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.billetera_retirar_titulo), fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (cuentas.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.billetera_retiro_sin_cuentas),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    cuentas.forEach { c ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    if (cuentaSeleccionada?.id == c.id) {
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+                                    } else {
+                                        Color.Transparent
+                                    }
+                                )
+                                .clickable { cuentaSeleccionada = c }
+                                .padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(c.mascara, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                            Text(
+                                text = if (c.tipoDestino == CuentaDestino.TIPO_BANCO) "Banco" else "Mercado Pago",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
                 OutlinedTextField(
                     value = montoStr,
                     onValueChange = { montoStr = it.filter { c -> c.isDigit() || c == '.' || c == ',' } },
                     label = { Text(stringResource(R.string.billetera_monto)) },
-                    placeholder = {
-                        Text(
-                            text = "Ej: 10.000",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
-                        )
-                    },
                     leadingIcon = {
                         Text(
                             text = "$",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Black,
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                            modifier = Modifier.padding(start = 4.dp)
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
                         )
                     },
-                    isError = montoStr.isNotEmpty() && !valido,
+                    isError = montoStr.isNotEmpty() && monto != null && monto < MontoUtils.MONTO_MIN_RETIRO,
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
-                if (montoStr.isNotEmpty() && !valido) {
+                if (montoStr.isNotEmpty() && monto != null && monto < MontoUtils.MONTO_MIN_RETIRO) {
                     Text(
                         text = stringResource(R.string.billetera_retiro_invalido),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall
                     )
+                }
+                if (monto != null) {
+                    Text(
+                        text = "Comisión (2%, tope $5.000): ${MontoUtils.formatClp(comision)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "Total a debitar: ${MontoUtils.formatClp(totalDebito)}",
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    if (totalDebito > saldoActual) {
+                        Text(
+                            text = stringResource(R.string.billetera_retiro_saldo_insuficiente),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
                 }
 
                 presets.chunked(3).forEach { fila ->
@@ -787,12 +920,19 @@ private fun RetiroDialog(
                         }
                     }
                 }
+
+                TextButton(
+                    onClick = onGestionarCuentas,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(stringResource(R.string.billetera_gestionar_destinos), fontWeight = FontWeight.Bold)
+                }
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { monto?.let(onConfirm) },
-                enabled = valido
+                onClick = { monto?.let { onConfirm(it, cuentaSeleccionada!!.id) } },
+                enabled = valido && totalDebito <= saldoActual
             ) { Text(stringResource(R.string.billetera_confirmar_retiro)) }
         },
         dismissButton = {
@@ -800,3 +940,231 @@ private fun RetiroDialog(
         }
     )
 }
+
+@Composable
+private fun CuentaBancariaDialog(
+    cuentas: List<CuentaDestino>,
+    onGuardar: (
+        tipoDestino: String,
+        banco: String?,
+        tipoCuenta: String?,
+        numeroCuenta: String?,
+        titular: String?,
+        rut: String?,
+        mpIdentificador: String?
+    ) -> Unit,
+    onEliminar: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var mostrandoFormulario by remember { mutableStateOf(cuentas.isEmpty()) }
+    var tipoDestino by remember { mutableStateOf(CuentaDestino.TIPO_BANCO) }
+    var bancoSel by remember { mutableStateOf(BancosChile.mapa.keys.firstOrNull() ?: "") }
+    var tipoCuenta by remember { mutableStateOf("corriente") }
+    var numeroCuenta by remember { mutableStateOf("") }
+    var titular by remember { mutableStateOf("") }
+    var rut by remember { mutableStateOf("") }
+    var mpIdentificador by remember { mutableStateOf("") }
+
+    val esBanco = tipoDestino == CuentaDestino.TIPO_BANCO
+    val numeroValido = Regex("^\\d{6,12}$").matches(numeroCuenta)
+    val rutValido = !esBanco || CuentaDestino.validarRut(rut)
+    val formValido = when (tipoDestino) {
+        CuentaDestino.TIPO_BANCO -> numeroValido && rutValido && titular.isNotBlank()
+        else -> mpIdentificador.isNotBlank()
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.billetera_destinos_titulo), fontWeight = FontWeight.Bold) },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (!mostrandoFormulario) {
+                    if (cuentas.isEmpty()) {
+                        Text(stringResource(R.string.billetera_retiro_sin_cuentas))
+                    } else {
+                        cuentas.forEach { c ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                                    .padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(c.mascara, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                                IconButton(onClick = { onEliminar(c.id) }) {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = "Eliminar",
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    TextButton(onClick = { mostrandoFormulario = true }) {
+                        Text(stringResource(R.string.billetera_agregar_destino), fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = esBanco,
+                            onClick = { tipoDestino = CuentaDestino.TIPO_BANCO },
+                            label = { Text("Cuenta bancaria") },
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilterChip(
+                            selected = !esBanco,
+                            onClick = { tipoDestino = CuentaDestino.TIPO_MP },
+                            label = { Text("Mercado Pago") },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    if (esBanco) {
+                        LazyColumn(modifier = Modifier.heightIn(max = 160.dp)) {
+                            items(BancosChile.lista) { (codigo, nombre) ->
+                                Text(
+                                    text = nombre,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(
+                                            if (bancoSel == codigo) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                            else Color.Transparent
+                                        )
+                                        .clickable { bancoSel = codigo }
+                                        .padding(8.dp),
+                                    fontWeight = if (bancoSel == codigo) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(
+                                selected = tipoCuenta == "corriente",
+                                onClick = { tipoCuenta = "corriente" },
+                                label = { Text("Corriente") }
+                            )
+                            FilterChip(
+                                selected = tipoCuenta == "vista",
+                                onClick = { tipoCuenta = "vista" },
+                                label = { Text("Vista") }
+                            )
+                        }
+                        OutlinedTextField(
+                            value = numeroCuenta,
+                            onValueChange = { numeroCuenta = it.filter { c -> c.isDigit() } },
+                            label = { Text("Número de cuenta") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            isError = numeroCuenta.isNotEmpty() && !numeroValido,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = titular,
+                            onValueChange = { titular = it },
+                            label = { Text("Titular") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = rut,
+                            onValueChange = { rut = it },
+                            label = { Text("RUT del titular") },
+                            singleLine = true,
+                            isError = rut.isNotEmpty() && !rutValido,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        OutlinedTextField(
+                            value = mpIdentificador,
+                            onValueChange = { mpIdentificador = it },
+                            label = { Text("Email o ID de Mercado Pago") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                            isError = mpIdentificador.isNotEmpty() && !formValido,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    if (formValido.not() && (numeroCuenta.isNotEmpty() || mpIdentificador.isNotEmpty() || rut.isNotEmpty())) {
+                        Text(
+                            text = stringResource(R.string.billetera_destino_datos_invalidos),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (mostrandoFormulario) {
+                TextButton(
+                    onClick = {
+                        onGuardar(
+                            tipoDestino,
+                            if (esBanco) bancoSel else null,
+                            if (esBanco) tipoCuenta else null,
+                            if (esBanco) numeroCuenta else null,
+                            if (esBanco) titular else null,
+                            if (esBanco) rut else null,
+                            if (!esBanco) mpIdentificador else null
+                        )
+                        mostrandoFormulario = false
+                    },
+                    enabled = formValido
+                ) { Text(stringResource(R.string.billetera_guardar_destino)) }
+            } else {
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.billetera_pago_cerrar)) }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_back)) }
+        }
+    )
+}
+
+@Composable
+private fun RetiroEstadoOverlay(ui: RetiroUi, onCerrar: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onCerrar,
+        title = { Text("Retiro", fontWeight = FontWeight.Bold) },
+        text = {
+            when (ui) {
+                is RetiroUi.Procesando -> {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                        Spacer(Modifier.width(14.dp))
+                        Text(stringResource(R.string.billetera_retiro_procesando))
+                    }
+                }
+                is RetiroUi.Final -> {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = if (ui.estado == "aprobada") {
+                                stringResource(R.string.billetera_retiro_aprobado)
+                            } else {
+                                ui.mensaje ?: stringResource(R.string.billetera_retiro_rechazado)
+                            },
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = stringResource(R.string.billetera_retiro_plazo),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onCerrar) {
+                Text(stringResource(R.string.billetera_pago_cerrar))
+            }
+        }
+    )
+}
+

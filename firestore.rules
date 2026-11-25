@@ -60,6 +60,11 @@ service cloud.firestore {
       // Las escrituras las hace únicamente el backend (Admin SDK).
     }
 
+    // --- CUENTAS DESTINO DE RETIRO (varias por usuario; solo su dueño) ---
+    match /cuentas_bancarias/{cuentaId} {
+      allow read, write: if isAuthenticated() && resource.data.uid == request.auth.uid;
+    }
+
     // --- FICHAS TÉCNICAS ---
     match /fichas/{userId} {
       allow read: if isAuthenticated();

@@ -31,12 +31,18 @@ class PagoRetornoActivity : ComponentActivity() {
                 }
             )
         } else {
-            // Se escribe el estado antes de lanzar MenuActivity para que, al
-            // reanudarse, la billetera lo lea y no lo interprete como cancelación.
+            // Se restaura la UI de pago para que la billetera retome el overlay y
+            // muestre el estado final (éxito) aunque el proceso se haya reiniciado
+            // mientras el checkout estaba abierto.
+            if (com.example.cuidaleapp.utils.AppNavigationState.recargaUi.value == null) {
+                com.example.cuidaleapp.utils.AppNavigationState.marcarProcesando()
+            }
             com.example.cuidaleapp.utils.AppNavigationState.setPagoEstado(estadoNormalizado)
             startActivity(
                 Intent(this, MenuActivity::class.java).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP
                     putExtra("TARGET_SCREEN", "BILLETERA")
                     putExtra("PAGO_ESTADO", estadoNormalizado)
                     putExtra("SKIP_SPLASH", true)
