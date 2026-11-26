@@ -700,7 +700,12 @@ const {
   responderCambiosCobro,
   pagarCobro,
   registrarCuentaDestino,
-  webhookMercadoPagoPayout
+  webhookMercadoPagoPayout,
+  iniciarOauthMp,
+  canjearOauthMp,
+  desvincularMp,
+  cancelarRecarga,
+  sincronizarRecargasPendientes
 } = require("./pagos");
 
 exports.iniciarCobroTurno = iniciarCobroTurno;
@@ -712,3 +717,8 @@ exports.responderCambiosCobro = responderCambiosCobro;
 exports.pagarCobro = pagarCobro;
 exports.registrarCuentaDestino = registrarCuentaDestino;
 exports.webhookMercadoPagoPayout = webhookMercadoPagoPayout;
+exports.iniciarOauthMp = iniciarOauthMp;
+exports.canjearOauthMp = canjearOauthMp;
+exports.desvincularMp = desvincularMp;
+exports.cancelarRecarga = cancelarRecarga;
+exports.sincronizarRecargasPendientes = sincronizarRecargasPendientes;

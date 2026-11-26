@@ -30,6 +30,9 @@ data class SolicitudCuidado(
     val tarifaHora: Long = 0L,
     val tarifaHoraReferencia: Long? = null,
     val estadoAcuerdo: String = "acordado",
+    val propuestaPrecio: Long? = null,
+    val acuerdoAceptadoRepresentante: Boolean = false,
+    val acuerdoAceptadoCuidador: Boolean = false,
     val horarioAcuerdo: Map<String, Boolean> = emptyMap(),
     val cobroEstado: String? = null,
     val createdAt: Timestamp? = null

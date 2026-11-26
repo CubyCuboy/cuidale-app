@@ -23,6 +23,7 @@
  *   MP_WEBHOOK_SECRET   Clave secreta generada al configurar los Webhooks.
  */
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const crypto = require("crypto");
@@ -30,8 +31,33 @@ const crypto = require("crypto");
 const MP_ACCESS_TOKEN = defineSecret("MP_ACCESS_TOKEN");
 const MP_WEBHOOK_SECRET = defineSecret("MP_WEBHOOK_SECRET");
 
-// Modo de prueba: mientras sea true, el checkout se abre en el sandbox de Mercado Pago.
-const MP_MODO_PRUEBA = true;
+// Credenciales OAuth de Mercado Pago Connect. En modo prueba no es obligatorio
+// configurarlas: el flujo cae a un modo de compatibilidad que vincula la cuenta
+// de la propia aplicación. Para producción, basta con setearlas y cambiar el
+// Access Token (MP_ACCESS_TOKEN) por el token real.
+const MP_CLIENT_ID = defineSecret("MP_CLIENT_ID");
+const MP_USER_ID = defineSecret("MP_USER_ID");
+// El client_secret de OAuth se lee del entorno para no bloquear el deploy en
+// modo prueba. Para producción, configurarlo (Secret Manager o variable de
+// entorno) y agregarlo a la lista secrets de los flujos OAuth.
+
+// Redirect URI registrada para OAuth de Mercado Pago Connect (deep link de la app).
+const MP_OAUTH_REDIRECT = "cuidaleapp://oauthmp";
+
+/*
+ * El modo prueba se detecta automáticamente según la credencial: si el Access
+ * Token empieza con "TEST-", todo opera contra el sandbox. Al pasar a
+ * producción solo hay que cambiar MP_ACCESS_TOKEN por el token real.
+ */
+function mpModoPrueba() {
+  // Permite forzar el modo vía entorno (p.ej. MP_MODO_PRUEBA=false en producción
+  // si la credencial productiva también empezara con APP_USR-).
+  const forzado = process.env.MP_MODO_PRUEBA;
+  if (forzado !== undefined) return String(forzado) === "true";
+  const token = String(MP_ACCESS_TOKEN.value() || "");
+  // Las credenciales de prueba de Mercado Pago usan prefijo TEST- o APP_USR-.
+  return token.startsWith("TEST-") || token.startsWith("APP_USR-");
+}
 
 const REGION = "southamerica-west1";
 const MP_API = "https://api.mercadopago.com";
@@ -171,6 +197,28 @@ function validarRutChileno(rut) {
 /* Comisión por retiro: 2% con tope $5.000 CLP. */
 function calcularComisionRetiro(monto) {
   return Math.min(Math.round(monto * COMISION_RETIRO_PCT), COMISION_RETIRO_TOPE);
+}
+
+/* Convierte un detalle de Mercado Pago en un mensaje amigable. */
+function amigableDetalleRetiro(detalle) {
+  const d = String(detalle || "").toLowerCase();
+  if (
+    d.includes("not_found") || d.includes("not found") ||
+    d.includes("does not exist") || d.includes("inexistente") ||
+    d.includes("invalid receiver") || d.includes("receiver")
+  ) {
+    return "La cuenta de destino no existe o no está habilitada para recibir retiros. Verifica los datos.";
+  }
+  if (
+    d.includes("account_not_verified") || d.includes("not verified") ||
+    d.includes("verification") || d.includes("no verificada")
+  ) {
+    return "La cuenta de destino no está verificada. Completa la verificación en Mercado Pago.";
+  }
+  if (d.includes("unauthorized") || d.includes("policy")) {
+    return "Mercado Pago aún no habilita retiros para esta integración (política de desembolsos). Activa los Payouts/Connect en tu aplicación y vuelve a intentar.";
+  }
+  return String(detalle || "No se pudo procesar el retiro.");
 }
 
 /* Lee una cuenta destino verificando que pertenezca al usuario. */
@@ -323,7 +371,7 @@ exports.crearRecarga = onCall({ ...RUN_OPTIONS, secrets: [MP_ACCESS_TOKEN] }, as
     }
   });
 
-  const url = MP_MODO_PRUEBA && preferencia.sandbox_init_point ? preferencia.sandbox_init_point : preferencia.init_point;
+  const url = mpModoPrueba() && preferencia.sandbox_init_point ? preferencia.sandbox_init_point : preferencia.init_point;
   return { recargaId, url };
 });
 
@@ -593,7 +641,9 @@ exports.registrarCuentaDestino = onCall(RUN_OPTIONS, async (req) => {
     }
     const esEmail = /^[\w.+-]+@[\w-]+\.[\w.]+$/.test(mpIdentificador);
     const esId = /^\d+$/.test(mpIdentificador);
-    if (!esEmail && !esId) {
+    // Acepta IDs de usuario de Mercado Pago (ej. TESTUSER...) y similares.
+    const esAlfa = /^[A-Za-z0-9_-]{4,}$/.test(mpIdentificador);
+    if (!esEmail && !esId && !esAlfa) {
       throw new HttpsError("invalid-argument", "Identificador de Mercado Pago no válido.");
     }
     base.mpIdentificador = mpIdentificador;
@@ -635,6 +685,47 @@ exports.registrarCuentaDestino = onCall(RUN_OPTIONS, async (req) => {
   };
 });
 
+/* Construye el cuerpo del payout según el tipo de destino (banco / MP). */
+function construirBodyPayout(cuenta, monto, uid, movimientoId) {
+  const esBanco = cuenta.tipoDestino === "banco";
+  const body = {
+    amount: monto,
+    type: esBanco ? "bank_transfer" : "mercado_pago_account",
+    external_reference: `${uid}#${movimientoId}`,
+    description: "Retiro Cuidale App",
+    // IMPORTANTE: sin esta URL Mercado Pago no notifica el estado del payout
+    // y el retiro quedaría "procesando" para siempre.
+    notification_url: functionUrl("webhookMercadoPagoPayout")
+  };
+
+  if (esBanco) {
+    const nombres = String(cuenta.titular || "").trim().split(/\s+/);
+    const receiver = {
+      bank_account: {
+        bank_code: String(cuenta.banco || ""),
+        account_type: String(cuenta.tipoCuenta || ""),
+        account_number: String(cuenta.numeroCuenta || "")
+      }
+    };
+    if (nombres[0]) receiver.first_name = nombres[0];
+    if (nombres.length > 1) receiver.last_name = nombres.slice(1).join(" ");
+    if (cuenta.rut) receiver.identification = { type: "RUT", number: String(cuenta.rut) };
+    if (cuenta.email) receiver.email = String(cuenta.email);
+    body.receiver = receiver;
+  } else {
+    // Para cuentas de Mercado Pago el receptor se identifica con su user_id
+    // (account_id). No se envían first_name/identification vacíos: pueden hacer
+    // fallar la creación del payout en sandbox/producción.
+    body.receiver = {
+      mercado_pago_account: {
+        account_id: String(cuenta.accountIdMp || "")
+      }
+    };
+    if (cuenta.email) body.receiver.email = String(cuenta.email);
+  }
+  return body;
+}
+
 /*
  * Retira saldo de la billetera hacia una cuenta bancaria o una cuenta de
  * Mercado Pago usando la API de Payouts. Comisión 2% (tope $5.000), tope por
@@ -657,9 +748,26 @@ exports.retirarSaldo = onCall({ ...RUN_OPTIONS, secrets: [MP_ACCESS_TOKEN] }, as
     throw new HttpsError("failed-precondition", "Debes registrar un destino de retiro.");
   }
 
-  const comision = calcularComisionRetiro(monto);
+  // La comisión por retiro (2% tope $5.000) aplica solo al cuidador. El
+  // representante retira sin comisión.
+  const rol = await rolDeUsuario(uid);
+  const aplicaComision = rol !== "representante";
+  const comision = aplicaComision ? calcularComisionRetiro(monto) : 0;
   const totalDebito = monto + comision;
   const hoy = fechaHoyCL();
+
+  // Para destinos de Mercado Pago el receptor se identifica con su ID numérico
+  // de usuario. Si el registro trae otro formato (correo/nickname) avisamos
+  // antes de descontar saldo y evitar errores tipo "not found" de MP.
+  if (cuenta.tipoDestino === "mercado_pago") {
+    const accountIdMp = String(cuenta.mpUserId || cuenta.mpIdentificador || "").trim();
+    if (!/^\d+$/.test(accountIdMp)) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Para retirar a Mercado Pago registra el ID numérico de tu cuenta (el número de usuario, no el correo ni el apodo)."
+      );
+    }
+  }
 
   const resultado = await db().runTransaction(async (tx) => {
     const billetera = await leerBilletera(tx, uid);
@@ -705,82 +813,116 @@ exports.retirarSaldo = onCall({ ...RUN_OPTIONS, secrets: [MP_ACCESS_TOKEN] }, as
   });
 
   let payout;
-  try {
-    const nombres = String(cuenta.titular || "").trim().split(/\s+/);
-    const receiverBase = {
-      first_name: nombres[0] || "",
-      last_name: nombres.slice(1).join(" "),
-      identification: { type: "RUT", number: String(cuenta.rut || "") },
-      email: String(cuenta.email || "")
-    };
-    const body = {
-      amount: monto,
-      type: cuenta.tipoDestino === "banco" ? "bank_transfer" : "mercado_pago_account",
-      external_reference: `${uid}#${resultado.movimientoId}`,
-      description: "Retiro Cuidale App"
-    };
-    if (cuenta.tipoDestino === "banco") {
-      body.receiver = {
-        ...receiverBase,
-        bank_account: {
-          bank_code: String(cuenta.banco || ""),
-          account_type: String(cuenta.tipoCuenta || ""),
-          account_number: String(cuenta.numeroCuenta || "")
-        }
-      };
-    } else {
-      body.receiver = {
-        ...receiverBase,
-        mercado_pago_account: {
-          account_id: String(cuenta.mpIdentificador || "")
-        }
-      };
-    }
-    payout = await mpFetch("/v1/payouts", {
-      method: "POST",
-      headers: { "X-Idempotency-Key": resultado.movimientoId },
-      body: JSON.stringify(body)
-    });
-  } catch (e) {
-    console.error("Payout create error:", e);
-    await db().runTransaction(async (tx) => {
-      const billetera = await leerBilletera(tx, uid);
-      const idx = billetera.movimientos.findIndex((mv) => mv.id === resultado.movimientoId);
-      if (idx >= 0) {
-        const mov = billetera.movimientos[idx];
-        if (mov.estado === "procesando") {
-          billetera.saldo += totalDebito;
-          billetera.movimientos[idx] = {
-            ...mov,
-            estado: "rechazada",
-            detalle: "No se pudo crear el payout",
-            saldoResultante: billetera.saldo
-          };
-          tx.set(billetera.ref, {
-            uid, saldo: billetera.saldo, movimientos: billetera.movimientos,
-            actualizadoAt: FieldValue.serverTimestamp()
-          }, { merge: true });
-        }
+  const body = construirBodyPayout({
+    tipoDestino: cuenta.tipoDestino,
+    banco: cuenta.banco,
+    tipoCuenta: cuenta.tipoCuenta,
+    numeroCuenta: cuenta.numeroCuenta,
+    titular: cuenta.titular,
+    rut: cuenta.rut,
+    email: cuenta.email,
+    // Para MP se prioriza el user_id obtenido vía Connect (mpUserId); si no,
+    // se usa el identificador registrado (número de usuario o TESTUSER…).
+    accountIdMp: String(cuenta.mpUserId || cuenta.mpIdentificador || "")
+  }, monto, uid, resultado.movimientoId);
+    let mpErrorDetalle = "";
+    try {
+      const resp = await fetch(`${MP_API}/v1/payouts`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${MP_ACCESS_TOKEN.value()}`,
+          "Content-Type": "application/json",
+          "X-Idempotency-Key": resultado.movimientoId
+        },
+        body: JSON.stringify(body)
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        console.error("Payout create MP error:", resp.status, JSON.stringify(data));
+        mpErrorDetalle = String(data.message || data.error || `Mercado Pago respondió ${resp.status}`);
+        throw new Error(mpErrorDetalle);
       }
-    });
-    await notificar(uid, "retiro_rechazado", "sistema", {
-      titulo: "Retiro rechazado",
-      texto: `No se pudo procesar tu retiro de ${formatoCLP(monto)}. Se devolvió el saldo.`
-    });
-    throw new HttpsError("internal", "No se pudo procesar el retiro. Inténtalo nuevamente.");
-  }
+      payout = data;
+    } catch (e) {
+      console.error("Payout create error:", e);
+      const detalle = amigableDetalleRetiro(mpErrorDetalle || e.message || "No se pudo crear el payout");
+      await db().runTransaction(async (tx) => {
+        const billetera = await leerBilletera(tx, uid);
+        const idx = billetera.movimientos.findIndex((mv) => mv.id === resultado.movimientoId);
+        if (idx >= 0) {
+          const mov = billetera.movimientos[idx];
+          if (mov.estado === "procesando") {
+            billetera.saldo += totalDebito;
+            billetera.movimientos[idx] = {
+              ...mov,
+              estado: "rechazada",
+              detalle,
+              saldoResultante: billetera.saldo
+            };
+            tx.set(billetera.ref, {
+              uid, saldo: billetera.saldo, movimientos: billetera.movimientos,
+              actualizadoAt: FieldValue.serverTimestamp()
+            }, { merge: true });
+          }
+        }
+      });
+      await notificar(uid, "retiro_rechazado", "sistema", {
+        titulo: "Retiro rechazado",
+        texto: `No se pudo procesar tu retiro de ${formatoCLP(monto)}. ${detalle} Se devolvió el saldo.`
+      });
+      throw new HttpsError("failed-precondition", detalle);
+    }
+
+  // Evalúa el estado inicial del payout. Si ya viene resuelto (aprobado o
+  // rechazado), se actualiza el movimiento de inmediato sin depender del
+  // webhook. Si queda pending/processing, el webhook (notification_url) lo
+  // resolverá después.
+  const payoutStatus = String(payout.status || "");
+  const payoutDetalle = amigableDetalleRetiro(String(payout.status_detail || payoutStatus));
+  let estadoFinal = "procesando";
 
   await db().runTransaction(async (tx) => {
     const billetera = await leerBilletera(tx, uid);
     const idx = billetera.movimientos.findIndex((mv) => mv.id === resultado.movimientoId);
-    if (idx >= 0) {
-      billetera.movimientos[idx] = { ...billetera.movimientos[idx], payoutId: String(payout.id || "") };
+    if (idx < 0) return;
+    const mov = billetera.movimientos[idx];
+    const conPayoutId = { ...mov, payoutId: String(payout.id || "") };
+
+    if (["processed", "completed", "approved"].includes(payoutStatus)) {
+      billetera.movimientos[idx] = { ...conPayoutId, estado: "aprobada", payoutId: String(payout.id || ""), fechaAcreditado: ahora() };
+      tx.set(billetera.ref, { movimientos: billetera.movimientos }, { merge: true });
+      estadoFinal = "aprobada";
+    } else if (["rejected", "cancelled", "cancelled_partial"].includes(payoutStatus)) {
+      const reversion = Math.abs(Number(conPayoutId.monto) || 0);
+      billetera.saldo += reversion;
+      billetera.movimientos[idx] = {
+        ...conPayoutId,
+        estado: "rechazada",
+        payoutId: String(payout.id || ""),
+        detalle: payoutDetalle,
+        saldoResultante: billetera.saldo
+      };
+      tx.set(billetera.ref, {
+        uid, saldo: billetera.saldo, movimientos: billetera.movimientos,
+        actualizadoAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      estadoFinal = "rechazada";
+    } else {
+      // pending / processing / in_process: se guarda el payoutId y se espera webhook.
+      billetera.movimientos[idx] = conPayoutId;
       tx.set(billetera.ref, { movimientos: billetera.movimientos }, { merge: true });
     }
   });
 
+  if (estadoFinal === "rechazada") {
+    await notificar(uid, "retiro_rechazado", "sistema", {
+      titulo: "Retiro rechazado",
+      texto: `El retiro de ${formatoCLP(monto)} fue rechazado por Mercado Pago. Se devolvió el saldo.`
+    });
+  }
+
   return {
-    estado: "procesando",
+    estado: estadoFinal,
     movimientoId: resultado.movimientoId,
     payoutId: String(payout.id || ""),
     comision
@@ -842,7 +984,7 @@ exports.webhookMercadoPagoPayout = onRequest({ ...RUN_OPTIONS, secrets: [MP_ACCE
           ...mov,
           estado: "rechazada",
           payoutId,
-          detalle: String(payout.status_detail || payout.status),
+          detalle: amigableDetalleRetiro(String(payout.status_detail || payout.status)),
           saldoResultante: billetera.saldo
         };
         tx.set(billetera.ref, {
@@ -1153,19 +1295,41 @@ exports.iniciarCobroTurno = onCall(RUN_OPTIONS, async (req) => {
     }
 
     const fecha = fechaHoyCL();
-    // Un turno por día (C20-53): si ya existe uno activo, se rechaza.
+    const monto = Math.round(tarifa * horas);
+    const bill = await leerBilletera(tx, sol.representanteUid);
+    const saldoRep = bill.saldo;
+
+    // Un turno por día (C20-53): si ya existe uno activo del mismo cuidador,
+    // se reutiliza (idempotencia) actualizando horas/comentario en lugar de
+    // rechazar. Solo se rechaza si el turno activo de hoy pertenece a otro
+    // cuidador o ya fue pagado/rechazado.
     const existentes = await db().collection("turnos").where("solicitudId", "==", solicitudId).get();
     const activoHoy = existentes.docs.find((doc) => {
       const t = doc.data();
       return t.fecha === fecha && !["pagado", "rechazado"].includes(t.estado);
     });
     if (activoHoy) {
-      throw new HttpsError("already-exists", "Ya existe un turno iniciado para hoy.");
+      const existente = activoHoy.data();
+      if (existente.cuidadorUid !== uid) {
+        throw new HttpsError("already-exists", "Ya existe un turno iniciado para hoy.");
+      }
+      const turnoId = existente.id;
+      tx.update(db().collection("turnos").doc(turnoId), {
+        horasTrabajadas: horas,
+        tarifaUsada: tarifa,
+        montoCalculado: monto,
+        comentario: String(d.comentario || "").slice(0, 300),
+        saldoSuficiente: saldoRep >= monto,
+        updatedAt: FieldValue.serverTimestamp()
+      });
+      tx.update(db().collection("cobros").doc(turnoId), {
+        horas, monto, tarifaHora: tarifa,
+        comentario: String(d.comentario || "").slice(0, 300),
+        saldoSuficiente: saldoRep >= monto,
+        updatedAt: FieldValue.serverTimestamp()
+      });
+      return { turnoId, representanteUid: sol.representanteUid, monto, saldoSuficiente: saldoRep >= monto };
     }
-
-    const monto = Math.round(tarifa * horas);
-    const bill = await leerBilletera(tx, sol.representanteUid);
-    const saldoRep = bill.saldo;
 
     const turnoRef = db().collection("turnos").doc();
     const turnoId = turnoRef.id;
@@ -1214,7 +1378,293 @@ exports.iniciarCobroTurno = onCall(RUN_OPTIONS, async (req) => {
 });
 
 // Expuesto solo para pruebas unitarias (no enumerable: no se despliega como función)
+/* ---------- Mercado Pago Connect: conexión de cuenta para retiros ---------- */
+// Modelo Marketplace (Mercado Pago Connect):
+//  - Cada usuario vincula su cuenta MP mediante OAuth (authorization code).
+//  - La plataforma guarda el access_token del vendedor en billetera/{uid}.
+//    mp_conexion y registra su user_id como destino de retiro.
+//  - Los payouts se crean con el Access Token de la app (MP_ACCESS_TOKEN) y el
+//    account_id del vendedor, por lo que al pasar a producción solo hay que
+//    cambiar MP_ACCESS_TOKEN por el token real.
+//  - Sin MP_CLIENT_ID/MP_CLIENT_SECRET (modo prueba) el flujo usa la cuenta de
+//    la propia aplicación como destino (compatibilidad/demo).
+
+// Lee un secreto opcional sin lanzar error si aún no está configurado.
+function valorSecreto(param) {
+  try { return String(param.value() || ""); } catch (_) { return ""; }
+}
+
+function upsertCuentaMp(uid, userId, email) {
+  const idResuelto = String(userId || "").trim() || String(email || "").trim();
+  // Nunca guardamos un identificador sintético: si no se pudo resolver uno
+  // real, la conexión falla y el usuario debe ingresar su ID numérico a mano.
+  if (!idResuelto) return Promise.resolve(null);
+  return db().collection("cuentas_bancarias")
+    .where("uid", "==", uid)
+    .where("tipoDestino", "==", "mercado_pago")
+    .limit(1).get()
+    .then((cuentasQ) => {
+      const ref = cuentasQ.empty
+        ? db().collection("cuentas_bancarias").doc()
+        : cuentasQ.docs[0].ref;
+      const idMp = idResuelto;
+      return ref.set({
+        id: ref.id,
+        uid,
+        tipoDestino: "mercado_pago",
+        banco: "",
+        bancoNombre: "Mercado Pago",
+        tipoCuenta: "",
+        numeroCuenta: "",
+        titular: "",
+        rut: "",
+        mpIdentificador: idMp,
+        mpUserId: userId || "",
+        mpEmail: email || "",
+        mpAppId: valorSecreto(MP_CLIENT_ID),
+        creadaAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+    });
+}
+
+/* Devuelve la URL de autorización OAuth de Mercado Pago Connect ("" si faltan credenciales). */
+function urlAutorizacionMp(uid) {
+  const clientId = valorSecreto(MP_CLIENT_ID);
+  const clientSecret = String(process.env.MP_CLIENT_SECRET || "");
+  // Se requiere client_id + client_secret; si falta alguno (modo prueba) se
+  // usa el formulario manual con el User ID numérico.
+  if (!clientId || !clientSecret) return "";
+  const params = new URLSearchParams({
+    client_id: clientId,
+    response_type: "code",
+    redirect_uri: MP_OAUTH_REDIRECT,
+    state: uid
+  });
+  return `${MP_API.replace(/^https:\/\/api\./, "https://auth.")}/authorization?${params.toString()}`;
+}
+
+/* Intercambia el código de autorización por el token del vendedor (Connect). */
+async function canjearCodeOauthMp(code) {
+  const clientId = valorSecreto(MP_CLIENT_ID);
+  const clientSecret = String(process.env.MP_CLIENT_SECRET || "");
+  if (!code || !clientId || !clientSecret) return null;
+  const resp = await fetch(`${MP_API}/oauth/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      grant_type: "authorization_code",
+      client_id: clientId,
+      client_secret: clientSecret,
+      code,
+      redirect_uri: MP_OAUTH_REDIRECT
+    })
+  });
+  const j = await resp.json().catch(() => ({}));
+  if (!resp.ok || !j.access_token) {
+    console.error("MP oauth/token error:", resp.status, JSON.stringify(j));
+    return null;
+  }
+  return {
+    accessToken: String(j.access_token),
+    refreshToken: String(j.refresh_token || ""),
+    userId: String(j.user_id || ""),
+    publicKey: String(j.public_key || ""),
+    email: String(j.email || "")
+  };
+}
+
+/* Fallback (demo): resuelve la cuenta MP de la propia aplicación. */
+async function resolverCuentaMpApp() {
+  let userId = "";
+  let email = "";
+  try {
+    const resp = await fetch(`${MP_API}/users/me`, {
+      headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN.value()}` }
+    });
+    const j = await resp.json();
+    if (resp.ok) {
+      userId = String(j.id || "");
+      email = String(j.email || "");
+    }
+  } catch (e) {
+    console.error("mp users/me error:", e.message);
+  }
+  return { userId, email };
+}
+
+exports.iniciarOauthMp = onCall(
+  { ...RUN_OPTIONS, secrets: [MP_CLIENT_ID, MP_USER_ID, MP_ACCESS_TOKEN] },
+  async (req) => {
+    const uid = requireAuth(req);
+    const authUrl = urlAutorizacionMp(uid);
+    if (authUrl) {
+      return { ok: true, authUrl, requiereRedirect: true };
+    }
+    // Modo prueba: sin client_id se intenta vincular la cuenta de la app.
+    const { userId, email } = await resolverCuentaMpApp();
+    const creada = await upsertCuentaMp(uid, userId, email);
+    if (!creada) {
+      throw new HttpsError("failed-precondition", "No se pudo resolver una cuenta de Mercado Pago. Ingresa manualmente tu ID numérico de usuario.");
+    }
+    return { ok: true, email, userId };
+  }
+);
+
+exports.canjearOauthMp = onCall(
+  { ...RUN_OPTIONS, secrets: [MP_CLIENT_ID, MP_USER_ID, MP_ACCESS_TOKEN] },
+  async (req) => {
+    const uid = requireAuth(req);
+    const code = String((req.data && req.data.code) || "");
+
+    const conexion = await canjearCodeOauthMp(code);
+    if (conexion) {
+      // Guarda el access_token del vendedor para operaciones futuras.
+      await db().collection("billetera").doc(uid).set({
+        mp_conexion: {
+          user_id: conexion.userId,
+          access_token: conexion.accessToken,
+          refresh_token: conexion.refreshToken,
+          public_key: conexion.publicKey,
+          actualizadoAt: ahora()
+        }
+      }, { merge: true });
+      const creada = await upsertCuentaMp(uid, conexion.userId, conexion.email);
+      if (!creada) {
+        throw new HttpsError("failed-precondition", "No se pudo vincular la cuenta de Mercado Pago.");
+      }
+      return { ok: true, email: conexion.email, userId: conexion.userId };
+    }
+
+    // Fallback (demo): intenta vincular la cuenta de la aplicación.
+    const { userId, email } = await resolverCuentaMpApp();
+    const creadaFallback = await upsertCuentaMp(uid, userId, email);
+    if (!creadaFallback) {
+      throw new HttpsError("failed-precondition", "No se pudo resolver una cuenta de Mercado Pago. Ingresa manualmente tu ID numérico de usuario.");
+    }
+    return { ok: true, email, userId };
+  }
+);
+
+/* Desvincula la cuenta de Mercado Pago: elimina el destino y limpia la conexión. */
+exports.desvincularMp = onCall(RUN_OPTIONS, async (req) => {
+  const uid = requireAuth(req);
+
+  // Elimina la cuenta destino tipo Mercado Pago del usuario.
+  const cuentasQ = await db().collection("cuentas_bancarias")
+    .where("uid", "==", uid)
+    .where("tipoDestino", "==", "mercado_pago")
+    .limit(10)
+    .get();
+  const batch = db().batch();
+  for (const doc of cuentasQ.docs) {
+    batch.delete(doc.ref);
+  }
+
+  // Limpia la conexión MP guardada en la billetera.
+  batch.update(db().collection("billetera").doc(uid), {
+    mp_conexion: admin.firestore.FieldValue.delete()
+  });
+
+  await batch.commit();
+  return { ok: true };
+});
+
+/* Cancela una recarga pendiente (la marca como rechazada en Firestore). */
+exports.cancelarRecarga = onCall(RUN_OPTIONS, async (req) => {
+  const uid = requireAuth(req);
+  const recargaId = String((req.data && req.data.recargaId) || "");
+  if (!recargaId) throw new HttpsError("invalid-argument", "Falta la recarga.");
+
+  const ref = db().collection("billetera").doc(uid);
+  await db().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return;
+    const data = snap.data();
+    const movs = Array.isArray(data.movimientos) ? data.movimientos : [];
+    const idx = movs.findIndex(
+      (m) => m.id === recargaId && m.tipoMovimiento === "recarga" && m.estado === "pendiente"
+    );
+    if (idx < 0) return;
+    movs[idx] = {
+      ...movs[idx],
+      estado: "rechazada",
+      detalle: "Cancelada por el usuario",
+      canceladaAt: ahora()
+    };
+    tx.update(ref, { movimientos: movs });
+  });
+  return { ok: true };
+});
+
+/* Scheduler: consulta a Mercado Pago y sanea recargas huérfanas en "pendiente". */
+exports.sincronizarRecargasPendientes = onSchedule(
+  {
+    schedule: "every 12 hours",
+    timeZone: "America/Santiago",
+    // Cloud Scheduler no está disponible en southamerica-west1; se usa east1.
+    region: "southamerica-east1",
+    timeoutSeconds: 300,
+    secrets: [MP_ACCESS_TOKEN]
+  },
+  async () => {
+    let actualizadas = 0;
+    try {
+      const docs = await db().collection("billetera")
+        .orderBy("actualizadoAt", "desc")
+        .limit(400)
+        .get();
+      const batch = db().batch();
+      for (const doc of docs.docs) {
+        const uid = doc.id;
+        const data = doc.data();
+        const movs = Array.isArray(data.movimientos) ? data.movimientos : [];
+        let cambio = false;
+        for (let i = 0; i < movs.length; i++) {
+          const m = movs[i];
+          if (m.tipoMovimiento !== "recarga" || m.estado !== "pendiente") continue;
+          let nuevo = null;
+          const ext = `${uid}#${m.id}`;
+          try {
+            const search = await mpFetch(
+              `/v1/payments/search?external_reference=${encodeURIComponent(ext)}&limit=1`
+            );
+            const results = (search.results || []);
+            if (results.length > 0) {
+              const status = String(results[0].status || "");
+              const pagoId = String(results[0].id || "");
+              if (status === "approved") {
+                nuevo = { estado: "aprobada", paymentId: pagoId, aprobadaAt: ahora() };
+              } else if (["rejected", "cancelled", "refunded", "charged_back"].includes(status)) {
+                nuevo = { estado: "rechazada", paymentId: pagoId, detalle: `MP: ${status}` };
+              }
+              // "pending"/"in_process" se dejan intactos (aún puede confirmarse).
+            }
+          } catch (e) {
+            console.error("mp payment search error:", e.message);
+          }
+          if (!nuevo) {
+            const ts = m.timestamp ? (m.timestamp.toMillis ? m.timestamp.toMillis() : Date.now()) : 0;
+            if (Date.now() - ts > 24 * 60 * 60 * 1000) {
+              nuevo = { estado: "rechazada", detalle: "Vencida por falta de confirmación" };
+            }
+          }
+          if (nuevo) {
+            movs[i] = { ...m, ...nuevo };
+            cambio = true;
+            actualizadas++;
+          }
+        }
+        if (cambio) batch.update(doc.ref, { movimientos: movs });
+      }
+      if (actualizadas > 0) await batch.commit();
+    } catch (e) {
+      console.error("sincronizarRecargasPendientes error:", e);
+    }
+    console.log("recargas sincronizadas:", actualizadas);
+  }
+);
+
 Object.defineProperty(exports, "_test", {
-  value: { firmaValida, toPesos, validarRutChileno, calcularComisionRetiro, BANCOS_CHILE },
+  value: { firmaValida, toPesos, validarRutChileno, calcularComisionRetiro, amigableDetalleRetiro, BANCOS_CHILE },
   enumerable: false
 });

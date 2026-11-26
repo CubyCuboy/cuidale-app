@@ -10,6 +10,7 @@ import com.example.cuidaleapp.models.SolicitudCuidado
 import com.example.cuidaleapp.utils.FirebaseFunctionsApi
 import com.example.cuidaleapp.utils.MontoUtils
 import com.example.cuidaleapp.utils.PagoErrorMessages
+import com.example.cuidaleapp.utils.RecargaUi
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
@@ -81,6 +82,30 @@ class BilleteraViewModel : ViewModel() {
 
     private val _retiroUi = MutableStateFlow<RetiroUi?>(null)
     val retiroUi: StateFlow<RetiroUi?> = _retiroUi
+
+    private val _oauthMpEnProceso = MutableStateFlow(false)
+    val oauthMpEnProceso: StateFlow<Boolean> = _oauthMpEnProceso
+
+    // Mensaje transitorio del flujo de Mercado Pago (éxito/error). Se muestra
+    // una vez en la pantalla de cuentas y luego se limpia.
+    private val _oauthMpFeedback = MutableStateFlow<String?>(null)
+    val oauthMpFeedback: StateFlow<String?> = _oauthMpFeedback
+
+    // URL de autorización OAuth (Mercado Pago Connect) para abrir en navegador.
+    private val _oauthMpAuthUrl = MutableStateFlow<String?>(null)
+    val oauthMpAuthUrl: StateFlow<String?> = _oauthMpAuthUrl
+
+    // Señal para abrir el formulario manual cuando no hay OAuth configurado.
+    private val _abrirFormularioMpManual = MutableStateFlow(false)
+    val abrirFormularioMpManual: StateFlow<Boolean> = _abrirFormularioMpManual
+
+    // Mensaje transitorio de las cuentas destino (guardar/eliminar/cargar).
+    private val _cuentasFeedback = MutableStateFlow<String?>(null)
+    val cuentasFeedback: StateFlow<String?> = _cuentasFeedback
+
+    // Estado del overlay de pago/transferencia (reutiliza RecargaUi).
+    private val _pagoUi = MutableStateFlow<RecargaUi?>(null)
+    val pagoUi: StateFlow<RecargaUi?> = _pagoUi
 
     private var _retiroPendienteMovimientoId: String? = null
 
@@ -203,7 +228,10 @@ class BilleteraViewModel : ViewModel() {
         cuentasListener = db.collection("cuentas_bancarias")
             .whereEqualTo("uid", uid)
             .addSnapshotListener { snapshot, error ->
-                if (error != null) return@addSnapshotListener
+                if (error != null) {
+                    _cuentasFeedback.value = "No se pudieron cargar tus cuentas."
+                    return@addSnapshotListener
+                }
                 _cuentasDestino.value = snapshot?.toObjects(CuentaDestino::class.java) ?: emptyList()
             }
     }
@@ -289,8 +317,6 @@ class BilleteraViewModel : ViewModel() {
         rut: String? = null,
         mpIdentificador: String? = null
     ) {
-        if (_operacion.value is OperacionEstado.EnCurso) return
-        _operacion.value = OperacionEstado.EnCurso
         viewModelScope.launch {
             FirebaseFunctionsApi.registrarCuentaDestino(
                 tipoDestino = tipoDestino,
@@ -301,11 +327,11 @@ class BilleteraViewModel : ViewModel() {
                 rut = rut,
                 mpIdentificador = mpIdentificador
             )
-                .onSuccess { _operacion.value = OperacionEstado.Exito }
+                .onSuccess { _cuentasFeedback.value = "Cuenta guardada correctamente" }
                 .onFailure { e ->
                     val codigo = (e as? FirebaseFunctionsException)?.code?.name?.lowercase()?.replace('_', '-')
                     val server = (e as? FirebaseFunctionsException)?.message
-                    _operacion.value = OperacionEstado.Error(PagoErrorMessages.mensaje(codigo, server))
+                    _cuentasFeedback.value = PagoErrorMessages.mensaje(codigo, server)
                 }
         }
     }
@@ -316,6 +342,10 @@ class BilleteraViewModel : ViewModel() {
         viewModelScope.launch {
             runCatching {
                 db.collection("cuentas_bancarias").document(id).delete().await()
+            }.onSuccess {
+                _cuentasFeedback.value = "Cuenta eliminada"
+            }.onFailure {
+                _cuentasFeedback.value = "No se pudo eliminar la cuenta."
             }
         }
     }
@@ -335,6 +365,14 @@ class BilleteraViewModel : ViewModel() {
             FirebaseFunctionsApi.retirarSaldo(monto, cuentaId)
                 .onSuccess { iniciado ->
                     _retiroPendienteMovimientoId = iniciado.movimientoId
+                    when (iniciado.estado) {
+                        "aprobada" -> _retiroUi.value = RetiroUi.Final("aprobada")
+                        "rechazada" -> _retiroUi.value = RetiroUi.Final(
+                            "rechazada",
+                            "El retiro fue rechazado por Mercado Pago. Se devolvió el saldo."
+                        )
+                        else -> Unit // procesando: el webhook lo resolverá
+                    }
                     _operacion.value = OperacionEstado.Exito
                 }
                 .onFailure { e ->
@@ -351,21 +389,114 @@ class BilleteraViewModel : ViewModel() {
         _retiroPendienteMovimientoId = null
     }
 
+    /** Inicia la vinculación de Mercado Pago (OAuth Connect externo). */
+    fun iniciarVincularMp() {
+        if (_oauthMpEnProceso.value) return
+        _oauthMpEnProceso.value = true
+        viewModelScope.launch {
+            FirebaseFunctionsApi.mpOauthIniciar()
+                .onSuccess { data ->
+                    _oauthMpEnProceso.value = false
+                    val authUrl = data["authUrl"].orEmpty()
+                    if (authUrl.isNotBlank()) {
+                        _oauthMpAuthUrl.value = authUrl
+                    } else {
+                        // Sin client_id configurado: no hay OAuth; se abre el
+                        // formulario manual para ingresar el User ID numérico.
+                        _oauthMpFeedback.value = "Vincula tu cuenta ingresando tu User ID numérico."
+                        _abrirFormularioMpManual.value = true
+                    }
+                }
+                .onFailure { e ->
+                    _oauthMpEnProceso.value = false
+                    _oauthMpFeedback.value =
+                        if (e is FirebaseFunctionsException) e.message ?: "Error al vincular Mercado Pago."
+                        else "Error de conexión al vincular Mercado Pago."
+                }
+        }
+    }
+
+    fun consumirOauthMpAuthUrl() {
+        _oauthMpAuthUrl.value = null
+    }
+
+    fun consumirAbrirFormularioMpManual() {
+        _abrirFormularioMpManual.value = false
+    }
+
+    /** Canjea el código OAuth devuelto por el deep link y vincula la cuenta MP. */
+    fun finalizarConexionMp(code: String) {
+        if (_oauthMpEnProceso.value) return
+        _oauthMpEnProceso.value = true
+        viewModelScope.launch {
+            FirebaseFunctionsApi.mpOauthCanjear(code)
+                .onSuccess {
+                    _oauthMpEnProceso.value = false
+                    _oauthMpFeedback.value = "Mercado Pago conectado correctamente"
+                }
+                .onFailure { e ->
+                    _oauthMpEnProceso.value = false
+                    _oauthMpFeedback.value =
+                        if (e is FirebaseFunctionsException) e.message ?: "Error al vincular Mercado Pago."
+                        else "Error de conexión al vincular Mercado Pago."
+                }
+        }
+    }
+
+    fun consumirOauthMpFeedback() {
+        _oauthMpFeedback.value = null
+    }
+
+    fun consumirCuentasFeedback() {
+        _cuentasFeedback.value = null
+    }
+
+    /** Desvincula la cuenta de Mercado Pago (elimina destino y limpia conexión). */
+    fun desvincularConexionMp() {
+        if (_oauthMpEnProceso.value) return
+        _oauthMpEnProceso.value = true
+        viewModelScope.launch {
+            FirebaseFunctionsApi.mpOauthDesvincular()
+                .onSuccess {
+                    _oauthMpEnProceso.value = false
+                    _oauthMpFeedback.value = "Mercado Pago desconectado"
+                }
+                .onFailure { e ->
+                    _oauthMpEnProceso.value = false
+                    _oauthMpFeedback.value =
+                        if (e is FirebaseFunctionsException) e.message ?: "Error al desconectar Mercado Pago."
+                        else "Error de conexión al desconectar Mercado Pago."
+                }
+        }
+    }
+
+    /** Cancela la recarga pendiente (marca como rechazada en Firestore). */
+    fun cancelarRecarga(recargaId: String?) {
+        if (recargaId.isNullOrBlank()) return
+        viewModelScope.launch {
+            FirebaseFunctionsApi.cancelarRecarga(recargaId)
+        }
+    }
+
     /** Paga un cobro pendiente desde la billetera (Cloud Function `pagarCobro`). */
     fun pagarCobro(cobroId: String) {
-        if (_operacion.value is OperacionEstado.EnCurso) return
-        _operacion.value = OperacionEstado.EnCurso
+        if (_pagoUi.value != null) return
+        _pagoUi.value = RecargaUi.Procesando
         viewModelScope.launch {
             FirebaseFunctionsApi.pagarCobro(cobroId)
                 .onSuccess {
-                    _operacion.value = OperacionEstado.Exito
+                    _pagoUi.value = RecargaUi.Final("aprobado")
                 }
                 .onFailure { e ->
                     val codigo = (e as? FirebaseFunctionsException)?.code?.name?.lowercase()?.replace('_', '-')
                     val server = (e as? FirebaseFunctionsException)?.message
-                    _operacion.value = OperacionEstado.Error(PagoErrorMessages.mensaje(codigo, server))
+                    _pagoUi.value = RecargaUi.Final("error", PagoErrorMessages.mensaje(codigo, server))
                 }
         }
+    }
+
+    fun limpiarPagoUi() {
+        _pagoUi.value = null
     }
 
     fun consumirRecargaUrl() {

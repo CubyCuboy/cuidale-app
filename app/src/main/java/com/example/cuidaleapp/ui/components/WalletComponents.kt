@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddCircle
@@ -35,6 +36,7 @@ import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -52,11 +54,18 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.SubcomposeAsyncImage
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import androidx.compose.ui.unit.sp
 import com.example.cuidaleapp.R
 import com.example.cuidaleapp.models.Cobro
 import com.example.cuidaleapp.models.EstadoCobro
 import com.example.cuidaleapp.models.EstadoMovimiento
+import com.example.cuidaleapp.models.CuentaDestino
 import com.example.cuidaleapp.models.MovimientoBilletera
 import com.example.cuidaleapp.models.SolicitudCuidado
 import com.example.cuidaleapp.ui.theme.CuidaleThemeExtras
@@ -109,6 +118,7 @@ fun IniciarCobroTurnoDialog(
                     placeholder = { Text(stringResource(R.string.cobro_horas_placeholder)) },
                     isError = horasStr.isNotEmpty() && !horasValidas,
                     singleLine = true,
+                    readOnly = true,
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -419,6 +429,9 @@ fun PantallaPagarCobros(
 ) {
     val pendientes = cobros.filter { it.estadoCobro == EstadoCobro.PENDIENTE }
     val vivid = MaterialTheme.colorScheme.primary
+    val isDark = CuidaleThemeExtras.customColors.isDark
+    val bgTop = if (isDark) Color(0xFF0B1226) else Color(0xFFEAF1FB)
+    val bgBottom = if (isDark) Color(0xFF141D36) else Color(0xFFF8FAFD)
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -434,7 +447,7 @@ fun PantallaPagarCobros(
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        listOf(Color(0xFF0B1226), Color(0xFF141D36))
+                        listOf(bgTop, bgBottom)
                     )
                 )
         ) {
@@ -454,13 +467,13 @@ fun PantallaPagarCobros(
                         text = stringResource(R.string.billetera_pagar_transferir),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Black,
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     IconButton(onClick = onDismiss) {
                         Icon(
                             Icons.Default.Close,
                             contentDescription = stringResource(R.string.billetera_pago_cerrar),
-                            tint = Color.White.copy(alpha = 0.8f)
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -471,7 +484,7 @@ fun PantallaPagarCobros(
                         MontoUtils.formatClp(saldoActual)
                     ),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.75f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -487,12 +500,12 @@ fun PantallaPagarCobros(
                                 Icons.Default.CheckCircle,
                                 null,
                                 modifier = Modifier.size(72.dp),
-                                tint = Color.White.copy(alpha = 0.3f)
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
                             )
                             Spacer(Modifier.height(14.dp))
                             Text(
                                 stringResource(R.string.billetera_pagar_sin_pendientes),
-                                color = Color.White.copy(alpha = 0.7f),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 style = MaterialTheme.typography.bodyLarge
                             )
                         }
@@ -619,19 +632,29 @@ private fun MontoRapidoChip(
 }
 
 /**
- * Cortina de pantalla completa para el flujo de recarga (Mercado Pago).
- * No usa contenedores: la información se reparte directamente sobre el fondo
- * opaco, ocupando toda la pantalla con jerarquía visual (etiqueta arriba,
- * progreso, contenido central y acciones al pie).
+ * Cortina de pantalla completa reutilizable para operaciones de dinero
+ * (recarga, retiro, transferencia/pago). No usa contenedores: la información
+ * se reparte directamente sobre el fondo opaco con jerarquía visual.
  */
+data class PasoOverlay(val nombre: String, val icono: ImageVector)
+
 @Composable
-fun RecargaOverlay(
+private fun OperacionOverlay(
     ui: RecargaUi,
+    etiqueta: String,
+    pasos: List<PasoOverlay>,
+    procesoTitulo: String,
+    procesoDescripcion: String,
+    infoFinal: @Composable (estado: String, mensaje: String?) -> InfoEstadoOverlay,
     onCancel: () -> Unit,
     onReintentar: () -> Unit,
     onCerrar: () -> Unit
 ) {
     val vivid = MaterialTheme.colorScheme.primary
+    val isDark = CuidaleThemeExtras.customColors.isDark
+    val bgTop = if (isDark) Color(0xFF080D1A) else Color(0xFFEDF3FB)
+    val bgBottom = if (isDark) Color(0xFF141D36) else Color(0xFFF7FAFD)
+    val textoPrincipal = if (isDark) Color.White else Color(0xFF0F172A)
 
     Dialog(
         onDismissRequest = {
@@ -653,7 +676,7 @@ fun RecargaOverlay(
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        listOf(Color(0xFF080D1A), Color(0xFF141D36))
+                        listOf(bgTop, bgBottom)
                     )
                 )
         ) {
@@ -686,7 +709,7 @@ fun RecargaOverlay(
                 Spacer(Modifier.weight(0.05f))
 
                 Text(
-                    text = stringResource(R.string.billetera_pago_overlay_etiqueta),
+                    text = etiqueta,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                     color = vivid.copy(alpha = 0.95f),
@@ -695,7 +718,7 @@ fun RecargaOverlay(
 
                 Spacer(Modifier.height(26.dp))
 
-                PasosRecarga(indicePaso)
+                PasosOverlay(pasos, indicePaso)
 
                 Spacer(Modifier.weight(0.10f))
 
@@ -710,7 +733,7 @@ fun RecargaOverlay(
                     contentKey = { it::class },
                     label = "recargaFases"
                 ) { estado ->
-                    val info = infoParaEstado(estado, vivid)
+                    val info = infoEstadoProceso(estado, procesoTitulo, procesoDescripcion, infoFinal)
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally
@@ -740,14 +763,14 @@ fun RecargaOverlay(
                             text = info.titulo,
                             fontWeight = FontWeight.Black,
                             style = MaterialTheme.typography.headlineSmall,
-                            color = Color.White,
+                            color = textoPrincipal,
                             textAlign = TextAlign.Center
                         )
                         Spacer(Modifier.height(10.dp))
                         Text(
                             text = info.descripcion,
                             style = MaterialTheme.typography.bodyLarge,
-                            color = Color.White.copy(alpha = 0.85f),
+                            color = textoPrincipal.copy(alpha = 0.85f),
                             textAlign = TextAlign.Center
                         )
                         if (!info.ayuda.isNullOrBlank()) {
@@ -762,14 +785,14 @@ fun RecargaOverlay(
                                 Icon(
                                     Icons.Default.Info,
                                     contentDescription = null,
-                                    tint = Color.White.copy(alpha = 0.8f),
+                                    tint = textoPrincipal.copy(alpha = 0.8f),
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(Modifier.width(8.dp))
                                 Text(
                                     text = info.ayuda,
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = Color.White.copy(alpha = 0.75f),
+                                    color = textoPrincipal.copy(alpha = 0.75f),
                                     textAlign = TextAlign.Center
                                 )
                             }
@@ -790,7 +813,7 @@ fun RecargaOverlay(
                 ) { estado ->
                     val mostrarFooter = when (estado) {
                         is RecargaUi.Redirigiendo -> true
-                        is RecargaUi.Final -> estado.estado != "aprobado"
+                        is RecargaUi.Final -> estado.estado != "aprobado" && estado.estado != "aprobada"
                         else -> false
                     }
                     if (mostrarFooter) {
@@ -809,7 +832,7 @@ fun RecargaOverlay(
                                     }
                                 }
                                 is RecargaUi.Final -> {
-                                    if (estado.estado == "rechazado" || estado.estado == "error") {
+                                    if (estado.estado == "rechazado" || estado.estado == "rechazada" || estado.estado == "error") {
                                         HardShadowButton(
                                             text = stringResource(R.string.billetera_pago_reintentar),
                                             containerColor = MaterialTheme.colorScheme.primary,
@@ -840,61 +863,32 @@ fun RecargaOverlay(
 }
 
 @Composable
-private fun infoParaEstado(estado: RecargaUi, vivid: Color): InfoEstadoRecarga {
+private fun infoEstadoProceso(
+    estado: RecargaUi,
+    procesoTitulo: String,
+    procesoDescripcion: String,
+    infoFinal: @Composable (estado: String, mensaje: String?) -> InfoEstadoOverlay
+): InfoEstadoOverlay {
     return when (estado) {
-        is RecargaUi.Redirigiendo -> InfoEstadoRecarga(
+        is RecargaUi.Redirigiendo -> InfoEstadoOverlay(
             icono = null,
-            colorIcono = vivid,
-            titulo = stringResource(R.string.billetera_recarga_overlay_titulo),
-            descripcion = stringResource(R.string.billetera_recarga_overlay_desc),
+            colorIcono = MaterialTheme.colorScheme.primary,
+            titulo = procesoTitulo,
+            descripcion = procesoDescripcion,
             ayuda = null
         )
-        is RecargaUi.Procesando -> InfoEstadoRecarga(
+        is RecargaUi.Procesando -> InfoEstadoOverlay(
             icono = null,
-            colorIcono = vivid,
-            titulo = stringResource(R.string.billetera_procesando_titulo),
-            descripcion = stringResource(R.string.billetera_procesando_desc),
+            colorIcono = MaterialTheme.colorScheme.primary,
+            titulo = procesoTitulo,
+            descripcion = procesoDescripcion,
             ayuda = null
         )
-        is RecargaUi.Final -> {
-            val custom = CuidaleThemeExtras.customColors
-            val (icono, color) = when (estado.estado) {
-                "aprobado" -> Icons.Default.Check to custom.success
-                "rechazado" -> Icons.Default.Close to MaterialTheme.colorScheme.error
-                "cancelado" -> Icons.Default.Close to custom.warning
-                "pendiente" -> Icons.Default.Schedule to custom.warning
-                else -> Icons.Default.ErrorOutline to MaterialTheme.colorScheme.error
-            }
-            val titulo = when (estado.estado) {
-                "aprobado" -> stringResource(R.string.billetera_pago_aprobado_titulo)
-                "rechazado" -> stringResource(R.string.billetera_pago_rechazado_titulo)
-                "cancelado" -> stringResource(R.string.billetera_pago_cancelado_titulo)
-                "pendiente" -> stringResource(R.string.billetera_pago_pendiente_titulo)
-                else -> stringResource(R.string.billetera_pago_error_titulo)
-            }
-            val descripcion = when (estado.estado) {
-                "aprobado" -> stringResource(R.string.billetera_pago_aprobado_desc)
-                "rechazado" -> stringResource(R.string.billetera_pago_rechazado_desc)
-                "cancelado" -> stringResource(R.string.billetera_pago_cancelado_desc)
-                "pendiente" -> stringResource(R.string.billetera_pago_pendiente_desc)
-                else -> estado.mensaje ?: stringResource(R.string.billetera_pago_error_desc_gen)
-            }
-            val ayuda = when (estado.estado) {
-                "rechazado" -> stringResource(R.string.billetera_pago_rechazado_ayuda)
-                "cancelado" -> stringResource(R.string.billetera_pago_cancelado_ayuda)
-                "pendiente" -> stringResource(R.string.billetera_pago_pendiente_ayuda)
-                else -> if (estado.estado == "error") {
-                    stringResource(R.string.billetera_pago_error_ayuda)
-                } else {
-                    null
-                }
-            }
-            InfoEstadoRecarga(icono, color, titulo, descripcion, ayuda)
-        }
+        is RecargaUi.Final -> infoFinal(estado.estado, estado.mensaje)
     }
 }
 
-private data class InfoEstadoRecarga(
+private data class InfoEstadoOverlay(
     val icono: ImageVector?,
     val colorIcono: Color,
     val titulo: String,
@@ -904,16 +898,12 @@ private data class InfoEstadoRecarga(
 )
 
 @Composable
-private fun PasosRecarga(indiceActual: Int) {
-    data class Paso(val nombre: String, val icono: ImageVector)
-    val pasos = listOf(
-        Paso(stringResource(R.string.billetera_paso_solicitar), Icons.Default.Create),
-        Paso(stringResource(R.string.billetera_paso_pagar), Icons.Default.CreditCard),
-        Paso(stringResource(R.string.billetera_paso_resultado), Icons.Default.Check)
-    )
+private fun PasosOverlay(pasos: List<PasoOverlay>, indiceActual: Int) {
     val colorActivo = MaterialTheme.colorScheme.primary
     val exito = CuidaleThemeExtras.customColors.success
-    val inactivo = Color.White.copy(alpha = 0.25f)
+    val isDark = CuidaleThemeExtras.customColors.isDark
+    val textoBase = if (isDark) Color.White else Color(0xFF0F172A)
+    val inactivo = textoBase.copy(alpha = 0.25f)
 
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
@@ -925,7 +915,6 @@ private fun PasosRecarga(indiceActual: Int) {
             val completado = indice < indiceActual
 
             if (indice > 0) {
-                // Línea conectora entre pasos.
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -943,7 +932,6 @@ private fun PasosRecarga(indiceActual: Int) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 if (activo) {
-                    // Paso activo: halo + círculo con pulso.
                     val transition = rememberInfiniteTransition(label = "pasoActivo")
                     val pulse by transition.animateFloat(
                         initialValue = 0.92f,
@@ -1003,14 +991,182 @@ private fun PasosRecarga(indiceActual: Int) {
                     fontWeight = if (activo) FontWeight.Bold else FontWeight.Normal,
                     color = when {
                         activo -> colorActivo
-                        completado -> Color.White.copy(alpha = 0.9f)
-                        else -> Color.White.copy(alpha = 0.55f)
+                        completado -> textoBase.copy(alpha = 0.9f)
+                        else -> textoBase.copy(alpha = 0.55f)
                     },
                     textAlign = TextAlign.Center
                 )
             }
         }
     }
+}
+
+/* ---------- Wrappers por tipo de operación ---------- */
+
+@Composable
+fun RecargaOverlay(
+    ui: RecargaUi,
+    onCancel: () -> Unit,
+    onReintentar: () -> Unit,
+    onCerrar: () -> Unit
+) {
+    val pasos = listOf(
+        PasoOverlay(stringResource(R.string.billetera_paso_solicitar), Icons.Default.Create),
+        PasoOverlay(stringResource(R.string.billetera_paso_pagar), Icons.Default.CreditCard),
+        PasoOverlay(stringResource(R.string.billetera_paso_resultado), Icons.Default.Check)
+    )
+    OperacionOverlay(
+        ui = ui,
+        etiqueta = stringResource(R.string.billetera_pago_overlay_etiqueta),
+        pasos = pasos,
+        procesoTitulo = stringResource(R.string.billetera_recarga_overlay_titulo),
+        procesoDescripcion = stringResource(R.string.billetera_recarga_overlay_desc),
+        infoFinal = { estado, mensaje -> infoRecargaFinal(estado, mensaje) },
+        onCancel = onCancel,
+        onReintentar = onReintentar,
+        onCerrar = onCerrar
+    )
+}
+
+@Composable
+private fun infoRecargaFinal(estado: String, mensaje: String?): InfoEstadoOverlay {
+    val custom = CuidaleThemeExtras.customColors
+    val (icono, color) = when (estado) {
+        "aprobado" -> Icons.Default.Check to custom.success
+        "rechazado" -> Icons.Default.Close to MaterialTheme.colorScheme.error
+        "cancelado" -> Icons.Default.Close to custom.warning
+        "pendiente" -> Icons.Default.Schedule to custom.warning
+        else -> Icons.Default.ErrorOutline to MaterialTheme.colorScheme.error
+    }
+    val titulo = when (estado) {
+        "aprobado" -> stringResource(R.string.billetera_pago_aprobado_titulo)
+        "rechazado" -> stringResource(R.string.billetera_pago_rechazado_titulo)
+        "cancelado" -> stringResource(R.string.billetera_pago_cancelado_titulo)
+        "pendiente" -> stringResource(R.string.billetera_pago_pendiente_titulo)
+        else -> stringResource(R.string.billetera_pago_error_titulo)
+    }
+    val descripcion = when (estado) {
+        "aprobado" -> stringResource(R.string.billetera_pago_aprobado_desc)
+        "rechazado" -> stringResource(R.string.billetera_pago_rechazado_desc)
+        "cancelado" -> stringResource(R.string.billetera_pago_cancelado_desc)
+        "pendiente" -> stringResource(R.string.billetera_pago_pendiente_desc)
+        else -> mensaje ?: stringResource(R.string.billetera_pago_error_desc_gen)
+    }
+    val ayuda = when (estado) {
+        "rechazado" -> stringResource(R.string.billetera_pago_rechazado_ayuda)
+        "cancelado" -> stringResource(R.string.billetera_pago_cancelado_ayuda)
+        "pendiente" -> stringResource(R.string.billetera_pago_pendiente_ayuda)
+        else -> if (estado == "error") stringResource(R.string.billetera_pago_error_ayuda) else null
+    }
+    return InfoEstadoOverlay(icono, color, titulo, descripcion, ayuda)
+}
+
+@Composable
+fun RetiroOverlay(
+    ui: RecargaUi,
+    onReintentar: () -> Unit,
+    onCerrar: () -> Unit
+) {
+    val pasos = listOf(
+        PasoOverlay("Solicitar", Icons.Default.Create),
+        PasoOverlay("Procesar", Icons.Default.ArrowUpward),
+        PasoOverlay("Resultado", Icons.Default.Check)
+    )
+    OperacionOverlay(
+        ui = ui,
+        etiqueta = "Retiro",
+        pasos = pasos,
+        procesoTitulo = "Procesando retiro",
+        procesoDescripcion = "Estamos enviando el dinero a tu cuenta. Esto puede tomar unos segundos.",
+        infoFinal = { estado, mensaje -> infoRetiroFinal(estado, mensaje) },
+        onCancel = onReintentar,
+        onReintentar = onReintentar,
+        onCerrar = onCerrar
+    )
+}
+
+@Composable
+private fun infoRetiroFinal(estado: String, mensaje: String?): InfoEstadoOverlay {
+    val custom = CuidaleThemeExtras.customColors
+    val (icono, color) = when (estado) {
+        "aprobada" -> Icons.Default.Check to custom.success
+        "rechazada" -> Icons.Default.Close to MaterialTheme.colorScheme.error
+        "cancelado" -> Icons.Default.Close to custom.warning
+        "pendiente" -> Icons.Default.Schedule to custom.warning
+        else -> Icons.Default.ErrorOutline to MaterialTheme.colorScheme.error
+    }
+    val titulo = when (estado) {
+        "aprobada" -> "Retiro aprobado"
+        "rechazada" -> "Retiro rechazado"
+        "cancelado" -> "Retiro cancelado"
+        "pendiente" -> "Retiro pendiente"
+        else -> "Error en el retiro"
+    }
+    val descripcion = when (estado) {
+        "aprobada" -> "El dinero fue enviado a tu cuenta. Se acredita en 1 a 2 días hábiles."
+        "rechazada" -> mensaje ?: "Mercado Pago rechazó el retiro. Se devolvió el saldo."
+        "cancelado" -> "El retiro fue cancelado."
+        "pendiente" -> "El retiro está pendiente de confirmación."
+        else -> mensaje ?: "No se pudo procesar el retiro."
+    }
+    val ayuda = if (estado == "rechazada" || estado == "error") {
+        "Verifica que los datos de la cuenta destino sean correctos."
+    } else null
+    return InfoEstadoOverlay(icono, color, titulo, descripcion, ayuda)
+}
+
+@Composable
+fun PagoOverlay(
+    ui: RecargaUi,
+    onReintentar: () -> Unit,
+    onCerrar: () -> Unit
+) {
+    val pasos = listOf(
+        PasoOverlay("Verificar", Icons.Default.Visibility),
+        PasoOverlay("Transferir", Icons.AutoMirrored.Filled.Send),
+        PasoOverlay("Resultado", Icons.Default.Check)
+    )
+    OperacionOverlay(
+        ui = ui,
+        etiqueta = "Transferencia",
+        pasos = pasos,
+        procesoTitulo = "Procesando transferencia",
+        procesoDescripcion = "Estamos enviando el pago al cuidador.",
+        infoFinal = { estado, mensaje -> infoPagoFinal(estado, mensaje) },
+        onCancel = onReintentar,
+        onReintentar = onReintentar,
+        onCerrar = onCerrar
+    )
+}
+
+@Composable
+private fun infoPagoFinal(estado: String, mensaje: String?): InfoEstadoOverlay {
+    val custom = CuidaleThemeExtras.customColors
+    val (icono, color) = when (estado) {
+        "aprobado", "aprobada" -> Icons.Default.Check to custom.success
+        "rechazado", "rechazada" -> Icons.Default.Close to MaterialTheme.colorScheme.error
+        "cancelado" -> Icons.Default.Close to custom.warning
+        "pendiente" -> Icons.Default.Schedule to custom.warning
+        else -> Icons.Default.ErrorOutline to MaterialTheme.colorScheme.error
+    }
+    val titulo = when (estado) {
+        "aprobado", "aprobada" -> "Pago realizado"
+        "rechazado", "rechazada" -> "Pago rechazado"
+        "cancelado" -> "Pago cancelado"
+        "pendiente" -> "Pago pendiente"
+        else -> "Error en el pago"
+    }
+    val descripcion = when (estado) {
+        "aprobado", "aprobada" -> "El pago se transfirió correctamente al cuidador."
+        "rechazado", "rechazada" -> mensaje ?: "Mercado Pago rechazó el pago."
+        "cancelado" -> "El pago fue cancelado."
+        "pendiente" -> "El pago está pendiente de confirmación."
+        else -> mensaje ?: "No se pudo procesar el pago."
+    }
+    val ayuda = if (estado == "rechazado" || estado == "rechazada" || estado == "error") {
+        "Revisa tu saldo e inténtalo nuevamente."
+    } else null
+    return InfoEstadoOverlay(icono, color, titulo, descripcion, ayuda)
 }
 
 @Composable
@@ -1075,6 +1231,134 @@ private fun MpLoader() {
     }
 }
 
+/** Ficha estilizada de respaldo (iniciales sobre color). */
+@Composable
+private fun FichaBanco(bancoNombre: String, size: Dp) {
+    val fondo = colorPorBanco(bancoNombre)
+    val iniciales = inicialesBanco(bancoNombre)
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(RoundedCornerShape(12.dp))
+            .background(fondo),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = iniciales,
+            color = Color.White,
+            fontWeight = FontWeight.Black,
+            style = MaterialTheme.typography.titleSmall
+        )
+    }
+}
+
+/** Logotipo de un banco (código MP → logo real o ficha estilizada). */
+@Composable
+fun LogoBanco(banco: String, bancoNombre: String, size: Dp = 44.dp) {
+    val url = urlLogoBanco(banco)
+    if (url == null) {
+        FichaBanco(bancoNombre, size)
+        return
+    }
+    SubcomposeAsyncImage(
+        model = ImageRequest.Builder(LocalContext.current)
+            .data(url)
+            .crossfade(true)
+            .build(),
+        contentDescription = bancoNombre.ifEmpty { "Banco" },
+        contentScale = ContentScale.Crop,
+        modifier = Modifier
+            .size(size)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.White),
+        loading = { FichaBanco(bancoNombre, size) },
+        error = { FichaBanco(bancoNombre, size) }
+    )
+}
+
+/** Logotipo de cuenta destino: logo real del banco/MP (si está disponible) o ficha estilizada. */
+@Composable
+fun LogoCuenta(cuenta: CuentaDestino, size: Dp = 44.dp) {
+    if (cuenta.tipoDestino == CuentaDestino.TIPO_BANCO) {
+        LogoBanco(banco = cuenta.banco, bancoNombre = cuenta.bancoNombre, size = size)
+    } else {
+        SubcomposeAsyncImage(
+            model = ImageRequest.Builder(LocalContext.current)
+                .data(urlLogoBancoMp())
+                .crossfade(true)
+                .build(),
+            contentDescription = "Mercado Pago",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .size(size)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color.White),
+            loading = { FichaMp(size) },
+            error = { FichaMp(size) }
+        )
+    }
+}
+
+@Composable
+private fun FichaMp(size: Dp) {
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0xFF00A1E9)),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "MP",
+            color = Color.White,
+            fontWeight = FontWeight.Black,
+            style = MaterialTheme.typography.titleSmall
+        )
+    }
+}
+
+private fun urlLogoBancoMp(): String = "https://www.google.com/s2/favicons?domain=mercadopago.cl&sz=256"
+
+private fun dominioBanco(codigo: String): String? = when (codigo) {
+    "001" -> "bancochile.cl"
+    "002" -> "bancointernacional.cl"
+    "009" -> "scotiabank.cl"
+    "014" -> "itau.cl"
+    "016" -> "bancosecurity.cl"
+    "028" -> "bice.cl"
+    "031" -> "santander.cl"
+    "037" -> "bci.cl"
+    "049" -> "bancoestado.cl"
+    "051" -> "bancofalabella.cl"
+    "055" -> "ripley.cl"
+    "057" -> "consorcio.cl"
+    "065" -> "bancodesarrollo.cl"
+    "072" -> "bancoparis.cl"
+    "668" -> "coopeuch.cl"
+    else -> null
+}
+
+private fun urlLogoBanco(codigo: String): String? {
+    val dominio = dominioBanco(codigo) ?: return null
+    return "https://www.google.com/s2/favicons?domain=${dominio}&sz=256"
+}
+
+private fun colorPorBanco(nombre: String): Color {
+    val paleta = listOf(
+        Color(0xFF1B3B73), Color(0xFFB22222), Color(0xFF0067B3), Color(0xFF2E7D32),
+        Color(0xFF6A1B9A), Color(0xFFE65100), Color(0xFF00838F), Color(0xFF5D4037),
+        Color(0xFF37474F), Color(0xFF1565C0), Color(0xFF9E9D24), Color(0xFF4E342E)
+    )
+    val idx = kotlin.math.abs(nombre.hashCode()) % paleta.size
+    return paleta[idx]
+}
+
+private fun inicialesBanco(nombre: String): String {
+    val limpio = nombre.replace("Banco ", "").replace("Banco", "").trim()
+    val palabras = limpio.split(" ").filter { it.isNotBlank() }
+    return palabras.take(2).mapNotNull { it.firstOrNull()?.uppercase() }.joinToString("").ifEmpty { "BC" }
+}
+
 /** Tarjeta de una transferencia/movimiento de la billetera con su estado. */
 @Composable
 fun TransferenciaCard(mov: MovimientoBilletera, modifier: Modifier = Modifier) {
@@ -1115,64 +1399,85 @@ fun TransferenciaCard(mov: MovimientoBilletera, modifier: Modifier = Modifier) {
     }
 
     HardShadowPanel(
-        backgroundColor = CuidaleThemeExtras.customColors.panelBackground,
-        shadowColor = Color.Black.copy(alpha = 0.05f),
-        cornerRadius = 18.dp,
-        contentPadding = PaddingValues(16.dp),
+        backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+        shadowColor = Color.Black.copy(alpha = if (custom.isDark) 0.18f else 0.06f),
+        cornerRadius = 20.dp,
+        contentPadding = PaddingValues(0.dp),
         modifier = modifier.fillMaxWidth()
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(color.copy(alpha = 0.14f)),
-                contentAlignment = Alignment.Center
+        Column {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(icono, null, tint = color, modifier = Modifier.size(24.dp))
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = titulo,
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                if (mov.descripcion.isNotBlank() && mov.tipoMovimiento != "recarga") {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(
+                            Brush.linearGradient(
+                                listOf(color.copy(alpha = 0.35f), color.copy(alpha = 0.10f))
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(icono, null, tint = color, modifier = Modifier.size(26.dp))
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
                     Text(
-                        text = mov.descripcion,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodySmall,
+                        text = titulo,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = fechaAmigable(mov.timestamp?.toDate()),
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Text(
-                    text = fechaAmigable(mov.timestamp?.toDate()),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                )
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = MontoUtils.formatClp(mov.monto),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Black,
-                    color = if (esIngreso) custom.success else MaterialTheme.colorScheme.error
-                )
-                Spacer(Modifier.height(2.dp))
-                Surface(
-                    color = color.copy(alpha = 0.15f),
-                    contentColor = color,
-                    shape = RoundedCornerShape(50)
-                ) {
+                Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        text = estadoTexto,
-                        style = MaterialTheme.typography.labelSmall,
+                        text = MontoUtils.formatClp(mov.monto),
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Black,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        color = if (esIngreso) custom.success else MaterialTheme.colorScheme.error
                     )
+                    Spacer(Modifier.height(4.dp))
+                    Surface(
+                        color = color.copy(alpha = 0.15f),
+                        contentColor = color,
+                        shape = RoundedCornerShape(50)
+                    ) {
+                        Text(
+                            text = estadoTexto,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Black,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+                        )
+                    }
+                }
+            }
+            if (mov.descripcion.isNotBlank() || mov.referencia.isNotBlank()) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                    if (mov.descripcion.isNotBlank()) {
+                        Text(
+                            text = mov.descripcion,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (mov.referencia.isNotBlank()) {
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = "Ref: ${mov.referencia}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    }
                 }
             }
         }

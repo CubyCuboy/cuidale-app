@@ -78,6 +78,27 @@ fun ReviewSolicitudScreen(
         }
     }
 
+    // Si el cuidador está viendo una solicitud ya aceptada, marcar la
+    // notificación de aceptación como leída para que desaparezca del badge.
+    LaunchedEffect(solicitud.id, currentUid, isAccepted) {
+        if (isAccepted && currentUid != null) {
+            try {
+                val userQuery = FirebaseFirestore.getInstance().collection("usuarios")
+                    .whereEqualTo("uid", currentUid).get().await()
+                if (!userQuery.isEmpty) {
+                    val notifs = userQuery.documents[0].reference.collection("notificaciones")
+                        .whereEqualTo("tipo", "postulacion_aceptada")
+                        .whereEqualTo("data.solicitudId", solicitud.id)
+                        .whereEqualTo("leida", false)
+                        .get().await()
+                    for (doc in notifs.documents) {
+                        doc.reference.update("leida", true)
+                    }
+                }
+            } catch (_: Exception) { }
+        }
+    }
+
     LaunchedEffect(solicitud.pacienteFichaId) {
         try {
             val db = FirebaseFirestore.getInstance()
@@ -152,6 +173,20 @@ fun ReviewSolicitudScreen(
                             modifier = Modifier.padding(16.dp),
                             style = MaterialTheme.typography.bodyMedium,
                             color = secondaryTextColor,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                } else if (solicitud.cuidadorUid == currentUid) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            stringResource(R.string.review_solicitud_acuerdo_pendiente),
+                            modifier = Modifier.padding(16.dp),
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onErrorContainer,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                     }
@@ -271,7 +306,7 @@ fun ReviewSolicitudScreen(
                         Text(stringResource(R.string.review_solicitud_ver_ficha), fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
                     
-                    if (isAccepted && onNavigateToChat != null) {
+                    if ((isAccepted || solicitud.cuidadorUid == currentUid) && onNavigateToChat != null) {
                         Button(
                             onClick = { 
                                 val myUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
@@ -407,6 +442,9 @@ fun ReviewSolicitudScreen(
                         
                         CuidaleDetailRow(Icons.Default.Schedule, stringResource(R.string.crear_solicitud_campo_horario), solicitud.horarioStr)
                         CuidaleDetailRow(Icons.Default.DateRange, stringResource(R.string.review_solicitud_duracion), if (solicitud.esIndefinido) stringResource(R.string.review_solicitud_contrato_indefinido) else stringResource(R.string.review_solicitud_servicio_temporal))
+                        if (solicitud.tarifaHora > 0L) {
+                            CuidaleDetailRow(Icons.Default.AttachMoney, stringResource(R.string.crear_solicitud_valor_hora), com.example.cuidaleapp.utils.MontoUtils.formatClp(solicitud.tarifaHora))
+                        }
                         
                         if (!solicitud.esIndefinido) {
                             Row(modifier = Modifier.padding(start = 24.dp, top = 4.dp)) {

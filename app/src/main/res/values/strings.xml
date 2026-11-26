@@ -260,6 +260,8 @@
     <string name="notif_title_accept">Solicitud aceptada</string>
     <string name="notif_title_postulacion">Nueva postulación</string>
     <string name="notif_title_postulacion_accept">Postulación aceptada</string>
+    <string name="notif_title_solicitud_dirigida">Solicitud de servicio dirigida</string>
+    <string name="notif_title_solicitud_dirigida_negociacion">Propuesta de valor en negociación</string>
     <string name="notif_title_service_end">Servicio finalizado</string>
     <string name="notif_title_chat">%1$s</string>
     <string name="notif_title_new_user">Nuevo %1$s en tu zona</string>
@@ -280,6 +282,8 @@
     <string name="notif_user_fallback">El usuario</string>
     <string name="notif_body_postulacion">%1$s envió una postulación para el cuidado.</string>
     <string name="notif_body_postulacion_accept">Tu postulación fue aceptada.</string>
+    <string name="notif_body_solicitud_dirigida">Un representante te envió una solicitud de servicio.</string>
+    <string name="notif_body_solicitud_dirigida_negociacion">Revisa la propuesta de valor por hora en el chat.</string>
     <string name="notif_body_service_end">El servicio ha finalizado.</string>
     <string name="notif_body_chat">Tienes un nuevo mensaje sin leer.</string>
     <string name="notif_body_new_user">%1$s se unió a la plataforma.</string>
@@ -454,6 +458,8 @@
   <string name="settings_account_security_subtitle">Administra tu perfil y métodos de acceso</string>
   <string name="settings_account_management_subtitle">Correo, vínculos y proveedores</string>
   <string name="settings_reset_pass_subtitle">Actualiza tu contraseña</string>
+  <string name="settings_datos_bancarios">Datos bancarios</string>
+  <string name="settings_datos_bancarios_subtitle">Cuentas y Mercado Pago para retirar</string>
   <string name="settings_session_subtitle">Termina la sesión en este dispositivo</string>
   <string name="settings_logout_subtitle">Cerrar sesión de tu cuenta</string>
   <string name="settings_storage_subtitle">Administra el espacio en tu dispositivo</string>
@@ -790,6 +796,14 @@
     <string name="chat_status_available">DISPONIBLE</string>
     <string name="chat_status_taken">YA TOMADA</string>
     <string name="chat_view_details">VER DETALLES</string>
+    <string name="chat_negotiation_title">Negociación de valor hora</string>
+    <string name="chat_negotiation_proposed">Valor propuesto: %1$s</string>
+    <string name="chat_negotiation_accept">ACEPTAR</string>
+    <string name="chat_negotiation_propose">PROPONER OTRO VALOR</string>
+    <string name="chat_negotiation_propose_title">Proponer otro valor</string>
+    <string name="chat_negotiation_propose_label">Nuevo valor por hora (CLP)</string>
+    <string name="chat_negotiation_agreed">Precio acordado: %1$s</string>
+    <string name="chat_negotiation_pending">Pendiente de acuerdo</string>
     <string name="chat_task_report">REPORTE DE TAREA</string>
     <string name="chat_today">HOY</string>
     <string name="chat_yesterday">AYER</string>
@@ -1166,6 +1180,7 @@ María González | Residencia Luz | +56912345678 | Encargada | Buena conducta</s
     <string name="caregiver_profile_ir_al_chat">IR AL CHAT</string>
     <string name="caregiver_profile_chat_ya_solicitado">CHAT YA SOLICITADO</string>
     <string name="caregiver_profile_solicitar_chat">SOLICITAR CHAT</string>
+    <string name="caregiver_profile_crear_solicitud_servicio">SOLICITAR SERVICIO</string>
     <string name="caregiver_profile_procesando">PROCESANDO...</string>
     <string name="caregiver_profile_rechazar">RECHAZAR</string>
     <string name="caregiver_profile_aceptar_solicitud">ACEPTAR SOLICITUD</string>
@@ -1195,6 +1210,8 @@ María González | Residencia Luz | +56912345678 | Encargada | Buena conducta</s
     <string name="crear_solicitud_editar_solicitud">EDITAR SOLICITUD</string>
     <string name="crear_solicitud_procesando">PROCESANDO...</string>
     <string name="crear_solicitud_guardar_cambios">GUARDAR CAMBIOS</string>
+    <string name="crear_solicitud_discutir_precio">DISCUTIR PRECIO</string>
+    <string name="crear_solicitud_valor_referencial_hint">Valor referencial del cuidador: %1$s</string>
     <string name="crear_solicitud_cancelar">CANCELAR</string>
     <string name="crear_solicitud_regresar">REGRESAR</string>
     <string name="crear_solicitud_mi_paciente">Mi Familiar</string>
@@ -1511,6 +1528,7 @@ María González | Residencia Luz | +56912345678 | Encargada | Buena conducta</s
     <string name="acuerdo_ir_chat">HABLAR CON LA OTRA PARTE</string>
     <string name="nav_billetera">Mi Billetera</string>
     <string name="solicitudes_acuerdo_pendiente">Acuerdo pendiente — ambos deben confirmar antes de iniciar turnos</string>
+    <string name="solicitudes_solicitudes_dirigidas">Solicitudes dirigidas</string>
 
     <!-- LoginScreen -->
     <string name="login_loading_dots_1">.</string>
@@ -1558,6 +1576,7 @@ María González | Residencia Luz | +56912345678 | Encargada | Buena conducta</s
     <string name="review_solicitud_cancelar_postulacion_mensaje">¿Estás seguro de cancelar tu postulación para este servicio?</string>
     <string name="review_solicitud_si_cancelar">SÍ, CANCELAR</string>
     <string name="review_solicitud_creada_por_ti">Esta solicitud fue creada por ti.</string>
+    <string name="review_solicitud_acuerdo_pendiente">Esta solicitud te fue dirigida. Acuerda el valor por hora con el representante a través del chat para iniciar el servicio.</string>
     <string name="review_solicitud_cancelar_postulacion">CANCELAR POSTULACIÓN</string>
     <string name="review_solicitud_postular_a_servicio">POSTULAR A SERVICIO</string>
     <string name="review_solicitud_servicio_activo">SERVICIO ACTIVO</string>

@@ -9,6 +9,9 @@ object MontoUtils {
     const val MONTO_MIN_RECARGA = 1_000L
     const val MONTO_MAX_RECARGA = 1_000_000L
     const val MONTO_MIN_RETIRO = 1_000L
+    // Límites de retiro (espejo del backend en functions/pagos.js).
+    const val MONTO_MAX_RETIRO_POR_CARGO = 200_000L
+    const val RETIROS_MAX_POR_DIA = 5
     const val TARIFA_MAX = 10_000_000L
     const val HORAS_MAX = 1_000.0
 
@@ -85,6 +88,7 @@ object MontoUtils {
         var minutos = (hFin * 60 + minFin) - (hInicio * 60 + minInicio)
         if (minutos <= 0) minutos += 24 * 60
         val horas = minutos / 60.0
-        return Math.round(horas * 100) / 100.0
+        // Redondeo a 1 decimal para cumplir la validación (máx. 1 decimal).
+        return Math.round(horas * 10) / 10.0
     }
 }

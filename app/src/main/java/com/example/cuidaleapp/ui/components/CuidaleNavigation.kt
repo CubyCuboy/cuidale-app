@@ -216,15 +216,6 @@ fun CuidaleDrawerContent(
             icon = { Icon(Icons.Default.Group, contentDescription = null) }, 
             colors = NavigationDrawerItemDefaults.colors(unselectedContainerColor = Color.Transparent)
         )
-        if (rol != "cuidador") {
-            NavigationDrawerItem(
-                label = { Text(stringResource(R.string.nav_heatmap), fontWeight = FontWeight.Bold) }, 
-                selected = false, 
-                onClick = onMapClick, 
-                icon = { Icon(Icons.Default.Map, contentDescription = null) }, 
-                colors = NavigationDrawerItemDefaults.colors(unselectedContainerColor = Color.Transparent)
-            )
-        }
         NavigationDrawerItem(
             label = { Text(stringResource(R.string.nav_settings), fontWeight = FontWeight.Bold) }, 
             selected = false, 

@@ -48,6 +48,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.Accessibility
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Cake
@@ -96,9 +97,11 @@ fun OtherFichaScreen(
     profileViewModel: ProfileViewModel,
     vinculosViewModel: VinculosViewModel,
     favoritosViewModel: FavoritosViewModel = androidx.lifecycle.viewmodel.compose.viewModel(),
+    myRole: String = "",
     onNavigateBack: () -> Unit,
     onChatNavigate: (String, String, UserData) -> Unit,
-    onReviewRequest: (SolicitudCuidado) -> Unit
+    onReviewRequest: (SolicitudCuidado) -> Unit,
+    onCrearSolicitud: ((String, String, String, Long) -> Unit)? = null
 ) {
     val isOnline by ConnectivityObserver.isOnline.collectAsState()
     val otherUserData by profileViewModel.otherUserData.collectAsState()
@@ -447,6 +450,22 @@ fun OtherFichaScreen(
                                 icon = if (isNoDeseado) Icons.Default.Visibility else Icons.Default.Block,
                                 enabled = isOnline,
                                 onClick = { showUnwantedDialog = true }
+                            )
+                        }
+
+                        if (myRole == "representante" && displayRole == "cuidador" && otherUserData != null) {
+                            val target = otherUserData!!
+                            HardShadowButton(
+                                text = stringResource(R.string.caregiver_profile_crear_solicitud_servicio),
+                                modifier = Modifier.fillMaxWidth().height(56.dp).padding(vertical = 4.dp),
+                                containerColor = if (isOnline) customColors.successStrong else Color.Gray,
+                                contentColor = Color.White,
+                                shadowColor = (if (isOnline) customColors.successStrong else Color.Gray).copy(alpha = 0.3f),
+                                icon = Icons.Default.AddCircle,
+                                enabled = isOnline,
+                                onClick = {
+                                    onCrearSolicitud?.invoke(target.uid, "${target.nombre} ${target.apellido_pa}".trim(), target.fotoUrl, target.valorHoraReferencial.toLong())
+                                }
                             )
                         }
 

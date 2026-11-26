@@ -49,7 +49,8 @@ sealed class MenuNavigation {
     object Chats : MenuNavigation()
     object Notifications : MenuNavigation()
     object Requests : MenuNavigation()
-    data class CreateRequest(val requestId: String? = null) : MenuNavigation()
+    data class CreateRequest(val requestId: String? = null, val cuidadorUid: String? = null, val cuidadorNombre: String = "", val cuidadorFoto: String = "", val valorReferencial: Long = 0L) : MenuNavigation()
+    data class Cuentas(val returnTo: MenuNavigation = Main) : MenuNavigation()
     data class ManageApplications(val solicitudId: String) : MenuNavigation()
     data class ReviewRequest(val solicitud: SolicitudCuidado, val returnTo: MenuNavigation = Requests) : MenuNavigation()
     data class ActiveTasks(val solicitud: SolicitudCuidado) : MenuNavigation()
@@ -213,6 +214,7 @@ class MenuActivity : ComponentActivity() {
                     is Chat -> "CHAT"
                     Requests -> "REQUESTS"
                     is CreateRequest -> "CREATE_REQUEST"
+                    is Cuentas -> "CUENTAS"
                     Billetera -> "BILLETERA"
                     Transferencias -> "TRANSFERENCIAS"
                     is CobroDetalle -> "COBRO_DETALLE"
@@ -267,6 +269,12 @@ class MenuActivity : ComponentActivity() {
                 }
             }
 
+            val oauthCode = intent.getStringExtra("OAUTH_MP_CODE")
+            if (!oauthCode.isNullOrBlank()) {
+                billeteraViewModel.finalizarConexionMp(oauthCode)
+                currentScreen = Cuentas(returnTo = Billetera)
+            }
+
             BackHandler(enabled = currentScreen != Main) {
                 currentScreen = when (val cs = currentScreen) {
                     Profile -> Main
@@ -279,6 +287,7 @@ class MenuActivity : ComponentActivity() {
                     Requests -> Main
                     History -> Requests
                     is CreateRequest -> Requests
+                    is Cuentas -> cs.returnTo
                     is ManageApplications -> Requests
                     is ReviewRequest -> cs.returnTo
                     is ActiveTasks -> Requests
@@ -573,7 +582,8 @@ class MenuActivity : ComponentActivity() {
               putExtra("FROM_PROFILE", true)
           }
       )
-                                                                }
+                                                                },
+                                                                onGestionarCuentas = { currentScreen = Cuentas(returnTo = cs) }
                                                             )
                                                         }
                                                         Chats -> {
@@ -609,6 +619,7 @@ class MenuActivity : ComponentActivity() {
                                                                             }
                                                                         }
                                                                         "postulacion_recibida", "postulacion_aceptada", "servicio_finalizado",
+                                                                        "solicitud_dirigida", "solicitud_dirigida_negociacion",
                                                                         "recordatorio_tarea", "tarea_atrasada", "tarea_finalizada", "tarea_postergada", "turno_finalizado" -> {
                                                                             currentScreen = Requests
                                                                         }
@@ -644,9 +655,13 @@ class MenuActivity : ComponentActivity() {
                                                                     val solAceptada = solicitudesAceptadas.find { it.pacienteFichaId == uid }
                                                                     if (solAceptada != null) currentScreen = ReviewRequest(solAceptada, returnTo = Requests)
                                                                     else {
-                                                                        val pendingPair = solicitudViewModel.misPostulaciones.value.find { it.first.pacienteFichaId == uid }
-                                                                        if (pendingPair != null) currentScreen = ReviewRequest(pendingPair.first, returnTo = Requests)
-                                                                        else currentScreen = OtherFicha(uid, returnTo = Requests)
+                                                                        val dirigida = solicitudViewModel.solicitudesDirigidas.value.find { it.pacienteFichaId == uid }
+                                                                        if (dirigida != null) currentScreen = ReviewRequest(dirigida, returnTo = Requests)
+                                                                        else {
+                                                                            val pendingPair = solicitudViewModel.misPostulaciones.value.find { it.first.pacienteFichaId == uid }
+                                                                            if (pendingPair != null) currentScreen = ReviewRequest(pendingPair.first, returnTo = Requests)
+                                                                            else currentScreen = OtherFicha(uid, returnTo = Requests)
+                                                                        }
                                                                     }
                                                                 },
                                                                 onViewCaregiverProfile = { uid -> currentScreen = OtherFicha(uid, returnTo = Requests) },
@@ -657,6 +672,10 @@ class MenuActivity : ComponentActivity() {
                                                         is CreateRequest -> {
                                                             CreateSolicitudScreen(
                                                                 requestId = cs.requestId,
+                                                                cuidadorUid = cs.cuidadorUid,
+                                                                cuidadorNombre = cs.cuidadorNombre,
+                                                                cuidadorFoto = cs.cuidadorFoto,
+                                                                valorReferencial = cs.valorReferencial,
                                                                 viewModel = solicitudViewModel,
                                                                 fichaViewModel = fichaViewModel,
                                                                 onNavigateBack = { currentScreen = Requests }
@@ -674,7 +693,7 @@ class MenuActivity : ComponentActivity() {
                                                             ReviewSolicitudScreen(
                                                                 solicitud = cs.solicitud,
                                                                 viewModel = solicitudViewModel,
-                                                                isAccepted = (userData.rol == "cuidador" && cs.solicitud.cuidadorUid == userData.uid) || (userData.rol == "representante" && cs.solicitud.estado == "cerrada"),
+                                                                isAccepted = (userData.rol == "cuidador" && cs.solicitud.cuidadorUid == userData.uid && cs.solicitud.estado == "cerrada") || (userData.rol == "representante" && cs.solicitud.estado == "cerrada"),
                                                                 onNavigateBack = { currentScreen = Requests },
                                                                 onViewFullFicha = { uid -> currentScreen = OtherFicha(uid, returnTo = ReviewRequest(cs.solicitud)) },
                                                                 onRedirectToRequests = { currentScreen = Requests },
@@ -716,6 +735,18 @@ class MenuActivity : ComponentActivity() {
                                                                                 if (sol != null) currentScreen = ReviewRequest(sol, returnTo = cs)
                                                                             } catch (e: Exception) {}
                                                                         }
+                                                                    },
+                                                                    onAceptarPrecio = { solicitudId, rol ->
+                                                                        solicitudViewModel.aceptarPrecio(solicitudId, rol)
+                                                                    },
+                                                                    onProponerPrecio = { solicitudId, monto, rol ->
+                                                                        solicitudViewModel.proponerPrecio(
+                                                                            solicitudId = solicitudId,
+                                                                            nuevoMonto = monto,
+                                                                            rol = rol,
+                                                                            emisorNombre = userData.nombre,
+                                                                            emisorFoto = userData.fotoUrl
+                                                                        )
                                                                     }
                                                                 )
                                                             } else {
@@ -730,11 +761,15 @@ class MenuActivity : ComponentActivity() {
                                                                 profileViewModel = profileViewModel,
                                                                 vinculosViewModel = vinculosViewModel,
                                                                 favoritosViewModel = favoritosViewModel,
+                                                                myRole = userData.rol,
                                                                 onNavigateBack = { currentScreen = cs.returnTo },
                                                                 onChatNavigate = { chatId, otherUid, otherUser ->
                                                                     currentScreen = Chat(chatId, otherUid, otherUser, returnTo = cs)
                                                                 },
-                                                                onReviewRequest = { sol -> currentScreen = ReviewRequest(sol, returnTo = cs) }
+                                                                onReviewRequest = { sol -> currentScreen = ReviewRequest(sol, returnTo = cs) },
+                                                                onCrearSolicitud = { uid, nombre, foto, valor ->
+                                                                    currentScreen = CreateRequest(null, uid, nombre, foto, valor)
+                                                                }
                                                             )
                                                         }
                                                         SocialManagement -> {
@@ -776,7 +811,35 @@ class MenuActivity : ComponentActivity() {
                                                                 viewModel = billeteraViewModel,
                                                                 onVerCobro = { cobroId -> currentScreen = CobroDetalle(cobroId, returnTo = Billetera) },
                                                                 onNavigateBack = { currentScreen = Main },
+                                                                onGestionarCuentas = { currentScreen = Cuentas(returnTo = Billetera) },
                                                                 onVerTransferencias = { currentScreen = Transferencias }
+                                                            )
+                                                        }
+                                                        is Cuentas -> {
+                                                            val cuentas by billeteraViewModel.cuentasDestino.collectAsState()
+                                                            val oauthEnProceso by billeteraViewModel.oauthMpEnProceso.collectAsState()
+                                                            val oauthMpFeedback by billeteraViewModel.oauthMpFeedback.collectAsState()
+                                                            val cuentasFeedback by billeteraViewModel.cuentasFeedback.collectAsState()
+                                                            val oauthMpAuthUrl by billeteraViewModel.oauthMpAuthUrl.collectAsState()
+                                                            val abrirFormularioMpManual by billeteraViewModel.abrirFormularioMpManual.collectAsState()
+                                                            CuentasScreen(
+                                                                cuentas = cuentas,
+                                                                oauthEnProceso = oauthEnProceso,
+                                                                oauthMpFeedback = oauthMpFeedback,
+                                                                onConsumirOauthMpFeedback = { billeteraViewModel.consumirOauthMpFeedback() },
+                                                                cuentasFeedback = cuentasFeedback,
+                                                                onConsumirCuentasFeedback = { billeteraViewModel.consumirCuentasFeedback() },
+                                                                oauthMpAuthUrl = oauthMpAuthUrl,
+                                                                onConsumirOauthMpAuthUrl = { billeteraViewModel.consumirOauthMpAuthUrl() },
+                                                                abrirFormularioMpManual = abrirFormularioMpManual,
+                                                                onConsumirAbrirFormularioMpManual = { billeteraViewModel.consumirAbrirFormularioMpManual() },
+                                                                onVincularMp = { billeteraViewModel.iniciarVincularMp() },
+                                                                onGuardar = { tipo, banco, tipoCuenta, numero, titular, rut, mp ->
+                                                                    billeteraViewModel.guardarCuentaDestino(tipo, banco, tipoCuenta, numero, titular, rut, mp)
+                                                                },
+                                                                onEliminar = { id -> billeteraViewModel.eliminarCuentaDestino(id) },
+                                                                onDesconectarMp = { billeteraViewModel.desvincularConexionMp() },
+                                                                onBack = { currentScreen = cs.returnTo }
                                                             )
                                                         }
                                                         Transferencias -> {

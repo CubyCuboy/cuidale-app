@@ -184,4 +184,81 @@ object FirebaseFunctionsApi {
             Result.failure(e)
         }
     }
+
+    /**
+     * Inicia la vinculación OAuth de Mercado Pago Connect
+     * (Cloud Function `iniciarOauthMp`). Devuelve la URL de autorización si hay
+     * client_id configurado; si no, ok=true sin authUrl (fallback manual).
+     */
+    suspend fun mpOauthIniciar(): Result<Map<String, String>> {
+        return try {
+            val result = functions.getHttpsCallable("iniciarOauthMp")
+                .call(emptyMap<String, Any>())
+                .await()
+            val data = result.data as? Map<*, *> ?: emptyMap<String, Any>()
+            Result.success(data.entries.associate { it.key.toString() to (it.value?.toString() ?: "") })
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Canjea el código OAuth de Mercado Pago por el token y vincula la cuenta
+     * (Cloud Function `canjearOauthMp`).
+     */
+    suspend fun mpOauthCanjear(code: String): Result<Boolean> {
+        return try {
+            val result = functions.getHttpsCallable("canjearOauthMp")
+                .call(mapOf("code" to code))
+                .await()
+            val ok = (result.data as? Map<*, *>)?.get("ok") as? Boolean ?: false
+            if (ok) {
+                Result.success(true)
+            } else {
+                Result.failure(IllegalStateException("No se pudo vincular la cuenta de Mercado Pago."))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Desvincula la cuenta de Mercado Pago (Cloud Function `desvincularMp`).
+     * Elimina el destino y limpia la conexión en Firestore.
+     */
+    suspend fun mpOauthDesvincular(): Result<Boolean> {
+        return try {
+            val result = functions.getHttpsCallable("desvincularMp")
+                .call(emptyMap<String, Any>())
+                .await()
+            val ok = (result.data as? Map<*, *>)?.get("ok") as? Boolean ?: false
+            if (ok) {
+                Result.success(true)
+            } else {
+                Result.failure(IllegalStateException("No se pudo desvincular la cuenta de Mercado Pago."))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Cancela una recarga pendiente (Cloud Function `cancelarRecarga`).
+     * Marca el movimiento como rechazada en Firestore.
+     */
+    suspend fun cancelarRecarga(recargaId: String): Result<Boolean> {
+        return try {
+            val result = functions.getHttpsCallable("cancelarRecarga")
+                .call(mapOf("recargaId" to recargaId))
+                .await()
+            val ok = (result.data as? Map<*, *>)?.get("ok") as? Boolean ?: false
+            if (ok) {
+                Result.success(true)
+            } else {
+                Result.failure(IllegalStateException("No se pudo cancelar la recarga."))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

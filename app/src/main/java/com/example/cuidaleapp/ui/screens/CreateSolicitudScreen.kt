@@ -44,6 +44,10 @@ import java.util.*
 @Composable
 fun CreateSolicitudScreen(
     requestId: String? = null,
+    cuidadorUid: String? = null,
+    cuidadorNombre: String = "",
+    cuidadorFoto: String = "",
+    valorReferencial: Long = 0L,
     viewModel: SolicitudViewModel,
     fichaViewModel: FichaViewModel,
     onNavigateBack: () -> Unit
@@ -59,6 +63,12 @@ fun CreateSolicitudScreen(
     var esIndefinido by remember { mutableStateOf(true) }
     var exigirFotoTareas by remember { mutableStateOf(false) }
     var tarifaStr by remember { mutableStateOf("") }
+
+    LaunchedEffect(cuidadorUid, valorReferencial) {
+        if (requestId == null && cuidadorUid != null && valorReferencial > 0L && tarifaStr.isBlank()) {
+            tarifaStr = MontoUtils.formatClp(valorReferencial)
+        }
+    }
     
     var startDate by remember { mutableStateOf<Long?>(null) }
     var endDate by remember { mutableStateOf<Long?>(null) }
@@ -346,6 +356,14 @@ fun CreateSolicitudScreen(
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
+                        if (cuidadorUid != null && valorReferencial > 0L) {
+                            Text(
+                                text = stringResource(R.string.crear_solicitud_valor_referencial_hint, MontoUtils.formatClp(valorReferencial)),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 6.dp, start = 4.dp)
+                            )
+                        }
 
                         Spacer(modifier = Modifier.height(32.dp))
 
@@ -356,6 +374,9 @@ fun CreateSolicitudScreen(
                         val tarifa = MontoUtils.parseMonto(tarifaStr)
                         val tarifaValida = tarifa?.let { MontoUtils.validarTarifaHora(it) } == true
                         if (!tarifaValida) missingFields.add(stringResource(R.string.crear_solicitud_campo_valor_hora))
+
+                        val esNegociacion = requestId == null && cuidadorUid != null && tarifaValida &&
+                            (tarifa ?: 0L) != valorReferencial && (tarifa ?: 0L) > 0L
 
                         if (missingFields.isNotEmpty()) {
                             Surface(
@@ -378,7 +399,7 @@ fun CreateSolicitudScreen(
                         val canCreate = missingFields.isEmpty() && !isSaving
 
                         HardShadowButton(
-                            text = if (isSaving) stringResource(R.string.crear_solicitud_procesando) else if (requestId == null) stringResource(R.string.crear_solicitud_crear_solicitud) else stringResource(R.string.crear_solicitud_guardar_cambios),
+                            text = if (isSaving) stringResource(R.string.crear_solicitud_procesando) else if (requestId == null && esNegociacion) stringResource(R.string.crear_solicitud_discutir_precio) else if (requestId == null) stringResource(R.string.crear_solicitud_crear_solicitud) else stringResource(R.string.crear_solicitud_guardar_cambios),
                             containerColor = if (canCreate) MaterialTheme.colorScheme.primary else Color.Gray,
                             contentColor = Color.White,
                             shadowColor = if (canCreate) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else Color.Transparent,
@@ -397,6 +418,12 @@ fun CreateSolicitudScreen(
                                         periodos = selectedPeriods.toList(),
                                         exigirFotoTareas = exigirFotoTareas,
                                         tarifaHora = tarifa ?: 0L,
+                                        cuidadorUid = cuidadorUid,
+                                        cuidadorNombre = cuidadorNombre,
+                                        cuidadorFoto = cuidadorFoto,
+                                        tarifaHoraReferencia = if (valorReferencial > 0L) valorReferencial else null,
+                                        estadoAcuerdo = if (esNegociacion) "negociando" else "acordado",
+                                        propuestaPrecio = if (esNegociacion) tarifa else null,
                                         onSuccess = {
                                             isSaving = false
                                             onNavigateBack()

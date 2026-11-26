@@ -148,6 +148,20 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".activities.MpOauthActivity"
+            android:exported="true"
+            android:label="Conexión Mercado Pago"
+            android:theme="@android:style/Theme.NoDisplay"
+            android:noHistory="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="cuidaleapp" android:host="oauthmp" />
+            </intent-filter>
+        </activity>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

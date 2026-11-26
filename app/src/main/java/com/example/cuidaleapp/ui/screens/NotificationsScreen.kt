@@ -297,6 +297,8 @@ fun NotificationItem(
                             "vinculo_aceptado" -> stringResource(R.string.notif_title_accept)
                             "postulacion_recibida" -> notification.data["titulo"] ?: stringResource(R.string.notif_title_postulacion)
                             "postulacion_aceptada" -> notification.data["titulo"] ?: stringResource(R.string.notif_title_postulacion_accept)
+                            "solicitud_dirigida" -> notification.data["titulo"] ?: stringResource(R.string.notif_title_solicitud_dirigida)
+                            "solicitud_dirigida_negociacion" -> notification.data["titulo"] ?: stringResource(R.string.notif_title_solicitud_dirigida_negociacion)
                             "servicio_finalizado" -> notification.data["titulo"] ?: stringResource(R.string.notif_title_service_end)
                             "nuevo_mensaje" -> stringResource(R.string.notif_title_chat, sender?.nombre ?: stringResource(R.string.notification_chat_default_sender))
                             "nuevo_usuario", "nuevo_usuario_zona" -> stringResource(R.string.notif_title_new_user, if (userRole == "cuidador") stringResource(R.string.notif_paciente) else stringResource(R.string.notif_cuidador))
@@ -318,6 +320,8 @@ fun NotificationItem(
                             "vinculo_aceptado" -> stringResource(R.string.notif_body_accept, sender?.nombre ?: stringResource(R.string.notif_user_fallback))
                             "postulacion_recibida" -> stringResource(R.string.notif_body_postulacion, sender?.nombre ?: stringResource(R.string.notif_user_fallback))
                             "postulacion_aceptada" -> stringResource(R.string.notif_body_postulacion_accept)
+                            "solicitud_dirigida" -> stringResource(R.string.notif_body_solicitud_dirigida)
+                            "solicitud_dirigida_negociacion" -> stringResource(R.string.notif_body_solicitud_dirigida_negociacion)
                             "servicio_finalizado" -> stringResource(R.string.notif_body_service_end)
                             "nuevo_mensaje" -> notification.data["text"] ?: notification.data["body"] ?: stringResource(R.string.notif_body_chat)
                             "nuevo_usuario", "nuevo_usuario_zona" -> stringResource(R.string.notif_body_new_user, sender?.nombre ?: stringResource(R.string.notif_sender_fallback))
@@ -371,7 +375,8 @@ fun NotificationItem(
                     val btnText = when(notification.tipo) {
                         "nuevo_mensaje" -> stringResource(R.string.notif_btn_chat)
                         "solicitud_vinculo", "nuevo_usuario", "nuevo_usuario_zona" -> stringResource(R.string.notif_btn_profile)
-                        "postulacion_recibida", "postulacion_aceptada", "servicio_finalizado" -> stringResource(R.string.notif_btn_request)
+                        "postulacion_recibida", "postulacion_aceptada", "servicio_finalizado",
+                        "solicitud_dirigida", "solicitud_dirigida_negociacion" -> stringResource(R.string.notif_btn_request)
                         "recordatorio_tarea", "tarea_atrasada", "tarea_finalizada", "tarea_postergada" -> stringResource(R.string.notif_btn_task)
                         "turno_finalizado" -> stringResource(R.string.notif_btn_report)
                         "configuracion_cuenta" -> stringResource(R.string.notif_btn_history)

@@ -102,8 +102,9 @@ class MontoUtilsTest {
     }
 
     @Test
-    fun `horasDesdeHorario soporta cruce de medianoche`() {
-        assertEquals(8.98, MontoUtils.horasDesdeHorario("De 20:00 a 04:59")!!, 0.0001)
+    fun `horasDesdeHorario soporta cruce de medianoche redondeando a 1 decimal`() {
+        assertEquals(9.0, MontoUtils.horasDesdeHorario("De 20:00 a 04:59")!!, 0.0001)
+        assertEquals(8.9, MontoUtils.horasDesdeHorario("De 20:00 a 04:54")!!, 0.0001)
     }
 
     @Test

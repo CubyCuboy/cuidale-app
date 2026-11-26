@@ -33,6 +33,11 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
     private val _solicitudesAceptadas = MutableStateFlow<List<SolicitudCuidado>>(emptyList())
     val solicitudesAceptadas: StateFlow<List<SolicitudCuidado>> = _solicitudesAceptadas
 
+    // Solicitudes dirigidas (el representante eligió a este cuidador) que aún
+    // están en negociación de precio (estado abierta/negociando).
+    private val _solicitudesDirigidas = MutableStateFlow<List<SolicitudCuidado>>(emptyList())
+    val solicitudesDirigidas: StateFlow<List<SolicitudCuidado>> = _solicitudesDirigidas
+
     private val _misPostulaciones = MutableStateFlow<List<Pair<SolicitudCuidado, PostulacionCuidado>>>(emptyList())
     val misPostulaciones: StateFlow<List<Pair<SolicitudCuidado, PostulacionCuidado>>> = _misPostulaciones
 
@@ -196,12 +201,14 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
         cuidadorSolicitudesListener?.remove()
         cuidadorSolicitudesListener = db.collection("solicitudes")
             .whereEqualTo("cuidadorUid", uid)
-            .whereEqualTo("estado", "cerrada")
             .addSnapshotListener { snapshot, _ ->
                 if (snapshot != null) {
-                    val aceptadas = snapshot.toObjects(SolicitudCuidado::class.java)
+                    val todas = snapshot.toObjects(SolicitudCuidado::class.java)
+                    val aceptadas = todas.filter { it.estado == "cerrada" }
+                    val dirigidas = todas.filter { it.estado != "cerrada" }
                     _solicitudesAceptadas.value = aceptadas
-                    cargarFotosRepresentantes(aceptadas.map { it.representanteUid })
+                    _solicitudesDirigidas.value = dirigidas
+                    cargarFotosRepresentantes(todas.map { it.representanteUid })
                 }
             }
 
@@ -246,6 +253,12 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
         periodos: List<String>,
         exigirFotoTareas: Boolean = false,
         tarifaHora: Long = 0L,
+        cuidadorUid: String? = null,
+        cuidadorNombre: String = "",
+        cuidadorFoto: String = "",
+        tarifaHoraReferencia: Long? = null,
+        estadoAcuerdo: String = "acordado",
+        propuestaPrecio: Long? = null,
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {
@@ -282,17 +295,164 @@ class SolicitudViewModel(application: Application) : AndroidViewModel(applicatio
                     periodos = periodos,
                     exigirFotoTareas = exigirFotoTareas,
                     tarifaHora = tarifaHora,
-                    estado = "abierta",
+                    tarifaHoraReferencia = tarifaHoraReferencia,
+                    estadoAcuerdo = estadoAcuerdo,
+                    propuestaPrecio = propuestaPrecio,
+                    acuerdoAceptadoRepresentante = (estadoAcuerdo == "acordado"),
+                    cuidadorUid = cuidadorUid,
+                    cuidadorNombre = cuidadorNombre,
+                    cuidadorFoto = cuidadorFoto,
+                    estado = if (cuidadorUid != null && estadoAcuerdo == "acordado") "cerrada" else "abierta",
+                    aceptadoAt = if (cuidadorUid != null && estadoAcuerdo == "acordado") Timestamp.now() else null,
                     createdAt = Timestamp.now()
                 )
 
                 db.collection("solicitudes").document(id).set(solicitud).await()
+
+                // Si es solicitud dirigida en negociación, enviar propuesta al chat.
+                if (cuidadorUid != null && estadoAcuerdo == "negociando" && propuestaPrecio != null) {
+                    enviarPropuestaPrecioAlChat(id, cuidadorUid, cuidadorNombre, cuidadorFoto, propuestaPrecio, uid, repNombre, repFoto)
+                }
+
+                // Notificar al cuidador dirigido.
+                if (cuidadorUid != null && cuidadorUid != uid) {
+                    db.collection("usuarios").whereEqualTo("uid", cuidadorUid).get().addOnSuccessListener { targetQuery ->
+                        if (!targetQuery.isEmpty) {
+                            val notifRef = targetQuery.documents[0].reference.collection("notificaciones").document()
+                            val tipo = if (estadoAcuerdo == "negociando") "solicitud_dirigida_negociacion" else "solicitud_dirigida"
+                            val notif = Notification(
+                                id = notifRef.id,
+                                tipo = tipo,
+                                emisor = uid,
+                                receptor = cuidadorUid,
+                                timestamp = System.currentTimeMillis(),
+                                data = mapOf("solicitudId" to id)
+                            )
+                            notifRef.set(notif)
+                        }
+                    }
+                }
                 onSuccess()
             } catch (e: Exception) {
                 onError(e.localizedMessage ?: "Error desconocido al crear solicitud")
             } finally {
                 _isLoading.value = false
             }
+        }
+    }
+
+    /**
+     * Envía un mensaje de tipo "negociacion_precio" al chat entre el representante
+     * y el cuidador con la propuesta de valor hora.
+     */
+    private suspend fun enviarPropuestaPrecioAlChat(
+        solicitudId: String,
+        cuidadorUid: String,
+        cuidadorNombre: String,
+        cuidadorFoto: String,
+        monto: Long,
+        representanteUid: String,
+        representanteNombre: String,
+        representanteFoto: String
+    ) {
+        try {
+            val chatId = if (representanteUid < cuidadorUid) "${representanteUid}_$cuidadorUid" else "${cuidadorUid}_$representanteUid"
+            val chatMsgRef = com.google.firebase.database.FirebaseDatabase.getInstance().reference
+                .child("messages").child(chatId).push()
+            val chatMsg = mapOf(
+                "id" to (chatMsgRef.key ?: UUID.randomUUID().toString()),
+                "senderId" to representanteUid,
+                "text" to "Propuesta de valor por hora: $monto",
+                "type" to "negociacion_precio",
+                "metadata" to mapOf(
+                    "solicitudId" to solicitudId,
+                    "monto" to monto.toString(),
+                    "emisorNombre" to representanteNombre,
+                    "emisorFoto" to representanteFoto
+                ),
+                "timestamp" to System.currentTimeMillis(),
+                "readBy" to mapOf(representanteUid to true)
+            )
+            chatMsgRef.setValue(chatMsg).await()
+        } catch (e: Exception) { }
+    }
+
+    /**
+     * El cuidador o representante acepta el precio propuesto. Si ambos aceptan,
+     * la solicitud queda acordada y lista para iniciar el cuidado.
+     */
+    fun aceptarPrecio(solicitudId: String, rol: String, onReady: () -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                val docRef = db.collection("solicitudes").document(solicitudId)
+                val snap = docRef.get().await()
+                val sol = snap.toObject(SolicitudCuidado::class.java) ?: return@launch
+                val esRepresentante = rol == "representante"
+                val esCuidador = rol == "cuidador"
+                val updates = hashMapOf<String, Any>()
+                if (esRepresentante) updates["acuerdoAceptadoRepresentante"] = true
+                if (esCuidador) updates["acuerdoAceptadoCuidador"] = true
+                val ambosAceptan = (esRepresentante || sol.acuerdoAceptadoCuidador) && (esCuidador || sol.acuerdoAceptadoRepresentante)
+                if (ambosAceptan) {
+                    updates["estadoAcuerdo"] = "acordado"
+                    updates["propuestaPrecio"] = sol.tarifaHora
+                    // Solicitud dirigida: al acordar el precio queda activa (cerrada) y
+                    // lista para iniciar el cuidado.
+                    if (!sol.cuidadorUid.isNullOrBlank()) {
+                        updates["estado"] = "cerrada"
+                        updates["aceptadoAt"] = Timestamp.now()
+                    }
+                }
+                docRef.update(updates).await()
+                onReady()
+            } catch (e: Exception) { }
+        }
+    }
+
+    /**
+     * El cuidador o representante propone un nuevo valor. Se actualiza la
+     * solicitud y se envía un mensaje al chat con la nueva propuesta.
+     */
+    fun proponerPrecio(
+        solicitudId: String,
+        nuevoMonto: Long,
+        rol: String,
+        emisorNombre: String,
+        emisorFoto: String,
+        onReady: () -> Unit = {}
+    ) {
+        if (nuevoMonto <= 0L) return
+        viewModelScope.launch {
+            try {
+                val docRef = db.collection("solicitudes").document(solicitudId)
+                val snap = docRef.get().await()
+                val sol = snap.toObject(SolicitudCuidado::class.java) ?: return@launch
+                val esRepresentante = rol == "representante"
+                val updates = hashMapOf<String, Any>(
+                    "propuestaPrecio" to nuevoMonto,
+                    "tarifaHora" to nuevoMonto,
+                    "estadoAcuerdo" to "negociando"
+                )
+                updates["acuerdoAceptadoRepresentante"] = esRepresentante
+                updates["acuerdoAceptadoCuidador"] = !esRepresentante
+                docRef.update(updates).await()
+
+                val otroUid = if (esRepresentante) (sol.cuidadorUid ?: "") else sol.representanteUid
+                if (otroUid.isNotBlank()) {
+                    val emisorUid = if (esRepresentante) sol.representanteUid else (sol.cuidadorUid ?: "")
+                    enviarPropuestaPrecioAlChat(
+                        solicitudId = solicitudId,
+                        cuidadorUid = if (esRepresentante) otroUid else emisorUid,
+                        cuidadorNombre = sol.cuidadorNombre,
+                        cuidadorFoto = sol.cuidadorFoto,
+                        monto = nuevoMonto,
+                        representanteUid = if (esRepresentante) emisorUid else otroUid,
+                        representanteNombre = emisorNombre,
+                        representanteFoto = emisorFoto
+                    )
+                }
+                onReady()
+            } catch (e: Exception) { }
         }
     }
 

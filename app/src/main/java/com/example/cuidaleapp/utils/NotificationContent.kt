@@ -47,6 +47,16 @@ object NotificationTemplates {
                 "Tu postulación de cuidado fue aceptada.",
                 "SOLICITUDES"
             )
+            "solicitud_dirigida" -> Triple(
+                "Solicitud de servicio dirigida",
+                "Un representante te envió una solicitud de servicio.",
+                "SOLICITUDES"
+            )
+            "solicitud_dirigida_negociacion" -> Triple(
+                "Solicitud de servicio en negociación",
+                "Un representante te envió una propuesta de valor por hora. Revísala en el chat.",
+                "SOLICITUDES"
+            )
             "servicio_finalizado" -> Triple(
                 "Servicio Finalizado",
                 "El servicio de cuidado ha sido finalizado.",

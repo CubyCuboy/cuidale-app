@@ -13,6 +13,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.AccountBox
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.LockReset
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Storage
@@ -64,6 +65,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onLogoutClick: () -> Unit,
     onResetPass: () -> Unit,
+    onGestionarCuentas: () -> Unit = {},
     chatViewModel: ChatViewModel? = null
 ) {
     val context = LocalContext.current
@@ -189,6 +191,14 @@ fun SettingsScreen(
                         onClick = {
                             context.startActivity(Intent(context, com.example.cuidaleapp.activities.AccountManagementActivity::class.java))
                         }
+                    )
+
+                    SettingsRow(
+                        icon = Icons.Default.AccountBalanceWallet,
+                        title = stringResource(R.string.settings_datos_bancarios),
+                        subtitle = stringResource(R.string.settings_datos_bancarios_subtitle),
+                        tint = MaterialTheme.colorScheme.secondary,
+                        onClick = onGestionarCuentas
                     )
 
                     if (isPasswordLinked) {

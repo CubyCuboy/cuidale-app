@@ -10,6 +10,7 @@ class HttpsError extends Error {
 const store = new Map(); // path -> data
 let autoId = 0;
 const SERVER_TS = { __serverTimestamp: true };
+const DELETE_SENTINEL = { __deleteSentinel: true };
 
 function clone(v) { return v === undefined ? undefined : JSON.parse(JSON.stringify(v)); }
 
@@ -45,17 +46,28 @@ class ColRef extends Query {
 }
 function resolve(d) {
   const out = {};
-  for (const [k, v] of Object.entries(d)) out[k] = v === SERVER_TS ? Date.now() : v;
+  for (const [k, v] of Object.entries(d)) {
+    if (v === DELETE_SENTINEL) continue;
+    out[k] = v === SERVER_TS ? Date.now() : v;
+  }
   return clone(out);
 }
 function writeSet(path, d, opts) {
   const prev = store.get(path);
-  store.set(path, opts && opts.merge && prev ? { ...prev, ...resolve(d) } : resolve(d));
+  const merged = { ...prev, ...resolve(d) };
+  for (const k of Object.keys(d)) {
+    if (d[k] === DELETE_SENTINEL) delete merged[k];
+  }
+  store.set(path, opts && opts.merge && prev ? merged : resolve(d));
 }
 function writeUpdate(path, d) {
   const prev = store.get(path);
   if (!prev) throw new Error(`NOT_FOUND update ${path}`);
-  store.set(path, { ...prev, ...resolve(d) });
+  const merged = { ...prev, ...resolve(d) };
+  for (const k of Object.keys(d)) {
+    if (d[k] === DELETE_SENTINEL) delete merged[k];
+  }
+  store.set(path, merged);
 }
 
 let txLock = Promise.resolve();
@@ -63,7 +75,12 @@ const firestore = {
   collection: (n) => new ColRef(n),
   batch: () => {
     const ops = [];
-    return { delete: (r) => ops.push(() => store.delete(r.path)), set: (r, d) => ops.push(() => writeSet(r.path, d)), commit: async () => ops.forEach((o) => o()) };
+    return {
+      delete: (r) => ops.push(() => store.delete(r.path)),
+      set: (r, d, o) => ops.push(() => writeSet(r.path, d, o)),
+      update: (r, d) => ops.push(() => writeUpdate(r.path, d)),
+      commit: async () => ops.forEach((o) => o())
+    };
   },
   // Transacciones serializadas: emula el aislamiento de Firestore.
   runTransaction: (fn) => {
@@ -85,7 +102,10 @@ const firestore = {
 };
 const admin = {
   firestore: Object.assign(() => firestore, {
-    FieldValue: { serverTimestamp: () => SERVER_TS },
+    FieldValue: {
+      serverTimestamp: () => SERVER_TS,
+      delete: () => DELETE_SENTINEL
+    },
     Timestamp: { now: () => Date.now() }
   }),
   app: () => ({ options: { projectId: "cuidale-app" } })

@@ -116,10 +116,18 @@ test("Turno: inicia el cobro del turno con tarifa y notifica al representante", 
   assert.equal(store.has(`solicitudes/${SOL}`), true, "el contrato sigue vivo");
 });
 
-test("Turno: rechaza un duplicado del mismo día", async () => {
+test("Turno: el mismo cuidador puede reintentar finalizar el turno hoy (idempotente)", async () => {
+  store.set(`solicitudes/${SOL}`, { id: SOL, estado: "cerrada", representanteUid: REP, cuidadorUid: CUI, tarifaHora: 9000, horarioStr: "De 09:00 a 18:00", estadoAcuerdo: "acordado" });
+  const primero = await call(P.iniciarCobroTurno, CUI, { solicitudId: SOL });
+  const segundo = await call(P.iniciarCobroTurno, CUI, { solicitudId: SOL });
+  assert.equal(segundo.turnoId, primero.turnoId, "se reutiliza el mismo turno del día");
+  assert.equal(segundo.estado, "pendiente_confirmacion_rep");
+});
+
+test("Turno: rechaza si el contrato no pertenece al cuidador (incluye turno activo de otro)", async () => {
   store.set(`solicitudes/${SOL}`, { id: SOL, estado: "cerrada", representanteUid: REP, cuidadorUid: CUI, tarifaHora: 9000, horarioStr: "De 09:00 a 18:00", estadoAcuerdo: "acordado" });
   await call(P.iniciarCobroTurno, CUI, { solicitudId: SOL });
-  await assert.rejects(call(P.iniciarCobroTurno, CUI, { solicitudId: SOL }), (e) => e.code === "already-exists");
+  await assert.rejects(call(P.iniciarCobroTurno, "otro_cuidador", { solicitudId: SOL }), (e) => e.code === "failed-precondition");
 });
 
 test("Turno: rechaza con acuerdo pendiente o sin tarifa definida", async () => {
@@ -134,6 +142,34 @@ test("Turno: rechaza si el contrato no está activo o pertenece a otro cuidador"
   await assert.rejects(call(P.iniciarCobroTurno, CUI, { solicitudId: SOL }), (e) => e.code === "failed-precondition");
   store.set(`solicitudes/${SOL}`, { id: SOL, estado: "cerrada", representanteUid: REP, cuidadorUid: CUI, tarifaHora: 9000, horarioStr: "De 09:00 a 18:00", estadoAcuerdo: "acordado" });
   await assert.rejects(call(P.iniciarCobroTurno, "otro_cuidador", { solicitudId: SOL }), (e) => e.code === "failed-precondition");
+});
+
+test("Recarga: cancelar marca la recarga pendiente como rechazada", async () => {
+  store.set(`billetera/${REP}`, { uid: REP, saldo: 50000, movimientos: [{ id: "r1", tipoMovimiento: "recarga", monto: 5000, estado: "pendiente" }] });
+  const r = await call(P.cancelarRecarga, REP, { recargaId: "r1" });
+  assert.equal(r.ok, true);
+  const mov = store.get(`billetera/${REP}`).movimientos[0];
+  assert.equal(mov.estado, "rechazada");
+});
+
+test("Mercado Pago: desvincula elimina el destino y limpia la conexión", async () => {
+  store.set(`billetera/${REP}`, { uid: REP, saldo: 1000, mp_conexion: { access_token: "tok" }, movimientos: [] });
+  store.set(`cuentas_bancarias/mp1`, { id: "mp1", uid: REP, tipoDestino: "mercado_pago", mpIdentificador: "x" });
+  const r = await call(P.desvincularMp, REP, {});
+  assert.equal(r.ok, true);
+  assert.equal(store.has(`cuentas_bancarias/mp1`), false, "se elimina el destino MP");
+  const billetera = store.get(`billetera/${REP}`);
+  assert.equal(billetera.mp_conexion, undefined, "se limpia la conexión MP");
+});
+
+test("Registrar destino MP acepta identificadores alfanuméricos (TESTUSER...)", async () => {
+  const r = await call(P.registrarCuentaDestino, REP, {
+    tipoDestino: "mercado_pago",
+    mpIdentificador: "TESTUSER7127016745970402067"
+  });
+  assert.equal(r.tipoDestino, "mercado_pago");
+  const cuenta = store.get(`cuentas_bancarias/${r.id}`);
+  assert.equal(cuenta.mpIdentificador, "TESTUSER7127016745970402067");
 });
 
 // ---------------- Recargas con Mercado Pago ----------------
@@ -228,19 +264,57 @@ test("Retiro: valida el mínimo y rechaza saldo insuficiente", async () => {
   await assert.rejects(call(P.retirarSaldo, REP, { monto: 20000 }), (e) => e.code === "failed-precondition");
 });
 
-test("Retiro: descuenta el saldo y registra el movimiento", async () => {
+test("Retiro: el representante retira sin comisión", async () => {
   store.set(`cuentas_bancarias/c1`, {
     uid: REP, tipoDestino: "banco", banco: "049", tipoCuenta: "corriente",
     numeroCuenta: "12345678", titular: "Ana Perez", rut: "11111111-1"
   });
   store.set(`billetera/${REP}`, { uid: REP, saldo: 10000, movimientos: [] });
-  global.fetch = async () => ({ ok: true, status: 200, json: async () => ({ id: "payout1" }) });
+  global.fetch = async () => ({ ok: true, status: 200, json: async () => ({ id: "payout1", status: "pending" }) });
   const r = await call(P.retirarSaldo, REP, { monto: 3000, cuentaId: "c1" });
   assert.equal(r.estado, "procesando");
-  assert.equal(r.comision, 60); // 2% de 3000
-  assert.equal(saldo(REP), 6940); // 10000 - (3000 + 60)
+  assert.equal(r.comision, 0); // representante sin comisión
+  assert.equal(saldo(REP), 7000); // 10000 - 3000
   const m = movimientos(REP).find((x) => x.id === r.movimientoId);
   assert.equal(m.tipoMovimiento, "retiro");
+  assert.equal(m.monto, -3000);
+  assert.equal(m.estado, "procesando");
+});
+
+test("Retiro: el cuidador paga comisión de 2%", async () => {
+  store.set(`cuentas_bancarias/c2`, {
+    uid: CUI, tipoDestino: "banco", banco: "049", tipoCuenta: "corriente",
+    numeroCuenta: "12345678", titular: "Bruno Gutierrez", rut: "22222222-2"
+  });
+  store.set(`billetera/${CUI}`, { uid: CUI, saldo: 10000, movimientos: [] });
+  global.fetch = async () => ({ ok: true, status: 200, json: async () => ({ id: "payout2", status: "pending" }) });
+  const r = await call(P.retirarSaldo, CUI, { monto: 3000, cuentaId: "c2" });
+  assert.equal(r.estado, "procesando");
+  assert.equal(r.comision, 60); // 2% de 3000
+  assert.equal(saldo(CUI), 6940); // 10000 - (3000 + 60)
+  const m = movimientos(CUI).find((x) => x.id === r.movimientoId);
   assert.equal(m.monto, -3060);
   assert.equal(m.estado, "procesando");
+});
+
+test("Retiro: si Mercado Pago rechaza el payout, se revierte el saldo al instante", async () => {
+  store.set(`cuentas_bancarias/c3`, {
+    uid: REP, tipoDestino: "mercado_pago",
+    mpIdentificador: "3877352752"
+  });
+  store.set(`billetera/${REP}`, { uid: REP, saldo: 10000, movimientos: [] });
+  global.fetch = async () => ({
+    ok: true, status: 200,
+    json: async () => ({
+      id: "payout3",
+      status: "rejected",
+      status_detail: "account_not_verified"
+    })
+  });
+  const r = await call(P.retirarSaldo, REP, { monto: 3000, cuentaId: "c3" });
+  assert.equal(r.estado, "rechazada");
+  assert.equal(saldo(REP), 10000, "el saldo se revierte por completo");
+  const m = movimientos(REP).find((x) => x.id === r.movimientoId);
+  assert.equal(m.estado, "rechazada");
+  assert.ok(m.detalle.includes("verificada"), "detalle amigable para cuenta no verificada");
 });

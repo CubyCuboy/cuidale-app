@@ -120,7 +120,7 @@ fun MapaCuidadoresScreen(
     var textoBusqueda by remember { mutableStateOf("") }
     var sugerenciasUbicacion by remember { mutableStateOf<List<SugerenciaUbicacion>>(emptyList()) }
     var resetNorthTrigger by remember { mutableLongStateOf(0L) }
-    var modoMapaDeCalor by remember { mutableStateOf(true) }
+    var modoMapaDeCalor by remember { mutableStateOf(false) }
     var showFilterSheet by remember { mutableStateOf(false) }
     var cuidadorBurbuja by remember { mutableStateOf<Cuidador?>(null) }
 
@@ -411,22 +411,6 @@ fun MapaCuidadoresScreen(
                                     imageVector = Icons.Default.Explore,
                                     contentDescription = stringResource(R.string.mapa_orientar_norte_desc),
                                     tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-
-                            IconButton(
-                                onClick = { modoMapaDeCalor = !modoMapaDeCalor },
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (modoMapaDeCalor) MaterialTheme.colorScheme.secondaryContainer
-                                        else MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
-                                    )
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.LocalFireDepartment,
-                                    contentDescription = stringResource(R.string.mapa_modo_calor_desc),
-                                    tint = if (modoMapaDeCalor) Color(0xFFFF6D00) else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }

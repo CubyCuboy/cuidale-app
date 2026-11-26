@@ -124,6 +124,7 @@ test("registrarCuentaDestino acepta cuenta de Mercado Pago", async () => {
 });
 
 test("retirarSaldo descuenta monto + comisión y crea payout", async () => {
+  store.set("usuarios/hashUser", { uid: UID, rol: "cuidador", nombre: "Ana" });
   seedCuentaBanco();
   const r = await call(P.retirarSaldo, UID, { monto: 10000, cuentaId: CUENTA });
   assert.equal(r.estado, "procesando");
@@ -142,7 +143,7 @@ test("retirarSaldo revierte saldo si el payout falla", async () => {
   global.fetch = fetchFail();
   await assert.rejects(
     call(P.retirarSaldo, UID, { monto: 10000, cuentaId: CUENTA }),
-    (e) => e.code === "internal"
+    (e) => e.code === "failed-precondition"
   );
   assert.equal(saldo(UID), 50000); // revertido
   assert.equal(movimientos(UID)[0].estado, "rechazada");
@@ -201,4 +202,63 @@ test("webhook payout rechazado revierte saldo", async () => {
   assert.equal(movimientos(UID)[0].estado, "rechazada");
   assert.equal(saldo(UID), 50000); // revertido
   assert.ok(notifs("hashUser").includes("retiro_rechazado"));
+});
+
+test("MP: retirarSaldo a cuenta de Mercado Pago usa el user_id como account_id sin identificación vacía", async () => {
+  store.set(`cuentas_bancarias/${CUENTA}`, {
+    uid: UID,
+    tipoDestino: "mercado_pago",
+    mpIdentificador: "3877352752"
+  });
+  store.set("usuarios/hashUser", { uid: UID, rol: "cuidador", nombre: "Ana" });
+  let enviado = null;
+  global.fetch = async (url, opts) => {
+    enviado = { url, body: JSON.parse(opts.body) };
+    return { ok: true, status: 200, json: async () => ({ id: "payout-mp-1", status: "processed" }) };
+  };
+  const r = await call(P.retirarSaldo, UID, { monto: 5000, cuentaId: CUENTA });
+  assert.equal(r.estado, "aprobada"); // resolución inmediata en sandbox
+  assert.equal(enviado.url, "https://api.mercadopago.com/v1/payouts");
+  assert.equal(enviado.body.type, "mercado_pago_account");
+  assert.equal(enviado.body.receiver.mercado_pago_account.account_id, "3877352752");
+  assert.equal(enviado.body.receiver.first_name, undefined);
+  assert.equal(enviado.body.receiver.identification, undefined);
+  assert.equal(saldo(UID), 44900); // 50000 - (5000 + 100)
+  const mov = movimientos(UID)[0];
+  assert.equal(mov.montoNeto, 5000);
+  assert.equal(mov.estado, "aprobada");
+});
+
+test("MP: retirarSaldo de $5.000 acepta (comisión 2%) y queda procesando hasta webhook", async () => {
+  store.set(`cuentas_bancarias/${CUENTA}`, {
+    uid: UID,
+    tipoDestino: "mercado_pago",
+    mpIdentificador: "3877352752"
+  });
+  store.set("usuarios/hashUser", { uid: UID, rol: "cuidador", nombre: "Ana" });
+  global.fetch = fetchOk({ id: "payout1", status: "processing" });
+  const r = await call(P.retirarSaldo, UID, { monto: 5000, cuentaId: CUENTA });
+  assert.equal(r.estado, "procesando");
+  assert.equal(r.comision, 100);
+  assert.equal(saldo(UID), 44900);
+});
+
+test("MP: retirarSaldo rechaza identificador no numérico con mensaje claro", async () => {
+  store.set(`cuentas_bancarias/${CUENTA}`, {
+    uid: UID,
+    tipoDestino: "mercado_pago",
+    mpIdentificador: "TESTUSER7127016745970402067"
+  });
+  await assert.rejects(
+    call(P.retirarSaldo, UID, { monto: 5000, cuentaId: CUENTA }),
+    (e) => e.code === "failed-precondition" && /numérico/.test(e.message)
+  );
+  assert.equal(saldo(UID), 50000); // no se descuenta nada
+});
+
+test("MP: amigableDetalleRetiro traduce el 403 de políticas de desembolsos", () => {
+  const m = P._test.amigableDetalleRetiro("PA_UNAUTHORIZED_RESULT_FROM_POLICIES");
+  assert.ok(m.includes("Payouts"), "menciona Payouts/Connect");
+  assert.ok(m.includes("no habilita"), "avisa que no está habilitado");
+  assert.equal(P._test.amigableDetalleRetiro("not_found"), "La cuenta de destino no existe o no está habilitada para recibir retiros. Verifica los datos.");
 });

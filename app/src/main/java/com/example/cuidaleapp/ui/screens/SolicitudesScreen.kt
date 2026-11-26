@@ -58,6 +58,7 @@ fun SolicitudesScreen(
     val isOnline by ConnectivityObserver.isOnline.collectAsState()
     val misSolicitudes by viewModel.misSolicitudes.collectAsState()
     val solicitudesAceptadas by viewModel.solicitudesAceptadas.collectAsState()
+    val solicitudesDirigidas by viewModel.solicitudesDirigidas.collectAsState()
     val misPostulaciones by viewModel.misPostulaciones.collectAsState()
     val postulacionesRecibidas by viewModel.postulacionesRecibidas.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
@@ -149,6 +150,7 @@ fun SolicitudesScreen(
                 } else {
                     CuidadorRequestsContent(
                         solicitudesAceptadas = solicitudesAceptadas,
+                        solicitudesDirigidas = solicitudesDirigidas,
                         misPostulaciones = misPostulaciones,
                         representantesFotos = representantesFotos,
                         isOnline = isOnline,
@@ -259,6 +261,7 @@ fun RepresentanteRequestsContent(
 @Composable
 fun CuidadorRequestsContent(
     solicitudesAceptadas: List<SolicitudCuidado>,
+    solicitudesDirigidas: List<SolicitudCuidado> = emptyList(),
     misPostulaciones: List<Pair<SolicitudCuidado, PostulacionCuidado>>,
     representantesFotos: Map<String, String> = emptyMap(),
     isOnline: Boolean = true,
@@ -281,6 +284,18 @@ fun CuidadorRequestsContent(
                 ) {
                     Spacer(modifier = Modifier.height(20.dp))
                     val acuerdoOk = sol.estadoAcuerdo.isBlank() || sol.estadoAcuerdo == "acordado"
+                    if (sol.tarifaHora > 0L) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                            Icon(Icons.Default.AttachMoney, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = com.example.cuidaleapp.utils.MontoUtils.formatClp(sol.tarifaHora),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         ActionButton(text = stringResource(R.string.solicitudes_tareas), icon = Icons.Default.ListAlt, color = Color(0xFF4CAF50), enabled = isOnline && acuerdoOk) { onViewTasks(sol) }
                         ActionButton(text = stringResource(R.string.solicitudes_detalles), icon = Icons.Default.Info, color = MaterialTheme.colorScheme.primary) { onViewDetails(sol.pacienteFichaId) }
@@ -309,8 +324,53 @@ fun CuidadorRequestsContent(
         }
 
         val aceptadasIds = solicitudesAceptadas.map { it.id }.toSet()
+        val dirigidasIds = solicitudesDirigidas.map { it.id }.toSet()
+
+        if (solicitudesDirigidas.isNotEmpty()) {
+            item {
+                Text(stringResource(R.string.solicitudes_solicitudes_dirigidas), style = MaterialTheme.typography.titleMedium, color = Color.White)
+            }
+            items(solicitudesDirigidas, key = { it.id }) { sol ->
+                BaseSolicitudCard(
+                    title = sol.nombrePaciente,
+                    subtitle = sol.horarioStr,
+                    imageUrl = sol.fotoPaciente,
+                    representanteFoto = representantesFotos[sol.representanteUid] ?: "",
+                    status = stringResource(R.string.solicitudes_estado_pendiente),
+                    statusColor = MaterialTheme.colorScheme.secondary
+                ) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    if (sol.tarifaHora > 0L) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                            Icon(Icons.Default.AttachMoney, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = com.example.cuidaleapp.utils.MontoUtils.formatClp(sol.tarifaHora),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                    Text(
+                        stringResource(R.string.solicitudes_acuerdo_pendiente),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    ActionButton(
+                        text = stringResource(R.string.solicitudes_detalles),
+                        icon = Icons.Default.Info,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { onViewDetails(sol.pacienteFichaId) }
+                }
+            }
+        }
+
         val postulacionesPendientes = misPostulaciones.filterNot {
-            it.second.estado == "aceptada" || it.first.estado == "cerrada" || it.first.id in aceptadasIds
+            it.second.estado == "aceptada" || it.first.estado == "cerrada" || it.first.id in aceptadasIds || it.first.id in dirigidasIds
         }
 
         if (postulacionesPendientes.isNotEmpty()) {
@@ -330,7 +390,7 @@ fun CuidadorRequestsContent(
             }
         }
 
-        if (solicitudesAceptadas.isEmpty() && postulacionesPendientes.isEmpty()) {
+        if (solicitudesAceptadas.isEmpty() && postulacionesPendientes.isEmpty() && solicitudesDirigidas.isEmpty()) {
             item { EmptyPlaceholder(stringResource(R.string.solicitudes_vacio_cuidador)) }
         }
     }
@@ -574,6 +634,14 @@ fun PostulacionStatusCard(solicitud: SolicitudCuidado, estado: String, represent
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                     Text(solicitud.horarioStr, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (solicitud.tarifaHora > 0L) {
+                        Text(
+                            text = com.example.cuidaleapp.utils.MontoUtils.formatClp(solicitud.tarifaHora),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
 

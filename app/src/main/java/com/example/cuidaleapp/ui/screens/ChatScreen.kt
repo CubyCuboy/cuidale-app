@@ -57,6 +57,8 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -108,6 +110,8 @@ fun ChatScreen(
     onViewOtherProfile: (String) -> Unit,
     onRedirectToRequests: () -> Unit,
     onViewRequest: ((String) -> Unit)? = null,
+    onAceptarPrecio: ((String, String) -> Unit)? = null,
+    onProponerPrecio: ((String, Long, String) -> Unit)? = null,
     favoritosViewModel: com.example.cuidaleapp.viewmodel.FavoritosViewModel? = null,
     initialMessage: String? = null
 ) {
@@ -1120,6 +1124,8 @@ fun ChatScreen(
                                                                 galleryStartUrl = url
                                                             },
                                                             onViewPostulacion = { solId -> onViewRequest?.invoke(solId) ?: onRedirectToRequests() },
+                                                            onAceptarPrecio = onAceptarPrecio?.let { cb -> { solId, _ -> cb(solId, myRole) } },
+                                                            onProponerPrecio = onProponerPrecio?.let { cb -> { solId, monto, _ -> cb(solId, monto, myRole) } },
                                                             onDoubleClick = {
                                                                 if (msg.senderId == myUid && !msg.deleted && isOnline) {
                                                                     messageToEdit = msg
@@ -2212,6 +2218,8 @@ fun ChatBubble(
     onExpandVideo: (String) -> Unit,
     onOpenBatchImage: ((String) -> Unit) = {},
     onViewPostulacion: (String) -> Unit,
+    onAceptarPrecio: ((String, String) -> Unit)? = null,
+    onProponerPrecio: ((String, Long, String) -> Unit)? = null,
     onDoubleClick: () -> Unit
 ) {
     var swipeOffset by remember { mutableFloatStateOf(0f) }
@@ -2363,6 +2371,14 @@ fun ChatBubble(
                             }
                             msg.type == "aviso_postulacion" || msg.type == "solicitud_compartida" -> {
                                 RequestAlertBubble(msg, onViewClick = { onViewPostulacion(msg.metadata["solicitudId"] ?: "") })
+                            }
+                            msg.type == "negociacion_precio" -> {
+                                PriceNegotiationBubble(
+                                    msg = msg,
+                                    isMe = isMe,
+                                    onAceptar = { onAceptarPrecio?.invoke(msg.metadata["solicitudId"] ?: "", "") },
+                                    onProponer = { onProponerPrecio?.invoke(msg.metadata["solicitudId"] ?: "", it, "") }
+                                )
                             }
                             msg.type == "tarea_compartida" -> {
                                 TaskSharedBubble(msg.text, isMe)
@@ -3112,6 +3128,117 @@ fun RequestAlertBubble(msg: ChatMessage, onViewClick: () -> Unit) {
                 Text(stringResource(R.string.chat_view_details), fontSize = 10.sp)
             }
         }
+    }
+}
+
+@Composable
+fun PriceNegotiationBubble(
+    msg: ChatMessage,
+    isMe: Boolean,
+    onAceptar: () -> Unit,
+    onProponer: (Long) -> Unit
+) {
+    val context = LocalContext.current
+    val db = FirebaseFirestore.getInstance()
+    val solicitudId = msg.metadata["solicitudId"] ?: ""
+    var estadoAcuerdo by remember { mutableStateOf<String?>(null) }
+    var tarifaActual by remember { mutableStateOf(0L) }
+    var showProposeDialog by remember { mutableStateOf(false) }
+    var nuevoMontoStr by remember { mutableStateOf("") }
+
+    LaunchedEffect(solicitudId) {
+        if (solicitudId.isNotEmpty()) {
+            db.collection("solicitudes").document(solicitudId).addSnapshotListener { snap, _ ->
+                if (snap != null && snap.exists()) {
+                    estadoAcuerdo = snap.getString("estadoAcuerdo")
+                    tarifaActual = snap.getLong("tarifaHora") ?: 0L
+                }
+            }
+        }
+    }
+
+    val montoPropuesto = msg.metadata["monto"]?.toLongOrNull() ?: tarifaActual
+    val acuerdoOk = estadoAcuerdo == "acordado"
+
+    Surface(
+        color = if (acuerdoOk) Color(0xFF4CAF50).copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f),
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.AttachMoney, null, tint = if (acuerdoOk) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = stringResource(R.string.chat_negotiation_title),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            if (montoPropuesto > 0L) {
+                Text(
+                    text = if (acuerdoOk) stringResource(R.string.chat_negotiation_agreed, com.example.cuidaleapp.utils.MontoUtils.formatClp(montoPropuesto))
+                    else stringResource(R.string.chat_negotiation_proposed, com.example.cuidaleapp.utils.MontoUtils.formatClp(montoPropuesto)),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            if (!acuerdoOk) {
+                Text(
+                    text = stringResource(R.string.chat_negotiation_pending),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = onAceptar,
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(0.dp),
+                        shape = RoundedCornerShape(8.dp)
+                    ) { Text(stringResource(R.string.chat_negotiation_accept), fontSize = 10.sp) }
+                    OutlinedButton(
+                        onClick = { showProposeDialog = true },
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(0.dp),
+                        shape = RoundedCornerShape(8.dp)
+                    ) { Text(stringResource(R.string.chat_negotiation_propose), fontSize = 9.sp) }
+                }
+            }
+        }
+    }
+
+    if (showProposeDialog) {
+        AlertDialog(
+            onDismissRequest = { showProposeDialog = false },
+            title = { Text(stringResource(R.string.chat_negotiation_propose_title)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.chat_negotiation_propose_label), style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = nuevoMontoStr,
+                        onValueChange = { nuevoMontoStr = it.filter { c -> c.isDigit() }.take(7) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val monto = nuevoMontoStr.toLongOrNull()
+                    if (monto != null && monto > 0L) {
+                        onProponer(monto)
+                    }
+                    showProposeDialog = false
+                }) { Text(stringResource(R.string.chat_negotiation_accept)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showProposeDialog = false }) { Text(stringResource(R.string.solicitudes_no)) }
+            }
+        )
     }
 }
 
