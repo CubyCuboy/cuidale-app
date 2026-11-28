@@ -113,6 +113,7 @@ const admin = {
 
 const fakes = {
   "firebase-functions/v2/https": { onCall: (_o, h) => h, onRequest: (_o, h) => h, HttpsError },
+  "firebase-functions/v2/scheduler": { onSchedule: (_o, h) => h },
   "firebase-functions/params": { defineSecret: (n) => ({ value: () => process.env[n] }) },
   "firebase-admin": admin
 };

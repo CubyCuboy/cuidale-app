@@ -37,12 +37,23 @@ const MP_WEBHOOK_SECRET = defineSecret("MP_WEBHOOK_SECRET");
 // Access Token (MP_ACCESS_TOKEN) por el token real.
 const MP_CLIENT_ID = defineSecret("MP_CLIENT_ID");
 const MP_USER_ID = defineSecret("MP_USER_ID");
-// El client_secret de OAuth se lee del entorno para no bloquear el deploy en
-// modo prueba. Para producción, configurarlo (Secret Manager o variable de
-// entorno) y agregarlo a la lista secrets de los flujos OAuth.
+// Client Secret de la MISMA aplicación de Mercado Pago que MP_CLIENT_ID y
+// MP_ACCESS_TOKEN (firebase functions:secrets:set MP_CLIENT_SECRET).
+const MP_CLIENT_SECRET = defineSecret("MP_CLIENT_SECRET");
 
-// Redirect URI registrada para OAuth de Mercado Pago Connect (deep link de la app).
-const MP_OAUTH_REDIRECT = "cuidaleapp://oauthmp";
+// OAuth de Mercado Pago Connect:
+//  - Mercado Pago solo acepta Redirect URI https, por eso se usa la función
+//    `retornoOauthMp`. Esa misma URL se registra en Mercado Pago Developers →
+//    tu aplicación → Configuración avanzada → URLs de redireccionamiento:
+//    https://southamerica-west1-cuidale-app.cloudfunctions.net/retornoOauthMp
+//  - La función canjea el código en el backend y luego abre la app con el
+//    deep link MP_OAUTH_DEEPLINK (declarado en AndroidManifest, MpOauthActivity).
+const MP_OAUTH_DEEPLINK = "cuidaleapp://oauthmp";
+const OAUTH_ESTADO_TTL_MS = 10 * 60 * 1000; // el state de OAuth vence en 10 minutos
+
+function mpOauthRedirectUri() {
+  return functionUrl("retornoOauthMp");
+}
 
 /*
  * El modo prueba se detecta automáticamente según la credencial: si el Access
@@ -1381,8 +1392,8 @@ exports.iniciarCobroTurno = onCall(RUN_OPTIONS, async (req) => {
 /* ---------- Mercado Pago Connect: conexión de cuenta para retiros ---------- */
 // Modelo Marketplace (Mercado Pago Connect):
 //  - Cada usuario vincula su cuenta MP mediante OAuth (authorization code).
-//  - La plataforma guarda el access_token del vendedor en billetera/{uid}.
-//    mp_conexion y registra su user_id como destino de retiro.
+//  - La plataforma guarda el access_token del vendedor en mp_conexiones/{uid}
+//    (solo backend) y registra su user_id como destino de retiro.
 //  - Los payouts se crean con el Access Token de la app (MP_ACCESS_TOKEN) y el
 //    account_id del vendedor, por lo que al pasar a producción solo hay que
 //    cambiar MP_ACCESS_TOKEN por el token real.
@@ -1391,7 +1402,7 @@ exports.iniciarCobroTurno = onCall(RUN_OPTIONS, async (req) => {
 
 // Lee un secreto opcional sin lanzar error si aún no está configurado.
 function valorSecreto(param) {
-  try { return String(param.value() || ""); } catch (_) { return ""; }
+  try { return String(param.value() || "").trim(); } catch (_) { return ""; }
 }
 
 function upsertCuentaMp(uid, userId, email) {
@@ -1427,26 +1438,32 @@ function upsertCuentaMp(uid, userId, email) {
     });
 }
 
-/* Devuelve la URL de autorización OAuth de Mercado Pago Connect ("" si faltan credenciales). */
-function urlAutorizacionMp(uid) {
-  const clientId = valorSecreto(MP_CLIENT_ID);
-  const clientSecret = String(process.env.MP_CLIENT_SECRET || "");
-  // Se requiere client_id + client_secret; si falta alguno (modo prueba) se
-  // usa el formulario manual con el User ID numérico.
-  if (!clientId || !clientSecret) return "";
+/* ¿Están configuradas las credenciales OAuth (client_id + client_secret)? */
+function oauthMpConfigurado() {
+  return Boolean(valorSecreto(MP_CLIENT_ID) && valorSecreto(MP_CLIENT_SECRET));
+}
+
+/*
+ * Devuelve la URL de autorización OAuth de Mercado Pago Connect ("" si faltan
+ * credenciales). `state` es un valor aleatorio de un solo uso guardado en
+ * mp_oauth_estados/{state}; NO se usa el uid para evitar ataques CSRF.
+ */
+function urlAutorizacionMp(state) {
+  if (!oauthMpConfigurado()) return "";
   const params = new URLSearchParams({
-    client_id: clientId,
+    client_id: valorSecreto(MP_CLIENT_ID),
     response_type: "code",
-    redirect_uri: MP_OAUTH_REDIRECT,
-    state: uid
+    platform_id: "mp",
+    redirect_uri: mpOauthRedirectUri(),
+    state
   });
-  return `${MP_API.replace(/^https:\/\/api\./, "https://auth.")}/authorization?${params.toString()}`;
+  return `https://auth.mercadopago.com/authorization?${params.toString()}`;
 }
 
 /* Intercambia el código de autorización por el token del vendedor (Connect). */
 async function canjearCodeOauthMp(code) {
   const clientId = valorSecreto(MP_CLIENT_ID);
-  const clientSecret = String(process.env.MP_CLIENT_SECRET || "");
+  const clientSecret = valorSecreto(MP_CLIENT_SECRET);
   if (!code || !clientId || !clientSecret) return null;
   const resp = await fetch(`${MP_API}/oauth/token`, {
     method: "POST",
@@ -1456,7 +1473,7 @@ async function canjearCodeOauthMp(code) {
       client_id: clientId,
       client_secret: clientSecret,
       code,
-      redirect_uri: MP_OAUTH_REDIRECT
+      redirect_uri: mpOauthRedirectUri()
     })
   });
   const j = await resp.json().catch(() => ({}));
@@ -1493,11 +1510,18 @@ async function resolverCuentaMpApp() {
 }
 
 exports.iniciarOauthMp = onCall(
-  { ...RUN_OPTIONS, secrets: [MP_CLIENT_ID, MP_USER_ID, MP_ACCESS_TOKEN] },
+  { ...RUN_OPTIONS, secrets: [MP_CLIENT_ID, MP_CLIENT_SECRET, MP_USER_ID, MP_ACCESS_TOKEN] },
   async (req) => {
     const uid = requireAuth(req);
-    const authUrl = urlAutorizacionMp(uid);
-    if (authUrl) {
+    if (oauthMpConfigurado()) {
+      // state aleatorio de un solo uso, ligado al usuario y con vencimiento.
+      const state = crypto.randomBytes(24).toString("hex");
+      await db().collection("mp_oauth_estados").doc(state).set({
+        uid,
+        creadoAt: Date.now(),
+        expiraAt: Date.now() + OAUTH_ESTADO_TTL_MS
+      });
+      const authUrl = urlAutorizacionMp(state);
       return { ok: true, authUrl, requiereRedirect: true };
     }
     // Modo prueba: sin client_id se intenta vincular la cuenta de la app.
@@ -1510,29 +1534,24 @@ exports.iniciarOauthMp = onCall(
   }
 );
 
+/*
+ * Compatibilidad con versiones anteriores de la app. Con OAuth configurado el
+ * código se canjea en `retornoOauthMp` (backend), así que aquí NO se aceptan
+ * códigos: un código recibido por deep link no se puede ligar de forma segura
+ * al usuario (sin state). Sin OAuth configurado (demo) vincula la cuenta de la
+ * propia aplicación, como antes.
+ */
 exports.canjearOauthMp = onCall(
-  { ...RUN_OPTIONS, secrets: [MP_CLIENT_ID, MP_USER_ID, MP_ACCESS_TOKEN] },
+  { ...RUN_OPTIONS, secrets: [MP_CLIENT_ID, MP_CLIENT_SECRET, MP_USER_ID, MP_ACCESS_TOKEN] },
   async (req) => {
     const uid = requireAuth(req);
-    const code = String((req.data && req.data.code) || "");
-
-    const conexion = await canjearCodeOauthMp(code);
-    if (conexion) {
-      // Guarda el access_token del vendedor para operaciones futuras.
-      await db().collection("billetera").doc(uid).set({
-        mp_conexion: {
-          user_id: conexion.userId,
-          access_token: conexion.accessToken,
-          refresh_token: conexion.refreshToken,
-          public_key: conexion.publicKey,
-          actualizadoAt: ahora()
-        }
-      }, { merge: true });
-      const creada = await upsertCuentaMp(uid, conexion.userId, conexion.email);
-      if (!creada) {
-        throw new HttpsError("failed-precondition", "No se pudo vincular la cuenta de Mercado Pago.");
-      }
-      return { ok: true, email: conexion.email, userId: conexion.userId };
+    if (oauthMpConfigurado()) {
+      const cuenta = await db().collection("cuentas_bancarias")
+        .where("uid", "==", uid)
+        .where("tipoDestino", "==", "mercado_pago")
+        .limit(1).get();
+      if (!cuenta.empty) return { ok: true };
+      throw new HttpsError("failed-precondition", "No se completó la vinculación con Mercado Pago. Vuelve a intentarlo desde Cuentas.");
     }
 
     // Fallback (demo): intenta vincular la cuenta de la aplicación.
@@ -1542,6 +1561,103 @@ exports.canjearOauthMp = onCall(
       throw new HttpsError("failed-precondition", "No se pudo resolver una cuenta de Mercado Pago. Ingresa manualmente tu ID numérico de usuario.");
     }
     return { ok: true, email, userId };
+  }
+);
+
+/*
+ * Guarda la conexión OAuth del usuario. Los tokens del vendedor van en
+ * mp_conexiones/{uid}, colección SIN reglas de lectura para la app (solo
+ * backend), y no dentro de la billetera, que el usuario sí puede leer.
+ */
+async function guardarConexionMp(uid, conexion) {
+  await db().collection("mp_conexiones").doc(uid).set({
+    uid,
+    user_id: conexion.userId,
+    access_token: conexion.accessToken,
+    refresh_token: conexion.refreshToken,
+    public_key: conexion.publicKey,
+    actualizadoAt: Date.now()
+  });
+  // upsertCuentaMp devuelve null solo si no hay un identificador real.
+  const resultado = await upsertCuentaMp(uid, conexion.userId, conexion.email);
+  return resultado !== null;
+}
+
+/* Página/redirect que devuelve al usuario a la app tras el OAuth. */
+function responderRetornoOauth(req, res, estado) {
+  const query = `estado=${estado}`;
+  const fallbackHtml = `${functionUrl("retornoOauthMp")}?${query}&ui=html`;
+  const intent = `intent://oauthmp?${query}#Intent;scheme=cuidaleapp;package=com.example.cuidaleapp;S.browser_fallback_url=${encodeURIComponent(fallbackHtml)};end`;
+  const ua = String(req.get("user-agent") || "");
+  const esChromeAndroid = /Android/i.test(ua) && /Chrome\//i.test(ua);
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+  if (esChromeAndroid && req.query.ui !== "html") {
+    res.redirect(302, intent);
+    return;
+  }
+  const directo = `${MP_OAUTH_DEEPLINK}?${query}`;
+  const ok = estado === "ok";
+  const mensaje = ok ? "¡Cuenta de Mercado Pago vinculada!" : estado === "cancelado" ? "Vinculación cancelada." : "No se pudo vincular tu cuenta.";
+  const icono = ok ? "✅" : "❌";
+  res.set("Content-Type", "text/html; charset=utf-8");
+  res.status(200).send(`<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cuidale App</title><style>
+body{font-family:sans-serif;text-align:center;padding:40px 16px;background:#f4f7fb}
+.tarjeta{display:inline-block;max-width:380px;width:100%;background:#fff;border-radius:20px;padding:32px 20px;box-shadow:0 8px 24px rgba(31,78,121,.12)}
+.icono{font-size:56px;line-height:1}
+h2{margin:14px 0 6px;color:#1F4E79}
+p{margin:6px 0;color:#5a6b7d;font-size:15px}
+a.btn{display:block;margin-top:22px;padding:14px 20px;background:#1F4E79;color:#fff;border-radius:24px;text-decoration:none;font-weight:bold}
+</style></head>
+<body><div class="tarjeta"><div class="icono">${icono}</div><h2>${mensaje}</h2><p>Puedes volver a Cuidale App.</p>
+<a class="btn" href="${directo}">Volver a la app</a></div></body></html>`);
+}
+
+/*
+ * Redirect URI (https) del OAuth de Mercado Pago. Recibe ?code&state, valida el
+ * state (existe, no vencido, un solo uso), canjea el código en el backend con
+ * el Client Secret y vuelve a la app con cuidaleapp://oauthmp?estado=ok|error.
+ * El código nunca pasa por el teléfono.
+ */
+exports.retornoOauthMp = onRequest(
+  { ...RUN_OPTIONS, secrets: [MP_CLIENT_ID, MP_CLIENT_SECRET] },
+  async (req, res) => {
+    if (req.query.ui === "html") {
+      const estadoUi = String(req.query.estado || "error").replace(/[^a-z]/gi, "");
+      responderRetornoOauth(req, res, estadoUi);
+      return;
+    }
+    const code = String(req.query.code || "");
+    const state = String(req.query.state || "").replace(/[^a-f0-9]/gi, "");
+    if (req.query.error || !code || !state) {
+      responderRetornoOauth(req, res, req.query.error ? "cancelado" : "error");
+      return;
+    }
+    try {
+      const estadoRef = db().collection("mp_oauth_estados").doc(state);
+      const uid = await db().runTransaction(async (tx) => {
+        const snap = await tx.get(estadoRef);
+        if (!snap.exists) return null;
+        tx.delete(estadoRef); // un solo uso
+        const d = snap.data() || {};
+        if (!d.uid || Number(d.expiraAt || 0) < Date.now()) return null;
+        return String(d.uid);
+      });
+      if (!uid) {
+        console.warn("retornoOauthMp: state inválido o vencido");
+        responderRetornoOauth(req, res, "error");
+        return;
+      }
+      const conexion = await canjearCodeOauthMp(code);
+      if (!conexion || !(await guardarConexionMp(uid, conexion))) {
+        responderRetornoOauth(req, res, "error");
+        return;
+      }
+      responderRetornoOauth(req, res, "ok");
+    } catch (e) {
+      console.error("retornoOauthMp error:", e.message);
+      responderRetornoOauth(req, res, "error");
+    }
   }
 );
 
@@ -1560,10 +1676,11 @@ exports.desvincularMp = onCall(RUN_OPTIONS, async (req) => {
     batch.delete(doc.ref);
   }
 
-  // Limpia la conexión MP guardada en la billetera.
-  batch.update(db().collection("billetera").doc(uid), {
+  // Borra los tokens guardados y limpia el campo antiguo de la billetera.
+  batch.delete(db().collection("mp_conexiones").doc(uid));
+  batch.set(db().collection("billetera").doc(uid), {
     mp_conexion: admin.firestore.FieldValue.delete()
-  });
+  }, { merge: true });
 
   await batch.commit();
   return { ok: true };

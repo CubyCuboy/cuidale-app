@@ -443,6 +443,29 @@ class BilleteraViewModel : ViewModel() {
         }
     }
 
+    /**
+     * Muestra el resultado del flujo OAuth de Mercado Pago al volver del
+     * navegador (el canje ya ocurrió en el backend). Con estado "ok" refresca
+     * las cuentas destino para reflejar la cuenta MP recién vinculada.
+     */
+    fun mostrarResultadoOauthMp(estado: String) {
+        _oauthMpEnProceso.value = false
+        when (estado.lowercase()) {
+            "ok" -> {
+                _oauthMpFeedback.value = "Cuenta de Mercado Pago vinculada"
+                recargarCuentasDestino()
+            }
+            "cancelado" -> _oauthMpFeedback.value = "Vinculación cancelada"
+            else -> _oauthMpFeedback.value = "No se pudo vincular tu cuenta de Mercado Pago. Inténtalo de nuevo."
+        }
+    }
+
+    /** Recarga las cuentas destino desde Firestore (tras una vinculación OAuth). */
+    fun recargarCuentasDestino() {
+        val uid = currentUid ?: return
+        escucharCuentasDestino(uid)
+    }
+
     fun consumirOauthMpFeedback() {
         _oauthMpFeedback.value = null
     }

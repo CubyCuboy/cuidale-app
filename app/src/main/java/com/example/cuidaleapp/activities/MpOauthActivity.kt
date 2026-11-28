@@ -7,15 +7,16 @@ import com.google.firebase.auth.FirebaseAuth
 
 /**
  * Recibe el retorno de la autorización OAuth de Mercado Pago
- * (deep link cuidaleapp://oauthmp?code=...). Solo reenvía el código a la
- * app; el canje del token lo hace la Cloud Function `canjearOauthMp`.
+ * (deep link cuidaleapp://oauthmp?estado=ok|error|cancelado). El canje del
+ * código ya lo hizo la Cloud Function `retornoOauthMp` en el backend; aquí solo
+ * se reenvía el resultado a la pantalla de cuentas.
  */
 class MpOauthActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val code = intent.data?.getQueryParameter("code") ?: ""
+        val estado = intent.data?.getQueryParameter("estado") ?: ""
 
         if (FirebaseAuth.getInstance().currentUser == null) {
             startActivity(
@@ -30,7 +31,7 @@ class MpOauthActivity : ComponentActivity() {
                         Intent.FLAG_ACTIVITY_CLEAR_TOP or
                         Intent.FLAG_ACTIVITY_SINGLE_TOP
                     putExtra("TARGET_SCREEN", "CUENTAS")
-                    putExtra("OAUTH_MP_CODE", code)
+                    putExtra("OAUTH_MP_ESTADO", estado)
                     putExtra("SKIP_SPLASH", true)
                 }
             )

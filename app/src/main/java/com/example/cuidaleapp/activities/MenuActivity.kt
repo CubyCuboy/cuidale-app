@@ -269,9 +269,9 @@ class MenuActivity : ComponentActivity() {
                 }
             }
 
-            val oauthCode = intent.getStringExtra("OAUTH_MP_CODE")
-            if (!oauthCode.isNullOrBlank()) {
-                billeteraViewModel.finalizarConexionMp(oauthCode)
+            val oauthEstado = intent.getStringExtra("OAUTH_MP_ESTADO")
+            if (!oauthEstado.isNullOrBlank()) {
+                billeteraViewModel.mostrarResultadoOauthMp(oauthEstado)
                 currentScreen = Cuentas(returnTo = Billetera)
             }
 

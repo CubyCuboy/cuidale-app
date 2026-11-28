@@ -703,6 +703,7 @@ const {
   webhookMercadoPagoPayout,
   iniciarOauthMp,
   canjearOauthMp,
+  retornoOauthMp,
   desvincularMp,
   cancelarRecarga,
   sincronizarRecargasPendientes
@@ -719,6 +720,7 @@ exports.registrarCuentaDestino = registrarCuentaDestino;
 exports.webhookMercadoPagoPayout = webhookMercadoPagoPayout;
 exports.iniciarOauthMp = iniciarOauthMp;
 exports.canjearOauthMp = canjearOauthMp;
+exports.retornoOauthMp = retornoOauthMp;
 exports.desvincularMp = desvincularMp;
 exports.cancelarRecarga = cancelarRecarga;
 exports.sincronizarRecargasPendientes = sincronizarRecargasPendientes;
